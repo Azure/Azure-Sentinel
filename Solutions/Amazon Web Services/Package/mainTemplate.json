@@ -28,6 +28,20 @@
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
     },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    },
     "workbook1-name": {
       "type": "string",
       "defaultValue": "AWS Network Activities",
@@ -68,12 +82,19 @@
     "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2'))))]",
     "dataConnectorVersion2": "1.0.0",
     "_dataConnectorcontentProductId2": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId2'),'-', variables('dataConnectorVersion2'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition3": "AwsS3WafCcpDefinition",
+    "dataConnectorTemplateNameConnectorDefinition3": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition3')))]",
+    "_dataConnectorContentIdConnections3": "AwsS3WafCcpDefinitionConnections",
+    "dataConnectorTemplateNameConnections3": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections3')))]",
+    "dataCollectionEndpointId3": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
     "workbookVersion1": "1.0.0",
     "workbookContentId1": "AmazonWebServicesNetworkActivitiesWorkbook",
     "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
     "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
     "_workbookContentId1": "[variables('workbookContentId1')]",
-    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
     "workbookVersion2": "1.0.0",
     "workbookContentId2": "AmazonWebServicesUserActivitiesWorkbook",
@@ -870,6 +891,20 @@
                       "baseQuery": "AWSCloudWatch"
                     }
                   ],
+                  "sampleQueries": [
+                    {
+                      "description": "High severity findings summarized by activity type",
+                      "query": "AWSGuardDuty\n            | where Severity > 7\n            | summarize count() by ActivityType"
+                    },
+                    {
+                      "description": "Top 10 rejected actions of type IPv4",
+                      "query": "AWSVPCFlow\n            | where Action == \"REJECT\"\n            | where Type == \"IPv4\"\n            | take 10"
+                    },
+                    {
+                      "description": "User creation events summarized by region",
+                      "query": "AWSCloudTrail\n            | where EventName == \"CreateUser\"\n            | summarize count() by AWSRegion"
+                    }
+                  ],
                   "connectivityCriterias": [
                     {
                       "type": "SentinelKinds",
@@ -1029,6 +1064,592 @@
           ],
           "id": "[variables('_uiConfigId2')]"
         }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition3'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition3')]",
+        "displayName": "Amazon Web Services S3 WAF",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition3'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "AwsS3WafCcpDefinition",
+                  "title": "Amazon Web Services S3 WAF",
+                  "logo": "amazon_web_services_Logo.svg",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "This connector allows you to ingest AWS WAF logs, collected in AWS S3 buckets, to Microsoft Sentinel. AWS WAF logs are detailed records of traffic that web access control lists (ACLs) analyze, which are essential for maintaining the security and performance of web applications. These logs contain information such as the time AWS WAF received the request, the specifics of the request, and the action taken by the rule that the request matched.",
+                  "graphQueriesTableName": "AWSWAF",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Amazon Web Services S3 WAF",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of logs",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | where TimeGenerated > ago(12h) | where name_s == \"no data test\"               | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": null
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": false,
+                          "write": false,
+                          "delete": false,
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 1. AWS CloudFormation Deployment \n To configure access on AWS, two templates has been generated to set up the AWS environment to send logs from an S3 bucket to your Log Analytics Workspace.\n #### For each template, create Stack in AWS: \n 1. Go to [AWS CloudFormation Stacks](https://aka.ms/awsCloudFormationLink#/stacks/create). \n 2. Choose the ‘Specify template’ option, then ‘Upload a template file’ by clicking on ‘Choose file’ and selecting the appropriate CloudFormation template file provided below. click ‘Choose file’ and select the downloaded template. \n 3. Click 'Next' and 'Create stack'."
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Template 1: OpenID connect authentication deployment",
+                            "isMultiLine": true,
+                            "fillWith": [
+                              "Oidc"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Template 2: AWS WAF resources deployment",
+                            "isMultiLine": true,
+                            "fillWith": [
+                              "AwsWAF"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 2. Connect new collectors \n To enable AWS S3 for Microsoft Sentinel, click the Add new collector button, fill the required information in the context pane and click on Connect."
+                          }
+                        },
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnValue": "properties.roleArn",
+                                "columnName": "Role ARN"
+                              },
+                              {
+                                "columnValue": "properties.sqsUrls[0]",
+                                "columnName": "Queue URL"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "title": "Add new controller",
+                            "subtitle": "AWS S3 connector",
+                            "label": "Add new collector",
+                            "instructionSteps": [
+                              {
+                                "title": "Account details",
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Role ARN",
+                                      "type": "text",
+                                      "name": "roleArn",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Queue URL",
+                                      "type": "text",
+                                      "name": "queueUrl",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition3')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition3'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition3')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections3')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AWSWAF_DCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Microsoft-AWSWAF"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ]
+                  }
+                ],
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId3')]"
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition3'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition3'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "AwsS3WafCcpDefinition",
+          "title": "Amazon Web Services S3 WAF",
+          "logo": "amazon_web_services_Logo.svg",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "This connector allows you to ingest AWS WAF logs, collected in AWS S3 buckets, to Microsoft Sentinel. AWS WAF logs are detailed records of traffic that web access control lists (ACLs) analyze, which are essential for maintaining the security and performance of web applications. These logs contain information such as the time AWS WAF received the request, the specifics of the request, and the action taken by the rule that the request matched.",
+          "graphQueriesTableName": "AWSWAF",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Amazon Web Services S3 WAF",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of logs",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | where TimeGenerated > ago(12h) | where name_s == \"no data test\"               | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors",
+              "value": null
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": false,
+                  "write": false,
+                  "delete": false,
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 1. AWS CloudFormation Deployment \n To configure access on AWS, two templates has been generated to set up the AWS environment to send logs from an S3 bucket to your Log Analytics Workspace.\n #### For each template, create Stack in AWS: \n 1. Go to [AWS CloudFormation Stacks](https://aka.ms/awsCloudFormationLink#/stacks/create). \n 2. Choose the ‘Specify template’ option, then ‘Upload a template file’ by clicking on ‘Choose file’ and selecting the appropriate CloudFormation template file provided below. click ‘Choose file’ and select the downloaded template. \n 3. Click 'Next' and 'Create stack'."
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Template 1: OpenID connect authentication deployment",
+                    "isMultiLine": true,
+                    "fillWith": [
+                      "Oidc"
+                    ]
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Template 2: AWS WAF resources deployment",
+                    "isMultiLine": true,
+                    "fillWith": [
+                      "AwsWAF"
+                    ]
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 2. Connect new collectors \n To enable AWS S3 for Microsoft Sentinel, click the Add new collector button, fill the required information in the context pane and click on Connect."
+                  }
+                },
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnValue": "properties.roleArn",
+                        "columnName": "Role ARN"
+                      },
+                      {
+                        "columnValue": "properties.sqsUrls[0]",
+                        "columnName": "Queue URL"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "title": "Add new controller",
+                    "subtitle": "AWS S3 connector",
+                    "label": "Add new collector",
+                    "instructionSteps": [
+                      {
+                        "title": "Account details",
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Role ARN",
+                              "type": "text",
+                              "name": "roleArn",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Queue URL",
+                              "type": "text",
+                              "name": "queueUrl",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition3')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition3'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition3')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections3')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections3'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections3')]",
+        "displayName": "Amazon Web Services S3 WAF",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "apikey": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "baseUrl": {
+              "defaultValue": "Enter baseUrl value",
+              "type": "string",
+              "minLength": 1
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Amazon Web Services S3 WAF",
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "roleArn": {
+              "defaultValue": "roleArn",
+              "type": "string",
+              "minLength": 1
+            },
+            "queueUrl": {
+              "defaultValue": "queueUrl",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections3": "[variables('_dataConnectorContentIdConnections3')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections3')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections3'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections3')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'AwsS3 WAF Pollinf Config')]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "AmazonWebServicesS3",
+              "properties": {
+                "connectorDefinitionName": "AwsS3WafCcpDefinition",
+                "dataTypes": {
+                  "logs": {
+                    "state": "enabled"
+                  }
+                },
+                "dcrConfig": {
+                  "streamName": "SENTINEL_AWSWAF",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "destinationTable": "",
+                "dataFormat": {
+                  "Format": "Json",
+                  "IsCompressed": true,
+                  "compressType": "Gzip"
+                },
+                "roleArn": "[[parameters('roleArn')]",
+                "sqsUrls": [
+                  "[[parameters('queueUrl')]"
+                ]
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections3'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
       }
     },
     {
@@ -1262,30 +1883,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1390,30 +2011,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1516,30 +2137,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1646,30 +2267,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1775,30 +2396,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1901,30 +2522,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2028,30 +2649,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2154,30 +2775,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2280,30 +2901,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2405,30 +3026,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2519,62 +3140,62 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "UPNSuffix"
+                        "columnName": "UPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "ObjectGuid",
-                        "columnName": "RemoteAWSAccountId"
+                        "columnName": "RemoteAWSAccountId",
+                        "identifier": "ObjectGuid"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "RemoteIpAddress"
+                        "columnName": "RemoteIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "LocalIpAddress"
+                        "columnName": "LocalIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "identifier": "Url",
-                        "columnName": "FindingLink"
+                        "columnName": "FindingLink",
+                        "identifier": "Url"
                       }
-                    ]
+                    ],
+                    "entityType": "URL"
                   }
                 ],
                 "customDetails": {
+                  "DetectionMechanism": "DetectionMechanism",
                   "ThreatFamilyName": "ThreatFamilyName",
                   "ResourceTypeAffected": "ResourceTypeAffected",
-                  "Artifact": "Artifact",
-                  "DetectionMechanism": "DetectionMechanism",
-                  "ThreatPurpose": "ThreatPurpose"
+                  "ThreatPurpose": "ThreatPurpose",
+                  "Artifact": "Artifact"
                 },
                 "alertDetailsOverride": {
-                  "alertSeverityColumnName": "Severity",
+                  "alertDescriptionFormat": "{{Description}}",
                   "alertTacticsColumnName": "ThreatPurpose",
-                  "alertDisplayNameFormat": "{{Title}}",
-                  "alertDescriptionFormat": "{{Description}}"
+                  "alertSeverityColumnName": "Severity",
+                  "alertDisplayNameFormat": "{{Title}}"
                 }
               }
             },
@@ -2670,30 +3291,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2790,30 +3411,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2910,30 +3531,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3030,30 +3651,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3150,30 +3771,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3270,30 +3891,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3390,30 +4011,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3510,30 +4131,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3630,30 +4251,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3750,30 +4371,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3870,30 +4491,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -3990,30 +4611,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -4110,30 +4731,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -4230,30 +4851,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -4350,30 +4971,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -4470,30 +5091,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -4590,30 +5211,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -4710,30 +5331,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -4830,30 +5451,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -4950,30 +5571,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -5070,30 +5691,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -5190,30 +5811,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -5310,30 +5931,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -5430,30 +6051,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -5550,30 +6171,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -5670,30 +6291,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -5790,30 +6411,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -5910,30 +6531,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6030,30 +6651,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6150,30 +6771,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6270,30 +6891,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6390,30 +7011,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6510,30 +7131,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6630,30 +7251,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6750,30 +7371,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6870,30 +7491,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -6990,30 +7611,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -7110,30 +7731,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -7230,30 +7851,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -7350,30 +7971,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -7470,30 +8091,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -7590,30 +8211,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -7710,30 +8331,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -7830,30 +8451,30 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -7961,21 +8582,21 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ],
                 "customDetails": {
@@ -8077,36 +8698,36 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountName"
+                        "columnName": "AccountName",
+                        "identifier": "Name"
                       },
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "AccountUPNSuffix"
+                        "columnName": "AccountUPNSuffix",
+                        "identifier": "UPNSuffix"
                       },
                       {
-                        "identifier": "CloudAppAccountId",
-                        "columnName": "RecipientAccountId"
+                        "columnName": "RecipientAccountId",
+                        "identifier": "CloudAppAccountId"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "SourceIpAddress"
+                        "columnName": "SourceIpAddress",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ],
                 "customDetails": {
+                  "SourceIpAddress": "SourceIpAddress",
                   "AWSUser": "UserIdentityArn",
-                  "UserAgent": "UserAgent",
-                  "SourceIpAddress": "SourceIpAddress"
+                  "UserAgent": "UserAgent"
                 }
               }
             },
@@ -11185,7 +11806,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Amazon Web Services",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Amazon%20Web%20Services/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Amazon Web Services solution for Microsoft Sentinel allows you to enable Security monitoring of AWS services by allowing ingestion of logs from the AWS CloudTrail platform, VPC Flow Logs, AWS GuardDuty and AWS CloudWatch.</p>\n<p><strong>Data Connectors:</strong> 2, <strong>Workbooks:</strong> 2, <strong>Analytic Rules:</strong> 57, <strong>Hunting Queries:</strong> 36</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Amazon%20Web%20Services/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Amazon Web Services solution for Microsoft Sentinel allows you to enable Security monitoring of AWS services by allowing ingestion of logs from the AWS CloudTrail platform, VPC Flow Logs, AWS GuardDuty and AWS CloudWatch.</p>\n<p><strong>Data Connectors:</strong> 3, <strong>Workbooks:</strong> 2, <strong>Analytic Rules:</strong> 57, <strong>Hunting Queries:</strong> 36</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -11218,6 +11839,11 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId2')]",
               "version": "[variables('dataConnectorVersion2')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections3')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
             },
             {
               "kind": "Workbook",
