@@ -1,0 +1,92 @@
+id: ba3b1d75-544c-43ff-9969-9ff753e3e3dc
+Function:
+  Title: Parser for CymruScoutIP
+  Version: "1.0.0"
+  LastUpdated: "2024-07-05"
+Category: Microsoft Sentinel Parser
+FunctionName: CymruScoutIP
+FunctionAlias: CymruScoutIP
+FunctionQuery: |
+        let dummy_table = datatable(TimeGenerated: datetime, IndicatorType: string, Indicator: string, IP: string, Insights: string, InsightsOverallRating: string, SummaryWhoIsASName: string, SummaryWhoIsASN: string, SummaryWhoIsNetName: string, SummaryWhoIsOrgName: string, SummaryReverseHostNames: string, IdentityASN: string, IdentityASName: string, IdentityNetName: string, IdentityOrgName: string, ASInfo: string, IPCountryCode: string, IdentityReverseHostNames: string, TagsIds: string, TagsNames: string, IPPdnsDomain: string, PDNSDetails: dynamic, OpenPorts:string, OpenPortsDetails: dynamic, ProtocolID: string, ProtocolType: string, OpenPortServices: string , CertificateDetails: string , FingerprintsDetails: string) [];
+        let CymruScoutIP = view(){
+        let pdnsfields = Cymru_Scout_IP_Data_Summary_PDNS_CL
+        | summarize arg_max(TimeGenerated, *) by ip_s, domain_s
+        | extend domain_s = column_ifexists("domain_s", ""),
+                event_count_d = column_ifexists("event_count_d", "")
+        | extend PDNSDetailRecord = bag_pack("domain", domain_s,"event_count", toint(event_count_d))
+        | summarize IPPdnsDomain = strcat_array(make_list(domain_s), ","), PDNSDetails = make_list(PDNSDetailRecord) by ip_s;
+        let open_portsfields = Cymru_Scout_IP_Data_Summary_OpenPorts_CL
+        | summarize arg_max(TimeGenerated, *) by ip_s, port_d
+        | extend port_d = column_ifexists("port_d", ""), protocol_d = column_ifexists("protocol_d", ""), protocol_text_s = column_ifexists("protocol_text_s", ""), service_s = column_ifexists("service_s", ""), event_count_d = column_ifexists("event_count_d", "")
+        | extend OpenPortsRecord = bag_pack("port", toint(port_d), "protocol", toint(protocol_d), "protocol_text", protocol_text_s, "event_count", toint(event_count_d))
+        | summarize OpenPorts = strcat_array(make_list(toint(port_d)), ","), ProtocolID = strcat_array(make_list(toint(protocol_d)), ","), ProtocolType = strcat_array(make_list(protocol_text_s), ","), OpenPortServices = strcat_array(make_list(service_s), ","), OpenPortsDetails = make_list(OpenPortsRecord) by ip_s;
+        let certificates = Cymru_Scout_IP_Data_Summary_Certs_CL
+        | summarize arg_max(TimeGenerated, *) by ip_s, port_d, md5_g
+        | extend issuer_s = column_ifexists("issuer_s", ""), issuer_common_name_s = column_ifexists("issuer_common_name_s", ""), common_name_s = column_ifexists("common_name_s", ""), subject_s = column_ifexists("subject_s", ""), port_d = column_ifexists("port_d", ""), first_seen_s = column_ifexists("first_seen_s", ""), last_seen_s = column_ifexists("last_seen_s", ""), self_signed_b = column_ifexists("self_signed_b", ""), not_before_s = column_ifexists("not_before_s", ""), not_after_s = column_ifexists("not_after_s", ""), valid_days_d = column_ifexists("valid_days_d", ""), md5_g = column_ifexists("md5_g", ""), sha1_s = column_ifexists("sha1_s", ""), sha256_s = column_ifexists("sha256_s", ""), css_color_s = column_ifexists("css_color_s", "")
+        | extend Certificates = bag_pack("issuer",issuer_s, "issuer_common_name",issuer_common_name_s, "common_name", common_name_s, "subject",subject_s, "port",toint(port_d), "first_seen", first_seen_s, "last_seen", last_seen_s, "self_signed",self_signed_b, "not_before", not_before_s, "not_after", not_after_s, "valid_days", toint(valid_days_d), "md5", md5_g, "sha1", sha1_s, "sha256", sha256_s, "css_color", css_color_s)
+        | summarize CertificateDetails = strcat_array(make_list(Certificates), ",") by ip_s;
+        let fingerprints = Cymru_Scout_IP_Data_Summary_Fingerprints_CL
+        | summarize arg_max(TimeGenerated, *) by ip_s, signature_g
+        | extend type_s = column_ifexists("type_s", ""), signature_g = column_ifexists("signature_g", ""), port_d = column_ifexists("port_d", ""), first_seen_s = column_ifexists("first_seen_s", ""), last_seen_s = column_ifexists("last_seen_s", ""), count_d = column_ifexists("count_d", "")
+        | extend Fingerprints = bag_pack("type", type_s, "signature", signature_g, "port", toint(port_d), "first_seen", first_seen_s, "last_seen", last_seen_s, "count", toint(count_d))
+        | summarize FingerprintsDetails = strcat_array(make_list(Fingerprints), ",") by ip_s;
+        union isfuzzy=true dummy_table,
+        (Cymru_Scout_IP_Data_Details_CL
+        | summarize arg_max(TimeGenerated, *) by ip_s
+        | join kind=leftouter (Cymru_Scout_IP_Data_Summary_Details_CL| summarize arg_max(TimeGenerated, *) by ip_s) on ip_s
+        | join kind=leftouter pdnsfields on ip_s
+        | join kind=leftouter open_portsfields on ip_s
+        | join kind=leftouter certificates on ip_s
+        | join kind=leftouter fingerprints on ip_s),
+        ( Cymru_Scout_IP_Data_Foundation_CL)
+        | summarize arg_max(TimeGenerated, *) by ip_s
+        | extend IndicatorType="IP", 
+                Indicator=column_ifexists("ip_s", ""), 
+                IP = column_ifexists("ip_s", ""), 
+                Insights = column_ifexists("insights_insights_s", ""), 
+                InsightsOverallRating = column_ifexists("insights_overall_rating_s", ""), 
+                SummaryWhoIsASName = column_ifexists("whois_as_name_s1", ""), 
+                SummaryWhoIsASN = column_ifexists("whois_asn_d1", ""), 
+                SummaryWhoIsNetName = column_ifexists("whois_net_name_s1", ""), 
+                SummaryWhoIsOrgName = column_ifexists("whois_org_name_s1", ""), 
+                SummaryReverseHostNames = strcat_array(todynamic(column_ifexists("reverse_hostnames_s", "")), ","), 
+                IdentityASN = column_ifexists("identity_asn_d", ""), 
+                IdentityASName = column_ifexists("identity_as_name_s", ""),
+                IdentityNetName = column_ifexists("identity_net_name_s", ""), 
+                IdentityOrgName = column_ifexists("identity_org_name_s", ""), 
+                ASInfo = column_ifexists("as_info_s", ""), 
+                IPCountryCode = coalesce(column_ifexists("country_code_s", ""), column_ifexists("geo_ip_cc_s", "")), 
+                IdentityReverseHostNames = strcat_array(todynamic(column_ifexists("identity_reverse_hostnames_s", "")), ","),
+                TagsIds = strcat_array(todynamic(column_ifexists("tags_id_s", "")), ","),
+                TagsNames = strcat_array(todynamic(column_ifexists("tags_name_s", "")), ",")
+        | project TimeGenerated,
+                IndicatorType, 
+                Indicator, 
+                IP, 
+                Insights, 
+                InsightsOverallRating, 
+                SummaryWhoIsASName, 
+                SummaryWhoIsASN, 
+                SummaryWhoIsNetName, 
+                SummaryWhoIsOrgName, 
+                SummaryReverseHostNames, 
+                IdentityASN, 
+                IdentityASName,
+                IdentityNetName, 
+                IdentityOrgName, 
+                ASInfo, 
+                IPCountryCode, 
+                IdentityReverseHostNames, 
+                IPPdnsDomain, 
+                PDNSDetails,
+                OpenPorts, 
+                OpenPortsDetails, 
+                ProtocolID, 
+                ProtocolType, 
+                OpenPortServices, 
+                CertificateDetails, 
+                FingerprintsDetails,
+                TagsIds,
+                TagsNames
+        };
+        CymruScoutIP

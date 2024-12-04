@@ -1,0 +1,134 @@
+id: 271e8881-3044-4332-a5f4-42264c2e0315
+name: GSA Enriched Office 365 - Anomalous access to other users' mailboxes
+description: |
+  'Looks for users accessing multiple other users' mailboxes or accessing multiple folders in another users mailbox.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - Collection
+relevantTechniques:
+  - T1114.002
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+    let starttime = todatetime('{{StartTimeISO}}');
+    let endtime = todatetime('{{EndTimeISO}}');
+    let lookback = totimespan((endtime - starttime) * 2);
+    let user_threshold = 1;    // Threshold for number of mailboxes accessed
+    let folder_threshold = 5;  // Threshold for number of mailbox folders accessed
+    // OfficeActivity Query
+    let OfficeEvents = OfficeActivity
+        | where TimeGenerated between (ago(lookback)..starttime)
+        | where Operation =~ "MailItemsAccessed"
+        | where ResultStatus =~ "Succeeded"
+        | where tolower(MailboxOwnerUPN) != tolower(UserId)
+        | join kind=rightanti (
+            OfficeActivity
+            | where TimeGenerated between (starttime..endtime)
+            | where Operation =~ "MailItemsAccessed"
+            | where ResultStatus =~ "Succeeded"
+            | where tolower(MailboxOwnerUPN) != tolower(UserId)
+        ) on MailboxOwnerUPN, UserId
+        | where isnotempty(Folders)
+        | mv-expand ParsedFolders = parse_json(Folders)
+        | extend folders = tostring(ParsedFolders.Path)
+        | extend ClientIP = iif(Client_IPAddress startswith "[", extract("\\[([^\\]]*)", 1, Client_IPAddress), Client_IPAddress)
+        | summarize 
+            StartTime = max(TimeGenerated), 
+            EndTime = min(TimeGenerated), 
+            set_folders = make_set(folders, 100000), 
+            set_ClientInfoString = make_set(ClientInfoString, 100000), 
+            set_ClientIP = make_set(ClientIP, 100000), 
+            set_MailboxGuid = make_set(MailboxGuid, 100000), 
+            set_MailboxOwnerUPN = make_set(MailboxOwnerUPN, 100000) 
+          by UserId
+        | extend 
+            folder_count = array_length(set_folders),
+            user_count = array_length(set_MailboxGuid)
+        | where user_count > user_threshold or folder_count > folder_threshold
+        | extend Reason = case(
+            user_count > user_threshold and folder_count > folder_threshold, "Both User and Folder Threshold Exceeded",
+            folder_count > folder_threshold and user_count <= user_threshold, "Folder Count Threshold Exceeded",
+            "User Threshold Exceeded")
+        | sort by user_count desc
+        | project-reorder UserId, user_count, folder_count, set_MailboxOwnerUPN, set_ClientIP, set_ClientInfoString, set_folders
+        | extend 
+            AccountName = tostring(split(UserId, "@")[0]), 
+            AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+        // EnrichedMicrosoft365AuditLogs Query
+        let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+        | where TimeGenerated between (ago(lookback)..starttime)
+        | where Operation =~ "MailItemsAccessed"
+        | where ResultStatus =~ "Succeeded"
+        | extend MailboxOwnerUPN = tostring(parse_json(AdditionalProperties).MailboxOwnerUPN)
+        | where tolower(MailboxOwnerUPN) != tolower(UserId)
+        | join kind=rightanti (
+            EnrichedMicrosoft365AuditLogs
+            | where TimeGenerated between (starttime..endtime)
+            | where Operation =~ "MailItemsAccessed"
+            | where ResultStatus =~ "Succeeded"
+            | extend MailboxOwnerUPN = tostring(parse_json(AdditionalProperties).MailboxOwnerUPN)
+            | where tolower(MailboxOwnerUPN) != tolower(UserId)
+        ) on MailboxOwnerUPN, UserId
+        | where isnotempty(tostring(parse_json(AdditionalProperties).Folders))
+        | mv-expand ParsedFolders = parse_json(AdditionalProperties).Folders
+        | extend folders = tostring(ParsedFolders.Path)
+        | extend ClientIP = iif(ClientIp startswith "[", extract("\\[([^\\]]*)", 1, ClientIp), ClientIp)
+        | extend ClientInfoString = tostring(parse_json(AdditionalProperties).ClientInfoString)
+        | extend MailboxGuid = tostring(parse_json(AdditionalProperties).MailboxGuid)
+        | summarize 
+            StartTime = max(TimeGenerated), 
+            EndTime = min(TimeGenerated), 
+            set_folders = make_set(folders, 100000), 
+            set_ClientInfoString = make_set(ClientInfoString, 100000), 
+            set_ClientIP = make_set(ClientIP, 100000), 
+            set_MailboxGuid = make_set(MailboxGuid, 100000), 
+            set_MailboxOwnerUPN = make_set(MailboxOwnerUPN, 100000) 
+          by UserId
+        | extend 
+            folder_count = array_length(set_folders),
+            user_count = array_length(set_MailboxGuid)
+        | where user_count > user_threshold or folder_count > folder_threshold
+        | extend Reason = case(
+            user_count > user_threshold and folder_count > folder_threshold, "Both User and Folder Threshold Exceeded",
+            folder_count > folder_threshold and user_count <= user_threshold, "Folder Count Threshold Exceeded",
+            "User Threshold Exceeded")
+        | sort by user_count desc
+        | project-reorder UserId, user_count, folder_count, set_MailboxOwnerUPN, set_ClientIP, set_ClientInfoString, set_folders
+        | extend 
+            AccountName = tostring(split(UserId, "@")[0]), 
+            AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+        // Combine Office and Enriched Logs
+        let CombinedEvents = OfficeEvents
+            | union EnrichedEvents
+            | mv-expand ClientIP = set_ClientIP  // Expand the set_ClientIP into individual ClientIP rows
+            | extend ClientIP = tostring(ClientIP)  // Explicitly cast ClientIP to string
+            | summarize arg_min(StartTime, *) by UserId, ClientIP
+            // Define AccountName and AccountUPNSuffix after summarize to ensure they're available
+            | extend 
+                AccountName = tostring(split(UserId, "@")[0]), 
+                AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+        // Final Output
+        CombinedEvents
+            | project 
+                UserId, 
+                user_count, 
+                folder_count, 
+                set_MailboxOwnerUPN, 
+                set_ClientIP, 
+                set_ClientInfoString, 
+                set_folders, 
+                AccountName, 
+                AccountUPNSuffix
+            | order by user_count desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.3
