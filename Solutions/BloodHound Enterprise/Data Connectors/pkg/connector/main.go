@@ -587,7 +587,11 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 	bloodhoundRecordData := make(map[string][]BloodhoundEnterpriseData)
 
 	// Get attack path type to attack path title mapping
-	pathMap := getAttackPathTitles(bloodhoundServer, bloodhoundClient, responseLogs)
+	pathMap, err := getAttackPathTitles(bloodhoundServer, bloodhoundClient, responseLogs)
+	if err != nil {
+		responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path titles %v", err))
+		return responseLogs, err
+	}
 
 	lastAnalysisTime, err := bloodhound.GetLastAnalysisTime(bloodhoundClient)
 	if err != nil {
