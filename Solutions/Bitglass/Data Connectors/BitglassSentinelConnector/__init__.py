@@ -66,14 +66,14 @@ class BG_CASB():
         if token is None:
             self.params = {
                 "startdate": self.from_time,
-                "cv": "1.0.1",
+                "cv": "1.1.5",
                 "type": self.event_type,
                 "responseformat": "json"
             }
         else:
             self.params = {
                 "nextpagetoken": token,
-                "cv": "1.0.1",
+                "cv": "1.1.5",
                 "type": self.event_type,
                 "responseformat": "json"
             }
