@@ -507,17 +507,69 @@ func CreateBatchesGauranteedToFit(records []BloodhoundEnterpriseData, maxUploadS
 }
 
 func ApplyEditors(ctx context.Context, c *sdk.Client, req *http.Request, additionalEditors []sdk.RequestEditorFn) error {
-	for _, r := range c.RequestEditors {
-		if err := r(ctx, req); err != nil {
+	for _, editor := range c.RequestEditors {
+		if err := editor(ctx, req); err != nil {
 			return err
 		}
 	}
-	for _, r := range additionalEditors {
-		if err := r(ctx, req); err != nil {
+	for _, editor := range additionalEditors {
+		if err := editor(ctx, req); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func getAssetData(bloodhoundServer string, bloodhoundClient *sdk.ClientWithResponses, uri string) (*http.Response, error){
+	// TODO Better error / retry handling
+	if !strings.HasPrefix(bloodhoundServer, "https") {
+		bloodhoundServer = "https://" + bloodhoundServer
+	}
+	var client = bloodhoundClient.ClientInterface.(*sdk.Client)	
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/uri", bloodhoundServer), nil)
+	if (err != nil) {
+		return nil, fmt.Errorf("failed to get attack path title %v", err)
+	}
+
+	err = ApplyEditors(context.TODO(), client, req, client.RequestEditors)
+	if (err != nil) {
+		return nil, fmt.Errorf("failed to get attack path title %v", err)
+	}
+	response, err := client.Client.Do(req)
+	if (err != nil) {
+		return nil, fmt.Errorf("failed to get attack path title %v", err)
+	}
+	if (response.StatusCode != http.StatusOK) {
+		return nil, fmt.Errorf("failed to get attack path title %v", response.Status)
+	}
+
+	return response, nil
+}
+
+// TODO: lift common http request / permission code into util func.
+func getAttackPathTitles(bloodhoundServer string, bloodhoundClient *sdk.ClientWithResponses, responseLogs []string) (map[string]string, error) {
+	pathTypes, err := bloodhoundClient.ListAttackPathTypesWithResponse(context.TODO(), nil)
+	if err != nil {
+		responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path types %v", err))
+		return nil, err
+	}
+	var pathMap = make(map[string]string)
+
+	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path types", len(*pathTypes.JSON200.Data)))
+	for _, pathType := range *pathTypes.JSON200.Data {
+		// I'm going to get these one at a time TOOD: check if there is a better way
+		uri := fmt.Sprintf("api/v2/assets/findings/%s/title.md", pathType)
+		response, err := getAssetData(bloodhoundServer, bloodhoundClient, uri)
+		if (err != nil) {
+			return nil, err
+		}
+
+		var responseBytes = make([]byte, 1024) // TODO check if this is a good size or will expand
+		count, err := response.Body.Read(responseBytes) 
+		pathMap[pathType] = string(responseBytes[:count])
+	}
+	return pathMap, nil
 }
 
 // UploadLogsCallback returns a curried function that can be used as a callback
@@ -535,43 +587,7 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 	bloodhoundRecordData := make(map[string][]BloodhoundEnterpriseData)
 
 	// Get attack path type to attack path title mapping
-	// TODO: lift this and it really should be defined in the API
-	// TODO: Retry?  Handle 429?
-	if !strings.HasPrefix(bloodhoundServer, "https") {
-		bloodhoundServer = "https://" + bloodhoundServer
-	}
-	var client = bloodhoundClient.ClientInterface.(*sdk.Client)	
-	pathTypes, err := bloodhoundClient.ListAttackPathTypesWithResponse(context.TODO(), nil)
-	if err != nil {
-		responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path types %v", err))
-		return responseLogs, err
-	}
-	var pathMap = make(map[string]string)
-
-	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path types", len(*pathTypes.JSON200.Data)))
-	for _, pathType := range *pathTypes.JSON200.Data {
-		// I'm going to get these one at a time TOOD: check if there is a better way
-	
-		req, err := http.NewRequest("GET",fmt.Sprintf("%s/api/v2/assets/findings/%s/title.md", bloodhoundServer, pathType), nil)
-		if (err != nil) {
-			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", err))
-			return responseLogs, err
-		}
-
-		ApplyEditors(context.TODO(), client, req, client.RequestEditors)
-		response, err := client.Client.Do(req)
-		if (err != nil) {
-			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", err))
-			return responseLogs, err
-		}
-		if (response.StatusCode != http.StatusOK) {
-			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", response.Status))
-			return responseLogs, err
-		}
-		var responseBytes = make([]byte, 1024)
-		count, err := response.Body.Read(responseBytes) 
-		pathMap[pathType] = string(responseBytes[:count])
-	}
+	pathMap := getAttackPathTitles(bloodhoundServer, bloodhoundClient, responseLogs)
 
 	lastAnalysisTime, err := bloodhound.GetLastAnalysisTime(bloodhoundClient)
 	if err != nil {
@@ -721,4 +737,5 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 	}
 	return responseLogs, lastError
 }
+
 
