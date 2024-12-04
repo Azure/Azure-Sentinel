@@ -4,16 +4,16 @@
     {
       "type": 1,
       "content": {
-        "json": "## Traffic Logs workbook\n---\n\nLog information in the dashboard is limited to 30 days."
+        "json": "## Network Traffic Insights Workbook (Preview)\n---\nInformation in the dashboard is based on log data\n\n\n"
       },
-      "name": "text - 0"
+      "name": "text - 2"
     },
     {
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
         "crossComponentResources": [
-          ""
+          "value::all"
         ],
         "parameters": [
           {
@@ -22,24 +22,25 @@
             "name": "LogAnalyticWorkspace",
             "label": "Log Analytic Workspace",
             "type": 5,
-            "description": "The log analytic workspace in which to execute the queries",
+            "description": "The Log Analytic Workspace In Which To Execute The Queries",
             "isRequired": true,
             "query": "resources\r\n| where type == \"microsoft.operationalinsights/workspaces\"\r\n| project id",
+            "crossComponentResources": [
+              "value::all"
+            ],
             "typeSettings": {
               "resourceTypeFilter": {
                 "microsoft.operationalinsights/workspaces": true
               },
-              "additionalResourceOptions": [
-                "value::1"
-              ],
+              "additionalResourceOptions": [],
               "showDefault": false
             },
             "timeContext": {
-              "durationMs": 86400000
+              "durationMs": 2592000000
             },
-            "defaultValue": "value::1",
             "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources"
+            "resourceType": "microsoft.resourcegraph/resources",
+            "value": null
           },
           {
             "id": "f15f34d8-8e2d-4c39-8dee-be2f979c86a8",
@@ -96,7 +97,7 @@
               "durationMs": 86400000
             },
             "value": {
-              "durationMs": 2592000000
+              "durationMs": 604800000
             }
           },
           {
@@ -108,7 +109,10 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "EnrichedMicrosoft365AuditLogsDemos_CL\r\n| summarize Count = count() by UserId_s\r\n| order by Count desc, UserId_s asc\r\n| project Value = UserId_s, Label = strcat(UserId_s, ' - ', Count, ' Logs'), Selected = false",
+            "query": "NetworkAccessTraffic\r\n| summarize Count = count() by UserPrincipalName\r\n| order by Count desc, UserPrincipalName asc\r\n| project Value = UserPrincipalName, Label = strcat(UserPrincipalName, ' - ', Count, ' Logs'), Selected = false",
+            "crossComponentResources": [
+              "{LogAnalyticWorkspace}"
+            ],
             "typeSettings": {
               "limitSelectTo": 20,
               "additionalResourceOptions": [
@@ -126,10 +130,41 @@
             "value": [
               "value::all"
             ]
+          },
+          {
+            "id": "527af4d2-3089-4aa4-9fbb-48ec697db20d",
+            "version": "KqlParameterItem/1.0",
+            "name": "WebCategories",
+            "label": "Web Categories",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "NetworkAccessTraffic\r\n| extend firstCategory = tostring(split(DestinationWebCategories, ',')[0]) // Split and get the first category\r\n| summarize Count = count() by firstCategory\r\n| order by Count desc, firstCategory asc\r\n| project Value = firstCategory, Label = strcat(firstCategory, ' - ', Count, ' Logs')",
+            "crossComponentResources": [
+              "{LogAnalyticWorkspace}"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 604800000
+            },
+            "timeContextFromParameter": "TimeRange",
+            "defaultValue": "value::all",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "value::all"
+            ]
           }
         ],
         "style": "pills",
-        "queryType": 1,
+        "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces"
       },
       "name": "parameters - 15"
@@ -155,23 +190,286 @@
             "linkLabel": "All Traffic",
             "subTarget": "AllTraffic",
             "style": "link"
+          },
+          {
+            "id": "5ae54b5a-ac7b-4b7a-a1e1-1e574625caa3",
+            "cellValue": "tabSel",
+            "linkTarget": "parameter",
+            "linkLabel": "URL Lookup",
+            "subTarget": "URLLookup",
+            "style": "link"
+          },
+          {
+            "id": "68c566f8-957e-4a3f-8b66-730fc24135fb",
+            "cellValue": "tabSel",
+            "linkTarget": "parameter",
+            "linkLabel": "Security Insights",
+            "subTarget": "Security",
+            "style": "link"
           }
         ]
       },
       "name": "links - 7"
     },
     {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let NetworkAccessTrafficData = NetworkAccessTraffic\r\n| where SourceIp != \"\" and isnotempty(SourceIp)\r\n| summarize arg_max(TimeGenerated, *) by SourceIp, TenantId;\r\n\r\nlet SigninLogsData = SigninLogs\r\n| where IPAddress != \"\" and isnotempty(IPAddress)\r\n| summarize arg_max(TimeGenerated, *) by IPAddress, TenantId, UserId, CorrelationId;\r\n\r\nSigninLogsData\r\n| join kind=leftanti (\r\n    NetworkAccessTrafficData\r\n    | where SourceIp != \"\" and isnotempty(SourceIp)\r\n) on $left.IPAddress == $right.SourceIp and $left.TenantId == $right.TenantId\r\n| project TimeGenerated, IPAddress, UserId, UserPrincipalName, AppDisplayName, DeviceDetail.deviceId\r\n",
+              "size": 0,
+              "title": "Sign-ins Outside Global Secure Access",
+              "timeContextFromParameter": "TimeRange",
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
+              "gridSettings": {
+                "rowLimit": 1000,
+                "filter": true
+              }
+            },
+            "name": "query - 0"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "tabSel",
+        "comparison": "isEqualTo",
+        "value": "Security"
+      },
+      "name": "group - 10"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "💡 Type the URL for detailed analysis"
+      },
+      "conditionalVisibility": {
+        "parameterName": "tabSel",
+        "comparison": "isEqualTo",
+        "value": "URLLookup"
+      },
+      "name": "text - 10"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "ec8c38c8-3064-4921-8dcd-a69d3895599b",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "URL",
+                  "type": 1,
+                  "typeSettings": {
+                    "isSearchBox": true
+                  },
+                  "timeContext": {
+                    "durationMs": 86400000
+                  }
+                }
+              ],
+              "style": "above",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "conditionalVisibility": {
+              "parameterName": "tabSel",
+              "comparison": "isEqualTo",
+              "value": "URLLookup"
+            },
+            "name": "parameters - 9"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "# Web Categories"
+            },
+            "name": "text - 11"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let CategoryData = NetworkAccessTraffic \r\n| where DestinationFqdn contains \"{URL}\"  // Filters logs based on the provided URL parameter\r\n| extend CategoriesList = split(DestinationWebCategories, \",\")  // Split categories into a list\r\n| mv-expand Category = CategoriesList  // Expand the list into individual rows\r\n| extend Category = trim_start(\" \", trim_end(\" \", tostring(Category)))  // Trim leading and trailing spaces\r\n| extend Category = iff(TrafficType == \"microsoft365\", \"Microsoft M365\", Category)  // Set category to \"Microsoft M365\" if TrafficType is \"microsoft365\"\r\n| summarize UniqueCategories = make_set(Category);  // Create a set of unique categories\r\n\r\nCategoryData\r\n| extend \r\n    PrimaryCategory = iff(array_length(UniqueCategories) > 0, tostring(UniqueCategories[0]), \"None\")\r\n| project \r\n    col1 = PrimaryCategory,\r\n    snapshot = \"Primary Category\"\r\n\r\n| union (\r\n    CategoryData\r\n    | extend \r\n        SecondaryCategory = iff(array_length(UniqueCategories) > 1, tostring(UniqueCategories[1]), \"None\")\r\n    | project \r\n        col1 = SecondaryCategory,\r\n        snapshot = \"Secondary Category\"\r\n)\r\n\r\n| order by snapshot asc\r\n",
+              "size": 4,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "snapshot"
+                },
+                "leftContent": {
+                  "columnMatch": "col1",
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal",
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                },
+                "showBorder": true,
+                "size": "auto"
+              }
+            },
+            "name": "query - 17"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "# Traffic Access Details"
+            },
+            "name": "text - 15"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let NetworkData = NetworkAccessTraffic\r\n| where DestinationFqdn contains \"{URL}\";  // Filters logs based on the provided URL parameter\r\n\r\nNetworkData\r\n| summarize \r\n    UniqueUsers = dcount(UserPrincipalName),\r\n    UniqueDevices = dcount(DeviceId),    \r\n    TotalAllow = countif(Action == \"Allow\"),\r\n    TotalBlock = countif(Action == \"Block\")\r\n| project \r\n    col1 = UniqueUsers, \r\n    snapshot = \"Unique Users\"\r\n| union (NetworkData\r\n    | summarize UniqueDevices = dcount(DeviceId)\r\n    | project col1 = UniqueDevices, snapshot = \"Unique Devices\")\r\n| union (NetworkData\r\n    | summarize TotalAllow = countif(Action == \"Allow\")\r\n    | project col1 = TotalAllow, snapshot = \"Total Allow\")\r\n| union (NetworkData\r\n    | summarize TotalBlock = countif(Action == \"Block\")\r\n    | project col1 = TotalBlock, snapshot = \"Total Block\")\r\n| order by snapshot asc",
+              "size": 4,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "snapshot",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "col1",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal",
+                      "maximumFractionDigits": 2,
+                      "maximumSignificantDigits": 3
+                    }
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "name": "query - 14"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "# Bandwidth Usage"
+            },
+            "name": "text - 16"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let NetworkData = NetworkAccessTraffic\r\n| where DestinationFqdn contains \"{URL}\";  // Filters logs based on the provided URL parameter\r\n\r\nNetworkData\r\n| summarize \r\n    TotalSent = sum(SentBytes),\r\n    TotalReceived = sum(ReceivedBytes),\r\n    TotalBandwidth = sum(SentBytes + ReceivedBytes)\r\n| extend \r\n    TotalSentMB = round(TotalSent / 1024.0 / 1024.0, 2),\r\n    TotalReceivedMB = round(TotalReceived / 1024.0 / 1024.0, 2),\r\n    TotalBandwidthMB = round(TotalBandwidth / 1024.0 / 1024.0, 2)\r\n| project \r\n    TotalSentMB,\r\n    TotalReceivedMB,\r\n    TotalBandwidthMB\r\n| extend dummy = 1\r\n| project-away dummy\r\n| mv-expand \r\n    Column = pack_array(\"TotalSentMB\", \"TotalReceivedMB\", \"TotalBandwidthMB\"),\r\n    Value = pack_array(TotalSentMB, TotalReceivedMB, TotalBandwidthMB)\r\n| extend \r\n    snapshot = case(\r\n        Column == \"TotalSentMB\", \"Total Sent (MB)\",\r\n        Column == \"TotalReceivedMB\", \"Total Received (MB)\",\r\n        Column == \"TotalBandwidthMB\", \"Total Bandwidth (MB)\",\r\n        \"Unknown\"\r\n    ),\r\n    col1 = iff(Value < 0.01, 0.00, Value)\r\n| project-away Column, Value\r\n| order by snapshot asc",
+              "size": 4,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "snapshot",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "col1",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal",
+                      "maximumFractionDigits": 2,
+                      "maximumSignificantDigits": 3
+                    }
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "name": "query - 17"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "# Traffic Logs (filtered)"
+            },
+            "name": "text - 12"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "NetworkAccessTraffic\r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| where DestinationFqdn contains \"{URL}\"\r\n| project \r\n    Timestamp = TimeGenerated,\r\n    User = UserPrincipalName,\r\n    [\"Source IP\"] = SourceIp,\r\n    [\"Destination IP\"] = DestinationIp,\r\n    [\"Destination Port\"] = DestinationPort,\r\n    [\"Destination FQDN\"] = DestinationFqdn,\r\n    Action = case(\r\n        tolower(Action) == \"allow\", \"🟢 Allow\", \r\n        tolower(Action) == \"block\", \"🔴 Block\", \r\n        tolower(Action) // This returns the action in lowercase if it doesn't match \"allow\" or \"block\"\r\n    ),\r\n    [\"Policy Name\"] = PolicyName,\r\n    [\"Policy Rule ID\"] = PolicyRuleId,\r\n    [\"Received Bytes\"] = ReceivedBytes,\r\n    [\"Sent Bytes\"] = SentBytes,\r\n    [\"Device OS\"] = DeviceOperatingSystem    \r\n| order by Timestamp desc\r\n",
+              "size": 0,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ]
+            },
+            "name": "query - 13"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "tabSel",
+        "comparison": "isEqualTo",
+        "value": "URLLookup"
+      },
+      "name": "group - URL Lookup"
+    },
+    {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "NetworkAccessDemo_CL\r\n| project \r\n    Timestamp = createdDateTime_t,\r\n    User = userPrincipalName_s,\r\n    SourceIP = SourceIP,\r\n    DestinationIP = destinationIp_s,\r\n    DestinationPort = destinationPort_d,\r\n    Action = action_s,\r\n    PolicyName = policyName_s,\r\n    TransportProtocol = transportProtocol_s,\r\n    TrafficType = trafficType_s,\r\n    DestinationURL = destinationUrl_s,\r\n    ReceivedBytes = receivedBytes_d,\r\n    SentBytes = sentBytes_d,\r\n    DeviceOS = deviceOperatingSystem_s,\r\n    PolicyRuleID = policyRuleId_s\r\n| order by Timestamp desc",
+        "query": "NetworkAccessTraffic\r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| project \r\n    Timestamp = TimeGenerated,\r\n    User = UserPrincipalName,\r\n    [\"Source IP\"] = SourceIp,\r\n    [\"Destination IP\"] = DestinationIp,\r\n    [\"Destination Port\"] = DestinationPort,\r\n    [\"Destination FQDN\"] = DestinationFqdn,\r\n    Action = case(\r\n        tolower(Action) == \"allow\", \"🟢 Allow\", \r\n        tolower(Action) == \"block\", \"🔴 Block\", \r\n        tolower(Action) // This returns the action in lowercase if it doesn't match \"allow\" or \"block\"\r\n    ),\r\n    [\"Policy Name\"] = PolicyName,\r\n    [\"Web Category\"] = DestinationWebCategories,\r\n    [\"Transport Protocol\"] = TransportProtocol,\r\n    [\"Traffic Type\"] = TrafficType,\r\n    [\"Received Bytes\"] = ReceivedBytes,\r\n    [\"Sent Bytes\"] = SentBytes,\r\n    [\"Device OS\"] = DeviceOperatingSystem,\r\n    [\"Policy Rule ID\"] = PolicyRuleId\r\n| order by Timestamp desc\r\n",
         "size": 3,
-        "showAnalytics": true,
-        "title": "Log",
+        "title": "Traffic Logs",
         "timeContextFromParameter": "TimeRange",
+        "showRefreshButton": true,
         "showExportToExcel": true,
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{LogAnalyticWorkspace}"
+        ],
         "gridSettings": {
           "rowLimit": 1000,
           "filter": true
@@ -188,11 +486,14 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "// Unique Users\nNetworkAccessDemo_CL\n| extend GeoInfo = geo_info_from_ip_address(SourceIP) // Extend each row with geolocation info\n| where userPrincipalName_s in ({Users}) or '*' in ({Users})\n| project SourceIP, Country = tostring(GeoInfo.country), State = tostring(GeoInfo.state), City = tostring(GeoInfo.city), Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\n| summarize UniqueUsers=dcount(Country)\n| extend snapshot = \"Total Locations\"\n| project col1 = UniqueUsers, snapshot\n\n// Union with Unique Devices\n| union (\n    NetworkAccessDemo_CL\n    | where userPrincipalName_s in ({Users}) or '*' in ({Users})\n    | extend BytesInGB = todouble(sentBytes_d + receivedBytes_d) / (1024 * 1024 * 1024)  // Convert bytes to gigabytes\n    | summarize TotalBytesGB = sum(BytesInGB)\n    | extend snapshot = \"Total Bytes (GB)\"\n    | project col1 =   tolong(TotalBytesGB), snapshot\n)\n\n// Union with Total Internet Access\n| union (\n    NetworkAccessDemo_CL\n    | where userPrincipalName_s in ({Users}) or '*' in ({Users})\n    | summarize TotalTransactions = count()\n    | extend snapshot = \"Total Trasnacations\"\n    | project col1 = TotalTransactions, snapshot\n)\n\n// Union with Total Private Access\n// Order by Snapshot for consistent tile ordering on dashboard\n| order by snapshot",
+        "query": "// Unique Users\nNetworkAccessTraffic\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Extend each row with geolocation info\n| project SourceIp, Country = tostring(GeoInfo.country), State = tostring(GeoInfo.state), City = tostring(GeoInfo.city), Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\n| summarize UniqueUsers=dcount(Country)\n| extend snapshot = \"Total Locations\"\n| project col1 = UniqueUsers, snapshot\n\n// Union with Unique Devices\n| union (\n    NetworkAccessTraffic\n    | where UserPrincipalName in ({Users}) or '*' in ({Users})\n    | extend BytesInGB = todouble(SentBytes + ReceivedBytes) / (1024 * 1024 * 1024)  // Convert bytes to gigabytes\n    | summarize TotalBytesGB = sum(BytesInGB)\n    | extend snapshot = \"Total Bytes (GB)\"\n    | project col1 =   tolong(TotalBytesGB), snapshot\n)\n\n// Union with Total Internet Access\n| union (\n    NetworkAccessTraffic\n    | where UserPrincipalName in ({Users}) or '*' in ({Users})\n    | summarize TotalTransactions = count()\n    | extend snapshot = \"Total Transactions\"\n    | project col1 = TotalTransactions, snapshot\n)\n\n// Union with Total Private Access\n// Order by Snapshot for consistent tile ordering on dashboard\n| order by snapshot",
         "size": 4,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{LogAnalyticWorkspace}"
+        ],
         "visualization": "tiles",
         "tileSettings": {
           "titleContent": {
@@ -243,12 +544,15 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "NetworkAccessDemo_CL\r\n| where userPrincipalName_s in ({Users}) or '*' in ({Users})\r\n| extend BytesInGB = todouble(sentBytes_d + receivedBytes_d) / (1024 * 1024 * 1024)  // Convert bytes to gigabytes\r\n| summarize TotalBytesGB = sum(BytesInGB) by bin(createdDateTime_t, 1h), trafficType_s\r\n| order by bin(createdDateTime_t, 1h) asc, trafficType_s asc\r\n| project createdDateTime_t, trafficType_s, TotalBytesGB\r\n",
+              "query": "NetworkAccessTraffic\r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| extend BytesIn = todouble(SentBytes + ReceivedBytes) / (1024 * 1024)  // Convert bytes to Mbytes\r\n| summarize TotalBytesMB = sum(BytesIn) by bin(TimeGenerated, 1h), TrafficType\r\n| order by bin(TimeGenerated, 1h) asc, TrafficType asc\r\n| project TimeGenerated, TrafficType, TotalBytesMB\r\n",
               "size": 2,
-              "title": "Usage over Time (GB)",
+              "title": "Usage Over Time (MB)",
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
               "visualization": "barchart"
             },
             "conditionalVisibility": {
@@ -272,12 +576,15 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "NetworkAccessDemo_CL\r\n| where userPrincipalName_s in ({Users}) or '*' in ({Users})\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIP) // Extend each row with geolocation info\r\n| project  createdDateTime_t, SourceIP, Country = tostring(GeoInfo.country), State = tostring(GeoInfo.state), City = tostring(GeoInfo.city), Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\r\n| where Country != \"\"\r\n| summarize Count = count() by City, State, Country\r\n\r\n",
-              "size": 0,
+              "query": "NetworkAccessTraffic\r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Extend each row with geolocation info\r\n| project  TimeGenerated, SourceIp, Country = tostring(GeoInfo.country), State = tostring(GeoInfo.state), City = tostring(GeoInfo.city), Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\r\n| where Country != \"\"\r\n| summarize Count = count() by City, State, Country\r\n\r\n",
+              "size": 3,
               "title": "Locations",
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
               "visualization": "map",
               "mapSettings": {
                 "locInfo": "CountryRegion",
@@ -297,19 +604,21 @@
                 }
               }
             },
-            "customWidth": "50",
             "name": "query - 0"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "NetworkAccessDemo_CL\r\n| where userPrincipalName_s in ({Users}) or '*' in ({Users})\r\n| where tolower(action_s) == \"allow\" and destinationWebCategory_displayName_s != '' // Filter for allowed traffic\r\n| extend firstCategory = tostring(split(destinationWebCategory_displayName_s, ',')[0]) // Split and get the first category\r\n| summarize Count = count() by firstCategory\r\n| top 10 by Count\r\n",
+              "query": "NetworkAccessTraffic\r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| where tolower(Action) == \"allow\" and DestinationWebCategories != '' // Filter for allowed traffic\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| extend firstCategory = tostring(split(DestinationWebCategories, ',')[0]) // Split and get the first category\r\n| summarize Count = count() by firstCategory\r\n| top 10 by Count\r\n",
               "size": 2,
               "title": "Top Allowed Web Categories",
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
               "visualization": "piechart"
             },
             "customWidth": "50",
@@ -319,26 +628,15 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "NetworkAccessDemo_CL\r\n| where userPrincipalName_s in ({Users}) or '*' in ({Users})\r\n| where tolower(action_s) == \"block\" and destinationFQDN_s != '' // Filter for allowed traffic\r\n| summarize Count = count() by destinationFQDN_s\r\n| top 100 by Count",
-              "size": 0,
-              "title": "Top Blocked Destinations",
-              "timeContextFromParameter": "TimeRange",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces"
-            },
-            "customWidth": "50",
-            "name": "query - 5"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "NetworkAccessDemo_CL\r\n| where userPrincipalName_s in ({Users}) or '*' in ({Users})\r\n| where tolower(action_s) == \"block\" and destinationWebCategory_displayName_s != '' // Filter for blocked traffic\r\n| extend firstCategory = tostring(split(destinationWebCategory_displayName_s, ',')[0]) // Split and get the first category\r\n| summarize Count = count() by firstCategory\r\n| top 10 by Count\r\n",
+              "query": "NetworkAccessTraffic\r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| where tolower(Action) == \"block\" and DestinationWebCategories != '' // Filter for blocked traffic\r\n| extend firstCategory = tostring(split(DestinationWebCategories, ',')[0]) // Split and get the first category\r\n| summarize Count = count() by firstCategory\r\n| top 10 by Count\r\n",
               "size": 3,
               "title": "Top Blocked Web Categories",
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
               "visualization": "piechart"
             },
             "customWidth": "50",
@@ -348,12 +646,61 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "NetworkAccessDemo_CL\r\n| where userPrincipalName_s in ({Users}) or '*' in ({Users})\r\n| where sentBytes_d > 0\r\n| where tolower(action_s) != \"block\" \r\n| summarize Count = count() , Sent = sum(sentBytes_d), Recived = sum(receivedBytes_d), Total = sum(receivedBytes_d+ sentBytes_d) by destinationFQDN_s\r\n| order by Count desc\r\n",
+              "query": "NetworkAccessTraffic  \r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| where tolower(Action) == \"block\" and DestinationFqdn != ''  // Filter for blocked traffic with non-empty Destination FQDN\r\n| summarize Count = count() by [\"Destination FQDN\"] = DestinationFqdn, [\"Destination Web Categories\"] = DestinationWebCategories, [\"Policy Name\"] = PolicyName\r\n| order by Count\r\n",
+              "size": 0,
+              "title": "Top Blocked Destinations",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Count",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  }
+                ],
+                "rowLimit": 1000,
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_bar_Count_3",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "$gen_bar_Count_3",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query - 5"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "NetworkAccessTraffic\r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where DestinationWebCategories in ({WebCategories}) or '*' in ({WebCategories})\r\n| where SentBytes > 0\r\n| where tolower(Action) != \"block\"\r\n| summarize \r\n    Count = count(), \r\n    [\"Sent Bytes\"] = sum(SentBytes), \r\n    [\"Received Bytes\"] = sum(ReceivedBytes), \r\n    [\"Total Bytes\"] = sum(ReceivedBytes + SentBytes) \r\n    by [\"Destination FQDN\"] = DestinationFqdn\r\n| order by Count desc\r\n",
               "size": 0,
               "title": "Top Allowed Destinations",
               "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
               "gridSettings": {
                 "formatters": [
                   {
@@ -384,8 +731,22 @@
                       "palette": "blue"
                     }
                   }
+                ],
+                "rowLimit": 1000,
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_bar_Count_1",
+                    "sortOrder": 2
+                  }
                 ]
-              }
+              },
+              "sortBy": [
+                {
+                  "itemKey": "$gen_bar_Count_1",
+                  "sortOrder": 2
+                }
+              ]
             },
             "customWidth": "50",
             "name": "query - 1"
@@ -394,12 +755,15 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "NetworkAccessDemo_CL\r\n| where userPrincipalName_s in ({Users}) or '*' in ({Users})\r\n| where transportProtocol_s != ''\r\n| summarize Count = count() by toupper(transportProtocol_s)\r\n| top 10 by Count\r\n",
+              "query": "NetworkAccessTraffic\r\n| where UserPrincipalName in ({Users}) or '*' in ({Users})\r\n| where TransportProtocol != ''\r\n| summarize Count = count() by toupper(TransportProtocol)\r\n| top 10 by Count\r\n",
               "size": 2,
-              "title": "Protocol Distburion",
+              "title": "Protocol Distribution",
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{LogAnalyticWorkspace}"
+              ],
               "visualization": "piechart"
             },
             "customWidth": "50",
@@ -415,7 +779,9 @@
       "name": "group - 4"
     }
   ],
-  "fallbackResourceIds": [    
+  "fallbackResourceIds": [
+    "Global Secure Access"
   ],
+  "fromTemplateId": "GSA Network Traffic Insights",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }

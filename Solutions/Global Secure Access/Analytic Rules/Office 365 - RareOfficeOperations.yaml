@@ -1,5 +1,5 @@
-id: 957cb240-f45d-4491-9ba5-93430a3c08be
-name: Rare and Potentially High-Risk Office Operations
+id: 433c254d-4b84-46f7-99ec-9dfefb5f6a7b
+name: GSA Enriched Office 365 - Rare and Potentially High-Risk Office Operations
 description: |
   Identifies Office operations that are typically rare and can provide capabilities useful to attackers.
 severity: Low
@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -19,11 +22,32 @@ relevantTechniques:
   - T1098
   - T1114
 query: |
-    EnrichedMicrosoft365AuditLogs
-    | where Operation in~ ( "Add-MailboxPermission", "Add-MailboxFolderPermission", "Set-Mailbox", "New-ManagementRoleAssignment", "New-InboxRule", "Set-InboxRule", "Set-TransportRule")
-    and not(UserId has_any ('NT AUTHORITY\\SYSTEM (Microsoft.Exchange.ServiceHost)', 'NT AUTHORITY\\SYSTEM (Microsoft.Exchange.AdminApi.NetCore)', 'NT AUTHORITY\\SYSTEM (w3wp)', 'devilfish-applicationaccount') and Operation in~ ( "Add-MailboxPermission", "Set-Mailbox"))
-    | extend ClientIPOnly = tostring(extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?', dynamic(["IPAddress"]), ClientIp)[0])
-    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  // OfficeActivity Query
+  let OfficeEvents = OfficeActivity
+      | where Operation in~ ( "Add-MailboxPermission", "Add-MailboxFolderPermission", "Set-Mailbox", "New-ManagementRoleAssignment", "New-InboxRule", "Set-InboxRule", "Set-TransportRule")
+      and not(UserId has_any ('NT AUTHORITY\\SYSTEM (Microsoft.Exchange.ServiceHost)', 'NT AUTHORITY\\SYSTEM (Microsoft.Exchange.AdminApi.NetCore)', 'NT AUTHORITY\\SYSTEM (w3wp)', 'devilfish-applicationaccount') 
+           and Operation in~ ( "Add-MailboxPermission", "Set-Mailbox"))
+      | extend ClientIPOnly = tostring(extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?', dynamic(["IPAddress"]), ClientIP)[0])
+      | extend AccountName = tostring(split(UserId, "@")[0]), 
+               AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  
+  // EnrichedMicrosoft365AuditLogs Query
+  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+      | where Operation in~ ( "Add-MailboxPermission", "Add-MailboxFolderPermission", "Set-Mailbox", "New-ManagementRoleAssignment", "New-InboxRule", "Set-InboxRule", "Set-TransportRule")
+      and not(UserId has_any ('NT AUTHORITY\\SYSTEM (Microsoft.Exchange.ServiceHost)', 'NT AUTHORITY\\SYSTEM (Microsoft.Exchange.AdminApi.NetCore)', 'NT AUTHORITY\\SYSTEM (w3wp)', 'devilfish-applicationaccount') 
+           and Operation in~ ( "Add-MailboxPermission", "Set-Mailbox"))
+      | extend ClientIPOnly = tostring(extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?', dynamic(["IPAddress"]), ClientIp)[0])
+      | extend AccountName = tostring(split(UserId, "@")[0]), 
+               AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  
+  // Combine and Deduplicate Office and Enriched Logs
+  let CombinedEvents = OfficeEvents
+      | union EnrichedEvents
+      | summarize arg_min(TimeGenerated, *) by Operation, UserId, ClientIPOnly;
+  
+  // Final Output
+  CombinedEvents
+      | project TimeGenerated, Operation, UserId, AccountName, AccountUPNSuffix, ClientIPOnly
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -37,9 +61,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: ClientIPOnly
-  - entityType: CloudApplication
-    fieldMappings:
-      - identifier: AppId
-        columnName: AppId
-version: 2.0.5
+version: 2.0.7
 kind: Scheduled

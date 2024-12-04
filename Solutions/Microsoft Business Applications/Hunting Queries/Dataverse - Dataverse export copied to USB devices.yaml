@@ -1,0 +1,61 @@
+id: f9658e11-e277-4a65-8f91-2cb94cf7497c
+name: Dataverse - Dataverse export copied to USB devices
+description: This query uses XDR data from M365 Defender to detect files downloaded
+  from a Dataverse instance and copied to USB drive.
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceInfo
+      - DeviceEvents
+      - DeviceFileEvents
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1052
+  - T1052.001
+query: |
+  DataverseActivity
+  | distinct InstanceUrl
+  | join kind=inner (DeviceFileEvents)
+      on $left.InstanceUrl == $right.FileOriginUrl
+  | join kind=inner (DeviceEvents
+      | where ActionType == "UsbDriveMounted"
+      | extend DriveLetter = tostring(AdditionalFields.DriveLetter)
+      | summarize MountedDriveLetters = make_set(DriveLetter, 26) by DeviceId, DeviceName)
+      on DeviceId
+  | extend TargetDriveLetter = tostring(split(FolderPath, "\\")[0])
+  | where set_has_element(MountedDriveLetters, TargetDriveLetter)
+  | join kind=inner (DeviceInfo
+      | summarize arg_max(TimeGenerated, DeviceId, PublicIP) by DeviceName)
+      on DeviceId
+  | summarize LatestEvent = arg_max(TimeGenerated, *) by FileName, UserId = InitiatingProcessAccountUpn, InstanceUrl
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      LatestEvent,
+      UserId,
+      PublicIP,
+      FolderPath,
+      InstanceUrl,
+      AccountName,
+      UPNSuffix,
+      CloudAppId
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - columnName: InstanceUrl
+        identifier: InstanceName
+      - columnName: CloudAppId
+        identifier: AppId
+  - entityType: Account
+    fieldMappings:
+      - columnName: UPNSuffix
+        identifier: UPNSuffix
+      - columnName: AccountName
+        identifier: Name
+version: 3.2.0
