@@ -1,5 +1,5 @@
 import { ExitCode } from "./exitCode";
-import { GetDiffFiles } from "./gitWrapper";
+import { GetDiffFiles } from "./gitHubWrapper";
 import * as logger from "./logger";
 
 export type CheckOptions = {

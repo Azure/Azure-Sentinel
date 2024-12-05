@@ -1,5 +1,5 @@
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { GetPRDetails } from "./utils/gitWrapper";
+import { GetPRDetails } from "./utils/gitHubWrapper";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
 import gitP, { SimpleGit } from 'simple-git/promise';

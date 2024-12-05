@@ -1,4 +1,4 @@
-import { GetDiffFiles, GetPRDetails } from "../gitWrapper";
+import { GetDiffFiles, GetPRDetails } from "../gitHubWrapper";
 import { WorkbookMetadata } from "../workbookMetadata";
 import gitP, { SimpleGit } from 'simple-git/promise';
 import { WorkbookValidationError } from "../validationError";
