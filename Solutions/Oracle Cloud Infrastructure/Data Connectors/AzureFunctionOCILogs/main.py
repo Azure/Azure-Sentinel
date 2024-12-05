@@ -59,15 +59,15 @@ def determine_log_type(event):
     Determine the Azure Sentinel log type based on the event type.
     """
     event_type = event.get("type", "default")
-    if "com.oraclecloud.loadbalancer" in event_type:
+    if event_type == "com.oraclecloud.loadbalancer.access" or event_type == "com.oraclecloud.loadbalancer.error" or event_type=="com.oraclecloud.OraLB-API.ListLoadBalancers":
         return "OCI_LoadBalancerLogs"
     # elif event_type == "com.oraclecloud.loadbalancer.error":
     #     return "OCI_LoadBalancerLogs"
-    elif "com.oraclecloud.audit" in event_type:
+    if event_type == "com.oraclecloud.Audit.ListEvents":
         return "OCI_AuditLogs"
-    elif "com.oraclecloud.virtualNetwork" in event_type:
+    if event_type == "com.oraclecloud.vcn.flowlogs.DataEvent" or event_type == "com.oraclecloud.vcn.flowlogs.QualityEvent.NoData" or event_type == "com.oraclecloud.virtualNetwork.GetVcn" or event_type == "com.oraclecloud.virtualNetwork.ListVcns" or event_type == "com.oraclecloud.vcn.flowlogs.QualityEvent.SkipData" or event_type == "com.oraclecloud.virtualNetwork.GetVcnDnsResolverAssociation":
         return "OCI_VirtualNetworkLogs"
-    elif "com.oraclecloud.compute" in event_type:
+    if "com.oraclecloud.compute" in event_type:
         return "OCI_ComputeInstanceLogs"
     else:
         return "OCI_LogsV2"  # Default log type
