@@ -3,7 +3,6 @@ package bloodhound
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -35,28 +34,19 @@ func InitializeBloodhoundClient(apiKey string, apikeyId string, bloodhoundServer
 	return client, nil
 }
 
-func GetTierZeroPrincipal(client *sdk.ClientWithResponses) (*sdk.ModelUnifiedGraphGraph, error) {
-	query := "match (n) where n.system_tags contains(\"admin_tier_0\") return n"
-	x := true
-	queryBody := sdk.RunCypherQueryJSONRequestBody{
-		IncludeProperties: &x,
-		Query:             &query,
-	}
-	const TIER_ZERO_ASSET_GROUP int64 = 1
-
-//	assetgrouprspones, err := client.GetAssetGroupWithResponse((context.TODO(), TIERint32(TIER_ZERO_ASSET_GROUP), nil))
-	response, err := client.RunCypherQueryWithResponse(context.TODO(), nil, queryBody)
+func GetTierZeroPrincipals(client *sdk.ClientWithResponses) ([]sdk.ModelAssetGroupMember, error) {
+	response, err := client.ListAssetGroupMembersWithResponse(context.TODO(), 1, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error getting tier zero principals %v", err)
 	}
-	if response.StatusCode() != 200 {
-		return nil, errors.New(response.Status())
+	if response.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("Error getting tier zero principals %s", response.Status())
 	}
-	return response.JSON200.Data, nil
+	return *response.JSON200.Data.Members, nil
 }
 
 func GetLastAnalysisTime(client *sdk.ClientWithResponses) (*time.Time, error) {
-	response, err := client.GetDatapipeStatusWithResponse(context.TODO(),nil )
+	response, err := client.GetDatapipeStatusWithResponse(context.TODO(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error getting last analysis run time %v", err)
 	}
@@ -105,7 +95,6 @@ func GetPostureData(client *sdk.ClientWithResponses, currentState *time.Time) (*
 
 	return response.JSON200.Data, nil
 }
-
 
 // Note: there is no last time
 func GetAttackPathTypesForDomain(client *sdk.ClientWithResponses, domain_ids []string) (map[string][]string, error) {

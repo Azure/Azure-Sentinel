@@ -155,8 +155,8 @@ func transformConfigurationFinding(domainMap *map[string]sdk.ModelDomainSelector
 		Principal:         *findingProps.Name,
 		TierZeroPrincipal: *findingProps.Name,
 		PathType:          pathType,
-		PathTitle:		   pathTitle,
-		EventDetails: 	   pathTitle, 
+		PathTitle:         pathTitle,
+		EventDetails:      pathTitle,
 		ID:                int64(*finding.Id),
 	}
 	return bhe_sentinel_data, nil
@@ -177,8 +177,8 @@ func transformRelationshipFinding(domainMap *map[string]sdk.ModelDomainSelector,
 		TierZeroPrincipal:    toProps.Name,
 		NonTierZeroPrincipal: fromProps.Name,
 		PathType:             pathType,
-		PathTitle: 			  pathTitle,
-		EventDetails:		  pathTitle,
+		PathTitle:            pathTitle,
+		EventDetails:         pathTitle,
 		// DeletedAt: finding.DeletedAt,
 		DeletedAtV: *finding.DeletedAt.Valid,
 		// DeletedAtV: finding.DeletedAt != nil,
@@ -294,8 +294,8 @@ func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ s
 		DeletedAtV:        *data.DeletedAt.Valid,
 		ID:                *data.Id,
 		PathType:          path_type,
-		PathTitle: 	       path_title,
-		EventDetails:	   path_title,
+		PathTitle:         path_title,
+		EventDetails:      path_title,
 	}
 	return bhe_sentinel_data, nil
 
@@ -357,68 +357,52 @@ func transformAudiLogs(logs []sdk.ModelAuditLog) ([]BloodhoundEnterpriseData, er
 	return records, nil
 }
 
-func transformTierZeroPrincipal(graph *sdk.ModelUnifiedGraphGraph, domainMap *map[string]sdk.ModelDomainSelector) ([]BloodhoundEnterpriseData, error) {
+func memberOf(elem *string, set map[string]bool) bool {
+	_, ok := set[string(*elem)]
+	return ok
+}
+
+func in(elem string, set map[string]bool) bool {
+	_, ok := set[elem]
+	return ok
+}
+
+func transformTierZeroPrincipal(tierZeroGroupmembers []sdk.ModelAssetGroupMember, domainMap map[string]sdk.ModelDomainSelector) ([]BloodhoundEnterpriseData, error) {
+	ENVIRONMENT_KINDS := map[string]bool{"Domain": true, "AZTenant": true}
 	records := make([]BloodhoundEnterpriseData, 0)
-	nodes := graph.Nodes
-	for _, node := range *nodes {
-		if *node.IsTierZero == false {
-			continue
-		}
-		props := (*node.Properties)
-		var selector *sdk.ModelDomainSelector = nil
+	for _, groupMember := range tierZeroGroupmembers {
+		var environment_name = ""
+		var environment_id = groupMember.EnvironmentId
+		var environment_kind = groupMember.EnvironmentKind
 
-		if *node.Kind == "Meta" {
-			continue
-		}
-		if *node.Kind == "Base" {
-			continue
-		}
-
-		sid, ok := props["domainsid"].(string)
-		if ok == true {
-			s, ok := (*domainMap)[sid]
-			if ok == true {
-				selector = &s
+		// Business logic
+		// If there is an environment_id we use this as the environnment
+		// If there is no environment_id and the primary_kind is an environment kind we use the ObjectId as the environment_id
+		// Otherwise we skip the record
+		if groupMember.EnvironmentId != nil && *groupMember.EnvironmentId != "" {
+			selector, ok := domainMap[*groupMember.EnvironmentId]
+			if ok {
+				environment_name = *selector.Name
 			}
-		}
-
-		if selector == nil {
-			sid, ok := props["tenantid"].(string)
-			if ok == true {
-				s, ok := (*domainMap)[sid]
-				if ok == true {
-					selector = &s
-				}
-			}
-		}
-		if selector == nil {
-			s, ok := (*domainMap)[*node.ObjectId]
-			if ok == true {
-				selector = &s
-			}
-		}
-		if selector == nil {
+		} else if groupMember.PrimaryKind != nil && memberOf(groupMember.PrimaryKind, ENVIRONMENT_KINDS) {
+			environment_name = *groupMember.Name
+			environment_id = groupMember.ObjectId
+			environment_kind = groupMember.PrimaryKind
+		} else {
+			log.Printf("Skipping tier zero element with no environment. Kind: %s", *groupMember.PrimaryKind)
 			continue
 		}
-
-		var domainType = selector.Name
-		if strings.HasPrefix(*domainType, "AZ") {
-			s := strings.ReplaceAll(*domainType, "AZ", "")
-			domainType = &s
-		}
-		bheRecord := BloodhoundEnterpriseData{
+		record := BloodhoundEnterpriseData{
+			TierZeroPrincipal: *groupMember.Name,
+			FindingID:         *groupMember.ObjectId,    // TODO: move this to a new field called ObjectID (backfill required for other data_types??)
+			EventDetails:      *groupMember.PrimaryKind, // TODO: move this to a new field called ObjectKind (backfill required for other data_types??)
+			DomainSID:         *environment_id,
+			DomainType:        *environment_kind,
+			DomainName:        environment_name,
 			DataType:          "t0_export",
 			TimeGenerated:     time.Now(),
-			DomainSID:         *node.ObjectId,
-			DomainName:        *selector.Name,
-			DomainType:        *selector.Type,
-			DomainID:          *selector.Id,
-			CreatedAt:         time.Now(),
-			EventDetails:      *node.Kind,
-			TierZeroPrincipal: *node.Label,
-			// TODO update updated time
 		}
-		records = append(records, bheRecord)
+		records = append(records, record)
 	}
 	return records, nil
 }
@@ -520,34 +504,33 @@ func ApplyEditors(ctx context.Context, c *sdk.Client, req *http.Request, additio
 	return nil
 }
 
-func getAssetData(bloodhoundServer string, bloodhoundClient *sdk.ClientWithResponses, uri string) (*http.Response, error){
+func getAssetData(bloodhoundServer string, bloodhoundClient *sdk.ClientWithResponses, uri string) (*http.Response, error) {
 	// TODO Better error / retry handling
 	if !strings.HasPrefix(bloodhoundServer, "https") {
 		bloodhoundServer = "https://" + bloodhoundServer
 	}
-	var client = bloodhoundClient.ClientInterface.(*sdk.Client)	
+	var client = bloodhoundClient.ClientInterface.(*sdk.Client)
 
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/uri", bloodhoundServer), nil)
-	if (err != nil) {
+	if err != nil {
 		return nil, fmt.Errorf("failed to get attack path title %v", err)
 	}
 
 	err = ApplyEditors(context.TODO(), client, req, client.RequestEditors)
-	if (err != nil) {
+	if err != nil {
 		return nil, fmt.Errorf("failed to get attack path title %v", err)
 	}
 	response, err := client.Client.Do(req)
-	if (err != nil) {
+	if err != nil {
 		return nil, fmt.Errorf("failed to get attack path title %v", err)
 	}
-	if (response.StatusCode != http.StatusOK) {
+	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get attack path title %v", response.Status)
 	}
 
 	return response, nil
 }
 
-// TODO: lift common http request / permission code into util func.
 func getAttackPathTitles(bloodhoundServer string, bloodhoundClient *sdk.ClientWithResponses, responseLogs []string) (map[string]string, error) {
 	pathTypes, err := bloodhoundClient.ListAttackPathTypesWithResponse(context.TODO(), nil)
 	if err != nil {
@@ -561,12 +544,12 @@ func getAttackPathTitles(bloodhoundServer string, bloodhoundClient *sdk.ClientWi
 		// I'm going to get these one at a time TOOD: check if there is a better way
 		uri := fmt.Sprintf("api/v2/assets/findings/%s/title.md", pathType)
 		response, err := getAssetData(bloodhoundServer, bloodhoundClient, uri)
-		if (err != nil) {
+		if err != nil {
 			return nil, err
 		}
 
 		var responseBytes = make([]byte, 1024) // TODO check if this is a good size or will expand
-		count, err := response.Body.Read(responseBytes) 
+		count, err := response.Body.Read(responseBytes)
 		pathMap[pathType] = string(responseBytes[:count])
 	}
 	return pathMap, nil
@@ -586,13 +569,6 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 
 	bloodhoundRecordData := make(map[string][]BloodhoundEnterpriseData)
 
-	// Get attack path type to attack path title mapping
-	pathMap, err := getAttackPathTitles(bloodhoundServer, bloodhoundClient, responseLogs)
-	if err != nil {
-		responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path titles %v", err))
-		return responseLogs, err
-	}
-
 	lastAnalysisTime, err := bloodhound.GetLastAnalysisTime(bloodhoundClient)
 	if err != nil {
 		responseLogs = append(responseLogs, fmt.Sprintf("failed to get last analysis time %v", err))
@@ -606,8 +582,6 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 		} else {
 			responseLogs = append(responseLogs, fmt.Sprintf("last ingest time %v before last analysis time %v.  We will continue", lastRun, lastAnalysisTime))
 		}
-	} else {
-		log.Printf("UploadLogsCallback lastRun is nil, not doing compare")
 	}
 
 	mapping, err := bloodhound.GetDomainMapping(bloodhoundClient)
@@ -616,6 +590,8 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 		return responseLogs, err
 	}
 	responseLogs = append(responseLogs, fmt.Sprintf("got %d domain mappings", len(*mapping)))
+
+	pathMap, err := getAttackPathTitles(bloodhoundServer, bloodhoundClient, responseLogs)
 
 	domainIds := make([]string, 0, len(*mapping))
 	for k, _ := range *mapping {
@@ -703,14 +679,14 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 
 	bloodhoundRecordData["attackPathAggregateData"] = attackPathAggregateBHERecords
 
-	tierZeroData, err := bloodhound.GetTierZeroPrincipal(bloodhoundClient)
+	tierZeroData, err := bloodhound.GetTierZeroPrincipals(bloodhoundClient)
 	if err != nil {
 		responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero principals %v", err))
 		return responseLogs, err
 	}
-	responseLogs = append(responseLogs, fmt.Sprintf("Got %d cypher query graph nodes", len(*tierZeroData.Nodes)))
+	responseLogs = append(responseLogs, fmt.Sprintf("Got %d cypher query graph nodes", len(tierZeroData)))
 
-	tier0BHERecords, err := transformTierZeroPrincipal(tierZeroData, mapping)
+	tier0BHERecords, err := transformTierZeroPrincipal(tierZeroData, *mapping)
 	if err != nil {
 		responseLogs = append(responseLogs, fmt.Sprintf("Error transforming tier zero principal data %v", err))
 		return responseLogs, err
@@ -741,5 +717,3 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 	}
 	return responseLogs, lastError
 }
-
-
