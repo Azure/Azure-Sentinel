@@ -1,0 +1,89 @@
+id: 54d48840-1c64-4399-afee-ad39a069118d
+kind: Scheduled
+name: Power Platform - Possibly compromised user accesses Power Platform services
+description: Identifies user accounts flagged at risk in Microsoft Entra Identity
+  Protection and correlates these users with sign-in activity in Power Platform, including
+  Power Apps, Power Automate and Power Platform Admin Center.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1078
+  - T1210
+query: |
+  let power_automate_appid = "6204c1d1-4712-4c46-a7d9-3ed63d992682";
+  let power_apps_appid = "a8f7a65c-f5ba-4859-b2d6-df772c264e9d";
+  let ppac_appid = "065d9450-1e87-434e-ac2f-69af271549ed";
+  let query_frequency = 1h;
+  SigninLogs
+  | where ingestion_time() >= ago(query_frequency)
+  | where array_length(todynamic(RiskEventTypes)) != 0 or array_length(todynamic(RiskEventTypes_V2)) != 0
+  | where AppId in (power_automate_appid, power_apps_appid, ppac_appid)
+  | extend AffectedPlatform = case(
+                                  AppId == ppac_appid,
+                                  "Power Platform Admin Center",
+                                  AppId == power_apps_appid,
+                                  "Power Apps",
+                                  AppId == power_automate_appid,
+                                  "Power Automate",
+                                  "Unknown"
+                              )
+  | extend
+      Severity = iif(AffectedPlatform in ("Power Apps", "Power Automate"), "Medium", "High"),
+      CloudAppId = case(AffectedPlatform == "Power Apps", int(27593), AffectedPlatform == "Power Automate", int(27592), 0),
+      AccountName = tostring(split(UserPrincipalName, '@')[0]),
+      UPNSuffix = tostring(split(UserPrincipalName, '@')[1])
+  | project
+      TimeGenerated,
+      UserId,
+      UniqueTokenIdentifier,
+      Identity,
+      RiskEventTypes,
+      RiskEventTypes_V2,
+      UserPrincipalName,
+      AppId,
+      AppDisplayName,
+      AffectedPlatform,
+      IPAddress,
+      Severity,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AffectedPlatform
+      - identifier: AppId
+        columnName: AppId
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Risky user sign-in activity in {{{AffectedPlatform}} '
+  alertDescriptionFormat: The user {{UserPrincipalName}} has sign-in risk events associated
+    and successfully signed in to {{{AffectedPlatform}} from {{IPAddress}}
+  alertSeverityColumnName: Severity
+customDetails:
+  RiskEventTypes: RiskEventTypes
+  RiskEventTypes_V2: RiskEventTypes_V2
+version: 3.0.0
