@@ -37,10 +37,10 @@ func InitializeBloodhoundClient(apiKey string, apikeyId string, bloodhoundServer
 func GetTierZeroPrincipals(client *sdk.ClientWithResponses) ([]sdk.ModelAssetGroupMember, error) {
 	response, err := client.ListAssetGroupMembersWithResponse(context.TODO(), 1, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting tier zero principals %v", err)
+		return []sdk.ModelAssetGroupMember{}, fmt.Errorf("Error getting tier zero principals %v", err)
 	}
 	if response.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("Error getting tier zero principals %s", response.Status())
+		return []sdk.ModelAssetGroupMember{}, fmt.Errorf("Error getting tier zero principals %s", response.Status())
 	}
 	return *response.JSON200.Data.Members, nil
 }

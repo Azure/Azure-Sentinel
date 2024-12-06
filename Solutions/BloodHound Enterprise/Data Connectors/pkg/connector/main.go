@@ -681,8 +681,7 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 
 	tierZeroData, err := bloodhound.GetTierZeroPrincipals(bloodhoundClient)
 	if err != nil {
-		responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero principals %v", err))
-		return responseLogs, err
+		responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero principals skipping %v", err))
 	}
 	responseLogs = append(responseLogs, fmt.Sprintf("Got %d cypher query graph nodes", len(tierZeroData)))
 
