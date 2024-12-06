@@ -1,0 +1,102 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics workspace."
+            }
+        },
+        "functionName": {
+            "type": "string",
+            "defaultValue": "BloodHound",
+            "minLength": 1,
+            "maxLength": 11,
+            "metadata": {
+                "description": "Specifies the name of the Function App."
+            }
+        },
+        "BHEDomain": {
+            "type": "string",
+            "defaultValue": "<abc.bloodhoundenterprise.io>"
+        },
+        "BHETokenId": {
+            "type": "string",
+            "defaultValue": "<BHE Token Id>",
+            "metadata": {
+                "description": "Token ID from the BloodHound Enterprise API"
+            }
+        },
+        "BHETokenKey": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Token Key from the BloodHound Enterprise API"
+            }
+        }
+    },
+    "variables": {
+        "baseUri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/BloodHound%20Enterprise/Data%20Connectors/deployment/"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "BloodHoundEnterpriseTable",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[concat(variables('baseUri'), 'BloodHoundEnterprise_custom_table.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                        "value": "[parameters('workspaceName')]"
+                    },
+                    "location": {
+                        "value": "[resourceGroup().location]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "FunctionApp",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[concat(variables('baseUri'), 'BloodHoundEnterprise_function_app.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "functionName": {
+                        "value": "[parameters('functionName')]"
+                    },
+                    "workspaceID": {
+                        "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+                    },
+                    "BHEDomain": {
+                        "value": "[parameters('BHEDomain')]"
+                    },
+                    "BHETokenId": {
+                        "value": "[parameters('BHETokenId')]"
+                    },
+                    "BHETokenKey": {
+                        "value": "[parameters('BHETokenKey')]"
+                    },
+                    "logsIngestionUrl": {
+                        "value": "[reference('BloodHoundEnterpriseTable').outputs.logsIngestionUrl.value]"
+                    },
+                    "dcrImmutableId": {
+                        "value": "[reference('BloodHoundEnterpriseTable').outputs.dcrImmutableId.value]"
+                    }
+                }
+            },
+            "dependsOn": [
+                "BloodHoundEnterpriseTable"
+            ]
+        }
+    ]
+}
