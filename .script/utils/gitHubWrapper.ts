@@ -9,7 +9,7 @@ const _repo = process.env.REPO_NAME;
 const _pr_number = process.env.PRNUM;
 
 if (!_owner || !_repo || !_pr_number) {
-  console.log("Environment variables REPO_OWNER, REPO_NAME and PRNUM are not set. Try rerunning the workflow.");
+  console.error("Environment variables REPO_OWNER, REPO_NAME and PRNUM are not set.");
   process.exit(1);
 }
 
@@ -30,13 +30,13 @@ if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
     },
   });
 } else {
-  console.log("GitHub App authentication is not configured. Skipping authentication.");
+  console.error("GitHub App authentication is not configured.");
 }
 
 async function GetPRDetails(owner: string, repo: string, pull_number: number) {
   if (typeof pullRequestDetails == "undefined") {
     if (!octokit) {
-      console.log("Octokit is not initialized. Cannot get PR details.");
+      console.error("Octokit is not initialized. Cannot get PR details.");
       return;
     }
     console.log("Getting PR details");
