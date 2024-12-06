@@ -58,17 +58,15 @@ def determine_log_type(event):
     """
     Determine the Azure Sentinel log type based on the event type.
     """
-    event_type = event.get("type", "default")
-    if event_type == "com.oraclecloud.loadbalancer.access" or event_type == "com.oraclecloud.loadbalancer.error" or event_type=="com.oraclecloud.OraLB-API.ListLoadBalancers":
+    # event_type = event.get("type", "default")
+    if event["type"] == "com.oraclecloud.loadbalancer.access" or event["type"] == "com.oraclecloud.loadbalancer.error" or event["type"]=="com.oraclecloud.OraLB-API.ListLoadBalancers":
         return "OCI_LoadBalancerLogs"
     # elif event_type == "com.oraclecloud.loadbalancer.error":
     #     return "OCI_LoadBalancerLogs"
-    if event_type == "com.oraclecloud.Audit.ListEvents":
+    if event["type"] == "com.oraclecloud.Audit.ListEvents":
         return "OCI_AuditLogs"
-    if event_type == "com.oraclecloud.vcn.flowlogs.DataEvent" or event_type == "com.oraclecloud.vcn.flowlogs.QualityEvent.NoData" or event_type == "com.oraclecloud.virtualNetwork.GetVcn" or event_type == "com.oraclecloud.virtualNetwork.ListVcns" or event_type == "com.oraclecloud.vcn.flowlogs.QualityEvent.SkipData" or event_type == "com.oraclecloud.virtualNetwork.GetVcnDnsResolverAssociation":
+    if event["type"] == "com.oraclecloud.vcn.flowlogs.DataEvent" or event["type"] == "com.oraclecloud.vcn.flowlogs.QualityEvent.NoData" or event["type"] == "com.oraclecloud.virtualNetwork.GetVcn" or event["type"] == "com.oraclecloud.virtualNetwork.ListVcns" or event["type"] == "com.oraclecloud.vcn.flowlogs.QualityEvent.SkipData" or event["type"] == "com.oraclecloud.virtualNetwork.GetVcnDnsResolverAssociation":
         return "OCI_VirtualNetworkLogs"
-    if "com.oraclecloud.compute" in event_type:
-        return "OCI_ComputeInstanceLogs"
     else:
         return "OCI_LogsV2"  # Default log type
 
@@ -146,8 +144,10 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                 #if event != 'ok' and event != 'Test': 
                     event = json.loads(event)
                     if "data" in event:
-                        # Determine table based on event type
                         log_type = determine_log_type(event)
+                        logging.info(
+                            '{} Log type value after determining the log type'.format(log_type))
+                        sentinel.log_type = log_type
                         if "request" in event["data"] and event["type"] != "com.oraclecloud.loadbalancer.access":
                             if event["data"]["request"] is not None and "headers" in event["data"]["request"]:
                                 event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
@@ -164,7 +164,6 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                             if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
                                 event["data"]["stateChange"]["current"] = json.dumps(
                                     event["data"]["stateChange"]["current"])
-                    sentinel.log_type = log_type
                     sentinel.send(event)
 
         sentinel.flush()
