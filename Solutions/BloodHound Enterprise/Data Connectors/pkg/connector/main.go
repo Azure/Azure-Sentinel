@@ -406,7 +406,7 @@ func transformTierZeroPrincipal(tierZeroGroupmembers []sdk.ModelAssetGroupMember
 	return records, nil
 }
 
-func CreateBatches(records []BloodhoundEnterpriseData, maxUploadSize int64) ([][]BloodhoundEnterpriseData, error) {
+func CreateBatches(records []BloodhoundEnterpriseData, maxUploadSize int64, smallerUploadSize int64) ([][]BloodhoundEnterpriseData, error) {
 	if len(records) == 0 {
 		return make([][]BloodhoundEnterpriseData, 0), nil
 	}
@@ -418,16 +418,17 @@ func CreateBatches(records []BloodhoundEnterpriseData, maxUploadSize int64) ([][
 		return nil, fmt.Errorf("Error marshaling the data %v", err)
 	}
 	n := int64(len(singleRecordJson))
+	log.Printf("Info A single record of type %s is %d bytes.  The maxUploadSize is %d bytes", records[0].DataType, n, smallerUploadSize)
 
 	if n >= maxUploadSize {
+		log.Printf("Error A single record[bytes] %d of type %s is too large to upload. maxUploadSize[bytes] %d", n, records[0].DataType, maxUploadSize)
 		return nil, fmt.Errorf("Error marshalling the data.  A single record[bytes] %d is too large to upload. maxUploadSize[bytes] %d. ", n, maxUploadSize)
 	}
 
 	// We limit ourselves to maxUploadSize and then we are conservative and reduce the number of records per batch
-	recordsPerBatch := int(maxUploadSize / n)
-	if recordsPerBatch > 2 {
-		recordsPerBatch -= 2
-	}
+	recordsPerBatch := int(smallerUploadSize / n)
+
+	log.Printf("Info We will try to batch %d records per batch", recordsPerBatch)
 
 	var batchedRecords = make([][]BloodhoundEnterpriseData, 0)
 
@@ -456,7 +457,7 @@ func printSlice(s [][]BloodhoundEnterpriseData) {
 // maxUploadSize reduced by half
 func CreateBatchesGauranteedToFit(records []BloodhoundEnterpriseData, maxUploadSize int64) ([][]byte, error) {
 
-	var batchesToMarshal, err = CreateBatches(records, maxUploadSize)
+	var batchesToMarshal, err = CreateBatches(records, maxUploadSize, maxUploadSize)
 	if err != nil {
 		return nil, err
 	}
@@ -474,10 +475,11 @@ func CreateBatchesGauranteedToFit(records []BloodhoundEnterpriseData, maxUploadS
 
 		// if a single marshaled JSON is still too big,
 		// reduce the maxUploadSize rebatch, adding them back to batchesToMarshal so they will be tested again
+		var smallerBatchSize = maxUploadSize
 		if int64(len(batchJSON)) > maxUploadSize {
 			log.Printf("Warning needing redo a large batch %d", len(batchJSON))
-			maxUploadSize := maxUploadSize - (int64(len(batchJSON)) - maxUploadSize)
-			smallBatches, err := CreateBatches(batch, maxUploadSize)
+			smallerBatchSize = smallerBatchSize / 2
+			smallBatches, err := CreateBatches(batch, maxUploadSize, smallerBatchSize)
 			if err != nil {
 				return nil, err
 			}

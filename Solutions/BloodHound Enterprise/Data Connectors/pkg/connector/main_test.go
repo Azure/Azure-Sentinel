@@ -40,7 +40,7 @@ func TestCreateBatches(t *testing.T) {
 	jsonRecords, _ := json.Marshal(testRecords)
 	t.Logf("size of record list %d", len(jsonRecords))
 
-	batches, err := CreateBatches(testRecords, 1000000)
+	batches, err := CreateBatches(testRecords, 1000000, 100000)
 	if err != nil {
 		t.Fatalf("Error creating batches %v", err)
 	}
@@ -74,7 +74,7 @@ func TestPop(t *testing.T) {
 	jsonRecords, _ := json.Marshal(testRecords)
 	t.Logf("size of record list %d", len(jsonRecords))
 
-	var batchesToMarshal, _ = CreateBatches(testRecords, 1000000)
+	var batchesToMarshal, _ = CreateBatches(testRecords, 1000000, 100000)
 	originalLength := len(batchesToMarshal)
 
 	// var batch = make([]BloodhoundEnterpriseData, 1)
@@ -110,7 +110,7 @@ func TestCreateBatchesGauranteed(t *testing.T) {
 	jsonRecords, _ := json.Marshal(testRecords)
 	t.Logf("size of record list %d", len(jsonRecords))
 
-	possibleBatchesToMarshal, err := CreateBatches(testRecords, 1000000)
+	possibleBatchesToMarshal, err := CreateBatches(testRecords, 100000, 100000)
 	if err != nil {
 		t.Fatal()
 	}
@@ -119,7 +119,7 @@ func TestCreateBatchesGauranteed(t *testing.T) {
 	if err != nil {
 		t.Fatal()
 	}
-	batchesToMarshal, err := CreateBatchesGauranteedToFit(testRecords, 1000000)
+	batchesToMarshal, err := CreateBatchesGauranteedToFit(testRecords, 100000)
 	numGauranteedBatches := len(batchesToMarshal)
 	if err != nil {
 		t.Fatal()
@@ -175,7 +175,7 @@ func TestRecordsTooBig(t *testing.T) {
 	singleRecordSize, _ := json.Marshal(testRecords[0])
 
 	maxRecordSize := int64(10)
-	_, err := CreateBatches(testRecords, maxRecordSize)
+	_, err := CreateBatches(testRecords, maxRecordSize, maxRecordSize - 1000)
 	if err == nil {
 		t.Logf("Error creating batches should fail when single record size %d will not fit max record size %d", singleRecordSize, maxRecordSize)
 	}
