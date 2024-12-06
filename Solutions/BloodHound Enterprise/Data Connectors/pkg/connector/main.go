@@ -371,32 +371,31 @@ func transformTierZeroPrincipal(tierZeroGroupmembers []sdk.ModelAssetGroupMember
 	ENVIRONMENT_KINDS := map[string]bool{"Domain": true, "AZTenant": true}
 	records := make([]BloodhoundEnterpriseData, 0)
 	for _, groupMember := range tierZeroGroupmembers {
-		var environment_name = ""
-		var environment_id = groupMember.EnvironmentId
-		var environment_kind = groupMember.EnvironmentKind
-
-		// Business logic
-		// If there is an environment_id we use this as the environnment
-		// If there is no environment_id and the primary_kind is an environment kind we use the ObjectId as the environment_id
-		// Otherwise we skip the record
-		if groupMember.EnvironmentId != nil && *groupMember.EnvironmentId != "" {
-			selector, ok := domainMap[*groupMember.EnvironmentId]
-			if ok {
-				environment_name = *selector.Name
-			}
-		} else if groupMember.PrimaryKind != nil && memberOf(groupMember.PrimaryKind, ENVIRONMENT_KINDS) {
-			environment_name = *groupMember.Name
-			environment_id = groupMember.ObjectId
-			environment_kind = groupMember.PrimaryKind
-		} else {
-			log.Printf("Skipping tier zero element with no environment. Kind: %s", *groupMember.PrimaryKind)
+		var environment_sid = groupMember.EnvironmentId
+		if groupMember.PrimaryKind != nil && memberOf(groupMember.PrimaryKind, ENVIRONMENT_KINDS) {
+			environment_sid = groupMember.ObjectId		
+		}
+		if environment_sid == nil || *environment_sid == "" {
+			log.Printf("Error tier zero principal missing environment sid skipping %v", groupMember)
 			continue
 		}
+
+		// Use the SID to lookup the name, id and type
+		selector, ok := domainMap[*environment_sid]
+		if !ok {
+			log.Printf("Error tier zero principal could not find domain record for sid %s skipping %v", *environment_sid, groupMember)
+			continue
+		}
+		environment_name := *selector.Name
+		environment_id := selector.Id
+		environment_kind := selector.Type
+
 		record := BloodhoundEnterpriseData{
 			TierZeroPrincipal: *groupMember.Name,
 			FindingID:         *groupMember.ObjectId,    // TODO: move this to a new field called ObjectID (backfill required for other data_types??)
 			EventDetails:      *groupMember.PrimaryKind, // TODO: move this to a new field called ObjectKind (backfill required for other data_types??)
-			DomainSID:         *environment_id,
+			DomainSID:         *environment_sid,
+			DomainID:		  *environment_id,			// TODO: DomainSID and DomainID seem redundant
 			DomainType:        *environment_kind,
 			DomainName:        environment_name,
 			DataType:          "t0_export",
