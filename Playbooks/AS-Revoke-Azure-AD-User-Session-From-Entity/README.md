@@ -19,7 +19,7 @@ This playbook is intended to be run from a Microsoft Sentinel Entity. It will lo
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* A Microsoft Azure Active Directory [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Revoke-Azure-AD-User-Session-From-Entity#create-an-app-registration) with admin consent granted for "**User.ReadWrite.All**" in the "**Microsoft Graph**" API
+* A Microsoft Azure Active Directory [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Revoke-Azure-AD-User-Session-From-Entity#create-an-app-registration) with admin consent granted for "**User.RevokeSessions.All**" in the "**Microsoft Graph**" API
 * An [Azure key vault secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Revoke-Azure-AD-User-Session-From-Entity#create-an-azure-key-vault-secret) containing your app registration client secret
 
 
@@ -50,7 +50,7 @@ From the "**Select an API**" pane, click the "**Microsoft APIs**" tab and select
 
 ![RevokeUserSession_App_Registration_5](Images/RevokeUserSession_App_Registration_5.png)
 
-Click "**Application permissions**", then paste "**User.ReadWrite.All**" in the search bar. Click the option matching the search, then click "**Add permission**".
+Click "**Application permissions**", then paste "**User.RevokeSessions.All**" in the search bar. Click the option matching the search, then click "**Add permission**".
 
 ![RevokeUserSession_App_Registration_6](Images/RevokeUserSession_App_Registration_6.png)
 
