@@ -33,7 +33,7 @@ if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
   console.error("GitHub App authentication is not configured.");
 }
 
-async function GetPRDetails(owner: string, repo: string, pull_number: number) {
+export async function GetPRDetails(owner :string  = String(_owner), repo = String(_repo), pull_number: number = Number(_pr_number)) {
   if (typeof pullRequestDetails == "undefined") {
     if (!octokit) {
       console.error("Octokit is not initialized. Cannot get PR details.");
