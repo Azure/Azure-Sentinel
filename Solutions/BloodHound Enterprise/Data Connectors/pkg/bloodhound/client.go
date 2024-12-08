@@ -209,7 +209,6 @@ func GetAuditLog(client *sdk.ClientWithResponses, lastRunTime *time.Time) ([]sdk
 	}
 
 	for _, logEntry := range *response.JSON200.Data.Logs {
-		log.Printf("%v", logEntry)
 		// TODO SCRUB LOG
 		scrubedLogs = append(scrubedLogs, logEntry)
 	}
