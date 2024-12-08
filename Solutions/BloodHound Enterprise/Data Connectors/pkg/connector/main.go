@@ -257,9 +257,7 @@ func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, da
 				if !ok || pathTitle == "" {
 					pathTitle = "Unknown"
 					log.Printf("Error path title not found for %s", pathType)
-				} else {
-					log.Printf("Found path title for %s", pathTitle)
-				}
+				} 
 				data, err := transformModelRiskCountr(domainMap, domainId, pathType, pathTitle, risk)
 				if err != nil {
 					log.Printf("Error transforming risk counter, skipping record: %v", err)
@@ -374,14 +372,14 @@ func transformTierZeroPrincipal(tierZeroGroupmembers []sdk.ModelAssetGroupMember
 			environment_sid = groupMember.ObjectId		
 		}
 		if environment_sid == nil || *environment_sid == "" {
-			log.Printf("Error tier zero principal missing environment sid skipping %v", groupMember)
+			log.Printf("Error tier zero principal missing environment sid skipping %s", *groupMember.Name)
 			continue
 		}
 
 		// Use the SID to lookup the name, id and type
 		selector, ok := domainMap[*environment_sid]
 		if !ok {
-			log.Printf("Error tier zero principal could not find domain record for sid %s skipping %v", *environment_sid, groupMember)
+			log.Printf("Error tier zero principal could not find domain record for sid %s skipping %s", *environment_sid, *groupMember.Name)
 			continue
 		}
 		environment_name := *selector.Name
