@@ -288,7 +288,7 @@ def main():
         else:
             SchemaName = None
         # Check if changed file is a union parser. If Yes, skip the file
-        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')):
+        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
@@ -817,6 +817,20 @@ class FilteringTest(unittest.TestCase):
 
 # For each schema supported by the test there is a mapping between each of the schema's parameter to the column that the parameter filters.
 all_schemas_parameters = {
+    "AlertEvent" :
+    {
+		"ipaddr_has_any_prefix" : "DvcIpAddr",
+        "disabled" : "",
+        "endtime" : "EventEndTime",
+        "hostname_has_any" : "DvcHostname",
+		"username_has_any" : "Username",
+        "attacktactics_has_any" : "AttackTactics",
+        "attacktechniques_has_any" : "AttackTechniques",
+        "threatcategory_has_any" : "ThreatCategory",
+        "alertverdict_has_any" : "AlertVerdict",
+        "starttime" : "EventStartTime",
+        "eventseverity_has_any": "EventSeverity"
+    },
     "AuditEvent" :
     {
 		"actorusername_has_any" : "ActorUsername",
@@ -842,6 +856,20 @@ all_schemas_parameters = {
         "starttime" : "EventStartTime",
         "targetappname_has_any" : "TargetAppName",
         "username_has_any" : "User"
+    },
+    "AlertEvent" :
+    {
+        "disabled" : "",
+        "endtime" : "EventEndTime",
+        "starttime" : "EventStartTime",
+        "ipaddr_has_any_prefix" : "DvcIpAddr",
+        "hostname_has_any" : "DvcHostname",
+        "username_has_any" : "Username",
+        "attacktactics_has_any" : "AttackTactics",
+        "attacktechniques_has_any" : "AttackTechniques",
+        "threatcategory_has_any" : "ThreatCategory",
+        "alertverdict_has_any" : "AlertVerdict",
+        "eventseverity_has_any" : "EventSeverity",
     },
     "DhcpEvent" :
     {

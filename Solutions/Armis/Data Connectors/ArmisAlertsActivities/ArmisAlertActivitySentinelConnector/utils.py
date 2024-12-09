@@ -22,7 +22,6 @@ class Utils:
                 {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"ArmisSecretKey": consts.API_KEY},
                 {"AzureWebJobsStorage": consts.CONNECTION_STRING},
-                {"AvoidDuplicates": consts.IS_AVOID_DUPLICATES},
                 {"ArmisAlertsTableName": consts.ARMIS_ALERTS_TABLE},
                 {"ArmisActivitiesTableName": consts.ARMIS_ACTIVITIES_TABLE},
             ]
@@ -30,7 +29,7 @@ class Utils:
         self._secret_key = consts.API_KEY
         self.get_access_token()
         self.state_manager_obj = StateManager(
-            connection_string=consts.CONNECTION_STRING, file_path=consts.CHECKPOINT_FILE
+            connection_string=consts.CONNECTION_STRING, file_path=consts.CHECKPOINT_FILE_TIME
         )
 
     def check_environment_var_exist(self, environment_var):
@@ -78,10 +77,10 @@ class Utils:
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            response = requests.request(
-                method, url, headers=self.header, params=params, data=data, timeout=consts.REQUEST_TIMEOUT
-            )
             for _ in range(retry_401 + 1):
+                response = requests.request(
+                    method, url, headers=self.header, params=params, data=data, timeout=consts.REQUEST_TIMEOUT
+                )
                 if response.status_code == 200:
                     response_json = response.json()
                     logging.info(
@@ -222,32 +221,6 @@ class Utils:
             )
             raise ArmisException()
 
-    def post_alert_checkpoint(self, alert):
-        """Post alert checkpoint.
-
-        Args:
-            alert (dict): last alert from data
-        """
-        __method_name = inspect.currentframe().f_code.co_name
-        try:
-            alert_time = self.get_formatted_time(alert["time"][:19])
-            self.state_manager_obj.post(str(alert_time))
-            logging.info(
-                consts.LOG_FORMAT.format(__method_name, "Alerts checkpoint updated : {}.".format(str(alert_time)))
-            )
-        except KeyError as err:
-            logging.error(consts.LOG_FORMAT.format(__method_name, "Key error : {}.".format(err)))
-            raise ArmisException()
-
-        except ArmisException:
-            raise ArmisException()
-
-        except Exception as err:
-            logging.error(
-                consts.LOG_FORMAT.format(__method_name, "Error while posting alerts checkpoint : {}.".format(err))
-            )
-            raise ArmisException()
-
     def get_access_token(self):
         """get_access_token method will fetch the access token using api and set it in header for further use."""
         __method_name = inspect.currentframe().f_code.co_name
@@ -255,7 +228,7 @@ class Utils:
             body = {"secret_key": self._secret_key}
             logging.info(consts.LOG_FORMAT.format(__method_name, "Getting access token."))
             response = self.make_rest_call(method="POST", url=consts.URL + consts.ACCESS_TOKEN_SUFFIX, data=body)
-            access_token = response["data"]["access_token"]
+            access_token = response.get("data", {}).get("access_token")
             self.header.update({"Authorization": access_token})
             logging.info(consts.LOG_FORMAT.format(__method_name, "Generated access token Successfully."))
         except KeyError as err:

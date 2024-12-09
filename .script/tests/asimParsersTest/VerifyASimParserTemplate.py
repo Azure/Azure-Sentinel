@@ -15,6 +15,7 @@ parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASim
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 SCHEMA_INFO = [
+    {"SchemaName": "AlertEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Alert Event Schema", "SchemaLink": "https://aka.ms/ASimAlertEventDoc"},
     {"SchemaName": "AuditEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
     {"SchemaName": "Authentication", "SchemaVersion": "0.1.3","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
     {"SchemaName": "Dns", "SchemaVersion": "0.1.7", "SchemaTitle":"ASIM Dns Schema","SchemaLink": "https://aka.ms/ASimDnsDoc"},
@@ -53,8 +54,8 @@ def run():
     for parser in parser_yaml_files:
         
         schema_name = extract_schema_name(parser)
-        if not schema_name or parser.endswith(f'ASim{schema_name}.yaml') or parser.endswith(f'im{schema_name}.yaml'):
-            print(f"{YELLOW}Skipping '{parser}' as this is a union parser file. Union parser files are not tested.{RESET}")
+        if parser.endswith((f'ASim{schema_name}.yaml', f'im{schema_name}.yaml', f'vim{schema_name}Empty.yaml')):
+            print(f"{YELLOW}Skipping '{parser}' as this is a union or empty parser file. This file won't be tested.{RESET}")
             continue
         # Skip vim parser file if the corresponding ASim parser file is not present
         elif parser.split('/')[-1].startswith('vim'):

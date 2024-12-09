@@ -25,11 +25,12 @@ RETRY_COUNT_401 = 3
 CONNECTION_STRING = os.environ.get("AzureWebJobsStorage", "")
 ARMIS_ALERTS_TABLE = os.environ.get("ArmisAlertsTableName", "")
 ARMIS_ACTIVITIES_TABLE = os.environ.get("ArmisActivitiesTableName", "")
-IS_AVOID_DUPLICATES = os.environ.get("AvoidDuplicates", "")
 WORKSPACE_ID = os.environ.get("WorkspaceID", "")
 WORKSPACE_KEY = os.environ.get("WorkspaceKey", "")
 CHUNK_SIZE = 35
 FILE_SHARE = "funcstatemarkershare"
-CHECKPOINT_FILE = "funcarmisalertsfile"
+CHECKPOINT_FILE_TIME = "funcarmisalertsfile"
+CHECKPOINT_FILE_OFFSET = "armisalertoffset"
 LOG_FORMAT = "Armis Alerts Activities Connector: (method = {}) : {}"
 REQUEST_TIMEOUT = 300
+CHECKPOINT_TABLE_NAME = "ArmisAlertActivityCheckpoint"

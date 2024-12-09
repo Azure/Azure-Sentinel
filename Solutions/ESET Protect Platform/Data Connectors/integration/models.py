@@ -54,11 +54,12 @@ class Config:
             self.retry_delay: float = float(config.get("retry_delay"))  # type: ignore
             self.requests_timeout = config.get("requests_timeout")
             self.buffer: int = config.get("buffer")  # type: ignore
+            self.data_sources: dict[str, t.Any] = config.get("data_sources")  # type: ignore
 
     def get_config_params(self) -> dict[str, t.Any] | t.Any:
         try:
             return yaml.safe_load(
-                resources.files(__package__ or "integration").parent.joinpath("config.yml").read_bytes()
+                resources.files(__package__ or "integration").parent.joinpath("config.yml").read_bytes()  # type: ignore
             )
         except FileNotFoundError as e:
             logging.error(e)
@@ -80,9 +81,11 @@ class EnvVariables:
         self.__conn_str: str = os.getenv("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", "")
         self.__key_base64: str = os.getenv("KEY_BASE64", "")
 
-        region = os.getenv("INSTANCE_REGION", "")
+        region = os.getenv("INSTANCE_REGION", "eu")
         self.oauth_url: str = f"https://{region}.business-account.iam.eset.systems"
-        self.detections_url: str = f"https://{region}.incident-management.eset.systems/v1/detections"
+        self.detections_url: str = (
+            f"https://{region}.incident-management.eset.systems"
+        )
 
     @property
     def username(self) -> str | None:

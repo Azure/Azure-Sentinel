@@ -4,6 +4,8 @@ import time
 import typing as t
 from datetime import datetime, timezone
 
+from aiohttp import ClientSession
+
 from integration.models import Config, EnvVariables, TokenStorage
 from integration.utils import (
     LastDetectionTimeHandler,
@@ -17,55 +19,97 @@ class ServiceClient:
     def __init__(self) -> None:
         self.config = Config()
         self.env_vars = EnvVariables()
-        self.last_detection_time_handler = LastDetectionTimeHandler(
-            self.env_vars.conn_str,
-            self.env_vars.last_detection_time,
-        )
         self.request_sender = RequestSender(self.config, self.env_vars)
         self.token_provider = TokenProvider(TokenStorage(), self.request_sender, self.env_vars, self.config.buffer)
         self.transformer_detections = TransformerDetections(self.env_vars)
-        self._is_running = False
-        self._next_page_token: str | None = None
-        self._cur_ld_time: str | None = None
+        self._session: ClientSession | None = None
+        self._lock = asyncio.Lock()
+
+    async def close(self) -> None:
+        if self._session and not self._session.closed:
+            await self._session.close()
 
     async def run(self) -> None:
-        if self._is_running:
-            while self._is_running:
-                await asyncio.gather(self._custom_sleep(), self._process_integration())
-        else:
-            await asyncio.gather(self._process_integration())
-
-    async def _process_integration(self) -> None:
+        self._session = ClientSession(raise_for_status=True)
         start_time = time.time()
+        try:
+            await asyncio.gather(
+                self._process_integration("EI", start_time), self._process_integration("ECOS", start_time)
+            )
+        except Exception as e:
+            logging.error("Unexpected error happened", exc_info=e)
+            raise e
+        finally:
+            await self.close()
+
+    async def _process_integration(self, data_source: str, start_time: float) -> None:
+        last_detection_time_handler = LastDetectionTimeHandler(
+            self.env_vars.conn_str, self.env_vars.last_detection_time, data_source=data_source
+        )
+        next_page_token: str | None = None
+        cur_ld_time: str | None = None
         max_duration = self.env_vars.interval * 60
 
-        while self._next_page_token != "" and (time.time() - start_time) < (max_duration - 30):
-            response_data = await self._call_service()
-            self._next_page_token = response_data.get("nextPageToken") if response_data else ""
+        if data_source == "EI" and not last_detection_time_handler.storage_table_handler.entities:
+            data_source, last_detection_time_handler = await self._check_if_ei_is_right_data_source(
+                last_detection_time_handler, next_page_token
+            )
+        endp = self.config.data_sources.get(data_source).get("endpoint")  # type: ignore
 
-            if response_data and response_data.get("detections") and (time.time() - start_time) < (max_duration - 15):
-                self._cur_ld_time, successful_data_upload = (
-                    await self.transformer_detections.send_integration_detections(response_data, self._cur_ld_time)
+        while next_page_token != "" and (time.time() - start_time) < (max_duration - 30):
+            response_data = await self._call_service(last_detection_time_handler, next_page_token, data_endpoint=endp)
+            next_page_token = response_data.get("nextPageToken") if response_data else ""
+
+            if (
+                response_data
+                and (response_data.get("detections") or response_data.get("detectionGroups"))
+                and (time.time() - start_time) < (max_duration - 15)
+            ):
+                cur_ld_time, successful_data_upload = await self.transformer_detections.send_integration_detections(
+                    response_data, cur_ld_time
                 )
-                self._next_page_token = "" if successful_data_upload is False else self._next_page_token
-                self._update_last_detection_time()
+                next_page_token = "" if successful_data_upload is False else next_page_token
+                self._update_last_detection_time(last_detection_time_handler, cur_ld_time)
 
-    def _update_last_detection_time(self) -> None:
-        if self._cur_ld_time and self._cur_ld_time != self.last_detection_time_handler.last_detection_time:
-            self.last_detection_time_handler.storage_table_handler.input_entity(
-                new_entity=self.last_detection_time_handler.get_entity_schema(self._cur_ld_time)  # type: ignore[call-arg]
+    async def _check_if_ei_is_right_data_source(
+        self,
+        last_detection_time_handler: LastDetectionTimeHandler,
+        next_page_token: str | None,
+        data_source: str = "EI",
+    ) -> tuple[str, LastDetectionTimeHandler]:
+        endp = self.config.data_sources.get(data_source).get("endpoint")  # type: ignore
+        response_data = await self._call_service(
+            last_detection_time_handler, next_page_token, page_size=1, data_endpoint=endp
+        )
+        if not response_data or not response_data.get("detectionGroups"):
+            data_source, last_detection_time_handler = (
+                "EP",
+                LastDetectionTimeHandler(self.env_vars.conn_str, self.env_vars.last_detection_time, data_source="EP"),
             )
 
-    async def _custom_sleep(self) -> None:
-        logging.info(f"Start of the {self.env_vars.interval} seconds interval")
-        await asyncio.sleep(self.env_vars.interval)
-        logging.info(f"End of the {self.env_vars.interval} seconds interval")
+        return data_source, last_detection_time_handler
 
-    async def _call_service(self) -> dict[str, t.Any] | None:
+    def _update_last_detection_time(
+        self, last_detection_time_handler: LastDetectionTimeHandler, cur_ld_time: str | None
+    ) -> None:
+        if cur_ld_time and cur_ld_time != last_detection_time_handler.last_detection_time:
+            last_detection_time_handler.storage_table_handler.input_entity(
+                new_entity=last_detection_time_handler.get_entity_schema(cur_ld_time)  # type: ignore[call-arg]
+            )
+
+    async def _call_service(
+        self,
+        last_detection_time_handler: LastDetectionTimeHandler,
+        next_page_token: str | None,
+        page_size: int = 100,
+        data_endpoint: str = "",
+    ) -> dict[str, t.Any] | None:
         logging.info(f"Service call initiated")
 
         if not self.token_provider.token.access_token or datetime.now(timezone.utc) > self.token_provider.token.expiration_time:  # type: ignore
-            await self.token_provider.get_token()
+            assert self._session
+            async with self._lock:
+                await self.token_provider.get_token(self._session)
 
         try:
             if (
@@ -74,16 +118,19 @@ class ServiceClient:
             ):
                 data = await self.request_sender.send_request(
                     self.request_sender.send_request_get,
+                    self._session,  # type: ignore
                     {
                         "Authorization": f"Bearer {self.token_provider.token.access_token}",
                         "Content-Type": "application/json",
+                        "3rd-integration": "MS-Sentinel",
                     },
-                    self.last_detection_time_handler.last_detection_time,
-                    self._next_page_token,
+                    last_detection_time_handler.last_detection_time,
+                    next_page_token,
+                    page_size,
+                    data_endpoint,
                 )
-                logging.info(
-                    f"Service call response data is {'obtained' if data and data.get('detections') else f'empty: {data}'}"
-                )
+                is_obtained = True if data and (data.get("detections") or data.get("detectionGroups")) else False
+                logging.info(f"Service call response data is {'obtained' if is_obtained else f'empty: {data}'}")
                 return data
 
             logging.info("Service not called due to missing token.")

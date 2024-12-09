@@ -43,6 +43,13 @@
     "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','ESETProtectPlatform')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ESETProtectPlatform')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('ESETProtectPlatform-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "ESETProtectPlatform-Parser"
+    },
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
@@ -152,7 +159,7 @@
                       "title": "Step 1 -  Create an API user"
                     },
                     {
-                      "description": "Create a Microsoft Entra ID registered application by following the steps in the [Register a new application instruction.](https://learn.microsoft.com/en-us/azure/healthcare-apis/register-application#register-a-new-application)",
+                      "description": "Create a Microsoft Entra ID registered application by following the steps in the [Register a new application instruction.](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)",
                       "title": "Step 2 -  Create a registered application"
                     },
                     {
@@ -321,7 +328,7 @@
               "title": "Step 1 -  Create an API user"
             },
             {
-              "description": "Create a Microsoft Entra ID registered application by following the steps in the [Register a new application instruction.](https://learn.microsoft.com/en-us/azure/healthcare-apis/register-application#register-a-new-application)",
+              "description": "Create a Microsoft Entra ID registered application by following the steps in the [Register a new application instruction.](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)",
               "title": "Step 2 -  Create a registered application"
             },
             {
@@ -330,6 +337,136 @@
             }
           ],
           "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "ESETProtectPlatform Data Parser with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Parser for ESET Protect Platform",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "ESETProtectPlatform",
+                "query": "IntegrationTable_CL\n    | extend \n        EventResult = \"NA\",\n        EventProduct = \"ESET Connect\",\n        EventVendor = \"ESET\",\n        DvcIdType = \"Computer\",\n        EventEndTime = column_ifexists('TimeGenerated', ''),\n        SrcIpAddr = tostring(networkCommunication['localIpAddress']),\n        DstIpAddr = networkCommunication['remoteIpAddress'],\n        SrcPortNumber = toint(networkCommunication['localPort']),\n        DstPortNumber = networkCommunication['remotePort'],\n        NetworkDirection = case(\n            networkCommunication['direction'] == \"NETWORK_COMMUNICATION_DIRECTION_UNSPECIFIED\", \"NA\",\n            networkCommunication['direction'] == \"NETWORK_COMMUNICATION_DIRECTION_INBOUND\", \"Inbound\",\n            \"Outbound\"\n        ),\n        NetworkProtocol = networkCommunication['protocolName'],\n        EventStartTime = todatetime(occurTime), \n        EventSeverity = case(\n            severityLevel == \"SEVERITY_LEVEL_UNSPECIFIED\", \"Informational\",\n            severityLevel == \"SEVERITY_LEVEL_LOW\", \"Low\",\n            severityLevel == \"SEVERITY_LEVEL_MEDIUM\", \"Medium\",\n            severityLevel == \"SEVERITY_LEVEL_HIGH\", \"High\",\n            \"Unknown\"\n        )\n    | project-rename\n        EventMessage = displayName,\n        EventOriginalUid = detectionUuid,\n        EventCount= groupSize, \n        EventOriginalSeverity = severityScore,\n        EventOriginalType = category, \n        EventType = typeName, \n        DvcDescription = deviceDisplayName, \n        DvcId = deviceUuid, \n        ActorUsername = userNameBase, \n        TargetProcessCurrentDirectory = processPath, \n        TargetProcessGuid = processUuid,\n        TargetProcessCommandLine = processCommandline,\n        TargetProcessFileSize = objectSizeBytes\n    | extend \n        Dvc = DvcId,\n        User = ActorUsername\n    | project-away\n        severityLevel, networkCommunication, occurTime\n",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ESETProtectPlatform')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "ESET Protect Platform",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "ESET"
+                },
+                "support": {
+                  "name": "ESET Enterprise Integrations",
+                  "email": "eset-enterpise-integration@eset.com",
+                  "tier": "Partner",
+                  "link": "https://help.eset.com/eset_connect/en-US/integrations.html"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "Parser for ESET Protect Platform",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "Parser for ESET Protect Platform",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "ESETProtectPlatform",
+        "query": "IntegrationTable_CL\n    | extend \n        EventResult = \"NA\",\n        EventProduct = \"ESET Connect\",\n        EventVendor = \"ESET\",\n        DvcIdType = \"Computer\",\n        EventEndTime = column_ifexists('TimeGenerated', ''),\n        SrcIpAddr = tostring(networkCommunication['localIpAddress']),\n        DstIpAddr = networkCommunication['remoteIpAddress'],\n        SrcPortNumber = toint(networkCommunication['localPort']),\n        DstPortNumber = networkCommunication['remotePort'],\n        NetworkDirection = case(\n            networkCommunication['direction'] == \"NETWORK_COMMUNICATION_DIRECTION_UNSPECIFIED\", \"NA\",\n            networkCommunication['direction'] == \"NETWORK_COMMUNICATION_DIRECTION_INBOUND\", \"Inbound\",\n            \"Outbound\"\n        ),\n        NetworkProtocol = networkCommunication['protocolName'],\n        EventStartTime = todatetime(occurTime), \n        EventSeverity = case(\n            severityLevel == \"SEVERITY_LEVEL_UNSPECIFIED\", \"Informational\",\n            severityLevel == \"SEVERITY_LEVEL_LOW\", \"Low\",\n            severityLevel == \"SEVERITY_LEVEL_MEDIUM\", \"Medium\",\n            severityLevel == \"SEVERITY_LEVEL_HIGH\", \"High\",\n            \"Unknown\"\n        )\n    | project-rename\n        EventMessage = displayName,\n        EventOriginalUid = detectionUuid,\n        EventCount= groupSize, \n        EventOriginalSeverity = severityScore,\n        EventOriginalType = category, \n        EventType = typeName, \n        DvcDescription = deviceDisplayName, \n        DvcId = deviceUuid, \n        ActorUsername = userNameBase, \n        TargetProcessCurrentDirectory = processPath, \n        TargetProcessGuid = processUuid,\n        TargetProcessCommandLine = processCommandline,\n        TargetProcessFileSize = objectSizeBytes\n    | extend \n        Dvc = DvcId,\n        User = ActorUsername\n    | project-away\n        severityLevel, networkCommunication, occurTime\n",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": ""
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ESETProtectPlatform')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "ESET Protect Platform",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "ESET"
+        },
+        "support": {
+          "name": "ESET Enterprise Integrations",
+          "email": "eset-enterpise-integration@eset.com",
+          "tier": "Partner",
+          "link": "https://help.eset.com/eset_connect/en-US/integrations.html"
         }
       }
     },
@@ -343,7 +480,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "ESET Protect Platform",
         "publisherDisplayName": "ESET Enterprise Integrations",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ESET%20Protect%20Platform/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>ESET Protect Platform solution for Microsoft Sentinel ingests detections from <a href=\"https://www.eset.com/int/business/protect-platform/\">ESET Protect Platform</a> using the provided <a href=\"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ESET%20Protect%20Platform/Data%20Connectors\">Integration REST API</a>.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>The ESET Protect Platform solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview\">Logs Ingestion API in Azure Monitor</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/ESET%20Protect%20Platform/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>ESET Protect Platform solution for Microsoft Sentinel ingests detections from <a href=\"https://www.eset.com/int/business/protect-platform/\">ESET Protect Platform</a> using the provided <a href=\"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ESET%20Protect%20Platform/Data%20Connectors\">Integration REST API</a>.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>The ESET Protect Platform solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview\">Logs Ingestion API in Azure Monitor</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -371,11 +508,16 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId1')]",
               "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
             }
           ]
         },
-        "firstPublishDate": "2024-10-15",
-        "lastPublishDate": "2024-10-15",
+        "firstPublishDate": "2024-10-29",
+        "lastPublishDate": "2024-11-08",
         "providers": [
           "ESET Enterprise Integrations"
         ],
