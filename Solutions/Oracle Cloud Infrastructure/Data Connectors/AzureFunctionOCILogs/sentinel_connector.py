@@ -15,6 +15,7 @@ class AzureSentinelConnector:
         self.shared_key = shared_key
         self.queue_size = queue_size
         self.queue_size_bytes = queue_size_bytes
+        self.bulks_number = 1
         self._queue = []
         self._bulks_list = []
         self.successfull_sent_events_number = 0
@@ -26,10 +27,14 @@ class AzureSentinelConnector:
             self.flush(force=False)
 
     def flush(self, force=True):
-        if force or len(self._queue) >= self.queue_size:
-            self._bulks_list.append(self._queue)
+        self._bulks_list.append(self._queue)
+        if force:
             self._flush_bulks()
-            self._queue = []
+        else:
+            if len(self._bulks_list) >= self.bulks_number:
+                self._flush_bulks()
+
+        self._queue = []
 
     def _flush_bulks(self):
         for queue in self._bulks_list:
