@@ -106,12 +106,12 @@ func transformPostureData(domainMap *map[string]sdk.ModelDomainSelector, posture
 
 	bhe_sentinel_data := BloodhoundEnterpriseData{
 		DataType:      "posture",
-		TimeGenerated: *postureStat.CreatedAt,
 		DomainSID:     *postureStat.DomainSid,
 		DomainName:    *selector.Name,
 		DomainType:    *selector.Type,
 		DomainID:      *selector.Id,
 		ExposureIndex: math.Round(*postureStat.ExposureIndex * 100),
+		Exposure:	   *postureStat.ExposureIndex,
 		FindingCount:  float64(*postureStat.CriticalRiskCount), // TODO: wrong
 		TierZeroCount: float64(*postureStat.TierZeroCount),     // TODO: wrong
 		UpdatedAt:     *postureStat.UpdatedAt,
@@ -280,7 +280,6 @@ func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ s
 		DomainName:        *selector.Name,
 		DomainType:        *selector.Type,
 		DomainID:          *selector.Id,
-		ExposureIndex:     math.Round(*data.CompositeRisk * 100),
 		Exposure:          *data.CompositeRisk,
 		FindingCount:      float64(*data.FindingCount),
 		DomainImpactValue: float64(*data.ImpactedAssetCount),
