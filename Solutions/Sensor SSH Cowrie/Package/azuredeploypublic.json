@@ -1,0 +1,454 @@
+{
+  "$schema": "https://schema.management.azure.com/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+      "adminUsername": {
+          "type": "String",
+          "metadata": {
+              "description": "Admin username for the VM"
+          }
+      },
+      "adminPassword": {
+          "type": "SecureString",
+          "metadata": {
+              "description": "Admin password for the VM"
+          }
+      },
+      "vmName": {
+          "defaultValue": "bastion-01",
+          "type": "String",
+          "metadata": {
+              "description": "Name of the virtual machine, bastion-01, cups-01, customerland-lamp-01"
+          }
+      },
+      "IpMgmtAllow": {
+          "defaultValue": "xx.xx.xx.xx/32",
+          "type": "String",
+          "metadata": {
+              "description": "The Ip Address that is allowed to connect over port 22222 SSH Mgmt Plane"
+          }
+      },
+      "resourceGroupNameofWorkspace": {
+          "defaultValue": "RGNAMEFORLOGANALYTICSWORKSPACE",
+          "type": "String",
+          "metadata": {
+              "description": "The Azure ResourceGroup name of the existing Sentinel or Log Analytics workspace"
+          }
+      },
+      "SubscriptionIDofWorkspace": {
+        "defaultValue": "AZURESUBGUIDFORLOGANALYTICSWORKSPACE",
+        "type": "String",
+        "metadata": {
+            "description": "The Azure SubscriptionID of the existing Sentinel or Log Analytics workspace"
+        }
+    },
+      "workspaceName": {
+          "defaultValue": "NAMEOFLOGANALYTICSWORKSPACE",
+          "type": "String",
+          "metadata": {
+              "description": "The Sentinel or Log Analytics workspace name"
+          }
+      },
+      "customTableName": {
+          "defaultValue": "newCowrie_CL",
+          "type": "String",
+          "metadata": {
+              "description": "Name of the custom table for Honeypot events"
+          }
+      },
+      "scriptUrl": {
+          "defaultValue": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Sensor%2520SSH%2520Cowrie/Scripts/script.sh",
+          "type": "String",
+          "metadata": {
+              "description": "URL of script to execute"
+          }
+      },
+      "scriptFileName": {
+          "defaultValue": "script.sh",
+          "type": "String",
+          "metadata": {
+              "description": "Name of script to execute"
+          }
+      }
+  },
+  "variables": {
+      "location": "[resourceGroup().location]",
+      "workspaceId": "[resourceId(parameters('resourceGroupNameofWorkspace'), 'Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+      "vmSize": "Standard_D2s_v3",
+      "imagePublisher": "Debian",
+      "imageOffer": "debian-11",
+      "imageSku": "11-gen2",
+      "dcrName": "cowrie-dcr",
+      "dceName": "cowrie-dce",      
+      "vnetName": "VNET-Sensor",
+      "subnetName": "default",
+      "nicName": "[concat(parameters('vmName'), '-nic')]",
+      "publicIPName": "[concat(parameters('vmName'), '-publicIP')]",
+      "osDiskName": "[concat(parameters('vmName'), '-osDisk')]"
+  },
+  "resources": [
+      {
+          "type": "Microsoft.Network/publicIPAddresses",
+          "apiVersion": "2021-05-01",
+          "name": "[variables('publicIPName')]",
+          "location": "[variables('location')]",
+          "properties": {
+              "publicIPAllocationMethod": "Dynamic"
+          }
+      },
+      {
+          "type": "Microsoft.Network/networkSecurityGroups",
+          "apiVersion": "2020-11-01",
+          "name": "myNSG",
+          "location": "[resourceGroup().location]",
+          "properties": {
+              "securityRules": [
+                  {
+                      "name": "AllowSSH",
+                      "properties": {
+                          "protocol": "Tcp",
+                          "sourcePortRange": "*",
+                          "destinationPortRange": "22",
+                          "sourceAddressPrefix": "*",
+                          "destinationAddressPrefix": "*",
+                          "access": "Allow",
+                          "priority": 1000,
+                          "direction": "Inbound"
+                      }
+                  },
+                  {
+                      "name": "AllowTelnet",
+                      "properties": {
+                          "protocol": "Tcp",
+                          "sourcePortRange": "*",
+                          "destinationPortRange": "23",
+                          "sourceAddressPrefix": "*",
+                          "destinationAddressPrefix": "*",
+                          "access": "Allow",
+                          "priority": 1010,
+                          "direction": "Inbound"
+                      }
+                  },
+                  {
+                      "name": "AllowTagCustom22222Inbound",
+                      "properties": {
+                          "protocol": "Tcp",
+                          "sourcePortRange": "*",
+                          "destinationPortRange": "22222",
+                          "sourceAddressPrefix": "AzureCloud",
+                          "destinationAddressPrefix": "*",
+                          "access": "Allow",
+                          "priority": 1020,
+                          "direction": "Inbound"
+                      }
+                  },
+                  {
+                      "name": "AllowCidrBlockCustom22222Inbound",
+                      "properties": {
+                          "protocol": "Tcp",
+                          "sourcePortRange": "*",
+                          "destinationPortRange": "22222",
+                          "sourceAddressPrefix": "[parameters('IpMgmtAllow')]",
+                          "destinationAddressPrefix": "*",
+                          "access": "Allow",
+                          "priority": 1030,
+                          "direction": "Inbound",
+                          "sourcePortRanges": [],
+                          "destinationPortRanges": [],
+                          "sourceAddressPrefixes": [],
+                          "destinationAddressPrefixes": []
+                      }
+                  }
+              ]
+          }
+      },
+      {
+          "type": "Microsoft.Network/virtualNetworks",
+          "apiVersion": "2021-05-01",
+          "name": "[variables('vnetName')]",
+          "location": "[variables('location')]",
+          "properties": {
+              "addressSpace": {
+                  "addressPrefixes": [
+                      "10.0.0.0/16"
+                  ]
+              },
+              "subnets": [
+                  {
+                      "name": "[variables('subnetName')]",
+                      "properties": {
+                          "addressPrefix": "10.0.0.0/24"
+                      }
+                  }
+              ]
+          }
+      },
+      {
+          "type": "Microsoft.Network/networkInterfaces",
+          "apiVersion": "2021-05-01",
+          "name": "[variables('nicName')]",
+          "location": "[variables('location')]",
+          "dependsOn": [
+              "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+              "[resourceId('Microsoft.Network/networkSecurityGroups', 'myNSG')]"
+          ],
+          "properties": {
+              "ipConfigurations": [
+                  {
+                      "name": "ipconfig1",
+                      "properties": {
+                          "privateIPAllocationMethod": "Dynamic",
+                          "subnet": {
+                              "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetName'))]"
+                          },
+                          "publicIPAddress": {
+                              "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPName'))]"
+                          }
+                      }
+                  }
+              ],
+              "networkSecurityGroup": {
+                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'myNSG')]"
+              }
+          }
+      },
+      {
+          "type": "Microsoft.Compute/virtualMachines",
+          "apiVersion": "2021-07-01",
+          "name": "[parameters('vmName')]",
+          "location": "[variables('location')]",
+          "dependsOn": [
+              "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+          ],
+          "properties": {
+              "hardwareProfile": {
+                  "vmSize": "[variables('vmSize')]"
+              },
+              "storageProfile": {
+                  "imageReference": {
+                      "publisher": "[variables('imagePublisher')]",
+                      "offer": "[variables('imageOffer')]",
+                      "sku": "[variables('imageSku')]",
+                      "version": "latest"
+                  },
+                  "osDisk": {
+                      "createOption": "FromImage",
+                      "managedDisk": {
+                          "storageAccountType": "Standard_LRS"
+                      }
+                  }
+              },
+              "osProfile": {
+                  "computerName": "[parameters('vmName')]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "adminPassword": "[parameters('adminPassword')]"
+              },
+              "networkProfile": {
+                  "networkInterfaces": [
+                      {
+                          "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+                      }
+                  ]
+              }
+          }
+      },
+      {
+        "type": "Microsoft.Compute/virtualMachines/extensions",
+        "apiVersion": "2021-11-01",
+        "name": "[format('{0}/AzureMonitorLinuxAgent', parameters('vmName'))]",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+        ],
+        "properties": {
+          "publisher": "Microsoft.Azure.Monitor",
+          "type": "AzureMonitorLinuxAgent",
+          "typeHandlerVersion": "1.21",
+          "autoUpgradeMinorVersion": true,
+          "enableAutomaticUpgrade": true
+        }
+      },
+      {
+          "type": "Microsoft.Compute/virtualMachines/extensions",
+          "apiVersion": "2021-03-01",
+          "name": "[concat(parameters('vmName'), '/customScriptExtension')]",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+              "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+          ],
+          "properties": {
+              "publisher": "Microsoft.Azure.Extensions",
+              "type": "CustomScript",
+              "typeHandlerVersion": "2.1",
+              "autoUpgradeMinorVersion": true,
+              "settings": {
+                  "fileUris": [
+                      "[parameters('scriptUrl')]"
+                  ],
+                  "commandToExecute": "[concat('bash ', parameters('scriptFileName'))]"
+              }
+          }
+      },
+      {
+        "type": "Microsoft.Resources/deployments",
+        "apiVersion": "2021-04-01",
+        "name": "nestedTemplate",
+        "resourceGroup": "[parameters('resourceGroupNameofWorkspace')]",
+        "subscriptionId": "[parameters('SubscriptionIDofWorkspace')]",
+        "properties": {
+          "mode": "Incremental",
+          "template": {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {},
+            "variables": {},
+            "resources": [
+              {
+                "type": "Microsoft.OperationalInsights/workspaces/tables",
+                "apiVersion": "2022-10-01",
+                "name": "[concat(parameters('workspaceName'), '/', parameters('customTableName'))]",
+                "properties": {
+                    "schema": {
+                        "name": "[parameters('customTableName')]",
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "Timestamp",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "RawData",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Message",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Severity",
+                                "type": "string"
+                            }
+                        ],
+                        "primaryKey": [
+                            "TimeGenerated"
+                        ]
+                    }
+                }
+            }  
+            ]
+          },
+          "parameters": {}
+        }
+      },
+      {
+          "type": "Microsoft.Insights/dataCollectionEndpoints",
+          "apiVersion": "2023-03-11",
+          "name": "cowrie-dce",
+          "location": "[resourceGroup().location]",
+          "properties": {
+              "immutableId": "",
+              "configurationAccess": {},
+              "logsIngestion": {},
+              "metricsIngestion": {},
+              "networkAcls": {
+                  "publicNetworkAccess": "Enabled"
+              }
+          }
+      },
+      {
+          "type": "Microsoft.Insights/dataCollectionRules",
+          "dependsOn": [
+            "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'cowrie-dce')]"
+        ],
+          "apiVersion": "2022-06-01",
+          "name": "cowrie-dcr",
+          "location": "[resourceGroup().location]",
+          "identity": {
+              "type": "systemAssigned"
+          },
+          "properties": {
+              "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'cowrie-dce')]",
+              "dataFlows": [
+                  {
+                      "destinations": [
+                          "MyDestination"
+                      ],
+                      "outputStream": "[concat('Custom-', parameters('customTableName'))]",
+                      "streams": [
+                          "Custom-Text-cowrie_CL"
+                      ],
+                      "transformKql": "source"
+                  }
+              ],
+              "dataSources": {
+                  "logFiles": [
+                      {
+                          "filePatterns": [
+                              "/home/cowrie/cowrie/var/log/cowrie/cowrie.json"
+                          ],
+                          "format": "text",
+                          "name": "Custom-Text-cowrie_CL",
+                          "settings": {
+                              "text": {
+                                  "recordStartTimestampFormat": "ISO 8601"
+                              }
+                          },
+                          "streams": [
+                              "Custom-Text-cowrie_CL"
+                          ]
+                      }
+                  ]
+              },
+              "destinations": {
+                  "logAnalytics": [
+                      {
+                          "name": "MyDestination",
+                          "workspaceResourceId": "[variables('workspaceId')]"
+                      }
+                  ]
+              },
+              "streamDeclarations": {
+                  "Custom-Text-cowrie_CL": {
+                      "columns": [
+                          {
+                              "name": "TimeGenerated",
+                              "type": "datetime"
+                          },
+                          {
+                            "name": "Message",
+                            "type": "string"
+                        },
+                          {
+                              "name": "RawData",
+                              "type": "string"
+                          }
+                      ]
+                  }
+              }
+          }
+      },
+      {
+        "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+        "dependsOn": [
+            "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+            "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+        ],
+        "apiVersion": "2023-03-11",
+        "scope": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]",
+        "name": "cowrie-dcr-assoc",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+        }
+      }
+  ],
+  "outputs": {
+      "adminUsername": {
+          "type": "String",
+          "value": "[parameters('adminUsername')]"
+      }
+  }
+}
