@@ -2,16 +2,16 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Illumio Containment Switch Playbook",
-        "description": "This playbook leverages Illumio workloads API to contain and isolate a workload based on user inputs.  <img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/Illumio-Port-Blocking-Switch/images/illumio-port-blocking-switch-playbook.png\"/>.",
+        "title": "Illumio Workload Quarantine Playbook",
+        "description": "This playbook leverages Illumio workloads API to quarantine a workload based on user inputs.  <img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/illumio-sentinel-playbook-v2/Solutions/IllumioSaaS/Playbooks/Illumio-Quarantine-Workload/images/illumio-quarantine-workload.png\"/>.",
         "prerequisites": [
             "To use this playbook, ensure that you have valid API key and secret, org id and pce fqdn. Ensure that you deploy the template with the required context."
         ],
         "postDeployment": [
-            "After deployment open the playbook in edit mode and configure/authorize all connections and press save. <img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/Illumio-Port-Blocking-Switch/images/illumio-port-blocking-switch-playbook.png\"/>"
+            "After deployment open the playbook in edit mode and configure/authorize all connections and press save. <img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/illumio-sentinel-playbook-v2/Solutions/IllumioSaaS/Playbooks/Illumio-Quarantine-Workload/images/illumio-quarantine-workload.png\"/>"
         ],
         "prerequisitesDeployTemplateFile": "",
-        "lastUpdateTime": "2024-11-21T00:00:00.000Z",
+        "lastUpdateTime": "2024-12-10T00:00:00.000Z",
         "entities": [
 
         ],
@@ -25,21 +25,21 @@
         "releaseNotes": [
             {
                 "version": "1.0",
-                "title": "Illumio Containment Switch",
+                "title": "Illumio Quarantine Workload",
                 "notes": [ "Initial version" ]
             }
         ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Illumio-Port-Blocking-Switch",
+            "defaultValue": "Illumio-Quarantine-Workload",
             "type": "String",
             "metadata": {
                 "description": "PlayBook Name"
             }
         },
         "FunctionAppName": {
-            "defaultValue": "IllumioPortBlockingApp",
+            "defaultValue": "IllumioQuarantineWorkload",
             "type": "String",
             "metadata": {
                 "description": "Function app Name"
@@ -78,19 +78,19 @@
     },
     "variables": {
         "hostingPlanName": "[parameters('FunctionAppName')]",
-        "storageAccountName": "portblockstorage",
+        "storageAccountName": "quarantineworkloadstorage",
         "functionAppName": "[parameters('FunctionAppName')]",
         "applicationInsightsName": "[parameters('FunctionAppName')]",
         "pceFQDN": "[parameters('PCE_FQDN')]",
         "port": "[parameters('PORT')]",
         "orgId": "[parameters('ORG_ID')]",
         "apiKey": "[parameters('API_KEY')]",
-        "apiSecret": "[parameters('API_SECRET')]"        
+        "apiSecret": "[parameters('API_SECRET')]"
     },
     "resources": [
         {
             "type": "Microsoft.Web/serverfarms",
-            "apiVersion": "2022-03-01",
+            "apiVersion": "2020-06-01",
             "name": "[variables('hostingPlanName')]",
             "location": "[resourceGroup().location]",
             "sku": {
@@ -178,7 +178,7 @@
                         },
                         {
                             "name": "WEBSITE_RUN_FROM_PACKAGE",
-                            "value": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/Illumio-Port-Blocking-Switch/illumio-containment-switch.zip"
+                            "value": "https://raw.githubusercontent.com/illumio-shield/Azure-Sentinel/illumio-sentine-playbook-v2/Solutions/IllumioSaaS/Playbooks/Illumio-Quarantine-Workload/illumio-quarantine-workload.zip"
                         },
                         {
                             "name": "PCE_FQDN",
@@ -243,11 +243,17 @@
                                 "schema": {
                                     "type": "object",
                                     "properties": {
-                                        "protocol": {
-                                            "type": "integer"
+                                        "workloads": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
                                         },
-                                        "port": {
-                                            "type": "integer"
+                                        "labels": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
                                         }
                                     }
                                 }
@@ -255,97 +261,13 @@
                         }
                     },
                     "actions": {
-                        "PortBlockingFunction-runTrafficQuery": {
+                        "QuarantineWorkloadFuncApp-quarantineWorkloadHTTPTrigger": {
                             "runAfter": {},
                             "type": "Function",
                             "inputs": {
                                 "body": "@triggerBody()",
                                 "function": {
-                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/runTrafficQuery')]"
-                                }
-                            }
-                        },
-                        "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": {
-                            "runAfter": {
-                                "PortBlockingFunction-runTrafficQuery": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Function",
-                            "inputs": {
-                                "body": "@body('PortBlockingFunction-runTrafficQuery')",
-                                "function": {
-                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/fetchVisibilityOnlyWorkloadsFromTrafficResults')]"
-                                }
-                            }
-                        },
-                        "PortBlockingFunction-createVirtualService": {
-                            "runAfter": {
-                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Function",
-                            "inputs": {
-                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
-                                "function": {
-                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createVirtualService')]"
-                                }
-                            }
-                        },
-                        "PortBlockingFunction-bindWorkloadsToVirtualService": {
-                            "runAfter": {
-                                "PortBlockingFunction-createVirtualService": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Function",
-                            "inputs": {
-                                "body": "@body('PortBlockingFunction-createVirtualService')",
-                                "function": {
-                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/bindWorkloadsToVirtualService')]"
-                                }
-                            }
-                        },
-                        "PortBlockingFunction-createAllowRuleForVirtualService": {
-                            "runAfter": {
-                                "PortBlockingFunction-bindWorkloadsToVirtualService": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Function",
-                            "inputs": {
-                                "body": "@body('PortBlockingFunction-bindWorkloadsToVirtualService')",
-                                "function": {
-                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createAllowRuleForVirtualService')]"
-                                }
-                            }
-                        },
-                        "PortBlockingFunction-changeWorkloadEnforcementState": {
-                            "runAfter": {
-                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Function",
-                            "inputs": {
-                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
-                                "function": {
-                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/changeWorkloadEnforcementState')]"
-                                }
-                            }
-                        },
-                        "PortBlockingFunction-createDenyRule": {
-                            "runAfter": {
-                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Function",
-                            "inputs": {
-                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
-                                "function": {
-                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createDenyRule')]"
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/quarantineWorkloadHTTPTrigger')]"
                                 }
                             }
                         }
@@ -354,6 +276,7 @@
                 },
                 "parameters": {
                     "$connections": {
+                        "defaultValue": {}
                     }
                 }
             }
