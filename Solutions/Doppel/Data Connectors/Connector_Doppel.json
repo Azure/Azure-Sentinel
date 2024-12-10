@@ -1,0 +1,109 @@
+{
+    "id": "Doppel_DataConnector",
+    "title": "Doppel Data Connector",
+    "publisher": "Doppel",
+    "descriptionMarkdown": "The data connector is built on Microsoft Sentinel for Doppel events and alerts and supports DCR-based [ingestion time transformations](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/ingestion-time-transformations) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.",
+    "graphQueriesTableName": "DoppelTable_CL",
+    "graphQueries": [
+        {
+            "metricName": "Events received",
+            "legend": "Data connector events",
+            "baseQuery": "DoppelTable_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "One event log",
+            "query": "DoppelTable_CL | take 1"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "DoppelTable_CL",
+            "lastDataReceivedQuery": "DoppelTable_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriteria": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "DoppelTable_CL | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required.",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": false
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Microsoft Entra Tenant ID, Client ID and Client Secret",
+                "description": "Microsoft Entra ID requires a Client ID and Client Secret to authenticate your application. Additionally, Global Admin/Owner level access is required to assign the Entra-registered application a Resource Group Monitoring Metrics Publisher role."
+            },
+            {
+                "name": "Requires Workspace ID, DCE-URI, DCR-ID",
+                "description": "You will need to get the Log Analytics Workspace ID, DCE Logs Ingestion URI and DCR Immutable ID for the configuration."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "Configure Doppel Webhook",
+            "description": "Configure the Webhook in Doppel and Endpoint with permissions in Microsoft Sentinel to send data.",
+            "instructions": [
+                {
+                    "type": "InstructionStepsGroup",
+                    "parameters": {
+                        "enable": true,
+                        "userRequestPlaceHolder": "",
+                        "instructionSteps": [
+                            {
+                                "title": "Register the Application in Microsoft Entra ID",
+                                "description": "1. **Open the [Microsoft Entra ID page](https://entra.microsoft.com/)**:\n   - Click the provided link to open the **Microsoft Entra ID** registration page in a new tab.\n   - Ensure you are logged in with an account that has **Admin level** permissions.\n\n2. **Create a New Application**:\n   - In the **Microsoft Entra ID portal**, select **App registrations** mentioned on the left-hand side tab.\n   - Click on **+ New registration**.\n   - Fill out the following fields:\n     - **Name**: Enter a name for the app (e.g., “Doppel App”).\n     - **Supported account types**: Choose **Accounts in this organizational directory only** (Default Directory only - Single tenant).\n     - **Redirect URI**: Leave this blank unless required otherwise.\n   - Click **Register** to create the application.\n\n3. **Copy Application and Tenant IDs**:\n   - Once the app is registered, note the **Application (client) ID** and **Directory (tenant) ID** from the **Overview** page. You’ll need these for the integration.\n\n4. **Create a Client Secret**:\n   - In the **Certificates & secrets** section, click **+ New client secret**.\n   - Add a description (e.g., 'Doppel Secret') and set an expiration (e.g., 1 year).\n   - Click **Add**.\n   - **Copy the client secret value immediately**, as it will not be shown again."
+                            },
+                            {
+                                "title": "Assign the \"Monitoring Metrics Publisher\" Role to the App",
+                                "description": "1. **Open the Resource Group in Azure Portal**:\n   - Navigate to the **Resource Group** that contains the **Log Analytics Workspace** and **Data Collection Rules (DCRs)** where you want the app to push data.\n\n2. **Assign the Role**:\n   - In the **Resource Group** menu, click on **Access control (IAM)** mentioned on the left-hand side tab ..\n   - Click on **+ Add** and select **Add role assignment**.\n   - In the **Role** dropdown, search for and select the **Monitoring Metrics Publisher** role.\n   - Under **Assign access to**, choose **Azure AD user, group, or service principal**.\n   - In the **Select** field, search for your registered app by **name** or **client ID**.\n   - Click **Save** to assign the role to the application."
+                            },
+                            {
+                                "title": "Deploy the ARM Template",
+                                "description": "1. **Retrieve the Workspace ID**:\n   - After assigning the role, you will need the **Workspace ID**.\n   - Navigate to the **Log Analytics Workspace** within the **Resource Group**.\n   - In the **Overview** section, locate the **Workspace ID** field under **Workspace details**.\n   - **Copy the Workspace ID** and keep it handy for the next steps.\n\n2. **Click the Deploy to Azure Button**:\n   - [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmetron-labs%2FAzure-Sentinel%2Frefs%2Fheads%2FDoppelSolution%2FSolutions%2FDoppel%2FData%2520Connectors%2FDeployToAzure.json).\n   - This will take you directly to the Azure portal to start the deployment.\n\n3. **Review and Customize Parameters**:\n   - On the custom deployment page, ensure you’re deploying to the correct **subscription** and **resource group**.\n   - Fill in the parameters like **workspace name**, **workspace ID**, and **workspace location**.\n\n4. **Click Review + Create** and then **Create** to deploy the resources."
+                            },
+                            {
+                                "title": "Verify DCE, DCR, and Log Analytics Table Setup",
+                                "description": "1. **Check the Data Collection Endpoint (DCE)**:\n   - After deploying, go to **Azure Portal > Data Collection Endpoints**.\n   - Verify that the **DoppelDCE** endpoint has been created successfully.\n   - **Copy the DCE Logs Ingestion URI**, as you’ll need this for generating the webhook URL.\n\n2. **Confirm Data Collection Rule (DCR) Setup**:\n   - Go to **Azure Portal > Data Collection Rules**.\n   - Ensure the **DoppelDCR** rule is present.\n   - **Copy the Immutable ID** of the DCR from the Overview page, as you’ll need it for the webhook URL.\n\n3. **Validate Log Analytics Table**:\n   - Navigate to your **Log Analytics Workspace** (linked to Microsoft Sentinel).\n   - Under the **Tables** section, verify that the **DoppelTable_CL** table has been created successfully and is ready to receive data."
+                            },
+                            {
+                                "title": "Integrate Doppel Alerts with Microsoft Sentinel",
+                                "description": "1. **Gather Necessary Information**:\n   - Collect the following details required for integration:\n     - **Data Collection Endpoint ID (DCE-ID)**\n     - **Data Collection Rule ID (DCR-ID)**\n     - **Microsoft Entra Credentials**: Tenant ID, Client ID, and Client Secret.\n\n2. **Coordinate with Doppel Support**:\n   - Share the collected DCE-ID, DCR-ID, and Microsoft Entra credentials with Doppel support.\n   - Request assistance to configure these details in the Doppel tenant to enable webhook setup.\n\n3. **Webhook Setup by Doppel**:\n   - Doppel will use the provided Resource IDs and credentials to configure a webhook.\n   - This webhook will facilitate the forwarding of alerts from Doppel to Microsoft Sentinel.\n\n4. **Verify Alert Delivery in Microsoft Sentinel**:\n   - Check that alerts from Doppel are successfully forwarded to Microsoft Sentinel.\n   - Validate that the **Workbook** in Microsoft Sentinel is updated with the alert statistics, ensuring seamless data integration."
+                            }                            
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
