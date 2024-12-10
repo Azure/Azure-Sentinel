@@ -3,14 +3,11 @@ import { createAppAuth } from "@octokit/auth-app";
 import * as logger from "./logger";
 import "./stringExtenssions";
 
-/*
+
 const _owner = process.env.REPO_OWNER;
 const _repo = process.env.REPO_NAME;
 const _pr_number = process.env.PRNUM;
-*/
-const _owner = "Azure";
-const _repo = "Azure-Sentinel";
-const _pr_number = "3";
+
 
 if (!_owner || !_repo || !_pr_number) {
   console.error("Environment variables REPO_OWNER, REPO_NAME and PRNUM are not set.");
