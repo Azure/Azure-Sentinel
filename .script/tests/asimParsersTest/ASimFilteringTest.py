@@ -817,6 +817,20 @@ class FilteringTest(unittest.TestCase):
 
 # For each schema supported by the test there is a mapping between each of the schema's parameter to the column that the parameter filters.
 all_schemas_parameters = {
+    "AlertEvent" :
+    {
+		"ipaddr_has_any_prefix" : "DvcIpAddr",
+        "disabled" : "",
+        "endtime" : "EventEndTime",
+        "hostname_has_any" : "DvcHostname",
+		"username_has_any" : "Username",
+        "attacktactics_has_any" : "AttackTactics",
+        "attacktechniques_has_any" : "AttackTechniques",
+        "threatcategory_has_any" : "ThreatCategory",
+        "alertverdict_has_any" : "AlertVerdict",
+        "starttime" : "EventStartTime",
+        "eventseverity_has_any": "EventSeverity"
+    },
     "AuditEvent" :
     {
 		"actorusername_has_any" : "ActorUsername",
