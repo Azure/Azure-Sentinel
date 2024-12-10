@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for Barracuda WAF.
 
-This ASIM parser supports normalizing the Barracuda WAF logs to the ASIM authentication normalized schema.
+This ASIM parser supports normalizing the Barracuda WAF logs ingested in 'barracuda_CL' table to the ASIM authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
