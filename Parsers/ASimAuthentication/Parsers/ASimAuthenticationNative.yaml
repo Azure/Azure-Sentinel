@@ -1,0 +1,41 @@
+Parser:
+  Title: Authentication Event ASIM parser for Microsoft Sentinel native Authentication table
+  Version: '0.1.1'
+  LastUpdated: Dece 10, 2024
+Product:
+  Name: Native
+Normalization:
+  Schema: Authentication
+  Version: '0.1.1'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Microsoft Sentinel Authentication table (ASimAuthenticationEventLogs) to the ASIM Authentication Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
+ParserName: ASimAuthenticationNative
+EquivalentBuiltInParser: _ASim_Authentication_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false) 
+  {
+    ASimAuthenticationEventLogs  | where not(disabled)
+      | project-rename
+          EventUid = _ItemId
+      | extend
+          User =  TargetUsername,
+          Src = coalesce (SrcDvcId, SrcHostname, or SrcIpAddr),
+          IpAddr=SrcIpAddr,
+          LogonTarget= coalesce (TargetAppName, TargetUrl, TargetHostname),
+          Dst = coalesce (TargerDvcId, TargetHostname, TargetIpAddr, TargetAppId,TargetAppName),
+          Rule = coalesce(NetworkRuleName, tostring(NetworkRuleNumber)),
+          EventStartTime = TimeGenerated,
+          EventSchema = "Authentication"
+      | project-away
+          TenantId, SourceSystem, _ResourceId, _SubscriptionId
+  };
+  parser  (disabled=disabled)
