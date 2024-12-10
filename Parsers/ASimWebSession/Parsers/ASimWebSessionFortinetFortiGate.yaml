@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM parser for Fortinet FortiGate
-  Version: '0.1'
-  LastUpdated: Nov 11th, 2023
+  Version: '0.1.1'
+  LastUpdated: Nov 4, 2024
 Product:
   Name: Fortinet FortiGate
 Normalization:
@@ -11,7 +11,7 @@ References:
 - Title: ASIM Web Session Schema
   Link: https://aka.ms/ASimWebSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: web log fields
   Link: https://docs.fortinet.com/document/fortigate/7.4.0/fortios-log-message-reference/400992  
 - Title: Fortinet FortiGate CEF setup
@@ -55,7 +55,7 @@ ParserQuery: |
     | extend 
         EventResultDetails = "NA"
     | lookup EventLookup on DeviceAction 
-    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName, ApplicationProtocol
     | project-rename 
       Url                     = RequestURL
       , UrlCategory           = RequestContext
@@ -72,9 +72,9 @@ ParserQuery: |
       , SrcInterfaceName      = DeviceInboundInterface
       , SrcIpAddr             = SourceIP
       , SrcPortNumber         = SourcePort
+      , NetworkApplicationProtocol = ApplicationProtocol
       , DvcId                 = DeviceExternalID
       , EventUid              = _ItemId
-      , DstHostname           = DestinationHostName
       , SrcHostname           = SourceHostName
       , SrcUsername           = SourceUserName
       , DstUsername           = DestinationUserName
@@ -100,6 +100,7 @@ ParserQuery: |
             ['ad.agent']:string
         ) with (pair_delimiter=';', kv_delimiter='=')
     | parse AdditionalExtensions with * "x-forwarded-for=" HttpRequestXff:string ";" *
+    | invoke _ASIM_ResolveDstFQDN('DestinationHostName')
     | project-rename
         HttpReferrer            = ['ad.referralurl'],
         HttpRequestMethod       = ['ad.httpmethod'],
@@ -115,10 +116,13 @@ ParserQuery: |
         ThreatOriginalRiskLevel = FortinetFortiGatecrscore,
         SrcPackets              = FortinetFortiGatesentpkt,
         DstPackets              = FortinetFortiGatercvdpkt
-    | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
+    | extend
+        temp_HttpRequestMethod = extract(@"rawdata=.*?Method=(.*?)(?:\||\;|$)", 1, AdditionalExtensions),
+        temp_HttpUserAgent = extract(@"rawdata=.*?User-Agent=(.*?)(?:\||\;|$)", 1, AdditionalExtensions)
     | extend 
         HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
-        HttpUserAgent = coalesce(temp_HttpUserAgent,HttpUserAgent)
+        HttpUserAgent = coalesce(temp_HttpUserAgent,HttpUserAgent),
+        HttpStatusCode = EventResultDetails
     | project-away temp_*
     | extend 
       EventCount               = int(1)
@@ -126,6 +130,7 @@ ParserQuery: |
       , EventSchemaVersion     = "0.2.6"
       , EventType              = "HTTPsession"
       , EventVendor            = "Fortinet"
+      , EventProduct           = "Fortigate"
       , DvcIdType              = "Other"
       , NetworkBytes           = DstBytes + SrcBytes
       , EventEndTime           = TimeGenerated
