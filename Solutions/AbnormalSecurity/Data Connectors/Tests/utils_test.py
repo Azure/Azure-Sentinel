@@ -144,7 +144,8 @@ class TestComputeIntervals(unittest.TestCase):
             STORED_TIME=datetime(2024, 10, 1, 12, 55),
             CURRENT_TIME=datetime(2024, 10, 1, 13, 0),
             TRACE_ID=uuid4(),
-            PYTHON_VERSION="3.11"
+            PYTHON_VERSION="3.11",
+            SINGLE_THREAT_PAGE_SIZE=40
         )
 
     def test_valid_intervals(self):

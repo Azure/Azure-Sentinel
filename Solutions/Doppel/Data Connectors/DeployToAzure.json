@@ -1,0 +1,239 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass the arm-ttk test, 'Location-Should-Not-Be-Hardcoded'. Instead the `workspace-location` derived from the log analytics workspace is used."
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "defaultValue": "East US",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "subscription": {
+            "defaultValue": "[last(split(subscription().id, '/'))]",
+            "type": "string",
+            "metadata": {
+                "description": "subscription id where Microsoft Sentinel is configured"
+            }
+        },
+        "resourceGroupName": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "string",
+            "metadata": {
+                "description": "resource group name where Microsoft Sentinel is configured"
+            }
+        },
+        "workspace": {
+            "defaultValue": "Doppel",
+            "type": "string",
+            "metadata": {
+                "description": "the log analytics workspace enabled for Microsoft Sentinel"
+            }
+        },
+        "workspaceId": {
+            "type": "string",
+            "metadata": {
+                "description": "The unique identifier (GUID) of the Log Analytics workspace."
+            }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "_logAnalyticsTableId1": "DoppelTable_CL",
+        "dceResourceName": "DoppelDCE",
+        "dceImmutableId": "[guid(variables('dceResourceName'))]",
+        "dcrResourceName": "DoppelDCR"
+    },
+    "resources": [
+        {
+            "name": "[variables('dceResourceName')]",
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-09-01-preview",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "description": "DCE for Doppel webhook ingestion",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                },
+                "configurationAccess": {
+                    "immutableId": "[variables('dceImmutableId')]"
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'), '/', variables('_logAnalyticsTableId1'))]",
+            "apiVersion": "2022-10-01",
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "location": "[parameters('workspace-location')]",
+            "kind": null,
+            "properties": {
+                "totalRetentionInDays": 30,
+                "archiveRetentionInDays": 0,
+                "plan": "Analytics",
+                "retentionInDaysAsDefault": true,
+                "totalRetentionInDaysAsDefault": true,
+                "schema": {
+                    "tableSubType": "DataCollectionRuleBased",
+                    "name": "[variables('_logAnalyticsTableId1')]",
+                    "tableType": "CustomLog",
+                    "columns": [
+                        {
+                            "name": "AlertID",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "Timestamp",
+                            "type": "datetime",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "AlertCreated",
+                            "type": "datetime",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "Entity",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "Severity",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "QueueState",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "EntityState",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "Product",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "Source",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "UpdatedBy",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        },
+                        {
+                            "name": "AlertLink",
+                            "type": "string",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        }
+                    ],
+                    "standardColumns": [
+                        {
+                            "name": "TenantId",
+                            "type": "guid",
+                            "isDefaultDisplay": false,
+                            "isHidden": false
+                        }
+                    ],
+                    "solutions": [
+                        "LogManagement"
+                    ],
+                    "isTroubleshootingAllowed": true
+                },
+                "provisioningState": "Succeeded",
+                "retentionInDays": 30
+            },
+            "id": "[concat('/subscriptions/', parameters('subscription'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('workspace'), '/tables/', variables('_logAnalyticsTableId1'))]"
+        },
+        {
+            "name": "[variables('dcrResourceName')]", 
+            "apiVersion": "2021-09-01-preview",
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceResourceName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('_logAnalyticsTableId1'))]"
+            ],
+            "kind": null,
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceResourceName'))]",
+                "streamDeclarations": {
+                    "Custom-DoppelTable_CL": {
+                        "columns": [
+                            {
+                                "name": "event_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "timestamp",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "updated_values",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "alert",
+                                "type": "dynamic"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "workspaceId": "[parameters('workspaceId')]",
+                            "name": "[parameters('workspaceId')]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-DoppelTable_CL"
+                        ],
+                        "destinations": [
+                            "[parameters('workspaceId')]"
+                        ],
+                        "transformKql": "source\n| extend \n    EventType = tostring(event_type),\n    AlertID = tostring(alert.id),\n    AlertLink = tostring(alert.doppel_link),\n    AlertCreated = todatetime(alert.created_at),\n    Entity = tostring(alert.entity),\n    QueueState = tostring(alert.queue_state),\n    EntityState = tostring(alert.entity_state),\n    Severity = tostring(alert.severity),\n    Product = tostring(alert.product),\n    Source = tostring(alert.source),\n    UpdatedBy = tostring(alert.uploaded_by),\n    Timestamp = todatetime(timestamp),\n    TimeGenerated = now()\n| project \n    AlertID, \n    TimeGenerated,\n    Timestamp, \n    AlertCreated, \n    Entity, \n    Severity, \n    QueueState, \n    EntityState, \n    Product, \n    Source, \n    UpdatedBy, \n    AlertLink\n\n",
+                        "outputStream": "Custom-DoppelTable_CL"
+                    }
+                ],
+                "provisioningState": "Succeeded"
+            }
+        }
+    ]
+}
