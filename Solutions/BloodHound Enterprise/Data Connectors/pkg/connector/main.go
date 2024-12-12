@@ -662,11 +662,20 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundSer
 
 	bloodhoundRecordData["attackPathAggregateData"] = attackPathAggregateBHERecords
 
-	tierZeroData, err := bloodhound.GetTierZeroPrincipals(bloodhoundClient)
+	var tierZeroData []sdk.ModelAssetGroupMember = make([]sdk.ModelAssetGroupMember, 0)
+
+	// Get Tier Zero asset group and then its members
+	tierZeroGroup, err := bloodhound.GetTierZeroGroup(bloodhoundClient)
 	if err != nil {
-		responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero principals skipping %v", err))
+		responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero group skipping %v", err))
+	} else {
+		tierZeroData, err = bloodhound.GetTierZeroPrincipals(bloodhoundClient, tierZeroGroup)
+		if err != nil {
+			responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero principals skipping %v", err))
+		}
+		responseLogs = append(responseLogs, fmt.Sprintf("Got %d cypher query graph nodes", len(tierZeroData)))	
 	}
-	responseLogs = append(responseLogs, fmt.Sprintf("Got %d cypher query graph nodes", len(tierZeroData)))
+
 
 	tier0BHERecords, err := transformTierZeroPrincipal(tierZeroData, *mapping)
 	if err != nil {

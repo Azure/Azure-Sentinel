@@ -34,13 +34,35 @@ func InitializeBloodhoundClient(apiKey string, apikeyId string, bloodhoundServer
 	return client, nil
 }
 
-func GetTierZeroPrincipals(client *sdk.ClientWithResponses) ([]sdk.ModelAssetGroupMember, error) {
-	response, err := client.ListAssetGroupMembersWithResponse(context.TODO(), 1, nil)
+func GetTierZeroGroup(client *sdk.ClientWithResponses) (int32, error) {
+	tier0_tag := "eq:admin_tier_0"
+	params := sdk.ListAssetGroupsParams {
+		Tag: &tier0_tag,
+	}
+	response, err := client.ListAssetGroupsWithResponse(context.TODO(), &params)
 	if err != nil {
-		return []sdk.ModelAssetGroupMember{}, fmt.Errorf("Error getting tier zero principals %v", err)
+		return 0, fmt.Errorf("Error getting tier zero group %v", err)
 	}
 	if response.StatusCode() != http.StatusOK {
-		return []sdk.ModelAssetGroupMember{}, fmt.Errorf("Error getting tier zero principals %s", response.Status())
+		return 0, fmt.Errorf("Error getting tier zero group %s", response.Status())
+	}
+	if len(*response.JSON200.Data.AssetGroups) == 1 && (*response.JSON200.Data.AssetGroups)[0].Id != nil {
+		return  *((*response.JSON200.Data.AssetGroups)[0].Id), nil
+	}
+	return 0, fmt.Errorf("Error getting tier zero group. Expected 1 group, got %d", len(*response.JSON200.Data.AssetGroups))
+}
+
+func GetTierZeroPrincipals(client *sdk.ClientWithResponses, tierZeroGroup int32) ([]sdk.ModelAssetGroupMember, error) {
+	limit := 10000
+	params := &sdk.ListAssetGroupMembersParams{
+		Limit: &limit,
+	}
+	response, err := client.ListAssetGroupMembersWithResponse(context.TODO(), tierZeroGroup, params)
+	if err != nil {
+		return []sdk.ModelAssetGroupMember{}, fmt.Errorf("Error getting tier zero principals in group %d %v", tierZeroGroup, err)
+	}
+	if response.StatusCode() != http.StatusOK {
+		return []sdk.ModelAssetGroupMember{}, fmt.Errorf("Error getting tier zero principals in group %d %s", tierZeroGroup, response.Status())
 	}
 	return *response.JSON200.Data.Members, nil
 }
