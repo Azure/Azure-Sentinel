@@ -7,6 +7,7 @@ param(
     [Parameter(Mandatory = $false)][string]$IsGov = $false
 )
 
+
 $context = Get-AzContext
 
 
@@ -41,10 +42,14 @@ $url = $baseUri + "/providers/Microsoft.SecurityInsights/contentProductPackages?
 
 Write-Host " Content Product Packages Uri: $url"
 
-$allSolutions = (Invoke-RestMethod -Method "Get" -Uri $url -Headers $authHeader ).value
+try {
+    $allSolutions = (Invoke-RestMethod -Method "Get" -Uri $url -Headers $authHeader ).value
+} catch {
+    Write-Error "Failed to retrieve solutions: $_"
+    Exit
+}
 
 #Deploy each single solution
-#$templateParameter = @{"workspace-location" = $Region; workspace = $Workspace }
 foreach ($deploySolution in $Solutions) {
     $singleSolution = $allSolutions | Where-Object { $_.properties.displayName -Contains $deploySolution }
     if ($null -eq $singleSolution) {
@@ -52,7 +57,12 @@ foreach ($deploySolution in $Solutions) {
     }
     else {
         $solutionURL = $baseUri + "/providers/Microsoft.SecurityInsights/contentProductPackages/$($singleSolution.name)?api-version=2024-03-01"
-        $solution = (Invoke-RestMethod -Method "Get" -Uri $solutionURL -Headers $authHeader )
+        try {
+            $solution = (Invoke-RestMethod -Method "Get" -Uri $solutionURL -Headers $authHeader )
+        } catch {
+            Write-Error "Failed to retrieve solution details for $deploySolution: $_"
+            continue
+        }
         Write-Host "Solution name: " $solution.name
         $packagedContent = $solution.properties.packagedContent
         #Some of the post deployment instruction contains invalid characters and since this is not displayed anywhere
@@ -85,8 +95,7 @@ foreach ($deploySolution in $Solutions) {
             Write-Host "Deployed solution:  $deploySolution"
         }
         catch {
-            $errorReturn = $_
-            Write-Error $errorReturn
+            Write-Error "Failed to deploy solution $deploySolution: $_"
         }
     }
 
@@ -108,8 +117,13 @@ $solutionURL = $baseUri + "/providers/Microsoft.SecurityInsights/contentTemplate
 #Add a filter only return analytic rule templates
 $solutionURL += "&%24filter=(properties%2FcontentKind%20eq%20'AnalyticsRule')"
 
-$results = (Invoke-RestMethod -Uri $solutionURL -Method Get -Headers $authHeader).value
-  
+try {
+    $results = (Invoke-RestMethod -Uri $solutionURL -Method Get -Headers $authHeader).value
+} catch {
+    Write-Error "Failed to retrieve analytic rule templates: $_"
+    Exit
+}
+
 $BaseAlertUri = $baseUri + "/providers/Microsoft.SecurityInsights/alertRules/"
 $BaseMetaURI = $baseURI + "/providers/Microsoft.SecurityInsights/metadata/analyticsrule-"
 
@@ -201,8 +215,7 @@ foreach ($result in $results ) {
                 #addition to the REST API to check for the existance of a dataset but
                 #it only checks certain ones.  Hope to modify this to do the check
                 #before trying to create the alert.
-                $errorReturn = $_
-                Write-Error $errorReturn
+                Write-Error "Failed to create rule $displayName: $_"
             }
             #This pauses for 5 second so that we don't overload the workspace.
             Start-Sleep -Seconds 1
