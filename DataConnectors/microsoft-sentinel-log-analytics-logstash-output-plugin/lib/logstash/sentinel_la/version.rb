@@ -1,6 +1,6 @@
 module LogStash; module Outputs;
 class MicrosoftSentinelOutputInternal
-  VERSION_INFO = [1, 1, 3].freeze
+  VERSION_INFO = [1, 1, 4].freeze
   VERSION = VERSION_INFO.map(&:to_s).join('.').freeze
 
   def self.version
