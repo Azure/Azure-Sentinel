@@ -1043,8 +1043,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         contentId = "[variables('_$fileName')]";
                         version   = "[variables('playbookVersion$global:playbookCounter')]";
                     };
-
-                    if($fileName.ToLower() -match "FunctionApp")
+                    
+                    if($IsFunctionAppResource)
                     {
                         $functionAppsPlaybookId = $playbookData.parameters.FunctionAppName.defaultValue
 
