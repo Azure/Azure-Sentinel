@@ -1,0 +1,1125 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "WorkspaceID": {
+            "minLength": 1,
+            "type": "String",
+            "metadata": {
+                "description": "Enter Workspace ID of Log Analytics workspace"
+            }
+        },
+        "WorkspaceKey": {
+            "minLength": 1,
+            "type": "SecureString",
+            "metadata": {
+                "description": "Enter Primary Key of Log Analytics workspace"
+            }
+        },
+        "InfobloxBaseURL": {
+            "defaultValue": "https://csp.infoblox.com",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Base URL starting with \"https://\" followed by hostname (Example: https://csp.infoblox.com)"
+            }
+        },
+         "InfobloxAPIToken": {
+            "minLength": 1,
+            "type": "SecureString",
+            "metadata": {
+                "description": "Enter Infoblox API Token for Authentication"
+            }
+        },
+        "Confidence": {
+            "type": "int",
+            "defaultValue": 80,
+            "minValue": 0,
+            "maxValue": 100,
+            "metadata": {
+                "description": "Specify the confidence for creating indicators (Indicators will be generated with a confidence greater than or equal to the specified value). Default is '80'"
+            }
+        },
+        "ThreatLevel": {
+            "type": "int",
+            "defaultValue": 80,
+            "minValue": 0,
+            "maxValue": 100,
+            "metadata": {
+                "description": "Specify the threat level for creating indicators (Indicators will be generated with a threat level greater than or equal to the specified value). Default is '80'"
+            }
+        },
+        "HistoricalDataCutoffDate": {
+            "type": "String",
+            "defaultValue" : "2024-01-01",
+            "metadata": {
+                "description": "Enter the cutoff date until which you want to retrieve historical data, starting from the current date and moving backwards. The date format should be YYYY-MM-DD. This marks the furthest point in the past from which data will be collected"
+            }
+        },
+        "AzureTenantId": {
+            "minLength": 1,
+            "type": "String",
+            "metadata": {
+                "description": "Enter Azure Tenant ID of your Azure Active Directory"
+            }
+        },
+        "AzureClientId": {
+            "minLength": 1,
+            "type": "String",
+            "metadata": {
+                "description": "Enter Azure Client ID that you have created during app registration"
+            }
+        },
+        "AzureClientSecret": {
+            "minLength": 1,
+            "type": "SecureString",
+            "metadata": {
+                "description": "Enter Azure Client Secret that you have created during creating the client secret"
+            }
+        },
+        "LogLevel": {
+            "type": "string",
+            "metadata": {
+                "description": "Add log level or log severity value. Default is 'INFO'"
+            },
+            "allowedValues": [
+                "Debug",
+                "Info",
+                "Error",
+                "Warning"
+            ],
+            "defaultValue": "Info"
+        },
+        "AppInsightsWorkspaceResourceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
+            }
+        }
+    },
+    "variables": {
+        "FunctionNameDurable" : "[concat('dossierlook',uniqueString(resourceGroup().id))]",
+        "function_names_Historical": [ "host", "ip", "url", "hash", "email" ],
+        "function_names_Current": [ "host", "ip", "url", "hash", "email" ],
+        "function_names_Json_parse": [ "hist", "curr" ],
+        "function_names_Indicator": [ "hist", "curr" ],
+        "HistCommon_storage": "[concat('Histhost',uniqueString(resourceGroup().id))]",
+        "CurrCommon_storage": "[concat('Currhost',uniqueString(resourceGroup().id))]",
+        "Storage_Strings": [ "[concat('Histhost',uniqueString(resourceGroup().id))]", "[concat('Currhost',uniqueString(resourceGroup().id))]" ],
+        "copy": [
+            {
+                "name": "HistoricalNameArray",
+                "count": "[length(variables('function_names_Historical'))]",
+                "input": {
+                    "Historical": "[concat('Hist',variables('function_names_Historical')[copyIndex('HistoricalNameArray', 0)],uniqueString(resourceGroup().id))]"
+                }
+            },
+            {
+                "name": "CurrentNameArray",
+                "count": "[length(variables('function_names_Current'))]",
+                "input": {
+                    "Current": "[concat('Curr',variables('function_names_Current')[copyIndex('CurrentNameArray', 0)],uniqueString(resourceGroup().id))]"
+                }
+            },
+            {
+                "name": "JsonParseNameArray",
+                "count": "[length(variables('function_names_Json_parse'))]",
+                "input": {
+                    "Json_parse": "[concat('Jparse',variables('function_names_Json_parse')[copyIndex('JsonParseNameArray', 0)],uniqueString(resourceGroup().id))]"
+                }
+            },
+            {
+                "name": "IndicatorNameArray",
+                "count": "[length(variables('function_names_Indicator'))]",
+                "input": {
+                    "Indicators": "[concat('ind',variables('function_names_Indicator')[copyIndex('IndicatorNameArray', 0)],uniqueString(resourceGroup().id))]"
+                }
+            }
+        ],
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('HistoricalNameArray')[copyIndex()].Historical]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('HistoricalNameArray')[copyIndex()].Historical]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            },
+            "copy": {
+                "name": "componentcopy",
+                "count": "[length(variables('function_names_Historical'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[tolower(variables('HistoricalNameArray')[copyIndex()].Historical)]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                },
+                "minimumTlsVersion": "TLS1_2"
+            },
+            "copy": {
+                "name": "storageaccountcopy",
+                "count": "[length(variables('function_names_Historical'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('HistoricalNameArray')[copyIndex()].Historical, '/default')]",
+            "dependsOn": [
+                "storageaccountcopy"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            },
+            "copy": {
+                "name": "blobServicescopy",
+                "count": "[length(variables('function_names_Historical'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('HistoricalNameArray')[copyIndex()].Historical, '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('HistoricalNameArray')[copyIndex()].Historical))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            },
+            "copy": {
+                "name": "fileServicescopy",
+                "count": "[length(variables('function_names_Historical'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('HistoricalNameArray')[copyIndex()].Historical]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('HistoricalNameArray')[copyIndex()].Historical))]",
+                "[resourceId('Microsoft.Insights/components', variables('HistoricalNameArray')[copyIndex()].Historical)]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('HistoricalNameArray')[copyIndex()].Historical]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.11"
+                }
+            },
+            "resources": [
+                {
+                    "type": "config",
+                    "apiVersion": "2018-11-01",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('HistoricalNameArray')[copyIndex()].Historical)]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('HistoricalNameArray')[copyIndex()].Historical), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('HistoricalNameArray')[copyIndex()].Historical), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('HistoricalNameArray')[copyIndex()].Historical),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('HistoricalNameArray')[copyIndex()].Historical)), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "Connection_String": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('HistCommon_storage')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('HistCommon_storage'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
+                        "API_token": "[parameters('InfobloxAPIToken')]",
+                        "BaseUrl": "[parameters('InfobloxBaseURL')]",
+                        "Schedule": "0 */15 * * * *",
+                        "ThreatType": "[variables('function_names_Historical')[copyIndex('sitescopy')]]",
+                        "HISTORICAL_TIME_INTERVAL": "-3",
+                        "Historical_Start_Date": "[parameters('HistoricalDataCutoffDate')]",
+                        "Workspace_Key": "[parameters('WorkspaceKey')]",
+                        "Workspace_Id": "[parameters('WorkspaceID')]",
+                        "LogLevel": "[parameters('LogLevel')]",
+                        "File_Share_Name": "infoblox-checkpoints",
+                        "File_Share_Name_For_Data": "infoblox-data-files",
+                        "Checkpoint_File_Name": "infoblox",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-InfobloxHistoricalToAzureStorage-functionapp"
+                    }
+                }
+            ],
+            "copy": {
+                "name": "sitescopy",
+                "count": "[length(variables('function_names_Historical'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('HistoricalNameArray')[copyIndex()].Historical, '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('HistoricalNameArray')[copyIndex()].Historical, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('HistoricalNameArray')[copyIndex()].Historical)]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            },
+            "copy": {
+                "name": "containerscopy",
+                "count": "[length(variables('function_names_Historical'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('HistoricalNameArray')[copyIndex()].Historical, '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('HistoricalNameArray')[copyIndex()].Historical, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('HistoricalNameArray')[copyIndex()].Historical)]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            },
+            "copy": {
+                "name": "containerscopy",
+                "count": "[length(variables('function_names_Historical'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('HistoricalNameArray')[copyIndex()].Historical, '/default/', tolower(variables('HistoricalNameArray')[copyIndex()].Historical))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('HistoricalNameArray')[copyIndex()].Historical, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('HistoricalNameArray')[copyIndex()].Historical)]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            },
+            "copy": {
+                "name": "sharescopy",
+                "count": "[length(variables('function_names_Historical'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('CurrentNameArray')[copyIndex()].Current]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('CurrentNameArray')[copyIndex()].Current]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            },
+            "copy": {
+                "name": "componentcopy",
+                "count": "[length(variables('function_names_Current'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[tolower(variables('CurrentNameArray')[copyIndex()].Current)]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            },
+            "copy": {
+                "name": "storageaccountcopy",
+                "count": "[length(variables('function_names_Current'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('CurrentNameArray')[copyIndex()].Current, '/default')]",
+            "dependsOn": [
+                "storageaccountcopy"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            },
+            "copy": {
+                "name": "blobServicescopy",
+                "count": "[length(variables('function_names_Current'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('CurrentNameArray')[copyIndex()].Current, '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('CurrentNameArray')[copyIndex()].Current))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            },
+            "copy": {
+                "name": "fileServicescopy",
+                "count": "[length(variables('function_names_Current'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('CurrentNameArray')[copyIndex()].Current]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('CurrentNameArray')[copyIndex()].Current))]",
+                "[resourceId('Microsoft.Insights/components', variables('CurrentNameArray')[copyIndex()].Current)]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('CurrentNameArray')[copyIndex()].Current]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.11"
+                }
+            },
+            "resources": [
+                {
+                    "type": "config",
+                    "apiVersion": "2018-11-01",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('CurrentNameArray')[copyIndex()].Current)]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('CurrentNameArray')[copyIndex()].Current), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('CurrentNameArray')[copyIndex()].Current), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('CurrentNameArray')[copyIndex()].Current),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('CurrentNameArray')[copyIndex()].Current)), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
+                        "Connection_String": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('CurrCommon_storage')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('CurrCommon_storage'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "ThreatType": "[variables('function_names_Current')[copyIndex('sitescopy')]]",
+                        "API_token": "[parameters('InfobloxAPIToken')]",
+                        "BaseUrl": "[parameters('InfobloxBaseURL')]",
+                        "Schedule": "0 0 */1 * * *",
+                        "CURRENT_TIME_INTERVAL": "1",
+                        "Workspace_Key": "[parameters('WorkspaceKey')]",
+                        "Workspace_Id": "[parameters('WorkspaceID')]",
+                        "LogLevel": "[parameters('LogLevel')]",
+                        "File_Share_Name": "infoblox-checkpoint",
+                        "File_Share_Name_For_Data": "infoblox-data-files",
+                        "Checkpoint_File_Name": "infoblox",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-InfobloxCurrentToAzureStorage-functionapp"
+                    }
+                }
+            ],
+            "copy": {
+                "name": "sitescopy",
+                "count": "[length(variables('function_names_Current'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('CurrentNameArray')[copyIndex()].Current, '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('CurrentNameArray')[copyIndex()].Current, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('CurrentNameArray')[copyIndex()].Current)]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            },
+            "copy": {
+                "name": "containerscopy",
+                "count": "[length(variables('function_names_Current'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('CurrentNameArray')[copyIndex()].Current, '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('CurrentNameArray')[copyIndex()].Current, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('CurrentNameArray')[copyIndex()].Current)]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            },
+            "copy": {
+                "name": "containerscopy",
+                "count": "[length(variables('function_names_Current'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('CurrentNameArray')[copyIndex()].Current, '/default/', tolower(variables('CurrentNameArray')[copyIndex()].Current))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('CurrentNameArray')[copyIndex()].Current, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('CurrentNameArray')[copyIndex()].Current)]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            },
+            "copy": {
+                "name": "sharescopy",
+                "count": "[length(variables('function_names_Current'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('JsonParseNameArray')[copyIndex()].Json_parse]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('JsonParseNameArray')[copyIndex()].Json_parse]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            },
+            "copy": {
+                "name": "componentcopy",
+                "count": "[length(variables('function_names_Json_parse'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[tolower(variables('JsonParseNameArray')[copyIndex()].Json_parse)]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            },
+            "copy": {
+                "name": "storageaccountcopy",
+                "count": "[length(variables('function_names_Json_parse'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('JsonParseNameArray')[copyIndex()].Json_parse, '/default')]",
+            "dependsOn": [
+                "storageaccountcopy"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            },
+            "copy": {
+                "name": "blobServicescopy",
+                "count": "[length(variables('function_names_Json_parse'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('JsonParseNameArray')[copyIndex()].Json_parse, '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('JsonParseNameArray')[copyIndex()].Json_parse))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            },
+            "copy": {
+                "name": "fileServicescopy",
+                "count": "[length(variables('function_names_Json_parse'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('JsonParseNameArray')[copyIndex()].Json_parse]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('JsonParseNameArray')[copyIndex()].Json_parse))]",
+                "[resourceId('Microsoft.Insights/components', variables('JsonParseNameArray')[copyIndex()].Json_parse)]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('JsonParseNameArray')[copyIndex()].Json_parse]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.11"
+                }
+            },
+            "resources": [
+                {
+                    "type": "config",
+                    "apiVersion": "2018-11-01",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('JsonParseNameArray')[copyIndex()].Json_parse)]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('JsonParseNameArray')[copyIndex()].Json_parse), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('JsonParseNameArray')[copyIndex()].Json_parse), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('JsonParseNameArray')[copyIndex()].Json_parse),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('JsonParseNameArray')[copyIndex()].Json_parse)), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "Connection_String": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('Storage_Strings')[copyIndex('sitescopy')]),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('Storage_Strings')[copyIndex('sitescopy')])), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
+                        "Schedule": "0 */15 * * * *",
+                        "LogLevel": "[parameters('LogLevel')]",
+                        "File_Share_Name_For_Data": "infoblox-data-files",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-InfoBloxParseRawIndicators-functionapp"
+                    }
+                }
+            ],
+            "copy": {
+                "name": "sitescopy",
+                "count": "[length(variables('function_names_Json_parse'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('JsonParseNameArray')[copyIndex()].Json_parse, '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('JsonParseNameArray')[copyIndex()].Json_parse, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('JsonParseNameArray')[copyIndex()].Json_parse)]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            },
+            "copy": {
+                "name": "containerscopy",
+                "count": "[length(variables('function_names_Json_parse'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('JsonParseNameArray')[copyIndex()].Json_parse, '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('JsonParseNameArray')[copyIndex()].Json_parse, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('JsonParseNameArray')[copyIndex()].Json_parse)]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            },
+            "copy": {
+                "name": "containerscopy",
+                "count": "[length(variables('function_names_Json_parse'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('JsonParseNameArray')[copyIndex()].Json_parse, '/default/', tolower(variables('JsonParseNameArray')[copyIndex()].Json_parse))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('JsonParseNameArray')[copyIndex()].Json_parse, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('JsonParseNameArray')[copyIndex()].Json_parse)]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            },
+            "copy": {
+                "name": "sharescopy",
+                "count": "[length(variables('function_names_Json_parse'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('IndicatorNameArray')[copyIndex()].Indicators]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('IndicatorNameArray')[copyIndex()].Indicators]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            },
+            "copy": {
+                "name": "componentcopy",
+                "count": "[length(variables('function_names_Indicator'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[tolower(variables('IndicatorNameArray')[copyIndex()].Indicators)]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            },
+            "copy": {
+                "name": "storageaccountcopy",
+                "count": "[length(variables('function_names_Indicator'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('IndicatorNameArray')[copyIndex()].Indicators, '/default')]",
+            "dependsOn": [
+                "storageaccountcopy"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            },
+            "copy": {
+                "name": "blobServicescopy",
+                "count": "[length(variables('function_names_Indicator'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('IndicatorNameArray')[copyIndex()].Indicators, '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('IndicatorNameArray')[copyIndex()].Indicators))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            },
+            "copy": {
+                "name": "fileServicescopy",
+                "count": "[length(variables('function_names_Indicator'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('IndicatorNameArray')[copyIndex()].Indicators]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('IndicatorNameArray')[copyIndex()].Indicators))]",
+                "[resourceId('Microsoft.Insights/components', variables('IndicatorNameArray')[copyIndex()].Indicators)]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('IndicatorNameArray')[copyIndex()].Indicators]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.11"
+                }
+            },
+            "resources": [
+                {
+                    "type": "config",
+                    "apiVersion": "2018-11-01",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('IndicatorNameArray')[copyIndex()].Indicators)]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('IndicatorNameArray')[copyIndex()].Indicators), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('IndicatorNameArray')[copyIndex()].Indicators), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('IndicatorNameArray')[copyIndex()].Indicators),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('IndicatorNameArray')[copyIndex()].Indicators)), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
+                        "Connection_String": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('Storage_Strings')[copyIndex('sitescopy')]),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('Storage_Strings')[copyIndex('sitescopy')])), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "Azure_Client_Id": "[parameters('AzureClientId')]",
+                        "Azure_Client_Secret": "[parameters('AzureClientSecret')]",
+                        "Azure_Tenant_Id": "[parameters('AzureTenantId')]",
+                        "File_Share_Name_For_Data": "infoblox-data-files",
+                        "Workspace_Key": "[parameters('WorkspaceKey')]",
+                        "Workspace_Id": "[parameters('WorkspaceID')]",
+                        "Schedule": "0 */15 * * * *",
+                        "LogLevel": "[parameters('LogLevel')]",
+                        "Confidence_Threshold": "[parameters('Confidence')]",
+                        "Threat_Level": "[parameters('ThreatLevel')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-AzureStorageToIndicators-functionapp"
+                    }
+                }
+            ],
+            "copy": {
+                "name": "sitescopy",
+                "count": "[length(variables('function_names_Indicator'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('IndicatorNameArray')[copyIndex()].Indicators, '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('IndicatorNameArray')[copyIndex()].Indicators, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('IndicatorNameArray')[copyIndex()].Indicators)]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            },
+            "copy": {
+                "name": "containerscopy",
+                "count": "[length(variables('function_names_Indicator'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('IndicatorNameArray')[copyIndex()].Indicators, '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('IndicatorNameArray')[copyIndex()].Indicators, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('IndicatorNameArray')[copyIndex()].Indicators)]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            },
+            "copy": {
+                "name": "containerscopy",
+                "count": "[length(variables('function_names_Indicator'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('IndicatorNameArray')[copyIndex()].Indicators, '/default/', tolower(variables('IndicatorNameArray')[copyIndex()].Indicators))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('IndicatorNameArray')[copyIndex()].Indicators, 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('IndicatorNameArray')[copyIndex()].Indicators)]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            },
+            "copy": {
+                "name": "sharescopy",
+                "count": "[length(variables('function_names_Indicator'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionNameDurable')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionNameDurable')]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[tolower(variables('FunctionNameDurable'))]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionNameDurable'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionNameDurable')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionNameDurable'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionNameDurable')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('FunctionNameDurable')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionNameDurable')))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionNameDurable'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('FunctionNameDurable')]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.11"
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('FunctionNameDurable'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionNameDurable')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionNameDurable')), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionNameDurable')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionNameDurable'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
+                        "API_token": "[parameters('InfobloxAPIToken')]",
+                        "BaseUrl": "[parameters('InfobloxBaseURL')]",
+                        "Workspace_Key": "[parameters('WorkspaceKey')]",
+                        "Workspace_Id": "[parameters('WorkspaceID')]",
+                        "Azure_Client_Id": "[parameters('AzureClientId')]",
+                        "Azure_Client_Secret": "[parameters('AzureClientSecret')]",
+                        "Azure_Tenant_Id": "[parameters('AzureTenantId')]",
+                        "LogLevel": "[parameters('LogLevel')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-InfobloxDossierLookup-functionapp"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionNameDurable'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionNameDurable'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionNameDurable'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionNameDurable'), '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionNameDurable'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionNameDurable'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionNameDurable'), '/default/', tolower(variables('FunctionNameDurable')))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('FunctionNameDurable'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionNameDurable'))]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            }
+        }
+    ]
+}

@@ -4,7 +4,7 @@ description: |
   'Amazon Relational Database Service (RDS) is scalable relational database in the cloud.
   If your organization have one or more AWS RDS Databases running, monitoring changes to especially internet facing AWS RDS (Relational Database Service)
   Once alerts triggered, validate if changes observed are authorized and adhere to change control policy.
-  More information: https://medium.com/@GorillaStack/the-most-important-aws-cloudtrail-security-events-to-track-a5b9873f8255
+  More information: https://medium.com/@GorillaStack/the-most-important-aws-cloudtrail-security-events-to-track-a5b9873f8255 
   and RDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html'
 severity: Low
 status: Available
@@ -27,16 +27,25 @@ query: |
   let EventNameList = dynamic(["AuthorizeDBSecurityGroupIngress","CreateDBSecurityGroup","DeleteDBSecurityGroup","RevokeDBSecurityGroupIngress"]);
   AWSCloudTrail
   | where EventName in~ (EventNameList)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserIdentityUserName, IPCustomEntity = SourceIpAddress
+  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
+  | extend timestamp = StartTimeUtc
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.1
+        columnName: SourceIpAddress
+version: 1.0.3
 kind: Scheduled

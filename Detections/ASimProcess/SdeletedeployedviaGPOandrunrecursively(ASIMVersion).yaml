@@ -17,30 +17,53 @@ tags:
   -
 query: |
   imProcess
-    | where EventType =~ "ProcessCreated"
-    | where Process endswith "svchost.exe"
-    | where CommandLine has "-k GPSvcGroup" or CommandLine has "-s gpsvc"
-    | extend timekey = bin(TimeGenerated, 1m)
-    | project timekey, ActingProcessId, Dvc
-    | join kind=inner (imProcess
+  | where EventType =~ "ProcessCreated"
+  | where Process endswith "svchost.exe"
+  | where CommandLine has "-k GPSvcGroup" or CommandLine has "-s gpsvc"
+  | extend timekey = bin(TimeGenerated, 1m)
+  | project timekey, ActingProcessId, Dvc
+  | join kind=inner (
+    imProcess
     | where EventType =~ "ProcessCreated"
     | where Process =~ "sdelete.exe" or CommandLine has "sdelete"
     | where ActingProcessName endswith "svchost.exe"
     | where CommandLine has_all ("-s", "-r")
     | extend timekey = bin(TimeGenerated, 1m)
-    ) on $left.ActingProcessId == $right.ParentProcessId, timekey, Dvc
+    ) 
+    on $left.ActingProcessId == $right.ParentProcessId, timekey, Dvc
+  | extend AccountName = tostring(split(ActorUsername, @'\')[1]), AccountNTDomain = tostring(split(ActorUsername, @'\')[0])
+  | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: ActorUsername
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: DvcIpAddr
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
         columnName: Dvc
-version: 1.0.2
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DvcIpAddr
+version: 1.0.5
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

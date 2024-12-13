@@ -1,0 +1,74 @@
+id: 87cc75df-d7b2-44f1-b064-ee924edfc879
+name: TI map Domain entity to EmailUrlInfo
+description: |
+  'Identifies a match in EmailUrlInfo table from any Domain IOC from TI.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - EmailUrlInfo
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+    let dt_lookBack = 1h; // Define the lookback period for email data as 1 hour
+    let ioc_lookBack = 14d; // Define the lookback period for threat intelligence data as 14 days
+    let EmailUrlInfo_ = EmailUrlInfo
+    | where isnotempty(Url) or isnotempty(UrlDomain) // Filter for non-empty URLs or URL domains
+    | where TimeGenerated >= ago(dt_lookBack) // Filter for records within the lookback period
+    | extend Url = tolower(Url), UrlDomain = tolower(UrlDomain) // Convert URLs and domains to lowercase
+    | extend EmailUrlInfo_TimeGenerated = TimeGenerated; // Create a new column for the time generated
+    let EmailEvents_ = EmailEvents
+    | where TimeGenerated >= ago(dt_lookBack); // Filter email events within the lookback period
+    let TI_Urls = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
+    | where isnotempty(Url) // Filter for non-empty URLs
+    | extend Url = tolower(Url) // Convert URLs to lowercase
+    | join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on URL
+    | where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired
+    | where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired
+    | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, Url // Get the latest email info for each indicator
+    | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, UrlLocation, NetworkMessageId; // Select relevant columns
+    let TI_Domains = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
+    | where isnotempty(DomainName) // Filter for non-empty domain names
+    | extend DomainName = tolower(DomainName) // Convert domain names to lowercase
+    | join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain // Join with email URL info on domain name
+    | where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired
+    | where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired
+    | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, UrlDomain // Get the latest email info for each indicator
+    | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId; // Select relevant columns
+    union TI_Urls, TI_Domains // Combine URL and domain threat intelligence data
+    | extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column
+    | join kind=inner (EmailEvents_) on NetworkMessageId // Join with email events on network message ID
+    | where DeliveryAction !has "Blocked" // Filter out blocked delivery actions
+    | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0]); // Extract name and UPN suffix from recipient email address
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: RecipientEmailAddress
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.3
+kind: Scheduled

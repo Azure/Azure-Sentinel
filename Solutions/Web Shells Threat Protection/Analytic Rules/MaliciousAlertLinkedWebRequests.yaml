@@ -1,10 +1,8 @@
 id: fbfbf530-506b-49a4-81ad-4030885a195c
 name: Malicious web application requests linked with Microsoft Defender for Endpoint (formerly Microsoft Defender ATP) alerts
 description: |
-  'Takes Microsoft Defender for Endpoint (formerly Microsoft Defender ATP) alerts where web scripts are present in the evidence and correlates with requests made to those scripts
-  in the WCSIISLog to surface new alerts for potentially malicious web request activity.
-  The lookback for alerts is set to 1h and the lookback for W3CIISLogs is set to 7d. A sample set of popular web script extensions
-  has been provided in scriptExtensions that should be tailored to your environment.'
+  'Takes Microsoft Defender for Endpoint (formerly Microsoft Defender ATP) alerts where web scripts are present in the evidence and correlates with requests made to those scripts in the WCSIISLog to surface new alerts for potentially malicious web request activity.
+  The lookback for alerts is set to 1h and the lookback for W3CIISLogs is set to 7d. A sample set of popular web script extensions has been provided in scriptExtensions that should be tailored to your environment.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: MicrosoftDefenderAdvancedThreatProtection
@@ -58,25 +56,29 @@ query: |
   // Summarize potential attacker activity
   | summarize count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), RequestUserAgents=make_set(csUserAgent), ReqestMethods=make_set(csMethod), RequestStatusCodes=make_set(scStatus), RequestCookies=make_set(csCookie), RequestReferers=make_set(csReferer), RequestQueryStrings=make_set(csUriQuery) by AttackerIP=cIP, SiteName=sSiteName, ShellLocation=csUriStem, tostring(FileName), HostName
   ) on FileName, HostName
-  | project StartTime, EndTime, AttackerIP, RequestUserAgents, HostName, SiteName, ShellLocation, ReqestMethods, RequestStatusCodes, RequestCookies, RequestReferers, RequestQueryStrings, RequestCount = count_
-  // Expose the attacker ip address as a custom entity
-  | extend timestamp=StartTime, IPCustomEntity = AttackerIP, HostCustomEntity = HostName
+  | project StartTime, EndTime, AttackerIP, RequestUserAgents, Computer = HostName, SiteName, ShellLocation, ReqestMethods, RequestStatusCodes, RequestCookies, RequestReferers, RequestQueryStrings, RequestCount = count_
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.2
+        columnName: AttackerIP
+version: 1.0.4
 kind: Scheduled
 metadata:
     source:
         kind: Scheduled
     author:
-        name: robMSFT
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

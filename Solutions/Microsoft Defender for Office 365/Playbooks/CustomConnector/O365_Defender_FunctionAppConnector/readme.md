@@ -26,6 +26,8 @@ This Functions App Connector is to connect Defender for office 365 API.
 | **RemoveAllowBlockListItems** | Remove entries for email addresses from the Tenant Allow/Block List |
 | **ListMalwarePolicy** | View existing malware filter policies|
 | **BlockMalwareFileExtension** | Add Malware file extensions to malware policy block list |
+| **GetInboxRule** | View list of existing Rules created in mailbox |
+| **RemoveInboxRule** | Remove the Inbox rule from particular Mailbox  |
 
 ### Deployment Instructions
 
@@ -113,6 +115,15 @@ This Functions App Connector is to connect Defender for office 365 API.
 	- {
     	"MalwarePolicyName": "malware policy Name",
     	"FileExtensions": "malicious file extension to be mark as blocked" for example["dgz","mde"]
+	}
+12. GetInboxRule
+	- {
+		"Mailbox" : "mailbox name ex: abc@yahoo.com"
+	}
+13. RemoveInboxRule
+	- {
+		"Mailbox" : "mailbox name ex: abc@yahoo.com",
+		"Identity" : "inbox rule name/RuleIdentity property"
 	}	
 	
 ### References below link for more details

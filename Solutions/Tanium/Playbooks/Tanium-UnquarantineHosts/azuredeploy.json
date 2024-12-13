@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Tanium-UnquarantineHosts",
-        "description": "This playbook starts with a Microsoft Sentinel incident, gets the hosts associated with that incident, then directs Tanium to un-quarantine those hosts. The status of the un-quarantine operation is commented on the Sentinel incident.",
+        "description": "This playbook starts with a Microsoft Sentinel incident, gets the hosts associated with that incident, then directs Tanium to un-quarantine those hosts. The status of the un-quarantine operation is commented on the Microsoft Sentinel incident.",
         "prerequisites": [
             "1. Microsoft Sentinel incidents with associated hosts.",
             "2. A [Tanium API Token](https://docs.tanium.com/platform_user/platform_user/console_api_tokens.html) granting access to your Tanium environment: the query will be made with the user priviledges of that token.",
@@ -14,7 +14,7 @@
         ],
         "entities": [ "host" ],
         "tags": ["Remediation"],
-        "lastUpdateTime": "2022-09-15T00:00:00.000Z",
+        "lastUpdateTime": "2023-12-08T00:00:00.000Z",
         "support": {
             "tier": "developer",
             "link": "https://www.tanium.com"
@@ -29,22 +29,16 @@
             "type": "string"
         },
         "IntegrationAccountName": {
-            "defaultValue": "Tanium-UnquarantineHosts-Integration",
+            "defaultValue": "",
             "type": "string",
             "metadata": {
-                "description": "An Integration Account is required to run inline JavaScript actions"
+                "description": "The name of an existing Azure Integration Account (required to run inline JavaScript actions)"
             }
         },
-        "IntegrationAccountPricingTier": {
+        "IntegrationAccountResourceGroupName": {
             "type": "string",
-            "defaultValue": "Free",
-            "allowedValues": [
-                "Free",
-                "Basic",
-                "Standard"
-            ],
             "metadata": {
-                "description": "Specify the Pricing Tier of the Integration Account."
+                "description": "The resource group name for the existing Azure Integration Account"
             }
         },
         "TaniumApiToken": {
@@ -85,30 +79,17 @@
           }
         },
         {
-            "type": "Microsoft.Logic/integrationAccounts",
-            "apiVersion": "2016-06-01",
-            "name": "[parameters('IntegrationAccountName')]",
-            "location": "[resourceGroup().location]",
-            "sku": {
-                "name": "[parameters('IntegrationAccountPricingTier')]"
-            },
-            "properties": {
-                "state": "Enabled"
-            }
-        },
-        {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2019-05-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-              "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-              "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
+              "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
             ],
             "properties": {
                 "state": "Enabled",
                 "integrationAccount": {
-                    "id": "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
+                    "id": "[resourceId(parameters('integrationAccountResourceGroupName'), 'Microsoft.Logic/integrationAccounts', parameters('integrationAccountName'))]"
                 },
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
@@ -653,7 +634,7 @@
                                 "from": "@variables('unknown action results')"
                             }
                         },
-                        "Entities_-_Get_Hosts": {
+                        "Get_Hosts_From_Incident": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
@@ -699,7 +680,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Entities_-_Get_Hosts": [
+                                "Get_Hosts_From_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -707,7 +688,7 @@
                                 "and": [
                                     {
                                         "less": [
-                                            "@length(body('Entities_-_Get_Hosts')?['Hosts'])",
+                                            "@length(body('Get_Hosts_From_Incident')?['Hosts'])",
                                             1
                                         ]
                                     }
@@ -848,157 +829,28 @@
                             },
                             "type": "Foreach"
                         },
-                        "For_each_incident_host": {
-                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
-                            "actions": {
-                                "If_ip_address": {
-                                    "actions": {
-                                        "Append_to_endpoint_filters": {
-                                            "runAfter": {
-                                                "Compose_endpoint_filter_for_host_and_ip_address": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "endpoint filters",
-                                                "value": "@outputs('Compose_endpoint_filter_for_host_and_ip_address')"
-                                            }
-                                        },
-                                        "Compose_endpoint_filter_for_host_and_ip_address": {
-                                            "runAfter": {},
-                                            "type": "Compose",
-                                            "inputs": {
-                                                "filters": [
-                                                    {
-                                                        "op": "CONTAINS",
-                                                        "path": "ipAddress",
-                                                        "value": "@{body('Parse_host_json')?['additionalData']?['LastIpAddress']}"
-                                                    },
-                                                    {
-                                                        "path": "name",
-                                                        "value": "@{body('Parse_host_json')?['hostName']}"
-                                                    }
-                                                ]
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Parse_host_json": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "Append_host_only_to_endpoint_filters": {
-                                                "runAfter": {
-                                                    "Compose_endpoint_filter_for_host_only": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "type": "AppendToArrayVariable",
-                                                "inputs": {
-                                                    "name": "endpoint filters",
-                                                    "value": "@outputs('Compose_endpoint_filter_for_host_only')"
-                                                }
-                                            },
-                                            "Compose_endpoint_filter_for_host_only": {
-                                                "runAfter": {},
-                                                "type": "Compose",
-                                                "inputs": {
-                                                    "filters": [
-                                                        {
-                                                            "path": "name",
-                                                            "value": "@{body('Parse_host_json')?['hostName']}"
-                                                        }
-                                                    ]
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "not": {
-                                                    "equals": [
-                                                        "@body('Parse_host_json')?['additionalData']?['LastIpAddress']",
-                                                        "@null"
-                                                    ]
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    "type": "If"
-                                },
-                                "Parse_host_json": {
-                                    "runAfter": {},
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@items('For_each_incident_host')",
-                                        "schema": {
-                                            "properties": {
-                                                "Type": {
-                                                    "type": "string"
-                                                },
-                                                "additionalData": {
-                                                    "properties": {
-                                                        "AvStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "FQDN": {
-                                                            "type": "string"
-                                                        },
-                                                        "HealthStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastExternalIpAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastIpAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastSeen": {
-                                                            "type": "string"
-                                                        },
-                                                        "LoggedOnUsers": {
-                                                            "type": "string"
-                                                        },
-                                                        "MdatpDeviceId": {
-                                                            "type": "string"
-                                                        },
-                                                        "OnboardingStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "RiskScore": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "friendlyName": {
-                                                    "type": "string"
-                                                },
-                                                "hostName": {
-                                                    "type": "string"
-                                                },
-                                                "osFamily": {
-                                                    "type": "string"
-                                                },
-                                                "osVersion": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "type": "object"
-                                        }
-                                    }
-                                }
+                        "Build_Endpoint_Filter_from_Hosts": {
+                            "inputs": {
+                                "code": "var hosts = workflowContext.actions.Get_Hosts_From_Incident.outputs.body.Hosts;\r\nvar filters=[];for(let i=0;i<hosts.length;i++){var a=hosts[i].hostName,t=hosts[i].additionalData,e=null!=t,s=t&&null!==t.LastIpAddress&&void 0!==t.LastIpAddress,l=t&&null!==t.FQDN&&void 0!==t.FQDN&&t.FQDN.includes(\".\");if(null!=a&&\"\"!==a){if(l&&s){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress},{any:!0,filters:[{path:\"name\",value:hosts[i].hostName},{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1}]});continue}if(l){filters.push({any:!0,filters:[{path:\"name\",value:hosts[i].hostName},{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1});continue}if(s){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress},{path:\"name\",value:hosts[i].hostName}]});continue}filters.push({filters:[{path:\"name\",value:hosts[i].hostName}]})}}\r\nreturn filters;"
                             },
                             "runAfter": {
-                                "Initialize_Endpoint_Filters_array": [
+                                "Initialize_Endpoint_Filter": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Foreach"
+                            "type": "JavaScriptCode"
+                        },
+                        "Set_Endpoint_Filter": {
+                            "inputs": {
+                                "name": "endpoint filters",
+                                "value": "@body('Build_Endpoint_Filter_from_Hosts')"
+                            },
+                            "runAfter": {
+                                "Build_Endpoint_Filter_from_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable"
                         },
                         "Get_the_\"All_Computers\"_group": {
                             "runAfter": {
@@ -1939,9 +1791,57 @@
                                 ]
                             }
                         },
-                        "Initialize_API_Gateway_query_cursor": {
+                        "Stop_If_Tanium_Has_No_Hosts_From_Incident": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_3": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>No data found in Tanium for hosts.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Terminate_no_hosts_in_Tanium": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
                             "runAfter": {
                                 "Parse_API_Gateway_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_API_Gateway_query_cursor": {
+                            "runAfter": {
+                                "Stop_If_Tanium_Has_No_Hosts_From_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -1956,7 +1856,7 @@
                                 ]
                             }
                         },
-                        "Initialize_Endpoint_Filters_array": {
+                        "Initialize_Endpoint_Filter": {
                             "runAfter": {
                                 "Initialize_API_Gateway_Query": [
                                     "Succeeded"
@@ -2024,7 +1924,7 @@
                         },
                         "Initialize_Tanium_Endpoint_Source_to_TDS": {
                             "runAfter": {
-                                "For_each_incident_host": [
+                                "Set_Endpoint_Filter": [
                                     "Succeeded"
                                 ]
                             },
@@ -2227,7 +2127,7 @@
                                             "inputs": {
                                                 "body": {
                                                     "query": "@variables('api gateway query')",
-                                                    "variables": "@variables('api gateway query variables')"
+                                                    "variables": "@json(variables('api gateway query variables'))"
                                                 },
                                                 "headers": {
                                                     "Content-Type": "application/json",
@@ -2433,7 +2333,7 @@
                             "inputs": {
                                 "body": {
                                     "query": "@variables('api gateway query')",
-                                    "variables": "@variables('api gateway query variables')"
+                                    "variables": "@json(variables('api gateway query variables'))"
                                 },
                                 "headers": {
                                     "Content-Type": "application/json",
@@ -2474,7 +2374,7 @@
                                     "inputs": {
                                         "body": {
                                             "query": "@variables('api gateway query')",
-                                            "variables": "@variables('api gateway query variables')"
+                                            "variables": "@json(variables('api gateway query variables'))"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json",

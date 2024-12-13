@@ -1,0 +1,82 @@
+id: ed88638d-8627-4c20-ba08-67c13807a9b1
+kind: Scheduled
+name: Power Apps - Multiple apps deleted
+description: Identifies mass delete activity where multiple Power Apps are deleted,
+  matching a predefined threshold of total apps deleted or app delete events across
+  multiple Power Platform environments.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+      - PowerPlatformAdminActivity
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+  - T0826
+query: |
+  let total_app_mass_delete_threshold = 25;
+  let cross_environment_delete_threshold = 10;
+  let query_frequency = 1h;
+  let app_delete_events = materialize(
+      PowerPlatformAdminActivity
+      | where TimeGenerated >= ago (query_frequency)
+      | where EventOriginalType == "DeletePowerApp"
+      | extend Properties = tostring(PropertyCollection)
+      | extend AppId = extract(@'"powerplatform.analytics.resource.power_app.id","Value":"([^"]+)"', 1, Properties)
+      | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+      | extend EnvironmentId = extract(@'"powerplatform.analytics.resource.environment.id","Value":"([^"]+)"', 1, Properties)
+      );
+  app_delete_events
+  | summarize AppCount = count(), EnvCount = dcount(EnvironmentId) by ActorName
+  | where AppCount >= total_app_mass_delete_threshold or EnvCount >= cross_environment_delete_threshold
+  | join kind=inner app_delete_events on ActorName
+  | summarize
+      Apps = make_set(AppId, 1000),
+      Environments = make_set(EnvironmentId, 1000),
+      StartTime = min(TimeGenerated)
+      by AppCount, EnvCount, ActorName
+  | extend
+      PowerAppsEntityId = 27593,
+      DataverseId = 32780,
+      AccountName = tostring(split(ActorName, '@')[0]),
+      UPNSuffix = tostring(split(ActorName, '@')[1])
+  | project
+      StartTime,
+      ActorName,
+      AppCount,
+      Apps,
+      EnvCount,
+      Environments,
+      PowerAppsEntityId,
+      DataverseId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: PowerAppsEntityId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+alertDetailsOverride:
+  alertDisplayNameFormat: Power Apps - mass deletion of apps
+  alertDescriptionFormat: '{{AppCount}} apps were deleted in {{EnvCount}} environments
+    by {{ActorName}} , exceeding the mass delete threshold.'
+customDetails:
+  EnvironmentsImpacted: Environments
+  AppsDeleted: Apps
+  AppDeleteCount: AppCount
+  EnvironmentsCount: EnvCount
+version: 3.2.0

@@ -1,0 +1,67 @@
+id: 28c63a44-2d35-48b7-831b-3ed24af17c7e
+name: Shadow Copy Deletions
+description: |
+  This rule detects when Shadow Copies are being deleted. This is a know actions that is performed by threat actors.
+  This query detects know commands that have been used by the ransomware actors.
+  Some information from Mitre Attack: 
+  https://attack.mitre.org/techniques/T1490/
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1490
+query: |
+  let CommonRansomwareExecutionCommands = dynamic([@'vssadmin.exe delete shadows /all /quiet', 
+  @'wmic.exe shadowcopy delete', @'wbadmin delete catalog -quiet', 
+  @'Get-WmiObject Win32_Shadowcopy | ForEach-Object {$_.Delete();}',
+  @'del /s /f /q c:\*.VHD c:\*.bac c:\*.bak c:\*.wbcat c:\*.bkf c:\Backup*.* c:\backup*.* c:\*.set c:\*.win c:\*.dsk', 
+  @'wbadmin delete systemstatebackup -keepVersions:0', 
+  @'schtasks.exe /Change /TN "\Microsoft\Windows\SystemRestore\SR" /disable', 
+  @'schtasks.exe /Change /TN "\Microsoft\Windows\SystemRestore\SR" /enable >nul 2>&1', 
+  @'reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore" /v "DisableConfig" /t "REG_DWORD" /d "1" /f', 
+  @'reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore" /v "DisableSR" /t "REG_DWORD" /d "1" /f', 
+  @'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v "DisableConfig" /t "REG_DWORD" /d "1" /f', 
+  @'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v "DisableSR" /t "REG_DWORD" /d "1" /f', 
+  @'reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore" /v "DisableConfig" /f >nul 2>&1', 
+  @'reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore" /v "DisableSR" /f >nul 2>&1', 
+  @'reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v "DisableConfig" /f >nul 2>&1', 
+  @'reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v "DisableSR" /f >nul 2>&1']);
+  DeviceProcessEvents
+  | where ProcessCommandLine has_any (CommonRansomwareExecutionCommands)
+  | project-reorder TimeGenerated, ProcessCommandLine, DeviceName, AccountName
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: DnsDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessId
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+kind: Scheduled

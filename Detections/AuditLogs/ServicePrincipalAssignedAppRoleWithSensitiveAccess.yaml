@@ -21,42 +21,72 @@ relevantTechniques:
 tags:
   - AADSecOpsGuide
 query: |
-  // Add other permissions to this list as needed
-    let permissions = dynamic(["Mail.Read", "offline_access", "Files.Read", "Notes.Read", "ChannelMessage.Read", "Chat.Read", "TeamsActivity.Read",
+    // Add other permissions to this list as needed
+    let permissions = dynamic([".All", "ReadWrite", "Mail.", "offline_access", "Files.Read", "Notes.Read", "ChannelMessage.Read", "Chat.Read", "TeamsActivity.Read",
     "Group.Read", "EWS.AccessAsUser.All", "EAS.AccessAsUser.All"]);
+    let auditList = 
     AuditLogs
     | where OperationName =~ "Add app role assignment to service principal"
     | mv-expand TargetResources[0].modifiedProperties
     | extend TargetResources_0_modifiedProperties = column_ifexists("TargetResources_0_modifiedProperties", '')
     | where isnotempty(TargetResources_0_modifiedProperties)
+    ;
+    let detailsList = auditList
     | where TargetResources_0_modifiedProperties.displayName =~ "AppRole.Value" or TargetResources_0_modifiedProperties.displayName =~ "DelegatedPermissionGrant.Scope"
     | extend Permissions = split((parse_json(tostring(TargetResources_0_modifiedProperties.newValue))), " ")
     | where Permissions has_any (permissions)
     | summarize AddedPermissions=make_set(Permissions,200) by CorrelationId
-    | join kind=inner (AuditLogs
-    | where OperationName =~ "Add app role assignment to service principal") on CorrelationId
-    | extend InitiatedBy = tostring(iff(isnotempty(InitiatedBy.user.userPrincipalName),InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName))
-    | extend ServicePrincipal = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[4].newValue)))
-    | extend SPID = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[6].newValue)))
-    | extend InitiatedBy = pack("User", InitiatedBy, "UA", column_ifexists("UserAgent",''), "IPAddress", column_ifexists("IpAddress",''))
-    | mv-expand kind=array AddedPermissions
-    | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), make_set(InitiatedBy,200), make_set(AddedPermissions,200) by SPID, ServicePrincipal
+    | join kind=inner auditList on CorrelationId
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))
+    | extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))
+    | where displayName == "ServicePrincipal.ObjectID" or displayName == "ServicePrincipal.DisplayName"
+    | extend displayName = case(displayName == "ServicePrincipal.ObjectID", "ServicePrincipalObjectID", displayName == "ServicePrincipal.DisplayName", "ServicePrincipalDisplayName", displayName)
+    | project TimeGenerated, CorrelationId, Id, AddedPermissions = tostring(AddedPermissions), InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIPAddress, InitiatingUserPrincipalName, InitiatedBy, displayName, newValue
+    ;
+    detailsList | project Id, displayName, newValue
+    | evaluate pivot(displayName, make_set(newValue))
+    | join kind=inner detailsList on Id
+    | extend ServicePrincipalObjectID = todynamic(column_ifexists("ServicePrincipalObjectID", "")), ServicePrincipalDisplayName = todynamic(column_ifexists("ServicePrincipalDisplayName", ""))
+    | mv-expand ServicePrincipalObjectID, ServicePrincipalDisplayName
+    | project-away Id1, displayName, newValue
+    | extend ServicePrincipalObjectID = tostring(ServicePrincipalObjectID), ServicePrincipalDisplayName = tostring(ServicePrincipalDisplayName)
+    | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), EventIds = make_set(Id,200) by CorrelationId, AddedPermissions, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIPAddress, InitiatingUserPrincipalName, InitiatedBy, ServicePrincipalDisplayName, ServicePrincipalObjectID
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
       - identifier: Name
-        columnName: ServicePrincipal
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
   - entityType: Account
     fieldMappings:
       - identifier: AadUserId
-        columnName: SPID
-version: 1.0.3
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+      - identifier: ObjectGuid
+        columnName: ServicePrincipalObjectID
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+version: 2.0.0
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

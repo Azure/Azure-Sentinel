@@ -1,7 +1,7 @@
 # Send-email-with-formatted-incident-report
 author: Benjamin Kovacevic
 
-This playbook will be sending email with formated incidents report (Incident title, severity, tactics, link,…) when incident is created in Azure Sentinel. Email notification is made in HTML.<br/> Please see screenshots for details.
+This playbook will be sending email with formated incidents report (Incident title, severity, tactics, link,…) when incident is created in Microsoft Sentinel. Email notification is made in HTML.<br/> Please see screenshots for details.
 <br/><br/>
 ## Pre-requisites:
 An O365 account to be used to send email notification 

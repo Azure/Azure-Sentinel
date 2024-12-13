@@ -21,45 +21,62 @@ Based on the article, our SOC leads understand that to be able to see the full p
 
 ![incident1](../Images/hunting-1.png)
 
+3. After clicking on “Hunting”, click the “Queries” tab to see the available queries.
 
-3.	In the hunting page, we can see that Microsoft Sentinel provides built-in hunting queries to kick start the proactive hunting process. On the metric bar we can see statistics about how many queries are “active” and have the required data sources to run in your environment.   There are also metrics showing how many queries have been run in during your current session, and how many of these queries produced results. We also see counts of the number of Livestream results and bookmarks created during the hunting process. 
+ ![incident1](../Images/hunting-20.png)
+ 
+4.	In the hunting page, we can see that Microsoft Sentinel provides built-in hunting queries to kick start the proactive hunting process. On the metric bar we can see statistics about how many queries are “active” and have the required data sources to run in your environment.   There are also metrics showing how many queries have been run in during your current session, and how many of these queries produced results. We also see counts of the number of Livestream results and bookmarks created during the hunting process. 
 
 ![incident1](../Images/hunting-2.png)
 
-4.	On the top action bar, shown in the above diagram, we can find the **Run All queries** button. Clicking on this button runs all active queries. This can take a significant amount of time depending on the number of queries and amount of log data being queried. To get results faster, it helps to filter down the set of queries to the specific set you need to run. 
+5.	On the top action bar, shown in the above diagram, we can find the **Run All queries** button. Clicking on this button runs all active queries. This can take a significant amount of time depending on the number of queries and amount of log data being queried. To get results faster, it helps to filter down the set of queries to the specific set you need to run. 
 
-5. Microsoft Sentinel provides many different attributes to filter down to just the queries you want to run. To filter by MITRE technique, click **Add filter**, select **Techniques**, and press **Apply**.
+6. Microsoft Sentinel provides many different attributes to filter down to just the queries you want to run. To filter by MITRE technique, click **Add filter**, select **Techniques**, and press **Apply**.
 
 ![incident1](../Images/hunting-3.png)
 
-6.	In the **Techniques** value field, uncheck the select all and only select **T1098** and click OK.
+7.	In the **Techniques** value field, uncheck the select all and only select **T1098** and click OK.
 
 ![incident1](../Images/hunting-4.png)
 
-7.	Review all the queries in the table using this technique. In this phase we can multi-select all of queries run them as a batch.
+8.	Review all the queries in the table using this technique. In this phase we can multi-select all of queries run them as a batch.
 
 To do so, press on the multi-select checkboxes for the queries you want to run. Notice that the **Run All Queries** button has changed into the **Run selected queries (Preview)** button. Click this button to run the queries.  
 **Note**: in some cases, you will need to modify the selected time range based on the time you deploy the lab to get query results.
 
 ![incident1](../Images/hunting-5.png)
 
-8.	Once we press on the **Run selected queries (Preview)** the results is start popping on the screen, in our case we immediately spot that the **Adding credentials to legitimate OAuth Applications** query returns several results.
-9.	Select this query and in the right pane press on **View Results**. This will navigate us to the log analytics screen to view the hunting query content and run it.
-10.	On the **Logs** screen, once the hunting query finishes executing, we can see all the data that returned with the parsed fields and columns. From high overview we can see that we have the actor IP and the username that run this operation. 
-11. Expand one of the results and check the fields. As you can see, we are able to spot the Azure AD application name, the added key name and type the IP, username of the actor and other relevant information that help us understand the specific action.
-12.	Our SOC analysts needs to know which application from all the above result set is critical and has a security risk. One way to do this is to open Azure Active Directory for each application from the hunting results, check their permissions, and validate the risk. Our SOC analyst follows the organization knowledge base that guides him to review a list for all the AAD applications with their risk levels.
-13.	On the **Logs** screen press on the **+** icon to open a new search tab and run the above query
+9.	Once we press on the **Run selected queries (Preview)** the results is start popping on the screen, in our case we immediately spot that the **Adding credentials to legitimate OAuth Applications** query returns several results.
+10.	Select this query and in the right pane press on **View Results**. This will navigate us to the log analytics screen to view the hunting query content and run it.
+11.	On the **Logs** screen, once the hunting query finishes executing, we can see all the data that returned with the parsed fields and columns. From high overview we can see that we have the actor IP and the username that run this operation. 
+12. Expand one of the results and check the fields. As you can see, we are able to spot the Azure AD application name, the added key name and type the IP, username of the actor and other relevant information that help us understand the specific action.
+13.	Our SOC analysts needs to know which application from all the above result set is critical and has a security risk. One way to do this is to open Azure Active Directory for each application from the hunting results, check their permissions, and validate the risk. Our SOC analyst follows the organization knowledge base that guides him to review a list for all the AAD applications with their risk levels.
+14.	The organization knowledge base has [this CSV file](../Artifacts/Telemetry/HighRiskApps.csv) that contains a list with the AAD applications and their associated risk level.
+15. To import this list in Sentinel page go to  **Configuration**, select **Watchlist**.
 
- ```powershell
-_GetWatchlist('HighRiskApps')
- ```
-![incident1](../Images/hunting-88.png)
+![watchlists](../Images/watchlists1.png)
+    
+16. In the watchlist wizard enter the following and click **Next: Source:**
+    
+    - Name: **HighRiskApps**
+    - Description: **High Risk Applications**
+    - Alias: **HighRiskApps**
 
+![watchlists](../Images/hunting-18.png)
 
+17. Download the [CSV file](../Artifacts/Telemetry/HighRiskApps.csv) to your desktop. 
+
+18. In the watchlist wizard, upload the file from your desktop, use **AppName** as the SearchKey, check the **File Preview** and click **Next: Review and Create**.
+
+![watchlists](../Images/hunting-19.png)
+
+19. Click Create to finish the wizard. The watchlist data takes about 1 minute to be available in the workspace. Wait until the Rows number changes from 0 to 5. Then click on **View in Logs**
+
+![watchlists](../Images/hunting-21.png)
 
 As you can see, this watchlist stores the application name, risk level and permissions. To correlate this information with our hunting results set, we need to run a simple join query.
 
-14.	On the same tab, edit the query and join it with the hunting data. For this demo, you can copy the query below and overwrite your existing query. Now run this new query to see the results. 
+20.	On the same tab, edit the query and join it with the hunting data. For this demo, you can copy the query below and overwrite your existing query. Now run this new query to see the results. 
 
  ```powershell
 _GetWatchlist('HighRiskApps')
@@ -120,18 +137,16 @@ As you can see the above query uses a **join** operator to join two data streams
 While reviewing query results in Log Analytics, we use Microsoft Sentinel’s bookmarking feature to store and enrich these results. We can extract entity identifiers and then use entity pages and the investigation graph to investigate the entity.  We can add tags and notes to the results to say why it is interesting.  Bookmarks will also preserve the query and time range that generated the specific row result so that analysts can reproduce the query in the future  
 If as part of our investigation, we determine that the bookmarked query result contains malicious activity, we can create a new incident from the bookmark, or attach the bookmark to an existing incident. 
 
-1.	On the **Logs** screen, open the **join** hunting query from **Exercise**.  Select one or more rows using the checkbox on the left-hand side of the table. Click **Add bookmark** in the action menu just about the results table.
+1.	On the **Logs** screen, open the **join** hunting query from **Exercise 1**.  Select the row using the checkbox on the left-hand side of the table. Click **Add bookmark** in the action menu just about the results table.
 
-![incident1](../Images/hunting-9.png)
+![incident1](../Images/hunting-22.png)
 
 
 2.	On the right-hand bookmark pane modify the **Bookmark Name** to **victim@buildseccxpninja.onmicrosoft.com added key to purview-spn App with High Risk** 
-3.	Using the drop down in the **entities** section of the **bookmark pane**, map the **Account** entity to the InitiatingUserOrApp column.  You can see a sample value in the drop down.  In the diagram below, the sample value is **victim@buildseccxpninja.onmicrosoft.com**.  
-4.	Map the IP entity to the InitiatingIpAddress column. In the diagram below, you can see the sample value **45.153.160.2**. 
-5.	We will also add a tag to map it to the main attack story. In the **tags** section write, **“solorwinds”**
-6.	Press **Create** at the bottom of the blade to create the bookmark.
+3.	We will also add a tag to map it to the main attack story. In the **tags** section write, **“solorwinds”**
+4.	Press **Create** at the bottom of the blade to create the bookmark.
 
-![incident1](../Images/hunting-10.png)
+![incident1](../Images/hunting-23.png)
 
 
 

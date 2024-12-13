@@ -5,7 +5,7 @@ description: |
 severity: Medium
 status: Available
 requiredDataConnectors:
-  - connectorId: PaloAltoNetworks
+  - connectorId: CefAma
     dataTypes:
       - CommonSecurityLog
 queryFrequency: 1h
@@ -13,7 +13,9 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - Execution
+relevantTechniques:
+  - T1204.002
 query: |
   let dt_lookBack = 1h;
   let covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )
@@ -34,25 +36,35 @@ query: |
   | project CommonSecurityLog_TimeGenerated, FileHashValue, FileHashType, Description, ThreatType,
   SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,
   RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity
-  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName
+  | extend AccountName = tostring(split(SourceUserName, "@")[0]), AccountUPNSuffix = tostring(split(SourceUserName, "@")[1])
+  | extend HostName = tostring(split(DeviceName, ".")[0]), DomainIndex = toint(indexof(DeviceName, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: SourceUserName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIP
   - entityType: FileHash
     fieldMappings:
       - identifier: Value
         columnName: FileHashValue
       - identifier: Algorithm
         columnName: FileHashType
-version: 1.3.1
+version: 1.3.6
 kind: Scheduled

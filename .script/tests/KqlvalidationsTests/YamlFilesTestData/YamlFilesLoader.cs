@@ -14,66 +14,66 @@ namespace Kqlvalidations.Tests
 
         //declare load all files on optional parameter loadAllFiles
 
-        public List<string> GetFilesNames(bool loadAllFiles=false)
+        public List<string> GetFilesNames(bool loadAllFiles = false)
         {
-            if(loadAllFiles)
+            var gitHubApiClient = GitHubApiClient.Create();
+
+            if (loadAllFiles)
             {
-                return GetDirectoryPaths()
-                    .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
-                    .ToList();
+                // Load all files without PR filter
+                return GetAllFiles();
             }
-            int prNumber = 0;
-            int.TryParse(System.Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
-            //assign pr number to debug with a pr
-            //prNumber=8595;
+
+            int prNumber = gitHubApiClient.GetPullRequestNumber();
+
             if (prNumber == 0)
             {
                 Console.WriteLine("PR Number is not set. Running all tests");
-                return GetDirectoryPaths()
-                    .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
-                    .ToList();
+                return GetAllFiles();
             }
-            else
+
+            try
             {
-                try
+                var prFiles = gitHubApiClient.GetPullRequestFiles();
+
+                if (prFiles != null && prFiles.Count > 0)
                 {
-                    var client = new GitHubClient(new ProductHeaderValue("MicrosoftSentinelValidationApp"));
-                    var prFiles = client.PullRequest.Files("Azure", "Azure-Sentinel", prNumber).Result;
-                    var prFilesListModified = new List<string>();
-                    var basePath = Utils.GetTestDirectory(TestFolderDepth);
-                    foreach (var file in prFiles)
-                    {
-                        var modifiedFile = Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar));
-                        prFilesListModified.Add(modifiedFile);
-                    }
-
-                    var validFiles = GetDirectoryPaths()
-                        .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
-                        .Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)))
-                        .ToList();
-
-                    if (validFiles.Count == 0)
-                    {
-                        validFiles.Add("NoFile.yaml");
-                    }
-
-                    return validFiles;
-                }
-                catch (Exception ex)
-                {
-                    // Exception occurred, return all files without filtering if there is any error in fetching PR Files
-                    Console.WriteLine("Error occured while getting the files from PR. Error message: " + ex.Message + " Stack trace: " + ex.StackTrace);
-                    return GetDirectoryPaths()
-                        .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
-                        .ToList();
+                    return GetValidFiles(prFiles);
                 }
             }
+            catch (Exception ex)
+            {
+                // Console.WriteLine the exception
+                Console.WriteLine($"Error occurred: {ex.Message}. Stack trace: {ex.StackTrace}");
+            }
+
+            // If there are issues with PR files, return all files
+            return GetAllFiles();
         }
 
+        private List<string> GetAllFiles()
+        {
+            return GetDirectoryPaths()
+                .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
+                .ToList();
+        }
 
+        private List<string> GetValidFiles(IReadOnlyList<PullRequestFile> prFiles)
+        {
+            var basePath = Utils.GetTestDirectory(TestFolderDepth);
+            var prFilesListModified = prFiles.Select(file => Path.Combine(basePath, file.FileName.Replace('/', Path.DirectorySeparatorChar))).ToList();
 
+            var validFiles = GetDirectoryPaths()
+                .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
+                .Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)))
+                .ToList();
 
+            if (validFiles.Count == 0)
+            {
+                validFiles.Add("NoFile.yaml");
+            }
 
-
+            return validFiles;
+        }
     }
 }

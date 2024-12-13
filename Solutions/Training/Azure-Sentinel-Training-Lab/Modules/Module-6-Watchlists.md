@@ -42,24 +42,27 @@ You have received a message from the SOC manager, informing you about a penetrat
 ![watchlists](../Images/watchlists5.png)
 
 ### Exercise 2: Whitelist IP addresses in the analytics rule
+1. Under *Content management*, select *Content hub*. Paste “High count of connections” into the search bar. Select the standalone analytic and click *Install*.
 
-1. Go to *Analytics*, then *Templates* and search for "High count of connections". Select the "High count of connections by client IP on many ports" rule and click on *Create rule*.
+![watchlists11](../Images/watchlists11.png)
+
+2. Go to *Analytics*, then *Templates* and search for "High count of connections". Select the "High count of connections by client IP on many ports" rule and click on *Create rule*.
 
 ![watchlists](../Images/watchlists6.png)
 
-2. In the *Set rule logic* step of the wizard, expand the query window.
+3. In the *Set rule logic* step of the wizard, expand the query window.
 
 ![watchlists](../Images/watchlists7.png)
 
-3. Add the following KQL statement that brings the IPAddress field from the "PenTestsIPaddresses" watchlist: *let PenTestIPaddresses = _GetWatchlist('PenTestIPaddresses') | project IPAddress;*
+4. Add the following KQL statement that brings the IPAddress field from the "PenTestsIPaddresses" watchlist: *let PenTestIPaddresses = _GetWatchlist('PenTestIPaddresses') | project IPAddress;*
 
 ![watchlists](../Images/watchlists8.png)
 
-4. Now add an additional *where* statement to discard records where the client IP address (cIP field) matches one of the IP addresses in the watchlist. The statement is: *| where cIP !in (PenTestIPaddresses)*
+5. Now add an additional *where* statement to discard records where the client IP address (cIP field) matches one of the IP addresses in the watchlist. The statement is: *| where cIP !in (PenTestIPaddresses)*
 
 ![watchlists](../Images/watchlists9.png)
 
-5. Continue through the wizard and save the modified rule.
+6. Continue through the wizard and save the modified rule.
 
 ![watchlists](../Images/watchlists10.png)
 

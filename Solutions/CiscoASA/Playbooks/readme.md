@@ -40,7 +40,7 @@ When deploying the Cisco ASA connector choose the option via on-premises data ga
 When using the connector you will be asked to select the data gateway you want to use.
 
 #### Secure tunnel between your network and Azure
-Create an Azure Virtual Network and connect it to your on-premise network using Azure VPN, for a sample see [Sample configuration: Cisco ASA device (IKEv2/no BGP)](https://docs.microsoft.com/azure/vpn-gateway/vpn-gateway-3rdparty-device-config-cisco-asa). When creating the Logic App make sure to select the option 'Associate with integration service environment'. When the Logic App is created you can connect it to the Azure Virtual Network. See (Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment [Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment (ISE)](https://docs.microsoft.com/azure/logic-apps/connect-virtual-network-vnet-isolated-environment)] and [Access to Azure Virtual Network resources from Azure Logic Apps by using integration service environments (ISEs)](https://docs.microsoft.com/azure/logic-apps/connect-virtual-network-vnet-isolated-environment-overview) for documentation.
+Create an Azure Virtual Network and connect it to your on-premise network using Azure VPN, for a sample see [Sample configuration: Cisco ASA device (IKEv2/no BGP)](https://docs.microsoft.com/azure/vpn-gateway/vpn-gateway-3rdparty-device-config-cisco-asa). When creating the Logic App make sure to select the option 'Associate with integration service environment'. When the Logic App is created you can connect it to the Azure Virtual Network. See (Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment [Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment (ISE)](https://learn.microsoft.com/en-us/azure/logic-apps/connect-virtual-network-vnet-isolated-environment-overview)] and [Access to Azure Virtual Network resources from Azure Logic Apps by using integration service environments (ISEs)](https://learn.microsoft.com/en-us/azure/logic-apps/connect-virtual-network-vnet-isolated-environment-overview) for documentation.
 
 <a name="deployment"></a>
 
@@ -54,7 +54,7 @@ Custom connector should be deployed in the Resource Group where the playbooks th
 
 ### Connector **not** via on-premises data gateway
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Connector name: Please enter the custom connector(ex:Cisco ASA connector)
     * Service Endpoint: The URL to the Cisco ASA REST API
 
@@ -68,7 +68,7 @@ Custom connector should be deployed in the Resource Group where the playbooks th
 
 ### Connector via on-premises data gateway
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Connector name: Please enter the custom connector(ex:Cisco ASA connector)
     * Service Endpoint: The URL to the Cisco ASA REST API
 

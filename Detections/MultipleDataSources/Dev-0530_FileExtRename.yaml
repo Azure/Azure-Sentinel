@@ -26,8 +26,8 @@ query: |
       | where FileName endswith ".h0lyenc" or FolderPath == "C:\\FOR_DECRYPT.html"
       | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
           by
-          AccountCustomEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),
-          HostCustomEntity = DeviceName,
+          AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain,
+          DeviceName,
           Type,
           InitiatingProcessId,
           FileName,
@@ -38,14 +38,17 @@ query: |
           InitiatingProcessSHA256,
           FileHashCustomEntity = SHA256,
           AlgorithmCustomEntity = "SHA256"
+      | extend HostName = tostring(split(DeviceName, ".")[0]), DomainIndex = toint(indexof(DeviceName, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)
       ),
       (imFileEvent
       | where EventType == "FileCreated"
       | where TargetFilePath endswith ".h0lyenc" or TargetFilePath == "C:\\FOR_DECRYPT.html"
       | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
           by
-          AccountCustomEntity = ActorUsername,
-          HostCustomEntity = DvcHostname,
+          ActorUsername,
+          DvcHostname,
+          DvcDomain,
           DvcId,
           Type,
           EventType,
@@ -54,29 +57,40 @@ query: |
           TargetFilePath,
           Commandline = ActingProcessCommandLine,
           AlgorithmCustomEntity = "SHA256"
+      | extend AccountName = tostring(split(ActorUsername, @'\')[1]), AccountDomain = tostring(split(ActorUsername, @'\')[0])
+      | extend HostName = DvcHostname, HostNameDomain = DvcDomain
+      | extend DeviceName = strcat(DvcHostname, ".", DvcDomain )
       )
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: ActorUserName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
         columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.2
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ashwin Patil
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

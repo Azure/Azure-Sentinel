@@ -1,0 +1,66 @@
+id: eb8a9c1c-f532-4630-817c-1ecd8a60ed80
+name: Cross-tenant Access Settings Organization Deleted
+description: |
+  'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when an Organization is deleted from the Microsoft Entra ID Cross-tenant Access Settings.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2d
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - Persistence
+  - Discovery
+relevantTechniques:
+  - T1078.004
+  - T1136.003
+  - T1087.004
+query: |
+  AuditLogs
+  | where OperationName has "Delete partner specific cross-tenant access setting"
+  | mv-apply TargetResource = TargetResources on
+    (
+        where TargetResource.type =~ "Policy"
+        | extend Properties = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = Properties on
+    (
+        where Property.displayName =~ "tenantId"
+        | extend ExtTenantDeleted = trim('"',tostring(Property.oldValue))
+    )
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
+version: 1.1.1
+kind: Scheduled

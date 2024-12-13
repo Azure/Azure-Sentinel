@@ -1,0 +1,578 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+    "handler": "Microsoft.Azure.CreateUIDef",
+    "version": "0.1.2-preview",
+    "parameters": {
+        "config": {
+            "isWizard": true,
+            "basics": {
+                "subscription": {
+                    "resourceProviders": [
+                        "Microsoft.Insights/dataCollectionEndpoints",
+                        "Microsoft.Insights/dataCollectionRules",
+                        "Microsoft.OperationalInsights/workspaces"
+                    ]
+                }
+            }
+        },
+        "basics": [
+            {
+                "name": "getLAWorkspace",
+                "type": "Microsoft.Solutions.ArmApiControl",
+                "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+                "condition": "[greater(length(resourceGroup().name),0)]",
+                "request": {
+                    "method": "GET",
+                    "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+                }
+            },
+            {
+                "name": "WorkspaceSelectInstruction",
+                "type": "Microsoft.Common.TextBlock",
+                "visible": true,
+                "options": {
+                    "text": "Select the workspace where you would like to ingest the data into. We will deploy this data connector and supported resources into the same region as your workspace's region"
+                }
+            },
+            {
+                "name": "logAnalyticsWorkspace",
+                "type": "Microsoft.Common.DropDown",
+                "label": "Workspace",
+                "placeholder": "Select a workspace",
+                "toolTip": "This dropdown will list the available workspaces to select for data ingestion",
+                "constraints": {
+                    "allowedValues": "[map(basics('getLAWorkspace').value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+                    "required": true
+                },
+                "visible": true
+            },
+            {
+                "name": "WorkspaceResourceID",
+                "type": "Microsoft.Common.DropDown",
+                "label": "WorkspaceResourceID",
+                "placeholder": "Select a workspace for dataconnector monitor Logs",
+                "toolTip": "This workspace will be used for data connector logging. New AppInsights will be created for monitoring and linked with this workspace. If you already have central logging workspace, you can select that one for central logging.",
+                "constraints": {
+                    "allowedValues": "[map(basics('getLAWorkspace').value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
+                    "required": true
+                },
+                "visible": true
+            },
+            {
+                "name": "FunctionAppInstruction",
+                "type": "Microsoft.Common.TextBlock",
+                "visible": true,
+                "options": {
+                    "text": "Depending on your Azure policies for storage account, please select if private virtual network is needed. If yes, user must select premium function app configuration since consumption plan doesnt support virtual network. User has to manually configure the virtual network if private networking is chosen."
+                }
+            },
+            {
+                "name": "AzureFunctionsDetailsSection",
+                "type": "Microsoft.Common.Section",
+                "label": "Azure Functions Configuration",
+                "elements": [
+                    {
+                        "name": "FunctionAppType",
+                        "type": "Microsoft.Common.DropDown",
+                        "defaultValue": ["Consumption"],
+                        "label": "Function App Type",
+                        "placeholder": "Select type of function app to be deployed",
+                        "constraints": {
+                            "allowedValues": [
+                                {
+                                    "label": "Consumption",
+                                    "value": "Consumption"
+                                },
+                                {
+                                    "label": "Premium",
+                                    "value": "Premium"
+                                }                             
+                            ],
+                            "required": true
+                        },
+                        "visible": true
+                    },
+                    {
+                        "name": "functionName",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Function App Name",
+                        "defaultValue": "IllumioDataConnector01",
+                        "placeholder": "illumiofunctionapp",
+                        "toolTip": "Enter a name for the function app. If in case, more data connectors are deployed, change the name to IllumioDataConnector02 and so on",
+                        "constraints": {
+                            "required": true,
+                            "validations": [
+                                {
+                                    "regex": "^[a-z0-9A-Z]{1,30}$",
+                                    "message": "Only alphanumeric characters are allowed, and the value must be 1-30 characters long."
+                                }
+                            ]
+                        },
+                        "visible": true
+                    },
+                    {
+                        "name": "storageAccountName",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Storage account name",
+                        "defaultValue": "illumiostorage",
+                        "placeholder": "illumiostorage",
+                        "toolTip": "Enter a name for the storage account. If deploying another data connector, you can use the previously configured storage account",
+                        "constraints": {
+                            "required": true,
+                            "validations": [
+                                {
+                                    "regex": "^[a-z0-9A-Z]{1,24}$",
+                                    "message": "Only alphanumeric characters are allowed, and the value must be 1-24 characters long."
+                                }
+                            ]
+                        },
+                        "visible": true
+                    },
+                    {
+                        "name": "enablePrivateNetworking",
+                        "type": "Microsoft.Common.DropDown",
+                        "label": "Enable Private Networking",
+                        "defaultValue": "False",
+                        "placeholder": "False",
+                        "toolTip": "Select true if private networking is needed, else false",
+                        "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                                {
+                                    "label": "True",
+                                    "description": "Storage account will need to configure private virtual network",
+                                    "value": true
+                                },
+                                {
+                                    "label": "False",
+                                    "description": "Storage account doesnt have to configure private virtual network",
+                                    "value": false
+                                }
+                            ]
+                        },
+                        "visible": true
+                    }                    
+                ]
+            },
+            {
+                "name": "LogSelectorInstruction",
+                "type": "Microsoft.Common.TextBlock",
+                "visible": true,
+                "options": {
+                    "text": "Choose whether you would like to ingest flow summaries, or auditable events or both"
+                }
+            },
+            {
+                "name": "LogSelector",
+                "type": "Microsoft.Common.DropDown",
+                "label": "LogSelector dropdown",
+                "placeholder": "All",
+                "defaultValue": ["All"],
+                "toolTip": "Select eiher all events or a specific type",
+                "selectAll": false,
+                "filter": true,
+                "filterPlaceholder": "Filter items ...",
+                "multiLine": true,
+                "defaultDescription": "Log Selector dropdown",
+                "constraints": {
+                    "allowedValues": [
+                        {
+                            "label": "Flow Summaries",
+                            "description": "Ingest only flow Summaries logs",
+                            "value": "Flow Summaries"
+                        },
+                        {
+                            "label": "Auditable Events",
+                            "description": "Ingest only auditable events",
+                            "value": "Auditable Events"
+                        },
+                        {
+                            "label": "All",
+                            "description": "Ingest both auditable and flow summaries events",
+                            "value": "All"
+                        }
+                    ],
+                    "required": true
+                }
+            }                    
+        ],
+        "steps": [
+            {
+                "name": "AzureFunctionsAppConfig",
+                "label": "Provide Credentials",
+                "elements": [
+                    {
+                        "name": "AWSDetails",
+                        "type": "Microsoft.Common.Section",
+                        "label": "AWS details",
+                        "elements": [
+                            {
+                                "name": "awsKey",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "AWS Access Key ID",
+                                "toolTip": "Enter valid AWS Key Id.",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "([A-Z0-9+/]{20})",
+                                    "validationMessage": "Enter valid AWS Key"
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "awsSecret",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "AWS Secret Access Key",
+                                "toolTip": "Enter valid AWS Secret key.",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "([a-zA-Z0-9+/]{40})",
+                                    "validationMessage": "Enter valid Access key"
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "awsRegionName",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "AWS Region",
+                                "placeholder": "us-west-2",
+                                "toolTip": "Enter valid region. Examples - us-west-2",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-[0-9]",
+                                    "validationMessage": "Enter valid AWS region name"
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "awsSqsUrl",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "SQS Queue URL",
+                                "placeholder": "https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue",
+                                "toolTip": "Enter valid SQS queue URL. examples - https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue ",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "(https|http)[:][\/]{2}(sqs)[.][a-z]{2}[-][a-z]{3,}[-][0-9]{1}[.](amazonaws.com)[\/][0-9]{12}[\/]{1}[a-zA-Z0-9-_]{0,80}",
+                                    "validationMessage": "Enter valid SQS queue URL"
+                                },
+                                "visible": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "AADAppDetailsforAuthentication",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Azure AD Application Details",
+                        "elements": [
+                            {
+                                "name": "aadTenantId",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "AAD Tenant Id",
+                                "toolTip": "If you dont have AAD application created, create one by following [instructions provided here](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal#create-azure-ad-application).Copy Tenant Id and enter here. For example: 87f988bf-86f1-41af-91ab-2d7cd011db47",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "(^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$)",
+                                    "validationMessage": "Enter valid AAD Tenant (Directory) Id"
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "aadApplicationId",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "AAD App (client) Id",
+                                "toolTip": "If you dont have AAD application created, create one by following [instructions provided here](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal#create-azure-ad-application).Copy Application Id and enter here. For example: 899f7b17-415f-4d01-8ab5-7a7db3aa39cb",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "(^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$)",
+                                    "validationMessage": "Enter valid AAD App (client) Id"
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "aadApplicationSecret",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "AAD App Secret Key",
+                                "toolTip": "If you dont have AAD application created, create one by following [instructions provided here](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal#create-azure-ad-application).Copy Secret key and enter here. For example: oYo8Q~Tno3m6AmFEjgUoWfi2JIjB_1LkB-I.vaWo",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "([A-z0-9.~+-\/]{30,50})",
+                                    "validationMessage": "Enter valid secret key"
+                                },
+                                "visible": true
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "DataIngestionConfig",
+                "label": "Data Ingestion Config",
+                "elements": [
+                    {
+                        "name": "getexistingDCEs",
+                        "type": "Microsoft.Solutions.ArmApiControl",
+                        "toolTip": "This filters for existing DCEs available in the region",
+                        "request": {
+                            "method": "GET",
+                            "path": "[concat(subscription().id, '/resourceGroups/', toLower(resourceGroup().name),'/providers/Microsoft.Insights/dataCollectionEndpoints?api-version=2021-09-01-preview')]"
+                        }
+                    },
+                    {
+                        "name": "getexistingDCRs",
+                        "type": "Microsoft.Solutions.ArmApiControl",
+                        "toolTip": "This filters for existing DCRs available in the region",
+                        "request": {
+                            "method": "GET",
+                            "path": "[concat(subscription().id, '/resourceGroups/', toLower(resourceGroup().name),'/providers/Microsoft.Insights/dataCollectionRules?api-version=2019-11-01-preview')]"
+                        }
+                    },
+                    {
+                        "name": "DCEConfigSection",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Data Collection Endpoint DCE configuration",
+                        "elements": [
+                            {
+                                "name": "DCECreationOption",
+                                "type": "Microsoft.Common.OptionsGroup",
+                                "label": "DCE Creation Option",
+                                "defaultValue": "Create New DCE",
+                                "toolTip": "You can create new / update (if exists) DCE by using default names. However if you want to use any other existing DCE / modify the default name, you can follow manual deployment instructions from the data connector page",
+                                "constraints": {
+                                    "allowedValues": [
+                                        {
+                                            "label": "Create New DCE",
+                                            "value": "CreateNewDCE"
+                                        },
+                                        {
+                                            "label": "Use existing DCE",
+                                            "value": "UseexistingDCE"
+                                        }
+                                    ],
+                                    "required": true
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "SelectExistingDCE",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "Select Existing DCE",
+                                "toolTip": "Select an existing DCE to use for data ingestion",
+                                "constraints": {
+                                    "required": true,
+                                    "allowedValues": "[map(filter(steps('DataIngestionConfig').getexistingDCEs.value, (item) => contains(item.location, first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('logAnalyticsWorkspace'))), (item) => item.location)))) , (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]"
+                                },
+                                "visible": "[equals(steps('DataIngestionConfig').DCEConfigSection.DCECreationOption, 'UseexistingDCE')]"
+                            },
+                            {
+                                "name": "NoDCEExistsError",
+                                "type": "Microsoft.Common.InfoBox",
+                                "visible": "[and(empty(steps('DataIngestionConfig').DCEConfigSection.SelectExistingDCE),equals(steps('DataIngestionConfig').DCEConfigSection.DCECreationOption,'UseexistingDCE'))]",
+                                "options": {
+                                    "icon": "Error",
+                                    "text": "Select DCE. If you don't have any suitable DCEs, you can un-check above to allow you to create new DCE"
+                                }
+                            },
+                            {
+                                "name": "input-dce-name",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Data Collection Endpoint Name",
+                                "placeholder": "IllumioDCE",
+                                "toolTip": "Enter a name for data collection endpoint",
+                                "defaultValue": "IllumioDCE",
+                                "constraints": {
+                                    "required": true,
+                                    "validations": [
+                                        {
+                                            "regex": "^[a-z0-9A-Z]{1,30}$",
+                                            "message": "Only alphanumeric characters are allowed, and the value must be 1-30 characters long."
+                                        }
+                                    ]
+                                },
+                                "visible": "[equals(steps('DataIngestionConfig').DCEConfigSection.DCECreationOption, 'CreateNewDCE')]"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "DCRConfigSection",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Data Collection Rules DCRs configuration",
+                        "elements": [
+                            {
+                                "name": "DCRCreationOption",
+                                "type": "Microsoft.Common.OptionsGroup",
+                                "label": "DCR Creation Option",
+                                "defaultValue": "Create New DCR",
+                                "toolTip": "You can create new / update (if exists) DCR by using default names. However if you want to use any other existing DCR / modify the default name, you can follow manual deployment instructions from the data connector page",
+                                "constraints": {
+                                    "allowedValues": [
+                                        {
+                                            "label": "Create New DCR",
+                                            "value": "CreateNewDCR"
+                                        },
+                                        {
+                                            "label": "Use existing DCR",
+                                            "value": "UseexistingDCR"
+                                        }
+                                    ],
+                                    "required": true
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "SelectExistingDCR",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "Select Existing DCR",
+                                "toolTip": "Select an existing DCR to use for data ingestion",
+                                "constraints": {
+                                    "required": true,
+                                    "allowedValues": "[map(filter(steps('DataIngestionConfig').getexistingDCRs.value, (item) => contains(item.location, first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('logAnalyticsWorkspace'))), (item) => item.location)))) , (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]"
+                                },
+                                "visible": "[equals(steps('DataIngestionConfig').DCRConfigSection.DCRCreationOption, 'UseexistingDCR')]"
+                            },
+                            {
+                                "name": "NoDCRExistsError",
+                                "type": "Microsoft.Common.InfoBox",
+                                "visible": "[and(empty(steps('DataIngestionConfig').DCRConfigSection.SelectExistingDCR),equals(steps('DataIngestionConfig').DCRConfigSection.DCRCreationOption,'UseexistingDCR'))]",
+                                "options": {
+                                    "icon": "Error",
+                                    "text": "Select DCR. If you don't have any suitable DCRs, you can un-check above to allow you to create new DCR"
+                                }
+                            },
+                            {
+                                "name": "dcr-data_name_input",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "DCR input",
+                                "placeholder": "IllumioDCR",
+                                "defaultValue": "IllumioDCR",
+                                "toolTip": "Enter a name for the data collection rule",
+                                "constraints": {
+                                    "required": true,
+                                    "validations": [
+                                        {
+                                            "regex": "^[a-z0-9A-Z]{1,30}$",
+                                            "message": "Only alphanumeric characters are allowed, and the value must be 1-30 characters long."
+                                        }
+                                    ]
+                                },
+                                "visible": "[equals(steps('DataIngestionConfig').DCRConfigSection.DCRCreationOption, 'CreateNewDCR')]"
+                            }
+                        ],
+                        "visible": true
+                    }
+                ]
+            },
+            {
+                "name": "IllumioAPIDetails",
+                "label": "Illumio API Config",
+                "elements": [
+                    {
+                        "name": "IllumioConfig",
+                        "type": "Microsoft.Common.Section",
+                        "label": "API Key",
+                        "elements": [
+                            {
+                                "name": "IllumioApiKey",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "API Key",
+                                "toolTip": "Enter API key for your org.",
+                                "constraints": {
+                                    "required": true,
+                                    "validationMessage": "Enter valid API Key"
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "IllumioApiSecret",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "API Secret",
+                                "toolTip": "Enter valid API Secret",
+                                "constraints": {
+                                    "required": true,
+                                    "validationMessage": "Enter valid API secret"
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "IllumioFqdn",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Illumio FQDN",
+                                "toolTip": "Enter FQDN",
+                                "constraints": {
+                                    "required": true,
+                                    "validationMessage": "Enter valid FQDN"
+                                },
+                                "visible": true
+                            },
+                            {
+                                "name": "IllumioFqdnPort",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "FQDN Port",
+                                "placeholder": "443",
+                                "defaultValue": "443",                                
+                                "toolTip": "Enter port for the above fqdn",
+                                "visible": true
+                            },
+                            {
+                                "name": "IllumioOrg",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Org ID",
+                                "toolTip": "Enter your org id",
+                                "constraints": {
+                                    "required": true,
+                                    "validationMessage": "Enter valid org id"
+                                },
+                                "visible": true
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "tags",
+                "label": "Tags",
+                "elements": [
+                    {
+                        "name": "tagsByResource",
+                        "type": "Microsoft.Common.TagsByResource",
+                        "toolTip": "Select which resources would you like to apply tags for",
+                        "resources": [
+                            "Microsoft.Insights/dataCollectionEndpoints",
+                            "Microsoft.Insights/dataCollectionRules",
+                            "Microsoft.OperationalInsights/workspaces",
+                            "Microsoft.Storage/storageAccounts",
+                            "Microsoft.Web/serverfarms",
+                            "Microsoft.Insights/components",
+                            "Microsoft.Web/sites"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "outputs": {
+            "logAnalyticsWorkspace": "[basics('logAnalyticsWorkspace')]",
+            "logAnalyticsWorkspaceSubscription": "[subscription().subscriptionId]",
+            "logAnalyticsWorkspaceResourceGroup": "[first(map(filter(basics('getLAWorkspace').value, (filter) => equals(filter.name,basics('logAnalyticsWorkspace'))), (item) => substring(item.id, add(lastIndexOf(first(split(item.id,'/providers/')),'/'),1), sub(length(first(split(item.id,'/providers/'))), add(lastIndexOf(first(split(item.id,'/providers/')),'/'),1)) ) ))]",
+            "dataCollectionEndpoint": "[coalesce(steps('DataIngestionConfig').DCEConfigSection.SelectExistingDCE, coalesce(steps('DataIngestionConfig').DCEConfigSection.input-dce-name,''))]",
+            "dataCollectionRule": "[coalesce(steps('DataIngestionConfig').DCRConfigSection.SelectExistingDCR, coalesce(steps('DataIngestionConfig').DCRConfigSection.dcr-data_name_input, ''))]",
+            "logTypes": "[basics('LogSelector')]",            
+            "workspaceResourceID": "[basics('WorkspaceResourceID')]",
+            "enablePrivateNetworking": "[basics('AzureFunctionsDetailsSection').enablePrivateNetworking]",
+            "storageAccountName": "[basics('AzureFunctionsDetailsSection').storageAccountName]",
+            "functionName": "[basics('AzureFunctionsDetailsSection').functionName]",
+            "awsKey": "[steps('AzureFunctionsAppConfig').AWSDetails.awsKey]",
+            "awsSecret": "[steps('AzureFunctionsAppConfig').AWSDetails.awsSecret]",
+            "awsRegionName": "[steps('AzureFunctionsAppConfig').AWSDetails.awsRegionName]",
+            "awsSqsUrl": "[steps('AzureFunctionsAppConfig').AWSDetails.awsSqsUrl]",
+            "aadTenantId": "[steps('AzureFunctionsAppConfig').AADAppDetailsforAuthentication.aadTenantId]",
+            "aadApplicationId": "[steps('AzureFunctionsAppConfig').AADAppDetailsforAuthentication.aadApplicationId]",
+            "aadApplicationSecret": "[steps('AzureFunctionsAppConfig').AADAppDetailsforAuthentication.aadApplicationSecret]",
+            "location": "[location()]",
+            "tagsByResource": "[steps('tags').tagsByResource]",
+            "apiKey": "[steps('IllumioAPIDetails').IllumioConfig.IllumioApiKey]",
+            "apiSecret": "[steps('IllumioAPIDetails').IllumioConfig.IllumioApiSecret]",
+            "fqdn": "[steps('IllumioAPIDetails').IllumioConfig.IllumioFqdn]",
+            "port": "[steps('IllumioAPIDetails').IllumioConfig.IllumioFqdnPort]",
+            "orgId": "[steps('IllumioAPIDetails').IllumioConfig.IllumioOrg]",
+            "functionAppType": "[basics('AzureFunctionsDetailsSection').FunctionAppType]"
+        }
+    }
+}

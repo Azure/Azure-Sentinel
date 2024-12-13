@@ -1,5 +1,5 @@
 id: ce74dc9a-cb3c-4081-8c2f-7d39f6b7bae1
-name: Identify Mango Sandstorm powershell commands  
+name: Identify Mango Sandstorm powershell commands
 description: |
   'The query below identifies powershell commands used by the threat actor Mango Sandstorm.
   Reference:  https://www.microsoft.com/security/blog/2022/08/25/mercury-leveraging-log4j-2-vulnerabilities-in-unpatched-systems-to-target-israeli-organizations/'
@@ -7,7 +7,7 @@ severity: High
 requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
-      - SecurityEvent 
+      - SecurityEvent
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
@@ -29,39 +29,50 @@ query: |
   | where EventID == 4688
   | where Process has_any ("powershell.exe","powershell_ise.exe","pwsh.exe") and CommandLine has_cs "-exec bypass -w 1 -enc"
   | where CommandLine  contains_cs "UwB0AGEAcgB0AC0ASgBvAGIAIAAtAFMAYwByAGkAcAB0AEIAbABvAGMAawAgAHsAKABzAGEAcABzACAAKAAiAHAA"
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, ProcessCustomEntity = Process
+  | extend DvcHostname = Computer, ProcessId = tostring(ProcessId), ActorUsername = Account
   ),
   (DeviceProcessEvents
-  | where FileName =~ "powershell.exe" and ProcessCommandLine has_cs "-exec bypass -w 1 -enc"  
-  | where ProcessCommandLine contains_cs "UwB0AGEAcgB0AC0ASgBvAGIAIAAtAFMAYwByAGkAcAB0AEIAbABvAGMAawAgAHsAKABzAGEAcABzACAAKAAiAHAA" 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName, ProcessCustomEntity = InitiatingProcessFileName
+  | where FileName =~ "powershell.exe" and ProcessCommandLine has_cs "-exec bypass -w 1 -enc"
+  | where ProcessCommandLine contains_cs "UwB0AGEAcgB0AC0ASgBvAGIAIAAtAFMAYwByAGkAcAB0AEIAbABvAGMAawAgAHsAKABzAGEAcABzACAAKAAiAHAA"
+  | extend DvcHostname = DeviceName, ProcessId = tostring(InitiatingProcessId), ActorUsername = strcat(AccountDomain, @"\", AccountName)
   ),
   (imProcessCreate
   | where Process has_any ("powershell.exe","powershell_ise.exe","pwsh.exe") and CommandLine has_cs "-exec bypass -w 1 -enc"
   | where CommandLine  contains_cs "UwB0AGEAcgB0AC0ASgBvAGIAIAAtAFMAYwByAGkAcAB0AEIAbABvAGMAawAgAHsAKABzAGEAcABzACAAKAAiAHAA"
-  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = DvcHostname, ProcessCustomEntity = Process
+  | extend ProcessId = tostring(TargetProcessId)
   )
   )
+  | extend AccountName = tostring(split(ActorUsername, "\\")[0]), AccountNTDomain = tostring(split(ActorUsername, "\\")[1])
+  | extend HostName = tostring(split(DvcHostname, ".")[0]), DomainIndex = toint(indexof(DvcHostname, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(DvcHostname, DomainIndex + 1), DvcHostname)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: ActorUsername
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: DvcHostname
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
-        columnName: ProcessCustomEntity
-version: 1.0.2
+        columnName: ProcessId
+version: 1.0.5
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

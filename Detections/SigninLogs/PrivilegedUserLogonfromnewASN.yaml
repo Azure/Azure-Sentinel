@@ -11,6 +11,9 @@ requiredDataConnectors:
   - connectorId: BehaviorAnalytics
     dataTypes:
       - BehaviorAnalytics
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
 queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
@@ -23,7 +26,7 @@ tags:
   - AADSecOpsGuide
 query: |
   let admins=(IdentityInfo
-    | where AssignedRoles contains "admin"
+    | where AssignedRoles contains "admin" or GroupMembership has "Admin"
     | summarize by tolower(AccountUPN));
     let known_asns = (
     SigninLogs
@@ -36,23 +39,27 @@ query: |
     | where tolower(UserPrincipalName) in (admins)
     | where AutonomousSystemNumber !in (known_asns)
     | project-reorder TimeGenerated, UserPrincipalName, UserAgent, IPAddress, AutonomousSystemNumber
-    | extend AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+    | extend AccountName = tostring(split(UserPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.4
+        columnName: IPAddress
+version: 1.0.6
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: petebryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

@@ -21,44 +21,57 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1071
 query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
-  ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  // Picking up only IOC's that contain the entities we want
-  | where isnotempty(Url)
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-    AuditLogs
+  let AuditEvents = materialize(AuditLogs
     | where TimeGenerated >= ago(dt_lookBack)
     // Extract the URL that is contained within the JSON data
-    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,tostring(TargetResources))
+    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,tostring(TargetResources))
     | where isnotempty(Url)
     | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
     | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName)
-    | extend Audit_TimeGenerated = TimeGenerated
-  ) on Url
+    | extend Audit_TimeGenerated = TimeGenerated);
+  let AuditUrls = AuditEvents | distinct Url = tolower(Url) | summarize make_list(Url);
+  ThreatIntelligenceIndicator
+  | where isnotempty(Url)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | where tolower(Url) in (AuditUrls)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (AuditEvents) on Url
   | where Audit_TimeGenerated < ExpirationDateTime
   | summarize Audit_TimeGenerated = arg_max(Audit_TimeGenerated, *) by IndicatorId, Url
   | project Audit_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
   OperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url
-  | extend timestamp = Audit_TimeGenerated, AccountCustomEntity = userPrincipalName, HostCustomEntity = TargetResourceDisplayName, URLCustomEntity = Url
+  | extend AccountName = tostring(split(userPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(userPrincipalName, "@")[1])
+  | extend HostName = tostring(split(TargetResourceDisplayName, ".")[0]), DomainIndex = toint(indexof(TargetResourceDisplayName, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(TargetResourceDisplayName, DomainIndex + 1), TargetResourceDisplayName)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: userPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: TargetResourceDisplayName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.2.4
+        columnName: Url
+version: 1.2.8
 kind: Scheduled

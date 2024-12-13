@@ -16,7 +16,6 @@ relevantTechniques:
   - T1102
   - T1078
 query: |
-
   OfficeActivity 
   | where RecordType =~ "SharePointFileOperation"
   | where Operation =~ "FileUploaded" 
@@ -29,13 +28,18 @@ query: |
       | where UserId != "app@sharepoint"
       | where SourceRelativeUrl has "Microsoft Teams Chat Files" 
   ) on OfficeObjectId 
-  | extend userBag = pack(UserId1, ClientIP1) 
-  | summarize makeset(UserId1), make_bag(userBag) by TimeGenerated, UserId, OfficeObjectId, SourceFileName 
+  | extend userBag = bag_pack(UserId1, ClientIP1) 
+  | summarize make_set(UserId1, 10000), make_bag(userBag, 10000) by TimeGenerated, UserId, OfficeObjectId, SourceFileName 
   | extend NumberUsers = array_length(bag_keys(bag_userBag))
-  | project timestamp=TimeGenerated, AccountCustomEntity=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag, NumberOfUsersAccessed=NumberUsers
+  | project timestamp=TimeGenerated, UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag, NumberOfUsersAccessed=NumberUsers
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  | extend Account_0_Name = AccountName
+  | extend Account_0_UPNSuffix = AccountUPNSuffix 
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 2.0.0
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.1

@@ -16,75 +16,77 @@
         "crossComponentResources": [],
         "parameters": [
           {
-            "id": "9a199167-2dde-49dd-8f01-23e9d1fa8151",
+            "id": "688dc7cb-bea3-41ae-ae94-32d22e09568c",
             "version": "KqlParameterItem/1.0",
-            "name": "InternalWSs",
-            "type": 1,
-            "isRequired": true,
-            "query": "SecurityIncident\r\n| take 1\r\n| parse IncidentUrl with * \"/workspaces/\" Workspace \"/\" *\r\n| project Workspace",
-            "isHiddenWhenLocked": true,
-            "timeContext": {
-              "durationMs": 604800000
-            },
-            "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces"
-          },
-          {
-            "id": "7806fefd-432f-4828-9756-8c0be5c08d07",
-            "version": "KqlParameterItem/1.0",
-            "name": "InternalSub",
-            "type": 1,
-            "isRequired": true,
-            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
-            "crossComponentResources": [
-              "value::selected"
-            ],
-            "isHiddenWhenLocked": true,
-            "timeContext": {
-              "durationMs": 0
-            },
-            "timeContextFromParameter": "TimeRange",
-            "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources"
-          },
-          {
-            "id": "55d3ab63-6e1f-4d02-8d9e-2225526689c7",
-            "version": "KqlParameterItem/1.0",
-            "name": "Subscription",
-            "type": 6,
-            "isRequired": true,
-            "query": "Resources\r\n| summarize Count = count() by subscriptionId\r\n| order by Count desc\r\n| extend Rank = row_number()\r\n| project value = subscriptionId, label = subscriptionId, selected = Rank == 1",
-            "crossComponentResources": [
-              "value::selected"
-            ],
-            "typeSettings": {
-              "additionalResourceOptions": [],
-              "showDefault": false
-            },
-            "timeContext": {
-              "durationMs": 0
-            },
-            "timeContextFromParameter": "TimeRange",
-            "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources"
-          },
-          {
-            "id": "95a45501-31b5-4ea2-bcb3-eb208e0080e2",
-            "version": "KqlParameterItem/1.0",
-            "name": "Workspace",
+            "name": "DefaultWorkspace",
             "type": 5,
             "isRequired": true,
-            "multiSelect": true,
-            "quote": "'",
-            "delimiter": ",",
-            "query": "//resources | where type =~ 'Microsoft.operationsmanagement/solutions' | where name contains //'SecurityInsights' | project id //= tostring(properties.workspaceResourceId)\r\n\r\nwhere type =~ 'microsoft.operationalinsights/workspaces'\r\n| project value =id, label = name, selected = iff(name =~ '{InternalWSs}', true, false)\r\n\r\n\r\n",
+            "value": "value::1",
+            "isHiddenWhenLocked": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": [
+                "value::1"
+              ]
+            }
+          },
+          {
+            "id": "c11b5651-cf86-4865-b23d-9ecc4f16b712",
+            "version": "KqlParameterItem/1.0",
+            "name": "ContextFree",
+            "type": 1,
+            "query": "{\"version\":\"1.0.0\",\"content\":\"\\\"{DefaultWorkspace}\\\"\"}",
+            "isHiddenWhenLocked": true,
+            "queryType": 8
+          },
+          {
+            "id": "bbbc300a-6f91-4b2b-b4b5-842b4bf8577a",
+            "version": "KqlParameterItem/1.0",
+            "name": "Selection",
+            "type": 1,
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| extend match = strcat(\"'\", id, \"'\") =~ \"{DefaultWorkspace:value}\"\r\n| order by match desc, name asc\r\n| take 1\r\n| project value = tostring(pack('sub', subscriptionId, 'rg', resourceGroup, 'ws', id))",
             "crossComponentResources": [
-              "value::all"
+              "value::selected"
+            ],
+            "isHiddenWhenLocked": true,
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "1db5ee15-fe52-458b-91d1-7ee39d8c2cd3",
+            "version": "KqlParameterItem/1.0",
+            "name": "Subscriptions",
+            "type": 6,
+            "isRequired": true,
+            "query": "summarize by subscriptionId\r\n| project value = strcat('/subscriptions/', subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ todynamic('{Selection}').sub, true, false)",
+            "crossComponentResources": [
+              "value::selected"
             ],
             "typeSettings": {
               "additionalResourceOptions": []
             },
-            "timeContextFromParameter": "TimeRange",
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "9732eff8-fb57-4cbd-8ade-5ae746f33760",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspaces",
+            "type": 5,
+            "isRequired": true,
+            "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| summarize by id, name\r\n| project id, selected = iff(id =~ todynamic('{Selection}').ws, true, false)",
+            "crossComponentResources": [
+              "{Subscriptions}"
+            ],
+            "value": "/subscriptions/<subs_ID>/resourcegroups/<rg_name>/providers/microsoft.operationalinsights/workspaces/<workspace_name>",
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            },
             "queryType": 1,
             "resourceType": "microsoft.resourcegraph/resources"
           },
@@ -279,17 +281,13 @@
         "version": "KqlItem/1.0",
         "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| summarize arg_max(TimeGenerated, Status, Severity, Owner, AdditionalData,CreatedTime) by IncidentNumber\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize count() by bin(CreatedTime, 1h)\n\n\n\n",
         "size": 1,
-        "timeContext": {
-          "durationMs": 2592000000
-        },
-        "timeContextFromParameter": "TimeRange",
         "timeBrushParameterName": "TimeBrush",
         "exportFieldName": "CreatedTime",
         "exportParameterName": "TimePicker",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "{Workspace}"
+          "{Workspaces}"
         ],
         "visualization": "unstackedbar",
         "gridSettings": {
@@ -324,14 +322,10 @@
         "version": "KqlItem/1.0",
         "query": "SecurityIncident\n| where CreatedTime >= {TimeBrush:start} and CreatedTime <= {TimeBrush:end}\n| where Status == 'Closed'\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| extend feedback =strcat(Classification,\" \",ClassificationReason)\n| summarize dcount(IncidentNumber) by feedback\n",
         "size": 1,
-        "timeContext": {
-          "durationMs": 2592000000
-        },
-        "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "{Workspace}"
+          "{Workspaces}"
         ],
         "visualization": "piechart"
       },
@@ -345,14 +339,10 @@
         "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| summarize arg_max(TimeGenerated,Status, Severity, Owner, AdditionalData) by IncidentNumber\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize dcount(IncidentNumber) by Severity",
         "size": 1,
         "title": "Incidents created by severity",
-        "timeContext": {
-          "durationMs": 2592000000
-        },
-        "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "{Workspace}"
+          "{Workspaces}"
         ],
         "visualization": "piechart",
         "tileSettings": {
@@ -407,14 +397,10 @@
         "query": "SecurityIncident\n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| summarize arg_max(TimeGenerated, Status, Severity, Owner, AdditionalData) by IncidentNumber\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize count() by case(tostring(Owner)==\"\", \"Unassigned\",tostring(Owner))\n\n",
         "size": 1,
         "title": "Incidents created by owner",
-        "timeContext": {
-          "durationMs": 2592000000
-        },
-        "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "{Workspace}"
+          "{Workspaces}"
         ],
         "visualization": "piechart",
         "tileSettings": {
@@ -449,14 +435,10 @@
         "query": "SecurityIncident\n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| summarize arg_max(TimeGenerated, Status, Severity, Owner, AdditionalData) by IncidentNumber\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize count() by Status\n",
         "size": 1,
         "title": "Incidents created by status",
-        "timeContext": {
-          "durationMs": 2592000000
-        },
-        "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
-          "{Workspace}"
+          "{Workspaces}"
         ],
         "visualization": "piechart",
         "tileSettings": {
@@ -525,11 +507,10 @@
               "query": "SecurityIncident\n| where FirstModifiedTime  >= {TimeRange:start} and FirstModifiedTime  <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \n| extend TimeToTriage =  (FirstModifiedTime - CreatedTime)/1h\n| summarize AvgTTT=avg(TimeToTriage) \n",
               "size": 1,
               "title": "Mean time to triage",
-              "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
-                "{Workspace}"
+                "{Workspaces}"
               ],
               "visualization": "tiles",
               "tileSettings": {
@@ -565,11 +546,10 @@
               "query": "SecurityIncident\n| where ClosedTime >= {TimeRange:start} and ClosedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize arg_max(TimeGenerated,*) by IncidentNumber \n| extend TimeToClosure =  (ClosedTime - CreatedTime)/1h\n| summarize AvgTTC=avg(TimeToClosure)",
               "size": 1,
               "title": "Mean time to closure ",
-              "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
-                "{Workspace}"
+                "{Workspaces}"
               ],
               "visualization": "tiles",
               "sortBy": [],
@@ -631,14 +611,10 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize Incidents=dcount(IncidentNumber) by Severity, bin(CreatedTime, 1d)",
                     "size": 1,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "linechart"
                   },
@@ -667,14 +643,10 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize Incidents=dcount(IncidentNumber) by case(tostring(Owner)==\"\", \"Unassigned\",tostring(Owner)), bin(CreatedTime, 1d)\n",
                     "size": 1,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "linechart"
                   },
@@ -703,17 +675,13 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize Incidents=dcount(IncidentNumber) by Status, bin(CreatedTime, 1d)",
                     "size": 1,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "exportFieldName": "series",
                     "exportParameterName": "Status",
                     "exportDefaultValue": "All",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "linechart"
                   },
@@ -746,17 +714,13 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize Incidents=dcount(IncidentNumber) by tostring(Product), bin(CreatedTime, 1d)",
                     "size": 1,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "exportFieldName": "series",
                     "exportParameterName": "Status",
                     "exportDefaultValue": "All",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "linechart"
                   },
@@ -789,14 +753,10 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| mvexpand Tactics to typeof(string)\n| summarize Incidents=dcount(IncidentNumber) by Tactics, bin(CreatedTime, 1d)",
                     "size": 1,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "unstackedbar"
                   },
@@ -825,14 +785,10 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| extend Tags = extract_all('labelName\":\"(.*?)\"',tostring(Labels))\n| mvexpand Tags to typeof(string)\n| summarize Incidents=dcount(IncidentNumber) by Tags, bin(CreatedTime, 1d)",
                     "size": 1,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "unstackedbar"
                   },
@@ -861,14 +817,10 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident \n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| summarize arg_max(TimeGenerated, Status, Severity, Owner, AdditionalData,CreatedTime) by IncidentNumber, Title\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize count() by bin(CreatedTime, 1h), Title\n| order by count_ desc",
                     "size": 1,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "piechart"
                   },
@@ -923,11 +875,10 @@
                     "query": "SecurityIncident\n| where FirstModifiedTime  >= {TimeRange:start} and FirstModifiedTime  <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \n| extend TimeToTriage =  (FirstModifiedTime - CreatedTime)/1h\n| summarize 5th_Percentile=max_of(percentile(TimeToTriage, 5),0),50th_Percentile=percentile(TimeToTriage, 50), 90th_Percentile=percentile(TimeToTriage, 90),99th_Percentile=percentile(TimeToTriage, 99) by bin(FirstModifiedTime, 1d)\n",
                     "size": 1,
                     "aggregation": 3,
-                    "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "linechart",
                     "chartSettings": {
@@ -983,11 +934,10 @@
                     "query": "SecurityIncident\n| where ClosedTime  >= {TimeRange:start} and ClosedTime  <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \n| extend TimeToClosure =  (ClosedTime - CreatedTime)/1h\n| summarize 5th_Percentile=percentile(TimeToClosure, 5),50th_Percentile=percentile(TimeToClosure, 50), 90th_Percentile=percentile(TimeToClosure, 90),99th_Percentile=percentile(TimeToClosure, 99) by bin(ClosedTime, 1d)\n",
                     "size": 1,
                     "aggregation": 3,
-                    "timeContextFromParameter": "TimeRange",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "linechart",
                     "gridSettings": {
@@ -1060,17 +1010,13 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident\n| where CreatedTime >= {TimeBrush:start} and CreatedTime <= {TimeBrush:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n|where Status == 'Closed'  \n| extend Ownerr = case(tostring(Owner)==\"\", \"Unassigned\",tostring(Owner))\n| summarize arg_min(LastModifiedTime,*) by IncidentNumber, Owner = Ownerr\n| extend TimeToTriage = LastModifiedTime - CreatedTime, Owner\n| summarize avg(TimeToTriage/1h) by Owner\n",
                     "size": 4,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "exportFieldName": "series",
                     "exportParameterName": "Status",
                     "exportDefaultValue": "All",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "tiles",
                     "tileSettings": {
@@ -1140,17 +1086,13 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident\n| where CreatedTime >= {TimeRange:start} and CreatedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize arg_max(FirstModifiedTime,*) by IncidentNumber \n| extend TimeToTriage =  FirstModifiedTime - CreatedTime\n| extend MinToTriage = TimeToTriage/1h\n| summarize avg(TimeToTriage/1h) by owner=case(tostring(Owner)==\"\", \"Unassigned\",tostring(Owner))\n\n",
                     "size": 4,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "exportFieldName": "series",
                     "exportParameterName": "Status",
                     "exportDefaultValue": "All",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "tiles",
                     "tileSettings": {
@@ -1219,17 +1161,13 @@
                     "version": "KqlItem/1.0",
                     "query": "SecurityIncident\n| where CreatedTime >= {TimeBrush:start} and CreatedTime <= {TimeBrush:end}\n| where ModifiedBy !in(\"Alert Grouping\",\"Fusion\",\"Incident created from alert\")\n| where ModifiedBy !contains(\"Automation rule\")\n| where Severity in ({Severity}) or \"*\" in ({Severity})\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or \"*\" in ({Tactics})\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or \"*\" in ({Owner})\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or \"*\" in ({Product})\n| summarize count() by ModifiedBy\n",
                     "size": 4,
-                    "timeContext": {
-                      "durationMs": 2592000000
-                    },
-                    "timeContextFromParameter": "TimeRange",
                     "exportFieldName": "series",
                     "exportParameterName": "Status",
                     "exportDefaultValue": "All",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "tiles",
                     "tileSettings": {
@@ -1299,7 +1237,7 @@
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "table",
                     "gridSettings": {
@@ -1411,7 +1349,7 @@
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
-                      "{Workspace}"
+                      "{Workspaces}"
                     ],
                     "visualization": "table",
                     "gridSettings": {

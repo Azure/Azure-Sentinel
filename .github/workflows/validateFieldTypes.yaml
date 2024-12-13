@@ -1,0 +1,50 @@
+name: Validate Parameter Fields Type
+
+on:  
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "**/Package/mainTemplate.json"
+
+env:
+  BRANCH_NAME: ${{ github.event.client_payload.pull_request.head.ref || github.event.client_payload.pullRequestBranchName }}
+  APP_INSIGHTS: "${{ vars.APPINSIGHTS }}"
+  BASE_FOLDER_PATH: "${{ vars.BASEFOLDERPATH }}"
+  PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number || github.event.client_payload.pull_request.number }}"
+  RUN_ID: "${{ github.run_id }}"
+  GITHUB_APPS_ID: "${{ secrets.APPLICATION_ID }}"
+  GITHUB_APPS_KEY: "${{ secrets.APPLICATION_PRIVATE_KEY }}"
+
+jobs:
+  validate-field-types:
+    if: ${{ !github.event.pull_request.head.repo.fork && !contains(github.event.client_payload.pull_request.head.ref , 'dependabot/') && !contains(github.event.client_payload.pullRequestBranchName , 'dependabot/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@46e4a501e119d39574a54e53a06c9a705efc55c9
+        with:
+          app-id: ${{ env.GITHUB_APPS_ID }}
+          private-key: ${{ env.GITHUB_APPS_KEY }}
+
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        env:
+          GeneratedToken: ${{ steps.generate_token.outputs.token }}
+        with:
+          ref: "${{ env.BRANCH_NAME }}"
+          fetch-depth: 2
+          token: ${{ env.GeneratedToken}}
+
+      - id: validateFieldTypes
+        name: validate-field-types
+        if: ${{ success() }}
+        shell: pwsh
+        run: |
+          $runId = "${{ env.RUN_ID }}"
+          $instrumentationKey = "${{ env.APP_INSIGHTS }}"
+          $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
+          $baseFolderPath = "${{ env.BASE_FOLDER_PATH }}"
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml
+          ./.script/package-automation/validateFieldTypes.ps1 $runId $pullRequestNumber $instrumentationKey $baseFolderPath

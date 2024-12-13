@@ -26,7 +26,7 @@ Following are the configuration steps to deploy Function App.
 ```
 "FunctionName": The name of the Azure function. Default value will be given as "fnLoCSCon"
 "Workspace Id": The Sentinel Log Analytics Workspace Id  
-"Workspace Key": The Sentinel Log Analytics Workspace Key  
+"Primary Key": The Sentinel Log Analytics Workspace Primary Key
 "LookoutClientId": The unique ID that was provided for this client
 "LookoutApiSecret": The API secret that was provided for this client
 "Baseurl": The URL used to access this client. The url must start with "https://"

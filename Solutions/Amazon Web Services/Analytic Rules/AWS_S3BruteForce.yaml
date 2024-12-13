@@ -22,30 +22,43 @@ query: |
     | where TimeGenerated >= ago(timeframe)
     | where EventName == "GetObject" and isnotempty(ErrorMessage) and isnotempty(ErrorCode)
     | where UserIdentityAccountId == "ANONYMOUS_PRINCIPAL" or UserIdentityAccessKeyId <> RecipientAccountId
+    | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+    | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+    | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+    | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+      AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
     | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
-    | summarize time_min_failed=arg_min(TimeGenerated, *), failed_keys = dcount(keyName) by UserIdentityAccountId, SourceIpAddress, bucketName
+    | summarize time_min_failed=arg_min(TimeGenerated, *), failed_keys = dcount(keyName) by RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, SourceIpAddress, bucketName
     | where failed_keys > 20;
     let success_attempts = AWSCloudTrail
     | where TimeGenerated >= ago(timeframe)
     | where EventName == "GetObject" and isempty(ErrorMessage) and isempty(ErrorCode)
     | where UserIdentityAccountId == "ANONYMOUS_PRINCIPAL" or UserIdentityAccessKeyId <> RecipientAccountId
+    | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+    | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+    | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+    | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+      AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
     | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
-    | summarize time_min_success=arg_min(TimeGenerated, *), success_keys = dcount(keyName) by UserIdentityAccountId, SourceIpAddress, bucketName
+    | summarize time_min_success=arg_min(TimeGenerated, *), success_keys = dcount(keyName) by RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, SourceIpAddress, bucketName
     | where success_keys >= 1;
     failed_attempts
-    | join kind=inner success_attempts on SourceIpAddress, UserIdentityAccountId, bucketName
+    | join kind=inner success_attempts on SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, bucketName
     | where time_min_success > time_min_failed
     | project-away keyName
-    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-    | extend timestamp = time_min_success, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName, AssumedRoleArn = UserIdentityArn
+    | extend timestamp = time_min_success
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: SourceIpAddress
+version: 1.0.1
 kind: Scheduled

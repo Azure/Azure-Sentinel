@@ -24,19 +24,39 @@ tags:
 
 query: |
   imProcessCreate
-    | where CommandLine contains "TVqQAAMAAAAEAAA"
-    | where isnotempty(Process)
-    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Dvc, ActorUsername, Process, CommandLine, ActingProcessName, EventVendor, EventProduct
-    | extend timestamp = StartTimeUtc, AccountCustomEntity = ActorUsername, HostCustomEntity = Dvc
+  | where CommandLine contains "TVqQAAMAAAAEAAA"
+  | where isnotempty(Process)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Dvc, ActorUsername, Process, CommandLine, ActingProcessName, EventVendor, EventProduct
+  | extend AccountName = tostring(split(ActorUsername, @'\')[1]), AccountNTDomain = tostring(split(ActorUsername, @'\')[0])
+  | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
+  | project-away DomainIndex
   
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: ActorUsername
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.1.1
+        columnName: Dvc
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.1.4
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Yuval Naor
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

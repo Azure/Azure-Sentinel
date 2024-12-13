@@ -38,7 +38,6 @@ query: |
   | where TimeGenerated > ago(timeframe)
   | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
   | where EventID == 4688) on NewProcessName
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   ),
   (WindowsEvent
   | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
@@ -57,28 +56,39 @@ query: |
   | extend NewProcessName = tostring(EventData.NewProcessName)
   | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | extend IpAddress = tostring(EventData.IpAddress)) on NewProcessName
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend SubjectUserName = tostring(EventData.SubjectUserName), SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | project-away DomainIndex
   ))  
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: SubjectAccount
+      - identifier: Name
+        columnName: SubjectUserName
+      - identifier: NTDomain
+        columnName: SubjectDomainName
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.1.3
+        columnName: IpAddress
+version: 1.1.5
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

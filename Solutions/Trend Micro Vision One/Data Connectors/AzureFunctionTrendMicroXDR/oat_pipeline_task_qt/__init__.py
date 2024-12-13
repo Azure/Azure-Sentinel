@@ -51,6 +51,10 @@ def main(
         if not token:
             logger.warning(f'Account token not found, clp: {clp_id}, stop current job.')
             return
+    
+        if utils.check_token_is_expired(token):
+            logger.error(f"token is expired, clp: {clp_id}")
+            return
 
         pipeline_id = oat_service.get_oat_pipeline_id(clp_id)
 

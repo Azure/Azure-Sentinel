@@ -1,0 +1,62 @@
+id: e8ae1375-4640-430c-ae8e-2514d09c71eb
+name: GSA Enriched Office 365 - SharePoint File Operation via Client IP with Previously Unseen User Agents
+description: |
+  New user agents associated with a client IP for SharePoint file uploads/downloads.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+    let starttime = todatetime('{{StartTimeISO}}');
+      let endtime = todatetime('{{EndTimeISO}}');
+      let lookback = starttime - 14d;
+      // Historical user agents in EnrichedMicrosoft365AuditLogs
+      let historicalUA_Enriched = EnrichedMicrosoft365AuditLogs
+        | where RecordType == "SharePointFileOperation"
+        | where Operation in ("FileDownloaded", "FileUploaded")
+        | where TimeGenerated between (lookback .. starttime)
+        | extend ClientApplication = tostring(parse_json(AdditionalProperties).UserAgent)
+        | summarize by ClientIp, ClientApplication;
+      // Recent user agents in EnrichedMicrosoft365AuditLogs
+      let recentUA_Enriched = EnrichedMicrosoft365AuditLogs
+        | where RecordType == "SharePointFileOperation"
+        | where Operation in ("FileDownloaded", "FileUploaded")
+        | where TimeGenerated between (starttime .. endtime)
+        | extend ClientApplication = tostring(parse_json(AdditionalProperties).UserAgent)
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by ClientIp, ClientApplication;
+      // Combine historical and recent user agents from EnrichedMicrosoft365AuditLogs
+      let Enriched_UA = recentUA_Enriched
+        | join kind=leftanti (historicalUA_Enriched) on ClientIp, ClientApplication
+        | where not(isempty(ClientIp))
+        | extend IP_0_Address = ClientIp;
+      // Historical user agents in OfficeActivity
+      let historicalUA_Office = OfficeActivity
+        | where RecordType == "SharePointFileOperation"
+        | where Operation in ("FileDownloaded", "FileUploaded")
+        | where TimeGenerated between (lookback .. starttime)
+        | summarize by ClientIP, UserAgent;
+      // Recent user agents in OfficeActivity
+      let recentUA_Office = OfficeActivity
+        | where RecordType == "SharePointFileOperation"
+        | where Operation in ("FileDownloaded", "FileUploaded")
+        | where TimeGenerated between (starttime .. endtime)
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by ClientIP, UserAgent;
+      // Combine historical and recent user agents from OfficeActivity
+      let Office_UA = recentUA_Office
+        | join kind=leftanti (historicalUA_Office) on ClientIP, UserAgent
+        | where not(isempty(ClientIP))
+        | extend IP_0_Address = ClientIP;
+      // Final combined result
+      Enriched_UA
+      | union Office_UA
+      | project StartTime, EndTime, ClientIp, ClientApplication, IP_0_Address;
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IP_0_Address
+version: 2.0.2

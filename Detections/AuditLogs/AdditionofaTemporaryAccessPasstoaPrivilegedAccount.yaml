@@ -13,7 +13,7 @@ requiredDataConnectors:
       - AuditLogs
   - connectorId: BehaviorAnalytics
     dataTypes:
-      - BehaviorAnalytics
+      - IdentityInfo
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -32,20 +32,50 @@ query: |
     AuditLogs
     | where OperationName =~ "Admin registered security info"
     | where ResultReason =~ "Admin registered temporary access pass method for user"
-    | extend userPrincipalName = tostring(TargetResources[0].userPrincipalName)
-    | where tolower(userPrincipalName) in (admin_users)
+    | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+    | where tolower(TargetUserPrincipalName) in (admin_users)
+    | extend TargetAadUserId = tostring(TargetResources[0].id)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: userPrincipalName
-version: 1.0.1
+        columnName: TargetUserPrincipalName
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+version: 1.0.4
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

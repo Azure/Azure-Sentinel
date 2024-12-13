@@ -200,5 +200,19 @@ export enum ConnectorCategory {
   MicrosoftPurviewInformationProtection="MicrosoftPurviewInformationProtection",
   Dynamics365Activity="Dynamics365Activity",
   CrowdstrikeReplicatorV2="CrowdstrikeReplicatorV2",
-  BloodHoundEnterprise="BloodHoundEnterprise"
+  BloodHoundEnterprise="BloodHoundEnterprise",
+  Corelight="Corelight",
+  CorelightConnectorExporter="CorelightConnectorExporter",
+  AwsS3="AwsS3",
+  AWS="AWS",
+  AzureActiveDirectory="AzureActiveDirectory",
+  SecurityAlert="SecurityAlert",
+  AzureActivity="AzureActivity",
+  PowerBIActivity="PowerBIActivity",
+  SecurityAlertOATP="SecurityAlert(OATP)",
+  SecurityAlertASC="SecurityAlert(ASC)",
+  CybleThreatIntel="CybleThreatIntel",
+  CrowdStrikeFalconIOC="CrowdStrikeFalconIOC",
+  Wiz="Wiz",
+  VectraStreamAma="VectraStreamAma"
 }

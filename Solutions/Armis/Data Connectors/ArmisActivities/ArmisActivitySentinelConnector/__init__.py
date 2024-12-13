@@ -51,10 +51,10 @@ class ArmisActivity:
 
         """
         if self._secret_key is not None and self._link is not None:
-            parameter = {"secret_key": self._secret_key}
+            body = {"secret_key": self._secret_key}
             try:
                 response = requests.post(
-                    (self._link + armis_link_suffix), params=parameter
+                    (self._link + armis_link_suffix), data=body
                 )
                 if response.status_code == 200:
                     logging.info("Armis Activity Connector: Getting access token.")
@@ -205,7 +205,7 @@ class ArmisActivity:
         try:
             self._get_access_token_activity("/access_token/")
             if is_table_not_exist:
-                aql_data = '''{} timeFrame:"1 Days" alert:(status:Unhandled,Suppressed,Resolved)'''.format(
+                aql_data = '''{} timeFrame:"1 Days" alert:(status:Unhandled,Suppressed,Resolved timeFrame:"1 Days")'''.format(
                     type_data["aql"]
                 )
             else:

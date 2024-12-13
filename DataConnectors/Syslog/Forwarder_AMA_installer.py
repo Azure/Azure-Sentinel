@@ -4,26 +4,10 @@
 # ----------------------------------------------------------------------------
 # This script is used to install the AMA on a linux machine and configure the
 # Syslog daemon on the linux machine for a data forwarding connector scenario.
-# Supported OS:
-#   64-bit
-#       CentOS 7 and 8
-#       Amazon Linux 2017.09
-#       Oracle Linux 7
-#       Red Hat Enterprise Linux Server 7 and 8
-#       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
-#       SUSE Linux Enterprise Server 12, 15
-#   32-bit
-#       CentOS 7 and 8
-#       Oracle Linux 7
-#       Red Hat Enterprise Linux Server 7 and 8
-#       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the Azure Monitoring Agent documentation.
-#
-# Daemon versions:
-#   Syslog-ng: 2.1 - 3.22.1
-#   Rsyslog: v8
+# If using Python 3 make sure it's set as the default command on the machine, or run the script with the 'python3'
+# command instead of 'python'.
+
 import subprocess
 import time
 
@@ -39,6 +23,7 @@ rsyslog_old_config_udp_content = "# provides UDP syslog reception\n$ModLoad imud
 rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtcp\n$InputTCPServerRun " + daemon_default_incoming_port + "\n"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
+temp_file_path = "/tmp/rsyslog_temp_config.txt"
 
 
 def print_error(input_str):
@@ -146,12 +131,12 @@ def set_rsyslog_new_configuration():
     Sets the Rsyslog configuration to listen on port 514 for incoming requests- For new config format
     """
     with open(rsyslog_conf_path, "rt") as fin:
-        with open("tmp.txt", "wt") as fout:
+        with open(temp_file_path, "wt") as fout:
             for line in fin:
                 if "imudp" in line or "imtcp" in line:
                     # Load configuration line requires 1 replacement
                     if "load" in line:
-                        fout.write(line.replace("#", "", 1))
+                        fout.write(line.lstrip("#"))
                     # Port configuration line requires 2 replacements
                     elif "port" in line:
                         fout.write(line.replace("#", "", 2))
@@ -159,7 +144,7 @@ def set_rsyslog_new_configuration():
                         fout.write(line)
                 else:
                     fout.write(line)
-    command_tokens = ["sudo", "mv", "tmp.txt", rsyslog_conf_path]
+    command_tokens = ["sudo", "cp", temp_file_path, rsyslog_conf_path]
     write_new_content = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     time.sleep(3)
     o, e = write_new_content.communicate()
@@ -266,7 +251,7 @@ def set_syslog_ng_configuration():
     comment_line = False
     snet_found = False
     with open(syslog_ng_conf_path, "rt") as fin:
-        with open("tmp.txt", "wt") as fout:
+        with open(temp_file_path, "wt") as fout:
             for line in fin:
                 # fount snet
                 if "s_net" in line and not "#":
@@ -281,7 +266,7 @@ def set_syslog_ng_configuration():
                     comment_line = False
                 # write line correctly
                 fout.write(line if not comment_line else ("#" + line))
-    command_tokens = ["sudo", "mv", "tmp.txt", syslog_ng_conf_path]
+    command_tokens = ["sudo", "cp", temp_file_path, rsyslog_conf_path]
     write_new_content = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     time.sleep(3)
     o, e = write_new_content.communicate()
@@ -320,15 +305,24 @@ def main():
         print("Located rsyslog daemon running on the machine")
         set_rsyslog_configuration()
         restart_rsyslog()
+        print_warning("Please note that the installation script opens port 514 to listen to incoming messages in both"
+                      " UDP and TCP protocols. To change this setting, refer to the Rsyslog configuration file located at "
+                      "'/etc/rsyslog.conf'.")
     elif is_syslog_ng():
         print("Located syslog-ng daemon running on the machine")
         set_syslog_ng_configuration()
         restart_syslog_ng()
+        print_warning("Please note that the installation script opens port 514 to listen to incoming messages in both"
+                      " UDP and TCP protocols. To change this setting, refer to the Syslog-ng configuration file located at"
+                      " '/etc/syslog-ng/syslog-ng.conf'.")
     else:
         print_error(
-            "Could not detect a running Syslog daemon on the machine, aborting installation. Please make sure you have a running Syslog daemon and rerun this script.")
+            "Could not detect a running Syslog daemon on the machine, aborting installation. Please make sure you have "
+            "a running Syslog daemon and rerun this script.")
+        exit()
     print_full_disk_warning()
-    print_ok("Installation completed")
+    print_ok("Installation completed successfully")
+
 
 
 main()

@@ -24,5 +24,5 @@
 	- Table Plan
 	- Archive Days
 
-6.	Provide archiveRetention value - The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days.  
+6.	Provide archiveRetention value - The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383 days.  
 	Note: Archive retention is calculated by using archiveRetention = totalRetentionInDays - retentionInDays.
