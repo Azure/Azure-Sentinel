@@ -41,7 +41,7 @@ def main(mytimer: func.TimerRequest):
     config = get_config()
     oci.config.validate_config(config)
 
-    sentinel_connector = AzureSentinelConnector(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=2000)
+    sentinel_connector = AzureSentinelConnector(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=2000)
 
     stream_client = oci.streaming.StreamClient(config, service_endpoint=MessageEndpoint)
 
