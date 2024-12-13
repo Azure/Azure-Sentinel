@@ -25,44 +25,38 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  let dt_lookBack = 1h;
-  let ioc_lookBack = 14d;
-  let EmailUrlInfo_ = materialize(EmailUrlInfo
-  | where isnotempty(UrlDomain)
-  | where TimeGenerated > ago(dt_lookBack)
-  | project-rename Email_Url = Url);
-  let Domains = EmailUrlInfo_
-  | distinct UrlDomain
-  | summarize make_list(UrlDomain);
-  let Candidates = ThreatIntelligenceIndicator
-  | where isnotempty(DomainName)
-  | where TimeGenerated >= ago(ioc_lookBack)
-  | extend TI_Domain = tolower(DomainName)
-  | where TI_Domain in (Domains)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
-  | join kind=innerunique EmailUrlInfo_ on $left.TI_Domain == $right.UrlDomain
-  | join kind=innerunique (EmailEvents | where TimeGenerated >= ago(dt_lookBack) | project-rename EmailEvents_TimeGenerated = TimeGenerated) on $left.NetworkMessageId == $right.NetworkMessageId
-  | where DeliveryLocation !has "Quarantine"
-  // Customize and uncomment the following line to remove security related mailboxes
-  //| where tolower(RecipientEmailAddress) !in ("secmailbox1@example.com", "secmailbox2@example.com")
-  | where EmailEvents_TimeGenerated < ExpirationDateTime
-  | summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by IndicatorId, RecipientEmailAddress;
-  let Candidate_Domains = Candidates | distinct TI_Domain | summarize make_list(TI_Domain);
-  ThreatIntelligenceIndicator
-  | where isnotempty(Url)
-  | where TimeGenerated > ago(ioc_lookBack)
-  | extend Host = tostring(parse_url(Url).Host)
-  | where Host in (Candidate_Domains)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
-  | join kind=innerunique (Candidates | extend parsed_url = parse_url(Email_Url) | extend BaseUrl = strcat(parsed_url.Scheme, "://", parsed_url.Host, parsed_url.Path)) on $left.Url == $right.BaseUrl
-  | where DeliveryAction !has "Blocked"
-  | project EmailEvents_TimeGenerated, RecipientEmailAddress, IndicatorId, TI_Domain, ConfidenceScore, Description, Tags, TrafficLightProtocolLevel, Url = Email_Url, DeliveryAction, DeliveryLocation, EmailDirection, NetworkMessageId, AuthenticationDetails, SenderFromAddress, SenderIPv4, Subject
-  | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])
-  | extend timestamp = EmailEvents_TimeGenerated
+    let dt_lookBack = 1h; // Define the lookback period for email data as 1 hour
+    let ioc_lookBack = 14d; // Define the lookback period for threat intelligence data as 14 days
+    let EmailUrlInfo_ = EmailUrlInfo
+    | where isnotempty(Url) or isnotempty(UrlDomain) // Filter for non-empty URLs or URL domains
+    | where TimeGenerated >= ago(dt_lookBack) // Filter for records within the lookback period
+    | extend Url = tolower(Url), UrlDomain = tolower(UrlDomain) // Convert URLs and domains to lowercase
+    | extend EmailUrlInfo_TimeGenerated = TimeGenerated; // Create a new column for the time generated
+    let EmailEvents_ = EmailEvents
+    | where TimeGenerated >= ago(dt_lookBack); // Filter email events within the lookback period
+    let TI_Urls = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
+    | where isnotempty(Url) // Filter for non-empty URLs
+    | extend Url = tolower(Url) // Convert URLs to lowercase
+    | join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on URL
+    | where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired
+    | where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired
+    | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, Url // Get the latest email info for each indicator
+    | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, UrlLocation, NetworkMessageId; // Select relevant columns
+    let TI_Domains = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
+    | where isnotempty(DomainName) // Filter for non-empty domain names
+    | extend DomainName = tolower(DomainName) // Convert domain names to lowercase
+    | join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain // Join with email URL info on domain name
+    | where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired
+    | where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired
+    | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, UrlDomain // Get the latest email info for each indicator
+    | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId; // Select relevant columns
+    union TI_Urls, TI_Domains // Combine URL and domain threat intelligence data
+    | extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column
+    | join kind=inner (EmailEvents_) on NetworkMessageId // Join with email events on network message ID
+    | where DeliveryAction !has "Blocked" // Filter out blocked delivery actions
+    | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0]); // Extract name and UPN suffix from recipient email address
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -76,5 +70,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled

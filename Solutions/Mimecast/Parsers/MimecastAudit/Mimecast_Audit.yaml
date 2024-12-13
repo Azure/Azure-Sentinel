@@ -1,0 +1,26 @@
+id: 679b2b50-2611-4358-9686-5948587cbb47
+Function:
+  Title: Parser for MimecastAudit
+  Version: '1.0.0'
+  LastUpdated: '2024-07-08'
+Category: Microsoft Sentinel Parser
+FunctionName: MimecastAudit
+FunctionAlias: MimecastAudit
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime) [];
+    let MimecastAudit_view = view() {
+    union isfuzzy=true dummy_table,
+    Audit_CL
+    | extend ["Id"] = column_ifexists('id_s', ''),
+        ["Audit Type"] = column_ifexists('auditType_s', ''),
+        ["User"] = column_ifexists('user_s', ''),
+        ["Event Time"] = column_ifexists('eventTime_t', ''),
+        ["Event Info"] = column_ifexists('eventInfo_s', ''),
+        ["Category"] = column_ifexists('Category',''),
+        ["Time Generated"] = column_ifexists('TimeGenerated','')
+    | extend ['Event Time'] = iff( isempty( ['Event Time']) ,now() , todatetime( ["Event Time"] ))   
+    | parse-kv ["Event Info"] as (IP: string, Application:string )  with (pair_delimiter=',', kv_delimiter=':') 
+    | summarize arg_max(TimeGenerated, *) by  ["Category"] , ["Audit Type"] , ["User"] , ["Event Info"] , ["Event Time"] , ["Id"]
+    | project ["Time Generated"]  ,["Source IP"] = IP ,Application , ["Category"] , ["Audit Type"] , ["User"] , ["Event Info"] , ["Event Time"] , ["Id"]
+    };
+    MimecastAudit_view
