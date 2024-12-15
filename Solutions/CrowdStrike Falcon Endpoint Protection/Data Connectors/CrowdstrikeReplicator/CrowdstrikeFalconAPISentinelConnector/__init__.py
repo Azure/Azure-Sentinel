@@ -71,7 +71,12 @@ def _create_s3_client():
 
 
 def customize_event(line):
-    element = json.loads(line)
+    try:
+        element = json.loads(line)  # Attempt to parse the line as JSON
+    except json.JSONDecodeError as e:
+        # Log the error and skip this line
+        logging.error(f"JSON decoding error for line: {line}. Error: {str(e)}")
+        return None  # Return None so that this line will be ignored during further processing
     required_fileds = [
         "timestamp", "aip", "aid", "EventType", "LogonType", "HostProcessType", "UserPrincipal", "DomainName",
         "RemoteAddressIP", "ConnectionDirection", "TargetFileName", "LocalAddressIP4", "IsOnRemovableDisk",
@@ -198,31 +203,15 @@ async def process_file(bucket, s3_path, client, semaphore, session, retrycount):
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
-                            try:
-                                logging.info(
-                                    "retrycount before customize event: {}".format(retrycount))
-                                event = customize_event(line)
-                                logging.info(
-                                    "retrycount after customize event: {}".format(retrycount))
-                            except ValueError as e:
-                                logging.error(
-                                    'Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                                logging.info(
-                                    "retrycount before raising e: {}".format(retrycount))
-                                raise e
+                            event = customize_event(line)
+                            if event is None:  # Skip malformed lines
+                                continue
                             await sentinel.send(event)
                 s = line
             if s:
-                try:
-                    logging.info(
-                        "retrycount before customize event2: {}".format(retrycount))
-                    event = customize_event(line)
-                    logging.info(
-                        "retrycount after customize event2: {}".format(retrycount))
-                except ValueError as e:
-                    logging.error(
-                        'Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                    raise e
+                event = customize_event(line)
+                if event is None:  # Skip malformed lines
+                    return
                 await sentinel.send(event)
             await sentinel.flush()
             total_events += sentinel.successfull_sent_events_number
