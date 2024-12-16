@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM filtering parser for Cisco Meraki
-  Version: '0.1'
-  LastUpdated: Jun 20 2023
+  Version: '0.2.1'
+  LastUpdated: Jun 18, 2024
 Product:
   Name: Cisco Meraki
 Normalization:
@@ -11,11 +11,11 @@ References:
 - Title: ASIM Web Session Schema
   Link: https://aka.ms/ASimWebSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Cisco Meraki Documentation
   Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
 Description: |
-  This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Web Session normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
+  This ASIM parser supports normalizing Cisco Meraki logs ingested in 'meraki_CL' table to the ASIM Web Session normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
 ParserName: vimWebSessionCiscoMeraki
 EquivalentBuiltInParser: _Im_WebSession_CiscoMeraki
 ParserParams:
@@ -47,7 +47,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
- let ActionLookup = datatable (action: string, DvcAction: string, EventResult: string, EventSeverity: string)  [
+  let ActionLookup = datatable (action: string, DvcAction: string, EventResult: string, EventSeverity: string)  [
     'allow', 'Allow', 'Success', 'Informational',
     'log', 'Allow', 'Success', 'Informational',
     'accept', 'Allow', 'Success', 'Informational',
@@ -67,15 +67,9 @@ ParserQuery: |
       disabled: bool=false
       ) {
       let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-      let allData = union isfuzzy=true
-              (
+      let allData = (
               meraki_CL
               | project-rename LogMessage =  Message
-              ),
-              (
-              Syslog
-              | where Computer in (_ASIM_GetSourceBySourceType('CiscoMeraki'))
-              | project-rename LogMessage =  SyslogMessage
               );
       let PreFilteredData = allData
           | where not(disabled) and (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
@@ -226,14 +220,7 @@ ParserQuery: |
           _ResourceId,
           MG,
           ManagementGroupName,
-          RawData,
-          EventTime,
-          Facility,
-          HostName,
-          SeverityLevel,
-          ProcessID,
-          HostIP,
-          ProcessName
+          RawData
   };
   parser(
       starttime=starttime, 
@@ -244,5 +231,4 @@ ParserQuery: |
       httpuseragent_has_any=httpuseragent_has_any,
       eventresultdetails_in=eventresultdetails_in,
       eventresult=eventresult,
-      disabled=disabled
-  )
+      disabled=disabled)
