@@ -36,6 +36,15 @@
     "_solutionVersion": "3.0.0",
     "solutionId": "slashnext1598548183597.slashnext-weblog-assessment-for-microsoft-sentinel",
     "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "SlashNextFunctionApp",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "SlashNextFunctionApp",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
     "FunctionApp": "FunctionApp",
     "_FunctionApp": "[variables('FunctionApp')]",
     "playbookVersion1": "1.0",
@@ -72,6 +81,247 @@
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SlashNext data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "SlashNext Function App",
+                  "publisher": "SlashNext",
+                  "descriptionMarkdown": "The SlashNext function app utilizes python to perform the analysis of the raw logs and returns URLs present in the logs.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Function App Invocation Count",
+                      "legend": "Invocations",
+                      "baseQuery": "AzureMetrics | where Resource == 'SlashnextFunctionApp' and MetricName == 'FunctionExecutionCount' | summarize TotalCount = sum(Total) by bin(TimeGenerated, 1h)"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Query to fetch function execution logs",
+                      "query": "AzureDiagnostics | where Resource == 'SlashnextFunctionApp' | project TimeGenerated, OperationName, ResultType, Message"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "FunctionAppLogs",
+                      "lastDataReceivedQuery": "AzureDiagnostics | where Resource == 'SlashnextFunctionApp' | summarize LastDataReceived = max(TimeGenerated)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "FunctionApp",
+                      "value": [
+                        "SlashnextFunctionApp"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.Storage/storageAccounts",
+                        "permissionsDisplayText": "read, write, and delete permissions on the storage account are required.",
+                        "providerDisplayName": "Storage Account",
+                        "scope": "Storage Account",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Microsoft.Web/serverfarms permissions",
+                        "description": "Read and write permissions to Azure App Service Plan are required to create and manage the App Service Plan. [See the documentation to learn more about App Service Plans](https://learn.microsoft.com/azure/app-service/overview-hosting-plans)."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Follow these steps to perform custom deployment of the SlashNext function app using ARM template:\n\n1. Click this [link](https://portal.azure.com/#create/Microsoft.Template) to open the Microsoft Azure Portal for custom deployment.\n2. Under the **Select a template** tab in the **Custom deployment** section, click **Build your own template in the editor**.\n3. Copy the contents of the **azuredeploy.json ARM template file** from this [GitHub repository](https://github.com/MuhammadAli-snx/Azure-Sentinel/blob/master/Solutions/SlashNext/FunctionApp/azuredeploy.json) and paste them into the **Edit template** section.\n4. Click the **Save** button.\n5. Select the preferred **Subscription**, **Resource Group**, and **Location**.\n6. Click **Create** to deploy.",
+                      "title": "Custom Deployment Using Azure Resource Manager (ARM) Template"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SlashNext",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SlashNext",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "SlashNext",
+                  "email": "support@slashnext.com",
+                  "tier": "Partner",
+                  "link": "https://support@slashnext.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "SlashNext Function App",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SlashNext",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "SlashNext",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "SlashNext",
+          "email": "support@slashnext.com",
+          "tier": "Partner",
+          "link": "https://support@slashnext.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "SlashNext Function App",
+          "publisher": "SlashNext",
+          "descriptionMarkdown": "The SlashNext function app utilizes python to perform the analysis of the raw logs and returns URLs present in the logs.",
+          "graphQueries": [
+            {
+              "metricName": "Function App Invocation Count",
+              "legend": "Invocations",
+              "baseQuery": "AzureMetrics | where Resource == 'SlashnextFunctionApp' and MetricName == 'FunctionExecutionCount' | summarize TotalCount = sum(Total) by bin(TimeGenerated, 1h)"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "FunctionAppLogs",
+              "lastDataReceivedQuery": "AzureDiagnostics | where Resource == 'SlashnextFunctionApp' | summarize LastDataReceived = max(TimeGenerated)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "FunctionApp",
+              "value": [
+                "SlashnextFunctionApp"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Query to fetch function execution logs",
+              "query": "AzureDiagnostics | where Resource == 'SlashnextFunctionApp' | project TimeGenerated, OperationName, ResultType, Message"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.Storage/storageAccounts",
+                "permissionsDisplayText": "read, write, and delete permissions on the storage account are required.",
+                "providerDisplayName": "Storage Account",
+                "scope": "Storage Account",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Microsoft.Web/serverfarms permissions",
+                "description": "Read and write permissions to Azure App Service Plan are required to create and manage the App Service Plan. [See the documentation to learn more about App Service Plans](https://learn.microsoft.com/azure/app-service/overview-hosting-plans)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Follow these steps to perform custom deployment of the SlashNext function app using ARM template:\n\n1. Click this [link](https://portal.azure.com/#create/Microsoft.Template) to open the Microsoft Azure Portal for custom deployment.\n2. Under the **Select a template** tab in the **Custom deployment** section, click **Build your own template in the editor**.\n3. Copy the contents of the **azuredeploy.json ARM template file** from this [GitHub repository](https://github.com/MuhammadAli-snx/Azure-Sentinel/blob/master/Solutions/SlashNext/FunctionApp/azuredeploy.json) and paste them into the **Edit template** section.\n4. Click the **Save** button.\n5. Select the preferred **Subscription**, **Resource Group**, and **Location**.\n6. Click **Create** to deploy.",
+              "title": "Custom Deployment Using Azure Resource Manager (ARM) Template"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
@@ -1741,7 +1991,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "SlashNext",
         "publisherDisplayName": "SlashNext",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SlashNext/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>SlashNext URL Investigation Connector is based upon its Real-time Phishing Defense (RPD) APIs which are connected to SlashNext real-time threat intelligence database, continuously updated with the latest phishing threats. SlashNext RPD APIs are designed to be very fast and give accurate binary verdict on each enrichment request to ease its integration in any phishing Incident Response (IR) or SOAR environment.</p>\n<p><strong>Custom Azure Logic Apps Connectors:</strong> 1, <strong>Function Apps:</strong> 1, <strong>Playbooks:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SlashNext/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>SlashNext URL Investigation Connector is based upon its Real-time Phishing Defense (RPD) APIs which are connected to SlashNext real-time threat intelligence database, continuously updated with the latest phishing threats. SlashNext RPD APIs are designed to be very fast and give accurate binary verdict on each enrichment request to ease its integration in any phishing Incident Response (IR) or SOAR environment.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Custom Azure Logic Apps Connectors:</strong> 1, <strong>Function Apps:</strong> 1, <strong>Playbooks:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -1766,6 +2016,11 @@
         "dependencies": {
           "operator": "AND",
           "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
             {
               "kind": "AzureFunction",
               "contentId": "[variables('_FunctionApp')]",
