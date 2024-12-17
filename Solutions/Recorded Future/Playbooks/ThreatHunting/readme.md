@@ -7,6 +7,9 @@ Threat hunting is the proactive and iterative process of searching for and detec
 
 - <a href="https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future" target="_blank">More about Automated threat hunt</a> (requires Recorded Future login)
 
+> [!NOTE]
+> If your Recorded Future Enterprise is using [multi-org](https://support.recordedfuture.com/hc/articles/4402787600787-Multi-Org-for-Modules), then threat hunting currently does not work for sub-orgs. See [known issues](../readme.md#threat-hunting-for-multi-orgs) for more detail.
+
 # Playbooks
 
 ## RecordedFuture-ThreatMap-Importer
