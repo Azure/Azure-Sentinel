@@ -1,8 +1,8 @@
-# Windows Security Events ASIM Authentication Normalization Parser
+# Windows Events ASIM Authentication Normalization Parser
 
-ARM template for ASIM Authentication schema parser for Windows Security Events.
+ARM template for ASIM Authentication schema parser for Windows Events.
 
-This ASIM parser supports normalizing Windows Authentication events (4624, 4625, 4634, and 4647), collected either by the Log Analytics Agent or the Azure Monitor Agent, into either the WindowsEvent (WEF) or SecurityEvent tables, to the ASIM Authentication schema.
+This ASIM parser supports normalizing Windows Authentication events (4624, 4625, 4634, and 4647), collected either by the Azure Monitor Agent, into the WindowsEvent (WEF) to the ASIM Authentication schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
