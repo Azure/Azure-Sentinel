@@ -10,13 +10,10 @@ Link to [Recorded Future Identity main readme](../readme.md)
 1. [Playbooks](#playbooks)
    1. ["Connector" playbooks](#connector_playbooks)
       1. [RFI-CustomConnector](#RFI-CustomConnector)
-   1. [Base playbooks](#Base-playbooks)
-      1. [Add risky user to Microsoft EntraID Group](#RFI-add-EntraID-security-group-user)
-      1. [Microsoft EntraID Protection - confirm user is compromised](#entraid_identity_protection_confirm_user_is_compromised)
-      1. [Lookup risky user and save results](#RFI-lookup-and-save-user)
-   1. ["Search" playbooks (Workforce and External)](#search_playbooks)
-      1. [RFI-search-workforce-user](#RFI-search-workforce-user)
-      1. [RFI-search-external-user](#RFI-search-external-user)
+   1. ["Alert" playbooks](#alert_playbooks)
+      1. [RFI-playbook-alert-importer](#RFI-playbook-alert-importer)
+      1. [RFI-playbook-alert-importer-law](#RFI-playbook-alert-importer-law)
+      1. [RFI-playbook-alert-importer-law-sentinel](#RFI-playbook-alert-importer-law-sentinel)
 1. [How to configure playbooks](#configuration)
    1. [How to find the playbooks (Logic Apps) after deployment](#find_playbooks_after_deployment)
    1. [Configuring Playbooks Connections](#configuration_connections)
@@ -32,7 +29,9 @@ Link to [Recorded Future Identity main readme](../readme.md)
 <a id="overview"></a>
 ## Overview
 
-This Solution consists of 6 playbooks (Logic Apps). Due to inconsistent naming of Logic Apps in Microsoft security products like Sentinel we will use the name playbooks instead of Logic Apps in this README. The playbooks need to be installed in the following order: custom-connector, base playbooks and one of the search playbooks. 
+This Solution contains two different **sub solutions** that consists of 9 playbooks (Logic Apps). Due to inconsistent naming of Logic Apps in Microsoft security products like Sentinel we will use the name playbooks instead of Logic Apps in this README. Depending on which **sub solution** that is chosen, follow the appropriate **readme**. This **readme** is for the recommended **Novel Identity Exposures** solution. For the **Identity** solution, see this [readme](v3/readme.md)
+
+The playbooks need to be installed in the following order: custom-connector, and one of the alert playbooks. 
 
 <details>
 <summary>Expand playbook overview</summary>
@@ -46,42 +45,41 @@ Custom connector are used to communicate and authorize towards Recorded Future b
 |-|-|
 | **RFI-CustomConnector** | RFI-CustomConnector connection and authorization to Recorded Future Backend API.|
 
-Base playbooks:
-Sub playbooks that are called by the search playbooks. 
+Alert playbook:
+These are the main playbooks
 
 | Playbook Name | Description |
 |-|-|
-| **RFI-add-EntraID-security-group-user** | Add risky user to Microsoft EntraID Group for users at risk. |
-| **RFI-confirm-EntraID-risky-user** | Confirm to Microsoft EntraID Identity Protection that user is compromised. |
-| **RFI-lookup-and-save-user** | Lookup additional information on a compromised user and save results to Log Analytics. |
-
-Search playbooks:
-These are the main playbooks, select one and run on a schedule.  
-
-| Playbook Name | Description |
-|-|-|
-| **RFI-search-workforce-user** | Search new exposures for Workforce users. |
-| **RFI-search-external-user** | Search new exposures for External users. |
+| **RFI-playbook-alert-importer** | Search new exposures for Workforce users. Choose this one if only Entra ID is available |
+| **RFI-playbook-alert-importer-law** | Search new exposures for Workforce users. Choose this one if Entra ID  and Log Analytics Workspace (LAW) is available |
+| **RFI-playbook-alert-importer-law-sentinel** | Search new exposures for Workforce users. Choose this one if Entra ID, Log Analytics Workspace (LAW) and Microsoft Sentinel is available  |
 </details>
 
 ## Deployment
 
-Recorded Future recommend deploying playbooks in this solution from this README, first the connector and then the base playbooks. Deploy search playbook dependent on your use case. After installation configure connectors inside of each playbook. Lastly configure playbook parameters in the search playbook. 
+Recorded Future recommend deploying playbooks in this solution from this README, first the connector and then deploy a playbook dependent on your use case. After installation configure connectors inside of the playbook. Lastly configure playbook parameters in the playbook. 
 
 ### Prerequisites
 
-- A Microsoft EntraID Tenant and subscription. 
+- A Microsoft EntraID Tenant and subscription.
+- For the Entra ID connector, the permissions required for the user that authorizes the connector are `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a> 
 - Azure subscription Owner or Contributor permissions so you can install the Logic Apps. [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
-- A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these logic apps will be created automatically if they don’t already exist. Note the name of the Log Analytic Workspace, it will be used at a later stage of the deployment.
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
+
 - For `Recorded Future Identity` Connections you will need `Recorded Future Identity API` token. To obtain one - check out [this section](#how_to_obtain_Recorded_Future_API_token).
+- Configure `Recorded Future Identity Exposure Playbook Alerts` for your use case, detailed information on how to - view this <a href="https://support.recordedfuture.com/hc/en-us/articles/21314816259859-Identity-Exposure-Playbook-Alert-Configuration" target="_blank"> guide </a>(requires Recorded Future login)
+
+#### Optional prerequisites
+These prerequisites is required for the playbooks **RFI-playbook-alert-importer-law** and **RFI-playbook-alert-importer-law-sentinel**
+- A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these logic apps will be created automatically if they don’t already exist. Note the name of the Log Analytic Workspace, it will be used at a later stage of the deployment.
+- During installation, the person performing the installations of the playbooks require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level, 
 
 
 <a id="playbooks"></a>
 ## Playbooks
 
 > [!IMPORTANT]
-> Deploy connector and base playbooks before deploying the Search playbooks. 
+> Deploy connector before deploying the alert importer playbooks. 
 
 <a id="connector_playbooks"></a>
 ### Connector-playbooks
@@ -94,8 +92,8 @@ This connector is used by other playbooks in this solution to communicate with R
 
 ### Deployment
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-CustomConnector-0-1-0%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-CustomConnector-0-1-0%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-CustomConnector-0-2-0%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-CustomConnector-0-2-0%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -105,37 +103,37 @@ This connector is used by other playbooks in this solution to communicate with R
 | **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Connector-Name**  | Connector name to use for this playbook (ex. "RFI-CustomConnector-0-1-0"). |
+| **Connector-Name**  | Connector name to use for this playbook (ex. "RFI-CustomConnector-0-2-0"). |
 |**Service Endpoint**| API Endpoint, always use the default ```https://api.recordedfuture.com/gw/azure-identity```| 
 </details>
 <hr/>
 
-## Base-playbooks
+<a id="alert_playbooks"></a>
 
-Base playbooks is called within the search playbooks to take action and mitigate the risks.
+## Alert Playbooks
 
-## RFI-add-EntraID-security-group-user
-
-This playbook adds a compromised user to an Microsoft EntraID group. Triage and remediation should be handled in sub playbooks. 
-By applying security policies to the Microsoft EntraID group and adding leaked users to that group - you can react to a leak and mitigate the risks.
+Search the Recorded Future Identity Intelligence Module for compromised identities, depending on use case, select the playbook that fits.
 
 <details>
-<summary> 
-Expand Playbook Workflow
-</summary>
+<summary> Workflow of Alert Playbooks</summary>
 
 | # | Action |
 |-|-|
-| 1 | Called by search playbooks. |
-| 2 | From `user_principal_name` (email or email username + Entra ID domain if it is not empty). |
-| 3 | Get user from EntraID by `user_principal_name`. |
-| 4 | Add user to EntraID security group. |
+| 1 | Pull novel identity exposures from Recorded Future Identity API based on previously done Playbook Alert setup |
+| 2 | For each user, check if they exist within the domain, if so, place them in a specified security group, if they are placed within in "Risky users" list, confirm them as risky.|
+| 3 | (Optional) Save all information related to the Playbook Alert in Log Analytics Workspace|
+| 3 | (Optional) Create a Microsoft Sentinel incident with information pertaining the identity exposure|
+| 4 | Report back actions taken for each specific Playbook Alert, for viewing in Recorded Future Portal|
+
 </details>
 
-### Deployment
+Depending on use case, choose the playbook that fits. The `RFI-playbook-alert-importer` playbook contains the base use case, ingesting novel identity exposures and remediation of those exposures trough Entra ID. `RFI-playbook-alert-importer-law` extends previous functionality by saving detailed information to a Log Analytics Workspace (LAW). Lastly, `RFI-playbook-alert-importer-law-sentinel` does all of the above and creates a **Microsoft Sentinel** incident, for easier investigation and follow up.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-add-EntraID-security-group-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-add-EntraID-security-group-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a id="RFI-playbook-alert-importer"></a>
+### Deployment RFI-playbook-alert-importer
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -145,40 +143,18 @@ Expand Playbook Workflow
 | **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook-Name** | Playbook name to use for this playbook (ex. "RFI-add-EntraID-security-group-user"). |
+| **Playbook Name** | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer"). |
+|**Active_directory_security_group_id**| ID of the the group in which to place risky users|
+|**Active_directory_domain**| (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
+|**RFI Custom Connector**| Name of the custom connector which to connect to Recorded Future with, should not deviate from "RFI-CustomConnector-0-2-0"|
 </details>
 <hr/>
 
-<a id="entraid_identity_protection_confirm_user_is_compromised"></a>
+<a id="RFI-playbook-alert-importer-law"></a>
+### Deployment RFI-playbook-alert-importer-law
 
-## RFI-confirm-EntraID-risky-user
-
-This playbook confirms compromise of users deemed "high risk" by Microsoft Entra ID Protection.
-
-For more info on Microsoft EntraID Protection, read here: 
-- [Microsoft Entra ID Protection](https://learn.microsoft.com/en-gb/entra/id-protection/) 
-- [What is Identity Protection](https://learn.microsoft.com/en-gb/entra/id-protection/overview-identity-protection)
-- [Remediate risks and unblock users](https://learn.microsoft.com/en-gb/entra/id-protection/howto-identity-protection-remediate-unblock).
-
-Note that this playbook only runs on already flagged risky users. If a user isn't flagged as a risky user by Entra ID Protection, this playbook won't do anything.
-
-<details>
-<summary> 
-Expand Playbook Workflow
-</summary>
-
-| # | Action |
-|-|-|
-| 1 | Called by search playbooks. |
-| 2 | Get user from Microsoft EntraID by `user_principal_name`. |
-| 3 | Check if Microsoft EntraID Identity Protection contains the user in a list of risky users. |
-| 4 | Confirm to Microsoft EntraID Identity Protection that user is compromised. |
-</details>
-
-### Deployment
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-confirm-EntraID-risky-user%2Fazuredeploy.json" target="_blank" >![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-confirm-EntraID-risky-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -188,32 +164,20 @@ Expand Playbook Workflow
 | **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RFI-confirm-EntraID-risky-user"). |
+| **Playbook Name** | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW"). |
+|**Save_to_log_analytics_workspace**|Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
+|**Active_directory_security_group_id**| ID of the the group in which to place risky users|
+|**Active_directory_domain**| (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
+|**Playbook_alert_log_analytics_custom_log_name**|Name of the custom log in Log Analytics Workspace, defaults to "RecordedFutureIdentity_PlaybookAlertResults_CL"|
+|**RFI Custom Connector**| Name of the custom connector which to connect to Recorded Future with, should not deviate from "RFI-CustomConnector-0-2-0"|
 </details>
 <hr/>
 
-## RFI-lookup-and-save-user
+<a id="RFI-playbook-alert-importer-law-sentinel"></a>
+### Deployment RFI-playbook-alert-importer-law-sentinel
 
-This playbook gets compromised identity details from Recorded Future Identity Intelligence and saves the data in Azure Log Analytics Workspace for further review and analysis.
-
-Lookup returns more data than initial Search, so you will get the leaks history for the email and other info.
-
-<details>
-<summary> 
-Expand Playbook Workflow
-</summary>
-
-| # | Action |
-|-|-|
-| 1 | Called by search playbooks. |
-| 2 | Pull data from Recorded Future Identity API for specified email and time range. |
-| 3 | Save Lookup results to Log Analytics Custom Log. |
-</details>
-
-### Deployment
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-lookup-and-save-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-lookup-and-save-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW-Sentinel%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW-Sentinel%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -223,69 +187,13 @@ Expand Playbook Workflow
 | **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RFI-lookup-and-save-user"). |
-</details>
-<hr/>
-
-<a id="search_playbooks"></a>
-
-## Search playbooks (Workforce and External)
-
-Search the Recorded Future Identity Intelligence Module for compromised workforce or external users.
-
-<details>
-<summary> Workflow of Search Playbooks (both Workforce and External use cases)</summary>
-
-| # | Action |
-|-|-|
-| 1 | Pull data from Recorded Future Identity API for specified domain and time range (can be "workforce" or "external" use case). |
-| 2 | Pull previously seen/saved leaks data from Log Analytics Custom Log. |
-| 3 | Compare data from step 1 and step 2 - to determine which leaks are new and haven't been seen previously by the Search Playbook. |
-| 4 | Save the new leaks from step 3, so on the next run of the Search Playbook we would get that data on step 2. |
-| 5 | Use Base Playbooks to react / take actions on the newly leaked credentials. |
-</details>
-
-External search playbook - will get data from Recorded Future on your clients leaks. The most valuable base playbook is "Lookup risky user and save results", as "Add risky user to Microsoft EntraID Group" and "Microsoft EntraID Identity Protection - confirm user is compromised" assumes that the leaked email is a user in your organization Microsoft EntraID, which is not true for External use case.
-
-<a id="RFI-search-workforce-user"></a>
-### Deployment RFI-search-workforce-user
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-search-workforce-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-search-workforce-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
-
-<details>
-<summary>Expand deployment parameters:</summary>
-
-| Parameter | Description |
-|-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook-Name** | Playbook name to use for this playbook (ex. "RFI-search-workforce-user"). |
-| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RFI-add-EntraID-security-group-user" playbook. |
-| **Playbook-Name-confirm-EntraID-risky-user** | Playbook name to use for "RFI-confirm-EntraID-risky-user" playbook. |
-| **Playbook-Name-lookup-and-save-user** | Playbook name to use for "RFI-lookup-and-save-user" playbook. |
-</details>
-<hr/>
-
-<a id="RFI-search-external-user"></a>
-### Deployment RFI-search-external-user (Service Providers or MSSPs)
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-search-external-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-search-external-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
-
-<details>
-<summary>Expand deployment parameters:</summary>
-
-| Parameter | Description |
-|-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook-Name** | Playbook name to use for this playbook (ex. "RFI-search-external-user"). |
-| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RFI-add-EntraID-security-group-user" playbook. |
-| **Playbook-Name-confirm-EntraID-risky-user** | Playbook name to use for "RFI-confirm-EntraID-risky-user" playbook.                                                                                     |
-| **Playbook-Name-lookup-and-save-user** | Playbook name to use for "RFI-lookup-and-save-user" playbook. |
+| **Playbook Name** | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW-Sentinel"). |
+|**Save_to_log_analytics_workspace**|Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
+|**Active_directory_security_group_id**| ID of the the group in which to place risky users|
+|**Create_incident**|Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
+|**Active_directory_domain**| (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
+|**Playbook_alert_log_analytics_custom_log_name**|Name of the custom log in Log Analytics Workspace, defaults to "RecordedFutureIdentity_PlaybookAlertResults_CL"|
+|**RFI Custom Connector**| Name of the custom connector which to connect to Recorded Future with, should not deviate from "RFI-CustomConnector-0-2-0"|
 </details>
 <hr/>
 
@@ -300,21 +208,78 @@ To find installed Playbooks (Logic Apps) after deployment - you can search for `
 
 After deployment - create/validate the Connections in each of deployed Playbooks. The logic app will have errors and save is disabled until all connectors are authorized.
 
-<img src="./images/playbookauth.png" alt="Logic Apps Parameters #1" width="70%"/>
+<img src="./images/playbookauth2.png" alt="Logic Apps Parameters #1" width="70%"/>
 
 
 <a id="API-connector-authorization"></a>
 ### API connector authorization
-The Recorded Future identity solution uses the following connectors. Information on how to authorize connectors is documented in the provided links. Playbooks use connectors that have to be individually authorized during deployment.  
+The Recorded Future identity solution uses the following connectors, some are required and and some optional. Information on how to authorize connectors is documented in the provided links. Playbooks use connectors that have to be individually authorized during deployment.  
 
 | Connector | Description |
 |-|-|
-| **/recordedfutureidenti** | [Microsoft power platform connector](https://learn.microsoft.com/en-us/connectors/recordedfutureidenti/).<br/> [How to obtain Recorded Future API token](#how_to_obtain_Recorded_Future_API_token) |
-| **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](Connectors/RecordedFuture-CustomConnector/readme.md) <br/> Same API token as the recordedfutureidenti connector. |
-| **/azureloganalyticsdatacollector** | [Azure Log Analytics Data Collector](https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/) <br/> [How to find Log Analytics Workspace key.](https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id) 
-| **/azuremonitorlogs** | [Azure Monitor Logs](https://learn.microsoft.com/en-us/connectors/azuremonitorlogs/) |
+| **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](Connectors/RecordedFuture-CustomConnector/readme.md) <br/> [How to obtain Recorded Future API token](#how_to_obtain_Recorded_Future_API_token) |
 | **/azuread** | [Microsoft Entra ID power platform connectors](https://learn.microsoft.com/en-us/connectors/azuread/). |
 | **/azureadip** | [Azure AD Identity Protection](https://learn.microsoft.com/en-us/connectors/azureadip/) |
+| **/azureloganalyticsdatacollector** (Optional) | [Azure Log Analytics Data Collector](https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/) <br/> [How to find Log Analytics Workspace key.](https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id) 
+| **/azuresentinel** (Optional)| <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors </a> |
+
+
+Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type. 
+
+Below are guides that a tailored to our recommended authorization flow (Managed Identity), depending on organizational rules, the flow might be different. Please consult with your Azure administrator in those cases. Multi-tenant authorizations are untested, please consult with your Azure administrators for proper authorization flow.
+<details>
+<summary>Expand to see rfi-custom-connector authorization guide</summary>
+
+<br>
+
+After a logic app has been installed, the **Recorded Future Connector V2** needs to be authorized. This only needs to be done once. If there are any uncertainties expand all nodes in the logic app after installation and look for blocks marked with a warning sign.
+
+1. Go to the specific logic app,  in the left menu click on the section _**Development tools**_
+2. Click on **_API connections_**
+3. Click on **_RFI-CustomConnector-0-2-0_**
+4. Click on **_General_** in the left menu on the newly opened section
+5. Click on **_Edit API Connection_**
+6. Paste the **Recorded Future API Key** and click **_Save_**   
+
+![apiconnection](images/apiconnection.png)
+
+</details>
+<br>
+
+***Optional connectors***
+<details>
+<summary>Expand to see azuresentinel managed identity authorization guide</summary>
+
+<br>
+
+The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner (with highest permissions)** or **Role Based Access Control Administrator** on resource group level. 
+
+For more detailed information check out this Micrsoft <a href="https://learn.microsoft.com/en-us/azure/logic-apps/authenticate-with-managed-identity?tabs=consumption" target="_blank">guide</a>
+
+These steps will be needed for each logic app that uses the **azuresentinel** / **RecordedFuture-MicrosoftSentinelConnection**
+1. Go to the specific logic app,  in the left menu click on the section _**Settings**_
+2. Click on _**Identity**_
+2. Click on the _**System Assinged**_ tab at the top of the page
+3. If needed, Toggle the _**Status**_ to _**On**_ then click _**Save**_
+![managedidentity1](images/managedidentity1.png)
+4. Click on _**Azure role assignments**_
+5. Click on _**Add new role assignment (Preview)**_
+6. Set _**Scope**_ to _**Resource Group**_, choose **Subscription**, choose the **Resource Group** in which the logic app is installed on and set the _**Role**_ to _**Microsoft Sentinel Contributor**_
+![managedidentity2](images/managedidentity2.png)
+
+7. Click _**Save**_
+
+</details>
+<details>
+<summary>Expand to see azureloganalyticsdatacollector managed identity authorization guide</summary>
+
+<br>
+
+1. Identify your **Workspace ID** and **Workspace Key**, for guidance, see <a href="https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id" target="_blank">this</a>
+1. Follow the steps outlined in the **azuresentinel** authorization guide
+2. Add the role _**Log Analytics Contributor**_ instead of _**Microsoft Sentinel Contributor**_
+
+</details>
 
 <a id="how_to_obtain_Recorded_Future_API_token"></a>
 ### How to obtain Recorded Future API token
@@ -322,15 +287,17 @@ The Recorded Future identity solution uses the following connectors. Information
 Recorded Future clients interested in API access for custom scripts or to enable a paid integration can request an API Token via this [Integration Support Ticket form](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens).  Please fill out the following fields, based on intended API usage.
 
 <details>
-<summary>Expand for example image of request form.</summary> 
+<summary>Expand for example image of request form. CHANGE IMAGE</summary> 
+
+**CHANGE IMAGE**
 
 ![API request form](images/APIRequest.png)
 </details>
 Select:
 
-- Recorded Future API Services - Identity API
+- Recorded Future API Services - Playbook Alert API
 - Integration Partner Category - Recorded Future Owned Integrations (Premier)
-- Premier Integration - Recorded Future Identity Intelligence for Azure Active Directory (Entra ID)
+- Premier Integration - Recorded Future Identity Intelligence for Azure Active Directory (Entra ID) **DOUBLE CHECK**
 - Select Your Type of Inquiry (optional) - New Installation
 
 Recorded Future Support will connect with your account team to confirm licensing and ensure the token is set up with the correct specifications and permissions. Additional questions about API token requests not covered by the above can be sent via email to our support team, support@recordedfuture.com.
@@ -341,52 +308,31 @@ Recorded Future Support will connect with your account team to confirm licensing
 
 Search playbooks are configured using Playbooks Parameters. Parameters can be found and set in the Logic App designer.
 
-<img src="./images/playbookparameters.png" alt="Logic Apps Parameters #1" width="80%"/>
+<img src="./images/playbookparameters2.png" alt="Logic Apps Parameters #1" width="80%"/>
 
-
+Example shows all parameters, number of parameters depends on playbook used
 
 ### Playbook parameters for Search Playbooks.
 
 - **You need to create a Microsoft EntraID Group, and provide the Object ID as a parameter to the Playbook. For more information, see [Microsoft EntraID Groups](https://learn.microsoft.com/en-us/entra/fundamentals/how-to-manage-groups) documentation.**
-- **You need to create a Log Analytics Workspace and provide the ID as a parameter to the playbook.**
-- **Recorded Future must be authorize `organization_domain` to search for connected to the API Tokens. This is done during the API request process** 
- 
-> [!IMPORTANT]
-> Make sure to set `lookup_lookback_days` same or larger than `search_lookback_days`. Otherwise, you can encounter a situation when you get empty results on Lookup for the compromised credentials from the search. 
 
 | Parameter | Description | 
 |-|-|
-| **organization_domain** | Organization domain to search exposures for. |
-| **search_lookback_days** | Time range for Search / number of days before today to search (e.g. input "-14" to search the last 14 days). |
-| **malware_logs_log_analytics_custom_log_name** | Name for Log Analytics Custom Log to save Credential Dumps Search results at (**needs to end with "`_CL`"**). |
-| **credential_dumps_log_analytics_custom_log_name** | Name for Log Analytics Custom Log to save Malware Logs Search results at (**needs to end with "`_CL`"**).  |
 | **active_directory_security_group_id** | Object ID of Microsoft EntraID Group for users at risk. You need to pre-create it by hand: search for "Groups" in Service search at the top of the page. For more information, see [Microsoft EntraID Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation. |
-| **lookup_lookback_days**  | Time range for Lookup / number of days before today to search (e.g. input "-14" to search the last 14 days). **Make sure to use `lookup_lookback_days` same or larger than `search_lookback_days`. Otherwise you can encounter a situation when you get empty results on Lookup for the compromised credentials from the Search.** |
-| **lookup_results_log_analytics_custom_log_name**   | Name for Log Analytics Custom Log to save Lookup results at (**needs to end with "`_CL`"**). |
 | **active_directory_domain** | (Optional, can be left empty) - in case your Microsoft EntraID domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Microsoft EntraID (ex. Compromised email: leaked@mycompany.com), your Microsoft EntraID domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Microsoft EntraID: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
+| **save_to_log_analytics_workspace** |(Optional, requires Log Analytics Workspace) - Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
+| **create_incident** | (Optional, requires Microsoft Sentinel) - Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
+|**playbook_alert_log_analytics_custom_log_name**| (Optional, requires Log Analytics Workspace) - Name of custom log where detailed Playbook Alert lookup information will be stored. Defaults to `RecordedFutureIdentity_PlaybookAlertResults_CL`|
 
-Playbook parameters for Search playbook "External use case" are the same as for "Workforce use case", except "External use case" does NOT need `credential_dumps_log_analytics_custom_log_name` parameter.
 
 <br/>
-
-Remove base playbook steps from search playbooks if the actions are not valid for your use case. Actions like set user as risky requires additional licensing from Microsoft (RFI-confirm-EntraID-risky-user).
-
-<img src="./images/BasePlaybooks.png" alt="Logic Apps Parameters #1" width="80%"/>
 
 <a id="how_to_run_playbooks"></a>
 ## How to run Playbooks
 
-RFI-search-workforce-user or/and RFI-search-external-user are running on recurrence schedule. It's possible to reschedule or change interval.
+RFI-playbook-alert-importer (-law/-law-sentinel) are running on recurrence schedule. It's possible to reschedule or change interval.
 
-<img src="./images/runningPlaybooks.png" alt="Empty Lookup results" width="60%"/>
-
-<a id="suggestions_for_advanced_users"></a>
-
-## Suggestions for advanced users
-
-- You can add more advanced control of compromised Microsoft EntraID users using GraphQL API, which allows you to force a user to reset a password, etc. But it requires some additional Azure skills (secrets handling, etc).
-- As Search and Lookup data is stored in Log Analytics Custom Log - you can create / set up custom Sentinel Alerts on that data.
-- In current implementation Search request gets only 500 records per request. You can request more records using the "Results" parameter. You can create a loop and use the "Offset" parameter in Search to request all the records using pagination. It's better to process/react on compromised credentials "on the go" in the same loop cycle you retrieved them.
+<img src="./images/runningPlaybooks2.png" alt="Empty Lookup results" width="90%"/>
 
 <a id="how_to_access_log_analytics_custom_logs"></a>
 ## How to access Log Analytics Custom Logs
