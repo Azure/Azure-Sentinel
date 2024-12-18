@@ -41,7 +41,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "GoogleCloudPlatformDNS",
-    "_solutionVersion": "3.0.0",
+    "_solutionVersion": "3.0.1",
     "solutionId": "azuresentinel.azure-sentinel-solution-gcpdns",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "GCPDNSDataConnector",
@@ -53,6 +53,13 @@
     "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','GCPCloudDNS')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'GCPCloudDNS')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('GCPCloudDNS-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "GCPCloudDNS-Parser"
+    },
     "workbookVersion1": "1.0.0",
     "workbookContentId1": "GCPDNSWorkbook",
     "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
@@ -199,7 +206,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GoogleCloudPlatformDNS data connector with template version 3.0.0",
+        "description": "GoogleCloudPlatformDNS data connector with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -544,13 +551,145 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "GCPCloudDNS Data Parser with template version 3.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Parser for GCPCloudDNS",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "GCPCloudDNS",
+                "query": "let DNSQuery_GcpDns=()\n{\n    GCP_DNS_CL\n    | project-rename\n        Query=payload_queryName_s, \n        QueryTypeName=payload_queryType_s,\n        ResponseName=payload_rdata_s, \n        EventResultDetails=payload_responseCode_s,\n        NetworkProtocol=payload_protocol_s, \n        SrcIpAddr=payload_sourceIP_s,\n        EventOriginalUid=insert_id_s,\n        EventSeverity=severity_s   \n    | extend\n        EventCount=int(1),\n        EventProduct='Cloud DNS',\n        EventVendor='GCP',\n        EventSchemaVersion=\"0.1.0\",\n        Dvc=\"GCPDNS\",\n        EventType = iif (resource_type_s == \"dns_query\", \"lookup\", resource_type_s),\n        EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),\n        EventSubType='response',\n        EventEndTime=todatetime(timestamp_t)       \n    // -- Aliases\n    | extend \n        ResponseCodeName=EventResultDetails, \n        Domain=Query,\n        IpAddr=SrcIpAddr,\n        EventStartTime = EventEndTime\n};\nDNSQuery_GcpDns\n",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'GCPCloudDNS')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "GoogleCloudPlatformDNS",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "Parser for GCPCloudDNS",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "Parser for GCPCloudDNS",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "GCPCloudDNS",
+        "query": "let DNSQuery_GcpDns=()\n{\n    GCP_DNS_CL\n    | project-rename\n        Query=payload_queryName_s, \n        QueryTypeName=payload_queryType_s,\n        ResponseName=payload_rdata_s, \n        EventResultDetails=payload_responseCode_s,\n        NetworkProtocol=payload_protocol_s, \n        SrcIpAddr=payload_sourceIP_s,\n        EventOriginalUid=insert_id_s,\n        EventSeverity=severity_s   \n    | extend\n        EventCount=int(1),\n        EventProduct='Cloud DNS',\n        EventVendor='GCP',\n        EventSchemaVersion=\"0.1.0\",\n        Dvc=\"GCPDNS\",\n        EventType = iif (resource_type_s == \"dns_query\", \"lookup\", resource_type_s),\n        EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),\n        EventSubType='response',\n        EventEndTime=todatetime(timestamp_t)       \n    // -- Aliases\n    | extend \n        ResponseCodeName=EventResultDetails, \n        Domain=Query,\n        IpAddr=SrcIpAddr,\n        EventStartTime = EventEndTime\n};\nDNSQuery_GcpDns\n",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": ""
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'GCPCloudDNS')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "GoogleCloudPlatformDNS",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Microsoft",
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "link": "https://support.microsoft.com/"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('workbookTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNS Workbook with template version 3.0.0",
+        "description": "GCPDNS Workbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -638,7 +777,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSDataExfiltration_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSDataExfiltration_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -666,10 +805,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -680,22 +819,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -751,7 +890,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSExchangeAutodiscoverAbuse_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSExchangeAutodiscoverAbuse_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -779,10 +918,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -795,22 +934,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -866,7 +1005,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSCVE-2021-40444_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSCVE-2021-40444_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -894,10 +1033,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -908,22 +1047,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -979,7 +1118,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSIpCheck_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSIpCheck_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -1007,10 +1146,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1021,22 +1160,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1092,7 +1231,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSIpDynDns_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSIpDynDns_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -1120,10 +1259,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1134,22 +1273,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1205,7 +1344,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSMaliciousPythonPackages_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSMaliciousPythonPackages_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
@@ -1233,10 +1372,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1247,22 +1386,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1318,7 +1457,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSMultipleErrorsFromIp_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSMultipleErrorsFromIp_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
@@ -1346,10 +1485,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1360,13 +1499,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1422,7 +1561,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSMultipleErrorsQuery_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSMultipleErrorsQuery_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject8').analyticRuleVersion8]",
@@ -1450,10 +1589,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1464,22 +1603,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1535,7 +1674,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSPrintNightmare_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSPrintNightmare_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject9').analyticRuleVersion9]",
@@ -1563,10 +1702,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1577,22 +1716,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1648,7 +1787,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSSIGREDPattern_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSSIGREDPattern_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject10').analyticRuleVersion10]",
@@ -1676,10 +1815,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1690,13 +1829,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1752,7 +1891,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSUNC2452AptActivity_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "GCPDNSUNC2452AptActivity_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject11').analyticRuleVersion11]",
@@ -1780,10 +1919,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "GCPDNSDataConnector",
                     "dataTypes": [
                       "GCPCloudDNS"
-                    ],
-                    "connectorId": "GCPDNSDataConnector"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -1794,22 +1933,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DNSCustomEntity",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1865,7 +2004,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSErrors_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSErrors_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
@@ -1950,7 +2089,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSIpLookup_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSIpLookup_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject2').huntingQueryVersion2]",
@@ -2035,7 +2174,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSOnlineShares_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSOnlineShares_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject3').huntingQueryVersion3]",
@@ -2120,7 +2259,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSRareDomains_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSRareDomains_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject4').huntingQueryVersion4]",
@@ -2205,7 +2344,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSRareErrors_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSRareErrors_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject5').huntingQueryVersion5]",
@@ -2290,7 +2429,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSRequestToTOR_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSRequestToTOR_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject6').huntingQueryVersion6]",
@@ -2375,7 +2514,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSServerLatency_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSServerLatency_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject7').huntingQueryVersion7]",
@@ -2460,7 +2599,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSSourceHighErrors_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSSourceHighErrors_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject8').huntingQueryVersion8]",
@@ -2545,7 +2684,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSUnexpectedTLD_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSUnexpectedTLD_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject9').huntingQueryVersion9]",
@@ -2630,7 +2769,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSUnusualTLD_HuntingQueries Hunting Query with template version 3.0.0",
+        "description": "GCPDNSUnusualTLD_HuntingQueries Hunting Query with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject10').huntingQueryVersion10]",
@@ -2711,12 +2850,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "GoogleCloudPlatformDNS",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/GoogleCloudPlatformDNS/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Google Cloud Platform DNS solution  provides the capability to ingest <a href=\"https://cloud.google.com/dns/docs/monitoring#using_logging\">Cloud DNS query logs</a> and <a href=\"https://cloud.google.com/dns/docs/audit-logging\">Cloud DNS audit logs</a> into Microsoft Sentinel using the <a href=\"https://cloud.google.com/logging/docs/api\">GCP Logging</a> API. Refer to GCP Logging <a href=\"https://cloud.google.com/logging/docs/api\">API documentation</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs</p>\n<ol type=\"a\">\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api\">Azure Monitor HTTP Data Collector API</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions </a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 11, <strong>Hunting Queries:</strong> 10</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/GoogleCloudPlatformDNS/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Google Cloud Platform DNS solution  provides the capability to ingest <a href=\"https://cloud.google.com/dns/docs/monitoring#using_logging\">Cloud DNS query logs</a> and <a href=\"https://cloud.google.com/dns/docs/audit-logging\">Cloud DNS audit logs</a> into Microsoft Sentinel using the <a href=\"https://cloud.google.com/logging/docs/api\">GCP Logging</a> API. Refer to GCP Logging <a href=\"https://cloud.google.com/logging/docs/api\">API documentation</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs</p>\n<ol type=\"a\">\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api\">Azure Monitor HTTP Data Collector API</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions </a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 11, <strong>Hunting Queries:</strong> 10</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -2745,6 +2884,11 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId1')]",
               "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
             },
             {
               "kind": "Workbook",

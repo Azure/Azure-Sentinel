@@ -1,0 +1,389 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Illumio Get Ven Details Playbook",
+        "description": "This playbook leverages Illumio workloads API to enrich IP, Hostname and Labels, found in Microsoft Sentinel alerts.  <img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/Illumio-Get-Ven-Details/Images/illumio-get-ven-details-playbook.png\"/>.",
+        "prerequisites": [
+            "To use this playbook, ensure that you have valid API key and secret, org id and pce fqdn. Ensure that you deploy the template with the required context."
+        ],
+        "postDeployment": [
+            "After deployment open the playbook in edit mode and configure/authorize all connections and press save. <img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/Illumio-Get-Ven-Details/Images/illumio-get-ven-details-playbook.png\"/>"
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2024-11-21T00:00:00.000Z",
+        "entities": [
+            "ip",
+            "host"
+        ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Illumio"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Illumio Get Ven Details",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Illumio-Ven-Details",
+            "type": "String",
+            "metadata": {
+                "description": "PlayBook Name"
+            }
+        },
+        "DeployersUserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "FunctionAppName": {
+            "defaultValue": "illumiopbfuncapp",
+            "type": "String",
+            "metadata": {
+                "description": "Function app Name"
+            }
+        }
+    },
+    "variables": {        
+        "o365ConnectionName": "[concat('o365-', parameters('PlaybookName'))]",
+        "sentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('o365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('DeployersUserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('sentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('DeployersUserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "location": "[resourceGroup().location]",
+            "name": "[parameters('PlaybookName')]",
+            "dependsOn": [            
+                "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "IllumioVenDetails-fetchVenDetails": {
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@triggerBody()",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/fetchVenDetails')]"
+                                }
+                            },
+                            "runAfter": {
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "IllumioVenDetails-fetchVenDetails": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "varStyle",
+                                        "type": "object",
+                                        "value": {
+                                            "cellStyle": "style=\"font-family: Calibri; padding: 5px; border: 1px solid black;\"",
+                                            "headerStyle": "style=\"font-family: Helvetica; padding: 5px; border: 1px solid black;\"",
+                                            "numcellStyle": "style=\"font-family: Calibri; padding: 5px; border: 1px solid black;text-align: center;\"",
+                                            "rowStyleHighValues": "style=\"font-size:110%;background-color:#b32400; padding: 5px; border: 1px solid black;text-align: center;\"",
+                                            "rowStyleInfoValues": "style=\"background-color:#a6a6a6; padding: 5px; border: 1px solid black;text-align: center;\"",
+                                            "rowStyleLowValues": "style=\"background-color:#ffcc00; padding: 5px; border: 1px solid black;text-align: center;\"",
+                                            "rowStyleMedValues": "style=\"background-color:#ff6600; padding: 5px; border: 1px solid black;text-align: center;\"",
+                                            "tableStyle": "style=\"border-collapse: collapse;\""
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_1": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "varHTMLTable",
+                                        "type": "string",
+                                        "value": "<table @{variables('varStyle').tableStyle}>\n   <tr>\n     <th @{variables('varStyle').headerStyle}>Created Time</th>\n     <th @{variables('varStyle').headerStyle}>Title</th>\n     <th @{variables('varStyle').headerStyle}>Severity</th>\n     <th @{variables('varStyle').headerStyle}>Description</th>\n   </tr>"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_2": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "varSeverityColour",
+                                        "type": "string",
+                                        "value": "@triggerBody()?['Severity']"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_3": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('IllumioVenDetails-fetchVenDetails')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "response": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "public_ip": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "hostname": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "labels": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "href": {
+                                                                    "type": "string"
+                                                                },
+                                                                "key": {
+                                                                    "type": "string"
+                                                                },
+                                                                "value": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "href",
+                                                                "key",
+                                                                "value"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "public_ip",
+                                                    "hostname",
+                                                    "labels"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "For_each": {
+                            "type": "Foreach",
+                            "foreach": "@body('Parse_JSON')?['response']",
+                            "actions": {
+                                "Append_to_string_variable": {
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "EntityTable",
+                                        "value": "<tr>\n     <td @{variables('varStyle').cellStyle}>@{item()?['public_ip']}</td>\n     <td @{variables('varStyle').cellStyle}>@{item()?['hostname']}</td>       \n     <td @{variables('varStyle').cellStyle}>@{item()?['labels']}</td>               \n</tr>"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Append_to_string_variable_2": {
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "varHTMLTable",
+                                "value": "</table>"
+                            },
+                            "runAfter": {
+                                "Append_to_string_variable_1": [
+                                    "SUCCEEDED"
+                                ]
+                            }
+                        },
+                        "Condition": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Parse_JSON')?['response'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "Send_an_email_(V2)": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "To": "user@domain.com",
+                                            "Subject": "Microsoft Sentinel: @{triggerBody()?['AlertDisplayName']}",
+                                            "Body": "<p class=\"editor-paragraph\">In the following, is more information, about the new Azure Sentinel alert:</p><br><p class=\"editor-paragraph\">@{variables('varHTMLTable')}</p><br><p class=\"editor-paragraph\">And VEN details pertaining to entities are</p><br><p class=\"editor-paragraph\">@{variables('EntityTable')}</p><p class=\"editor-paragraph\">Illumio</p>",
+                                            "Importance": "Normal"
+                                        },
+                                        "path": "/v2/Mail"
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "Append_to_string_variable_3": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_variable_3": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EntityTable",
+                                        "type": "string",
+                                        "value": "<table @{variables('varStyle').tableStyle}>\n   <tr>\n     <th @{variables('varStyle').headerStyle}>IP Address</th>\n     <th @{variables('varStyle').headerStyle}>Hostname</th>\n     <th @{variables('varStyle').headerStyle}>Labels</th>\n   </tr>"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_1": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Append_to_string_variable_3": {
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "EntityTable",
+                                "value": "</table>"
+                            },
+                            "runAfter": {
+                                "Append_to_string_variable_2": [
+                                    "SUCCEEDED"
+                                ]
+                            }
+                        },
+                        "Append_to_string_variable_1": {
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "varHTMLTable",
+                                "value": "   <tr>\n     <th @{variables('varStyle').cellStyle}>@{triggerBody()?['TimeGenerated']}</th>\n     <th @{variables('varStyle').cellStyle}>@{triggerBody()?['AlertDisplayName']}</th>\n     <th @{variables('varStyle').cellStyle}>@{triggerBody()?['Severity']}</th>\n     <th @{variables('varStyle').cellStyle}>@{triggerBody()?['Description']}</th>\n   </tr>"
+                            },
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+                                "connectionName": "[variables('sentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                "connectionName": "[variables('o365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
