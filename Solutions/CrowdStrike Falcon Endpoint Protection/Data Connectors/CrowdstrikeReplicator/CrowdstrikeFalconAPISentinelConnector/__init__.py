@@ -197,8 +197,6 @@ async def process_file(bucket, s3_path, client, semaphore, session, retrycount):
             s = ''
             async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
                 s += decompressed_chunk.decode(errors='ignore')
-                logging.info(
-                    "retrycount after s: {}".format(retrycount))
                 lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
