@@ -71,6 +71,7 @@ async def fetch_with_retries(url, retries=3, backoff=8, timeout=60, headers=None
     for attempt in range(1, retries + 1):
         async with aiohttp.ClientSession() as session:
             try:
+                logging.info(f"Fetch Attempt `{attempt}` for url: `{url}`")
                 response = await fetch(session, url)
                 return response
             except aiohttp.ClientResponseError as e:
