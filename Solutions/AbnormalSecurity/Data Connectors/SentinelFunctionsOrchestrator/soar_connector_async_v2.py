@@ -76,15 +76,15 @@ async def fetch_with_retries(url, retries=3, backoff=8, timeout=60, headers=None
                 return response
             except aiohttp.ClientResponseError as e:
                 if 500 <= e.status < 600:
-                    logging.error("Attempt {attempt} failed with error", exc_info=e)
+                    logging.error(f"Attempt {attempt} for {url} failed with error", exc_info=e)
                     if attempt == retries:
                         raise
                     else:
                         await asyncio.sleep(backoff**attempt)
                 else:
                     raise
-            except aiohttp.ClientError as e:
-                logging.error("Attempt {attempt} failed with error", exc_info=e)
+            except Exception as e:
+                logging.error(f"Attempt {attempt} for {url} failed with error", exc_info=e)
                 if attempt == retries:
                     raise
                 else:
