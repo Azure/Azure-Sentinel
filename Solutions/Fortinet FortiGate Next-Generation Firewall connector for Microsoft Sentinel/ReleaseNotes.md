@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                      |
 |-------------|--------------------------------|-----------------------------------------------------------------------------------------|
+| 3.0.7       | 11-11-2024                     |Removed Deprecated data connectors                                                       |
 | 3.0.6       | 22-08-2024                     |Deprecated data connectors                                                    |
 | 3.0.5       | 05-04-2024                     |Workbook queries are optimized to fix timeout issues                                                    |
 | 3.0.4       | 29-01-2024                     |Classic app insights to Log analytics                                                    |
