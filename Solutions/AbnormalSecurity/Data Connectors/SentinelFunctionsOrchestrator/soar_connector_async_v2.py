@@ -50,7 +50,7 @@ def compute_url(base_url: str, pathname: str, params: Dict[str, str]) -> str:
     return endpoint
 
 
-async def fetch_with_retries(url, retries=3, backoff=4, timeout=10, headers=None):
+async def fetch_with_retries(url, retries=3, backoff=8, timeout=60, headers=None):
     logging.info(f"Fetching url: {url}")
     async def fetch(session, url):
         async with session.get(url, headers=headers, timeout=timeout) as response:
@@ -68,8 +68,8 @@ async def fetch_with_retries(url, retries=3, backoff=4, timeout=10, headers=None
             logging.info(f"API Response Status for URL: `{url}` is `{response.status}`")
             return json.loads(text)
 
-    async with aiohttp.ClientSession() as session:
-        for attempt in range(1, retries + 1):
+    for attempt in range(1, retries + 1):
+        async with aiohttp.ClientSession() as session:
             try:
                 response = await fetch(session, url)
                 return response
@@ -83,8 +83,11 @@ async def fetch_with_retries(url, retries=3, backoff=4, timeout=10, headers=None
                 else:
                     raise
             except aiohttp.ClientError as e:
-                logging.error("Request failed with non-retryable error", exc_info=e)
-                raise
+                logging.error("Attempt {attempt} failed with error", exc_info=e)
+                if attempt == retries:
+                    raise
+                else:
+                    await asyncio.sleep(backoff**attempt)
 
 
 async def call_threat_campaigns_endpoint(
