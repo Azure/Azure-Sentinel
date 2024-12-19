@@ -1,0 +1,1265 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Log Analytics Workspace Name": {
+      "defaultValue": "<azure-log-analytics-workspace>",
+      "type": "String"
+    },
+    "Log Analytics Workspace Location": {
+      "defaultValue": "<azure-log-analytics-location>",
+      "type": "String"
+    },
+    "Log Analytics Workspace Subscription": {
+      "defaultValue": "<azure-log-analytics-subscription>",
+      "type": "String"
+    },
+    "Log Analytics Workspace Resource Group": {
+      "defaultValue": "<azure-log-analytics-resource-group>",
+      "type": "String"
+    },
+    "dce-reuse-flag": {
+      "defaultValue": false,
+      "allowedValues": [
+        false,
+        true
+      ],
+      "type": "Bool",
+      "metadata": {
+        "description": "The default name for the DCE is ms-sentinel-knox-dce-[function-name]-[LA-Region]. If you prefer a custom name, please set this flag to true"
+      }
+    },
+    "input-dce-name": {
+      "defaultValue": "",
+      "type": "String"
+    },
+    "dcr-normalized-data_refresh_flag": {
+      "defaultValue": true,
+      "allowedValues": [
+        false,
+        true
+      ],
+      "type": "Bool"
+    },
+    "dcr-normalized-data_name_input": {
+      "defaultValue": "",
+      "type": "String",
+      "metadata": {
+        "description": "Default name will be samsung-knox-dcr-[LA-Region], no need to enter if you want to use default names"
+      }
+    }
+  },
+  "variables": {
+    "loganalyticsworkspace": "[parameters('Log Analytics Workspace Name')]",
+    "loganalyticsworkspace-location": "[parameters('Log Analytics Workspace Location')]",
+    "loganalyticsworkspace-subscription": "[parameters('Log Analytics Workspace Subscription')]",
+    "loganalyticsworkspace-resourceGroup": "[parameters('Log Analytics Workspace Resource Group')]",
+    "default-dce-name": "[concat('samsung-knox-dce-',replace(variables('loganalyticsworkspace-location'),' ', ''))]",
+    "dce-name": "[if(not(parameters('dce-reuse-flag')), variables('default-dce-name'), parameters('input-dce-name'))]",
+    "dcr-normalized-data": "[if(empty(parameters('dcr-normalized-data_name_input')), concat('samsung-knox-dcr-',replace(variables('loganalyticsworkspace-location'),' ', '')), parameters('dcr-normalized-data_name_input'))]",
+    "dcr-normalized-data_refresh_flag": "[parameters('dcr-normalized-data_refresh_flag')]",
+    "cust-table-audit": "Samsung_Knox_Audit_CL",
+    "cust-table-application": "Samsung_Knox_Application_CL",
+    "cust-table-process": "Samsung_Knox_Process_CL",
+    "cust-table-user": "Samsung_Knox_User_CL",
+    "cust-table-network": "Samsung_Knox_Network_CL",
+    "cust-table-system": "Samsung_Knox_System_CL"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dce-name')]",
+      "location": "[variables('loganalyticsworkspace-location')]",
+      "dependsOn": [
+        "[resourceId(variables('loganalyticsworkspace-subscription'), variables('loganalyticsworkspace-resourceGroup'), 'Microsoft.Resources/deployments', 'RestDRLATablesTemplate')]"
+      ],
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2021-04-01",
+      "name": "RestDRLATablesTemplate",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-audit'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "tags": {},
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "[variables('cust-table-audit')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "DateTime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "DateTime"
+                    },
+                    {
+                      "name": "PrimaryImei",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei2",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceSerialNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceWifimac",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceModel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventGuid",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Version",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitreTtp",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Profile",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AdmUserId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AdmPkgName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FailureReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Action",
+                      "type": "string"
+                    },
+                    {
+                      "name": "KeyMask",
+                      "type": "int"
+                    },
+                    {
+                      "name": "PkgName",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-application'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "tags": {},
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "[variables('cust-table-application')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "DateTime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "DateTime"
+                    },
+                    {
+                      "name": "PrimaryImei",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei2",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceSerialNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceWifimac",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceModel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventGuid",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Version",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitreTtp",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Profile",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PkgName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AccessibilityApi",
+                      "type": "string"
+                    },
+                    {
+                        "name": "RestrictedPerms",
+                        "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-process'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "tags": {},
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "[variables('cust-table-process')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "DateTime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "DateTime"
+                    },
+                    {
+                      "name": "PrimaryImei",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei2",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceSerialNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceWifimac",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceModel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventGuid",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Version",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitreTtp",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Profile",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Tid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Pid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Ppid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Uid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Gid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ExitCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Syscall",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Path",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Cwd",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CmdLine",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Euid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Egid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Fsuid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Fsgid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Suid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Sgid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OwnerUid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OwnerGid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Atime",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Mtime",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Ctime",
+                      "type": "long"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-user'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "tags": {},
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "[variables('cust-table-user')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "DateTime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "DateTime"
+                    },
+                    {
+                      "name": "PrimaryImei",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei2",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceSerialNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceWifimac",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceModel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventGuid",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Version",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitreTtp",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Profile",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PkgName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Url",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ConfidenceScore",
+                      "type": "real"
+                    },
+                    {
+                      "name": "UrlType",
+                      "type": "int"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-network'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "tags": {},
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "[variables('cust-table-network')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "DateTime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "DateTime"
+                    },
+                    {
+                      "name": "PrimaryImei",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei2",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceSerialNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceWifimac",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceModel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventGuid",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Version",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitreTtp",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Profile",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Protocol",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SourcePort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "RemotePort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SourceAddr",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RemoteAddr",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventDetectedTime",
+                      "type": "DateTime"
+                    },
+                    {
+                      "name": "Family",
+                      "type": "int"
+                    },
+                    {
+                      "name": "PkgName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InterfaceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Tid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Pid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Ppid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Uid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Gid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ExitCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Syscall",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Path",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Ja3Fingerprint",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SocketType",
+                      "type": "int"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(variables('loganalyticsworkspace'),'/',variables('cust-table-system'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "tags": {},
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "[variables('cust-table-system')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "DateTime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "DateTime"
+                    },
+                    {
+                      "name": "PrimaryImei",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceImei2",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceSerialNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceWifimac",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceModel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventGuid",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Version",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitreTtp",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Profile",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BLBuildVersion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BLBuildId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BLBuildType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "KernelBuildId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "KernelBuildType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SystemBuildId0",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SystemBuildId1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SystemBuildId2",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BLMode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RebootReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SecureBoot",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BLEventTarget",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BLEvent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BLRP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "KernelRP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SystemRP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ArpDevice",
+                      "type": "string"
+                    },
+                    {
+                      "name": "WpState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "WbFuse",
+                      "type": "string"
+                    },
+                    {
+                      "name": "WbReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ImgStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "KernelState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CustomCount",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AvbBootState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AvbDeviceLocked",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AvbOsVersion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AvbOsPatchLevel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AvbVendorPatchLevel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AvbBootPatchLevel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "VbMetaType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UnlockCount",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EmStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EmFuseHistory",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EmTokens",
+                      "type": "string"
+                    },
+                    {
+                      "name": "KGState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "KGFuse",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FrpState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CCModeState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MDMState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EDLCount",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RPMBState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FOTACount",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ODINCount",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AvbVerityMode",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+
+          ]
+        },
+        "parameters": {}
+      },
+      "subscriptionId": "[variables('loganalyticsworkspace-subscription')]",
+      "resourceGroup": "[variables('loganalyticsworkspace-resourceGroup')]"
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dcr-normalized-data')]",
+      "location": "[variables('loganalyticsworkspace-location')]",
+      "tags": {
+        "createdBy": "Sentinel"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId(subscription().subscriptionId,resourceGroup().name,'Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]",
+        "streamDeclarations": {
+          "Custom-Samsung": {
+            "columns": [
+              {
+                "name": "imei1",
+                "type": "string",
+                "description": "Device Imei1"
+              },
+              {
+                "name": "imei2",
+                "type": "string",
+                "description": "Device Imei2"
+              },
+              {
+                "name": "serial",
+                "type": "string",
+                "description": "Device Serial"
+              },
+              {
+                "name": "mac",
+                "type": "string",
+                "description": "Device Wifi Mac"
+              },
+              {
+                "name": "model",
+                "type": "string",
+                "description": "Device Model"
+              },
+              {
+                "name": "timestamp",
+                "type": "long",
+                "description": "The time at which the data was generated"
+              },
+              {
+                "name": "event_id",
+                "type": "long",
+                "description": "id"
+              },
+              {
+                "name": "version",
+                "type": "int",
+                "description": "device event version"
+              },
+              {
+                "name": "name",
+                "type": "string",
+                "description": "event name like TAG_KEYGUARD_DISMISSED"
+              },
+              {
+                "name": "severity",
+                "type": "string",
+                "description": "Severity"
+              },
+              {
+                "name": "private",
+                "type": "string",
+                "description": "Profile, Allowable values: PRIVATE,  PUBLIC"
+              },
+              {
+                "name": "maturity",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "tag_table",
+                "type": "string",
+                "description": "tag for events"
+              },
+              {
+                "name": "mitre_attack_techniques",
+                "type": "dynamic",
+                "description": "MitreTtp"
+              },
+              {
+                "name": "addon_content",
+                "type": "dynamic",
+                "description": "userId, admUserId, admPkgName, reason, action, keyMask, pkgName, interfaceName"
+              },
+              {
+                "name": "tid",
+                "type": "int",
+                "description": "Tid"
+              },
+              {
+                "name": "pid",
+                "type": "int",
+                "description": "Pid"
+              },
+              {
+                "name": "ppid",
+                "type": "int",
+                "description": "Ppid"
+              },
+              {
+                "name": "uid",
+                "type": "int",
+                "description": "Uid"
+              },
+              {
+                "name": "gid",
+                "type": "int",
+                "description": "Gid"
+              },
+              {
+                "name": "exit_code",
+                "type": "int",
+                "description": "ExitCode"
+              },
+              {
+                "name": "syscall",
+                "type": "int",
+                "description": "Syscall"
+              },
+              {
+                "name": "path",
+                "type": "string",
+                "description": "Path"
+              },
+              {
+                "name": "cwd",
+                "type": "string",
+                "description": "Cwd"
+              },
+              {
+                "name": "cmdline",
+                "type": "string",
+                "description": "CmdLine"
+              },
+              {
+                "name": "euid",
+                "type": "int",
+                "description": "Euid"
+              },
+              {
+                "name": "egid",
+                "type": "int",
+                "description": "Egid"
+              },
+              {
+                "name": "fsuid",
+                "type": "int",
+                "description": "Fsuid"
+              },
+              {
+                "name": "fsgid",
+                "type": "int",
+                "description": "Fsgid"
+              },
+              {
+                "name": "suid",
+                "type": "int",
+                "description": "Suid"
+              },
+              {
+                "name": "sgid",
+                "type": "int",
+                "description": "Sgid"
+              },
+              {
+                "name": "owner_uid",
+                "type": "int",
+                "description": "OwnerUid"
+              },
+              {
+                "name": "owner_gid",
+                "type": "int",
+                "description": "OwnerGid"
+              },
+              {
+                "name": "atime",
+                "type": "long",
+                "description": "Atime"
+              },
+              {
+                "name": "mtime",
+                "type": "long",
+                "description": "Mtime"
+              },
+              {
+                "name": "ctime",
+                "type": "long",
+                "description": "Ctime"
+              },
+              {
+                "name": "package_name",
+                "type": "string",
+                "description": "PkgName"
+              },
+              {
+                "name": "accessbility_api",
+                "type": "string",
+                "description": "AccessibilityApi"
+              },
+              {
+                "name": "restricted_permissions",
+                "type": "dynamic",
+                "description": "RestrictedPerms"
+              },
+              {
+                "name": "url",
+                "type": "string",
+                "description": "Url"
+              },
+              {
+                "name": "confidence_score",
+                "type": "real",
+                "description": "ConfidenceScore"
+              },
+              {
+                "name": "url_type",
+                "type": "int",
+                "description": "UrlType"
+              },
+              {
+                "name": "protocol",
+                "type": "int",
+                "description": "Protocol"
+              },
+              {
+                "name": "local_port",
+                "type": "int",
+                "description": "SourcePort"
+              },
+              {
+                "name": "remote_port",
+                "type": "int",
+                "description": "RemotePort"
+              },
+              {
+                "name": "local_address",
+                "type": "string",
+                "description": "SourceAddr"
+              },
+              {
+                "name": "remote_address",
+                "type": "string",
+                "description": "RemoteAddr"
+              },
+              {
+                "name": "eventTime",
+                "type": "datetime",
+                "description": "EventDetectedTime"
+              },
+              {
+                "name": "family",
+                "type": "int",
+                "description": "Family"
+              },
+
+              {
+                "name": "JA3_fingerprint",
+                "type": "string",
+                "description": "Ja3Fingerprint"
+              },
+              {
+                "name": "type",
+                "type": "int",
+                "description": "SocketType"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "name": "SentinelWorkspace",
+              "workspaceResourceId": "[resourceId(variables('loganalyticsworkspace-subscription'), variables('loganalyticsworkspace-resourceGroup'),'Microsoft.OperationalInsights/Workspaces', variables('loganalyticsworkspace'))]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-Samsung"
+            ],
+            "destinations": [ "SentinelWorkspace" ],
+            "transformKql": "source \r\n|where (name == 'TAG_FAILED_TO_WIPE_USER_DATA' or name == 'TAG_WIPING_DATA_IS_NOT_ALLOWED_FOR_THIS_USER' or name == 'TAG_ADMIN_HAS_REQUESTED_FULL_WIPE_OF_DEVICE' or name == 'TAG_PACKAGE_NAME_HAS_BEEN_ACTIVATED_AS_ADMIN' or name == 'TAG_PACKAGE_NAME_HAS_BEEN_REMOVED_AS_ADMIN' or name == 'TAG_APPLICATION_ACTION_FAILED_BECAUSE_OF_SIGNATURE_VERIFICATION_FAILURE' or name == 'LOG_IS_FULL' or name == 'TAG_ADB_SHELL_INTERACTIVE' or name == 'TAG_KEYGUARD_DISABLED_FEATURES_SET' or name == 'TAG_KEYGUARD_DISMISSED') \r\n | extend PrimaryImei = case(isempty(imei1), imei2, imei1) \r\n |extend parsedAC = parse_json(addon_content)   \r\n| extend UserId = toint(parsedAC.userId)   \r\n| extend AdmUserId = toint(parsedAC.admUserId)   \r\n| extend AdmPkgName = tostring(parsedAC.admPkgName)   \r\n| extend FailureReason = tostring(parsedAC.reason)   \r\n| extend Action = tostring(parsedAC.action)   \r\n| extend KeyMask = toint(parsedAC.mask)   \r\n| extend PkgName = tostring(parsedAC.pkgName) \n| extend eventDatetime = datetime_add('milliSecond', tolong(timestamp), todatetime('1970-01-01'))\n  | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now()) \r\n| project-rename  EventGuid = event_id,\r\n   Name = name,\r\n Version = version,\r\n Severity = severity,\r\n MitreTtp = mitre_attack_techniques,\r\n Profile = private,\r\n DeviceImei1=imei1,\r\n DeviceImei2=imei2,\r\n DeviceSerialNumber=serial,\r\n DeviceWifimac=mac,\r\n DeviceModel=model, EventTime= eventDatetime ",
+            "outputStream": "[concat('Custom-', variables('cust-table-audit'))]"
+          },
+          {
+            "streams": [
+              "Custom-Samsung"
+            ],
+            "destinations": [ "SentinelWorkspace" ],
+            "transformKql": "source \r\n|where (name == 'PREVENT_APP_REMOVAL_CAPABILITY' or name == 'KEY_INPUT_CAPTURE_CAPABILITY'or name == 'SCREEN_CAPTURE_CAPABILITY' or name == 'USER_INTERACTION_CONTROL_CAPABILITY' or name == 'ACCESS_NOTIFICATION_PERMISSION' or name == 'VIDEO_CAPTURE_PERMISSION' or name == 'ACCESS_CALL_LOG_PERMISSION') \r\n  | extend PrimaryImei = case(isempty(imei1), imei2, imei1) \n| extend eventDatetime = datetime_add('milliSecond', tolong(timestamp), todatetime('1970-01-01'))\n | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now()) \r\n| project-rename EventGuid = event_id,\r\n   Name = name,\r\n Version = version,\r\n Severity = severity,\r\n MitreTtp = mitre_attack_techniques,\r\n Profile = private,\r\n PkgName = package_name,\r\n AccessibilityApi = accessbility_api,\r\n RestrictedPerms = restricted_permissions,\r\n DeviceImei1=imei1,\r\n DeviceImei2=imei2,\r\n DeviceSerialNumber=serial,\r\n DeviceWifimac=mac,\r\n DeviceModel=model, EventTime= eventDatetime ",
+            "outputStream": "[concat('Custom-', variables('cust-table-application'))]"
+          },
+          {
+            "streams": [
+              "Custom-Samsung"
+            ],
+            "destinations": [ "SentinelWorkspace" ],
+            "transformKql": "source \r\n|where (name == 'PROCESS_PRIVILEGE_ESCALATION') \r\n  | extend PrimaryImei = case(isempty(imei1), imei2, imei1) \n| extend eventDatetime = datetime_add('milliSecond', tolong(timestamp), todatetime('1970-01-01'))\n | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now()) \r\n| project-rename EventGuid = event_id,\r\n   Name = name,\r\n Version = version,\r\n Severity = severity,\r\n MitreTtp = mitre_attack_techniques,\r\n Profile = private,\r\n Tid = tid,\r\n Pid = pid,\r\n Ppid = ppid,\r\n Uid = uid,\r\n Gid = gid,\r\n ExitCode = exit_code,\r\n Syscall = syscall,\r\n Path = path,\r\n Cwd = cwd,\r\n CmdLine = cmdline,\r\n Euid = euid,\r\n Egid = egid,\r\n Fsuid = fsuid,\r\n Fsgid = fsgid,\r\n Suid = suid,\r\n Sgid = sgid,\r\n OwnerUid = owner_uid,\r\n OwnerGid = owner_gid,\r\n Atime = atime,\r\n Mtime = mtime,\r\n Ctime = ctime,\r\n DeviceImei1=imei1,\r\n DeviceImei2=imei2,\r\n DeviceSerialNumber=serial,\r\n DeviceWifimac=mac,\r\n DeviceModel=model, EventTime= eventDatetime ",
+            "outputStream": "[concat('Custom-', variables('cust-table-process'))]"
+          },
+          {
+            "streams": [
+              "Custom-Samsung"
+            ],
+            "destinations": [ "SentinelWorkspace" ],
+            "transformKql": "source \r\n|where (name == 'SUSPICIOUS_URL_ACCESSED' or name == 'PASSWORD_LOCKOUT') \r\n  | extend PrimaryImei = case(isempty(imei1), imei2, imei1) \n| extend eventDatetime = datetime_add('milliSecond', tolong(timestamp), todatetime('1970-01-01'))\n | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now()) \r\n| project-rename EventGuid = event_id,\r\n   Name = name,\r\n Version = version,\r\n Severity = severity,\r\n MitreTtp = mitre_attack_techniques,\r\n Profile = private,\r\n PkgName = package_name,\r\n Url = url,\r\n ConfidenceScore = confidence_score,\r\n UrlType = url_type,\r\n DeviceImei1=imei1,\r\n DeviceImei2=imei2,\r\n DeviceSerialNumber=serial,\r\n DeviceWifimac=mac,\r\n DeviceModel=model, EventTime= eventDatetime | extend MitreTtp = case(Name == 'SUSPICIOUS_URL_ACCESSED', array_concat(MitreTtp, parse_json(\"['T1566']\")), MitreTtp)",
+            "outputStream": "[concat('Custom-', variables('cust-table-user'))]"
+          },
+          {
+            "streams": [
+              "Custom-Samsung"
+            ],
+            "destinations": [ "SentinelWorkspace" ],
+            "transformKql": "source \r\n|where (name == 'TAG_NETWORK_EVENT_INSECURE_PACKET') \r\n  | extend PrimaryImei = case(isempty(imei1), imei2, imei1) \r\n| extend parsedAC = parse_json(addon_content)   \r\n| extend EventDetectedTime = datetime_add('milliSecond', tolong(parsedAC.eventTime), todatetime('1970-01-01'))  \r\n| extend PkgName = tostring(parsedAC.pkgName)   \r\n| extend InterfaceName = tostring(parsedAC.interfaceName) \n| extend eventDatetime = datetime_add('milliSecond', tolong(timestamp), todatetime('1970-01-01'))\n | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())  \r\n| project-rename EventGuid = event_id,\r\n   Name = name,\r\n Version = version,\r\n Severity = severity,\r\n MitreTtp = mitre_attack_techniques,\r\n Profile = private,\r\n Protocol = protocol,\r\n SourcePort = local_port,\r\n RemotePort = remote_port,\r\n SourceAddr = local_address,\r\n RemoteAddr = remote_address,\r\n Family = family,\r\n Tid = tid,\r\n Pid = pid,\r\n Ppid = ppid,\r\n Uid = uid,\r\n Gid = gid,\r\n ExitCode = exit_code,\r\n Syscall = syscall,\r\n Path = path,\r\n Ja3Fingerprint = JA3_fingerprint,\r\n SocketType = type,\r\n DeviceImei1=imei1,\r\n DeviceImei2=imei2,\r\n DeviceSerialNumber=serial,\r\n DeviceWifimac=mac,\r\n DeviceModel=model , EventTime= eventDatetime ",
+            "outputStream": "[concat('Custom-', variables('cust-table-network'))]"
+          },
+          {
+            "streams": [
+              "Custom-Samsung"
+            ],
+            "destinations": [ "SentinelWorkspace" ],
+            "transformKql": "source \r\n|where (name == 'BOOT_COMPROMISED_SOFTWARE_BINARY' or name == 'PERIPHERAL_ACCESS_THROUGH_POLICY_DETECTED_CAMERA' or name == 'PERIPHERAL_ACCESS_THROUGH_POLICY_DETECTED_MIC' or name == 'BOOT_STATE' or name == 'BOOT_SECURITY_ABNORMALITY') \r\n  | extend PrimaryImei = case(isempty(imei1), imei2, imei1) \r\n| extend parsedAC = parse_json(addon_content)   \r\n| extend BLBuildVersion = tostring(parsedAC.BOOTLOADER_BUILD_VERSION)   \r\n| extend BLBuildId = tostring(parsedAC.BOOTLOADER_BUILD_ID)   \r\n| extend BLBuildType = tostring(parsedAC.BOOTLOADER_BUILD_TYPE)   \r\n| extend KernelBuildId = tostring(parsedAC.KERNEL_BUILD_ID)   \r\n| extend KernelBuildType = tostring(parsedAC.KERNEL_BUILD_TYPE)   \r\n| extend SystemBuildId0 = tostring(parsedAC.SYSTEM_BUILD_ID0)   \r\n| extend SystemBuildId1 = tostring(parsedAC.SYSTEM_BUILD_ID1)   \r\n| extend SystemBuildId2 = tostring(parsedAC.SYSTEM_BUILD_ID2)   \r\n| extend BLMode = tostring(parsedAC.BOOTLOADER_MODE)   \r\n| extend RebootReason = tostring(parsedAC.REBOOT_REASON)   \r\n| extend SecureBoot = tostring(parsedAC.SECURE_BOOT)   \r\n| extend BLEventTarget = tostring(parsedAC.BOOTLOADER_EVENT_TARGET)   \r\n| extend BLEvent = tostring(parsedAC.BOOTLOADER_EVENT)   \r\n| extend BLRP = tostring(parsedAC.BOOTLOADER_RP)   \r\n| extend KernelRP = tostring(parsedAC.KERNEL_RP)   \r\n| extend SystemRP = tostring(parsedAC.SYSTEM_RP)   \r\n| extend ArpDevice = tostring(parsedAC.ARP_DEVICE)   \r\n| extend WpState = tostring(parsedAC.WP_STATE)   \r\n| extend WbFuse = tostring(parsedAC.WB_FUSE)   \r\n| extend WbReason = tostring(parsedAC.WB_REASON)   \r\n| extend ImgStatus = tostring(parsedAC.IMG_STATUS)   \r\n| extend KernelState = tostring(parsedAC.KERNEL_STATE)   \r\n| extend CustomCount = tostring(parsedAC.CUSTOM_COUNT)   \r\n| extend AvbBootState = tostring(parsedAC.AVB_BOOT_STATE)   \r\n| extend AvbDeviceLocked = tostring(parsedAC.AVB_DEVICE_LOCKED)   \r\n| extend AvbOsVersion = tostring(parsedAC.AVB_OS_VERSION)   \r\n| extend AvbOsPatchLevel = tostring(parsedAC.AVB_OS_PATCH_LEVEL)   \r\n| extend AvbVendorPatchLevel = tostring(parsedAC.AVB_VENDOR_PATCH_LEVEL)   \r\n| extend AvbBootPatchLevel = tostring(parsedAC.AVB_BOOT_PATCH_LEVEL)   \r\n| extend VbMetaType = tostring(parsedAC.VBMETA_TYPE)   \r\n| extend UnlockCount = tostring(parsedAC.UNLOCK_COUNT)   \r\n| extend EmStatus = tostring(parsedAC.EM_STATUS)   \r\n| extend EmFuseHistory = tostring(parsedAC.EM_FUSE_HISTORY)   \r\n| extend EmTokens = tostring(parsedAC.EM_TOKENS)   \r\n| extend KGState = tostring(parsedAC.KG_STATE)   \r\n| extend KGFuse = tostring(parsedAC.KG_FUSE)   \r\n| extend FrpState = tostring(parsedAC.FRP_STATE)   \r\n| extend CCModeState = tostring(parsedAC.CC_MODE_STATE)   \r\n| extend MDMState = tostring(parsedAC.MDM_STATE)   \r\n| extend EDLCount = tostring(parsedAC.EDL_COUNT)   \r\n| extend RPMBState = tostring(parsedAC.RPMB_STATE)   \r\n| extend FOTACount = tostring(parsedAC.FOTA_COUNT)   \r\n| extend ODINCount = tostring(parsedAC.ODIN_COUNT)   \r\n| extend AvbVerityMode = tostring(parsedAC.AVB_VERITY_MODE)   \r\n| extend eventDatetime = datetime_add('milliSecond', tolong(timestamp), todatetime('1970-01-01'))\n  | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())\r\n | project-rename  EventGuid = event_id,\r\n   Name = name,\r\n Version = version,\r\n Severity = severity,\r\n MitreTtp = mitre_attack_techniques,\r\n Profile = private,\r\n DeviceImei1=imei1,\r\n DeviceImei2=imei2,\r\n DeviceSerialNumber=serial,\r\n DeviceWifimac=mac,\r\n DeviceModel=model, EventTime= eventDatetime ",
+            "outputStream": "[concat('Custom-', variables('cust-table-system'))]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {}
+}
