@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.1.1       | 08-11-2024                     | Fixed CCP **Data Connector** connection bug                          |
+| 3.1.0       | 27-11-2024                     | Fixed Solution version in Maintemplate and resolved ARM template error                           |
 | 3.0.10      | 08-11-2024                     | Updated **Parser** to fix the schema                          |
 | 3.0.9       | 17-10-2024                     | Updated package to fix connectivity of CCP connector |
 | 3.0.8       | 14-08-2024                     | Data Connector Globally Available         |
