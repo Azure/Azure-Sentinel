@@ -5,26 +5,35 @@ from azure.monitor.ingestion import LogsIngestionClient
 
 
 def _transform_schema(audit_events: list) -> list:
-    dcr_events = []
-    for audit in audit_events:
-        dcr = dict()
-        dcr['CyberArkTenantId'] = audit['tenantId']
-        dcr['timestamp'] = int(audit.get('timestamp', 0))
-        dcr['username'] = audit.get('username', '')
-        dcr['applicationCode'] = audit.get('applicationCode', '')
-        dcr['auditCode'] = audit.get('auditCode', '')
-        dcr['auditType'] = audit.get('auditType', '')
-        dcr['action'] = audit.get('action', '')
-        dcr['userId'] = audit.get('userId', '')
-        dcr['source'] = audit.get('source', '')
-        dcr['actionType'] = audit.get('actionType', '')
-        dcr['component'] = audit.get('component', '')
-        dcr['serviceName'] = audit.get('serviceName', '')
-        dcr['target'] = audit.get('target', '')
-        dcr['command'] = audit.get('command', '')
-        dcr['sessionId'] = audit.get('sessionId', '')
-        dcr['message'] = audit.get('message', '')
-        dcr_events.append(dcr)
+    dcr_events = [
+        {
+            'CyberArkTenantId': audit['tenantId'],
+            'accountName': audit.get('accountName', ''),
+            'action': audit.get('action', ''),
+            'actionType': audit.get('actionType', ''),
+            'applicationCode': audit.get('applicationCode', ''),
+            'auditCode': audit.get('auditCode', ''),
+            'auditType': audit.get('auditType', ''),
+            'cloudAssets': audit.get('cloudAssets', ''),
+            'cloudIdentities': audit.get('cloudIdentities', ''),
+            'cloudProvider': audit.get('cloudProvider', ''),
+            'cloudWorkspacesAndRoles': audit.get('cloudWorkspacesAndRoles', ''),
+            'command': audit.get('command', ''),
+            'component': audit.get('component', ''),
+            'identityType': audit.get('identityType', ''),
+            'message': audit.get('message', ''),
+            'target': audit.get('target', ''),
+            'timestamp': int(audit.get('timestamp', 0)),
+            'targetPlatform': audit.get('targetPlatform', ''),
+            'targetAccount': audit.get('targetAccount', ''),
+            'safe': audit.get('safe', ''),
+            'sessionId': audit.get('sessionId', ''),
+            'serviceName': audit.get('serviceName', ''),
+            'source': audit.get('source', ''),
+            'userId': audit.get('userId', ''),
+            'username': audit.get('username', '')
+        }
+        for audit in audit_events]
     return dcr_events
 
 
