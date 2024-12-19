@@ -23,4 +23,4 @@ The simplest way to deploy is to launch the Deployment template from the Deploy 
 3. Once successfully deployed the function will start triggering within 5 minutes and the inital request to JumpCloud will be for logs since the previous midnight UTC time. 
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcabberley%2FJumpCloudSSO%2Fmaster%2Fazuredeploy_JumpCloud_API_FunctionApp.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2F5891abc456cd8cceb0b724a9f737b81aae67298a%2FDataConnectors%2FJumpCloud%2520Single%2520Sign%2520On%2Fazuredeploy_JumpCloud_API_FunctionApp.json)
