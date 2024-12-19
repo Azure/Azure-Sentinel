@@ -94,12 +94,7 @@ def _call_audit_api(route: str, body: dict) -> dict:
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {token}',
         'x-api-key': api_key,
-        'IntegrationName': 'Azure Sentinel Audit',
-        'IntegrationType': 'SIEM',
-        'IntegrationVersion': '1.0',
-        'CyberArkService': 'Audit',
-        'VendorName': 'Azure',
-        'VendorProductName': 'Sentinel'
+        'x-cybr-telemetry': 'aW49QXp1cmUgU2VudGluZWwgQXVkaXQmaXY9MS4xJnZuPU1pY3Jvc29mdCZpdD1TSUVN'
     }
     url = f'{api_base_url}/api/audits/stream/{route}'
     try:
