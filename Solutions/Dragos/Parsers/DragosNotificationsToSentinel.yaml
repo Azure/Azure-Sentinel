@@ -7,11 +7,25 @@ Category: Microsoft Sentinel Parser
 FunctionName: DragosNotificationsToSentinel
 FunctionAlias: DragosNotificationsToSentinel
 FunctionQuery: |
+  // Define helper to map dragos severity to sentinel severity
+  let DragosSeverityToSentinelSeverity(DragosSeverity:int = 0) =  case(DragosSeverity == 0, "Informational",
+      DragosSeverity == 1, "Informational",
+      DragosSeverity == 2, "Low",
+      DragosSeverity == 3, "Medium",
+      DragosSeverity == 4, "High",
+      DragosSeverity == 5, "High",
+      "Unknown");
+  //
+  // Look back over existing incidents to prevent dupes
   let existingIncidents = SecurityAlert
-    | where ProductName == "Dragos"
-    | extend CustomDetails=tostring(parse_json(ExtendedProperties)["Custom Details"])
-    | extend id = toint(extract_json("$.DragosNotificationId[0]", CustomDetails))
-    | project-keep SystemAlertId, id;
+  | where ProductName == "Dragos"
+  | extend CustomDetails=tostring(parse_json(ExtendedProperties)["Custom Details"])
+  | extend id = toint(extract_json("$.DragosNotificationId[0]", CustomDetails))
+  | project-keep SystemAlertId, id;
+  //
+  // Grab notifications
   union isfuzzy=true DragosPushNotificationsToSentinel, DragosPullNotificationsToSentinel
-    | join kind=leftouter (existingIncidents) on id
-    | where isempty(SystemAlertId)
+  | join kind=leftouter (existingIncidents) on id
+  | where isempty(SystemAlertId)
+  | extend MSSentinelSeverity = DragosSeverityToSentinelSeverity(severity)
+  | sort by severity desc
