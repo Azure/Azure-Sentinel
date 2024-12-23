@@ -154,6 +154,7 @@ async def main(mytimer: func.TimerRequest):
         logging.info("list of files that were not processed after defined no. of retries: {}".format(failed_files_array))
         
 async def process_file(bucket, s3_path, client, semaphore, session, retrycount):
+    global drop_files_array, failed_files_array
     async with semaphore:
         total_events = 0
         logging.info("Start processing file {}".format(s3_path))
