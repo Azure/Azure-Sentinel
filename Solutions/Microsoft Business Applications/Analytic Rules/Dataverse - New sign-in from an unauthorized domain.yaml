@@ -1,0 +1,84 @@
+id: 4c1c9aee-8e44-4bb9-bd53-f3e7d6761282
+kind: Scheduled
+name: Dataverse - New sign-in from an unauthorized domain
+description: Identifies Dataverse sign-in activity originating from users with UPN
+  suffixes that have not been seen previously in the last 14 days and are not present
+  on a predefined list of authorized domains. Common internal Power Platform system
+  users are excluded by default.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1190
+  - T1133
+query: |
+  // Allow list of UPN suffixes allowed by the organization.
+  let allowed_domains = dynamic([
+      'onmicrosoft.com',
+      'microsoft.com'
+      ]);
+  // All list of users allowed by the organization
+  let allowed_users = dynamic([
+      'user1@mydomain.com',
+      'user2@mydomain.com'
+      ]);
+  let query_frequency = 1h;
+  let query_lookback = 14d;
+  let historical_users = DataverseActivity
+      | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+      | where Message == 'UserSignIn'
+      | summarize by UserId;
+  DataverseActivity
+  | where TimeGenerated >= ago (query_frequency)
+  | where Message == 'UserSignIn'
+  | join kind=leftanti (historical_users) on UserId
+  | summarize FirstEvent = min(TimeGenerated), LastEvent = max(TimeGenerated) by UserId, ClientIp, InstanceUrl
+  | where isnotempty(ClientIp)
+  | extend CloudAppId = int(32780)
+  | extend AccountName = tostring(split(UserId, '@')[0])
+  | extend UPNSuffix = tostring(split(UserId, '@')[1])
+  | where UPNSuffix !in (allowed_domains) and UserId !in (allowed_users)
+  | project
+      FirstEvent,
+      LastEvent,
+      UserId,
+      ClientIp,
+      InstanceUrl,
+      AccountName,
+      UPNSuffix,
+      CloudAppId
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: Dataverse - Unauthorized sign-in activity
+  alertDescriptionFormat: New user sign-in activity was detected in {{InstanceUrl}}
+    originating from user {{UserId}}. This user's UPN suffix is not on the authorized
+    list of domains.
+version: 3.2.0

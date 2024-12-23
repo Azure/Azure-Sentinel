@@ -1,0 +1,61 @@
+id: 2f6bbf88-f5b0-49a3-b2b5-97fc3664e4d4
+name: Preview - TI map File Hash entity to Cloud App Events
+description: |
+    'Identifies compromises and attacks and detect malicious activities in one's file hash entity from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+    let dt_lookBack = 1h;
+    let ioc_lookBack = 14d;
+    ThreatIntelligenceIndicator
+        | where TimeGenerated >= ago(ioc_lookBack)
+        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+        | where Active == true and ExpirationDateTime > now()
+        | extend FileHashValue = toupper(FileHashValue)
+        | where isnotempty(FileHashValue)
+        | join kind=innerunique (union isfuzzy=true
+        (CloudAppEvents
+            | join kind=innerunique (union isfuzzy=true(DeviceFileEvents
+            | extend CloudAppEvents_TimeGenerated = TimeGenerated, Event = ReportId, FileHash = toupper(MD5))) on $left.TenantId == $right.TenantId))
+        on $left.FileHashValue == $right.MD5
+    | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId, FileHash, FileHashType, FileHashValue
+    | extend Description = max_CloudAppEvents_TimeGenerated_Description, ActivityGroupNames = max_CloudAppEvents_TimeGenerated_ActivityGroupNames, ThreatType = max_CloudAppEvents_TimeGenerated_ThreatType, ExpirationDateTime = max_CloudAppEvents_TimeGenerated_ExpirationDateTime, ConfidenceScore = max_CloudAppEvents_TimeGenerated_ConfidenceScore, SourceIP = max_CloudAppEvents_TimeGenerated_NetworkSourceIP, SourcePort = max_CloudAppEvents_TimeGenerated_NetworkSourcePort, DestinationIP = max_CloudAppEvents_TimeGenerated_NetworkDestinationIP, DestinationPort = max_CloudAppEvents_TimeGenerated_NetworkDestinationPort, DeviceName = max_CloudAppEvents_TimeGenerated_DeviceName
+    | project CloudAppEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SourceIP, SourcePort, DestinationIP, DestinationPort, DeviceName, FileHashType, FileHashValue, FileHash
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+  - entityType: IP
+    fieldMappings: 
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: FileHashType
+version: 1.0.3
+kind: Scheduled

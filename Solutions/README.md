@@ -57,60 +57,30 @@ For more information, see the [solution template documentation](https://docs.mic
 
 After creating both the `mainTemplate.json` and the `createUIDefinition.json` files, validate them, and package them into a .zip file that you can upload as part of the publishing process (Step 3).
 
-Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V2) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V2/README.md) to use the tool and package your content.
+Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V3) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md) to use the tool and package your content.
 
 ### Updating your solution
 
 If you already have an Microsoft Sentinel solution and want to update your package, use the package creation tool with updated content to create a new version of the package.
 
-For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `1.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
+For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `3.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
 
 When updating your package, make sure to raise the version value, regardless of how small or trivial the change is, including typo fixes in a content or solution definition file.
 
-For example, if your original package version is `1.0.1`, you might update your versions as follows:
+For example, if your original package version is `3.0.1`, you might update your versions as follows:
 
-* **Major updates** have a new version of 2.0.0 - this is usually reserved for major tooling or package level changes
-* **Minor updates**, for changes in content of the package, might have a new version of `1.1.0`
-* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `1.0.2`
+* **Major updates** have a new version of 3.0.0 - this is usually reserved for major tooling or package level changes
+* **Minor updates**, for changes in content of the package, might have a new version of `3.1.0`
+* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `3.0.2`
 
 Since solutions use ARM templates, you can customize the solution text as well as tabs as needed to cater to specific scenarios.
 
 ## Step 3 – Publish your solution
 
-The Microsoft Sentinel solution publishing experience is powered by the [Microsoft Partner Center](https://docs.microsoft.com/partner-center/overview).
+For a detailed walkthrough of how to publish your solutions, please refer to the following links - 
 
-### Registration (one-time)
-
-If you or your company is a first-time app publisher on Azure Marketplace, [follow the steps](https://docs.microsoft.com/azure/marketplace/partner-center-portal/create-account) to register and create a [Commercial Marketplace](https://docs.microsoft.com/azure/marketplace/overview) account in Partner Center. This process provides you with a unique **Publisher ID** and access to the Commercial Marketplace authoring and publishing experience, where you'll create, certify, and publish your solution.
-
-### Author and publish a solution offer
-
-The following steps reference the Partner Center's more detailed documentation.
-
-1.	[Create an Azure application type offer](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer) and configure the offer setup details as per the relevant  guidance.
-> Ensure that the OfferID contains the keyword "sentinel". Consider using the format: `microsoft-sentinel-solution-<productname>`
-
-2.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
-
-3.	Configure the [Offer listing details](https://docs.microsoft.com/azure/marketplace/azure-app-offer-listing), including the title, description, pictures, videos, support information, and so on. 
-    * As one of your search keywords, add `f1de974b-f438-4719-b423-8bf704ba2aef` to have your solution appear in the Microsoft Sentinel content hub.
-    * Ensure to provide CSP (Cloud Solution Provider) Program contact and relevant CSP information as requested. This will enable you to offer the solution to CSP subscriptions and increased visibility and adoption of your solution. Refer to the [CSP FAQs](#csp-cloud-solution-provider) for further details on why this is recommended for Microsoft Sentinel solutions. 
-    * If you want to start your solution in Preview (Public Preview), you can do so by appending "(Preview)" in the solution / offer title. This will ensure your offer  gets tagged with Preview tag in Microsoft Sentinel Content hub. 
-
-4.	[Create a plan](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-plans) and select **Solution Template** as the plan type. 
-    * If your offer needs to be available for customers from U.S. federal, state, local, or tribal entities, follow the steps to select the *Azure Government* check box and subsquent guidance.
-
-5.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-solution) the **Solutions template** plan. This is where you’ll upload the zip file that you'd created in step two and set a version for your package. Make sure to follow the versioning guidance described in step 2, above.	
-
-6. [Enable CSP for your offer](https://docs.microsoft.com/azure/marketplace/azure-app-marketing) by going to the *Resell through CSPs* tab in Partner Center and selecting *Any partner in the CSP program*. This will enable you to offer the solution to CSP subscriptions and increased visibility and adoption of your solution. Refer to the [CSP FAQs](#csp-cloud-solution-provider) for further details on why this is recommended for Microsoft Sentinel solutions. 
-
-7.	[Validate and test](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish) your solution offer.  
-
-8.	After the validation passes, [publish the offer live](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish#publish-your-offer-live). This will trigger the certification process, which can take up to 3 business days. 
-
-**Note:** The Microsoft Sentinel team will need to modify your files so that your solution appears in the Microsoft Sentinel content hub. Therefore, before going live, email the  [Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with your solutions offer ID and your **Publisher ID** so that we can make the required changes.
-
-**Note:** You must make the offer public in order for it to show up in the Microsoft Sentinel content hub so that customers can find it.
+1. Publish solutions to Microsoft Sentinel - https://learn.microsoft.com/en-us/azure/sentinel/publish-sentinel-solutions
+2. Solution tracking after publishing in the Microsoft Partner center - https://learn.microsoft.com/en-us/azure/sentinel/sentinel-solutions-post-publish-tracking
 
 ## Feedback
 

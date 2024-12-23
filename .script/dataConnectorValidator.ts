@@ -26,7 +26,11 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
 
         /* Disabling temporarily till we get confirmation from PM*/
         // isValidFileName(filePath
-        isValidPermissions(jsonFile.permissions, connectorCategory);
+        /* Skip validation for Solution Microsoft Exchange Security - Exchange On-Premises Solution */
+        if (!filePath.includes('Microsoft Exchange Security - Exchange On-Premises')) 
+        {
+          isValidPermissions(jsonFile.permissions, connectorCategory);
+        }
       }
       else{
         console.warn(`Skipping File as it is of type Events : ${filePath}`)
@@ -143,6 +147,18 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   else if (dataTypes[0].name.includes("SecurityIncident"))
   {
     return ConnectorCategory.CybleThreatIntel;
+  }
+  else if (dataTypes[0].name.includes("IndicatorsOfCompromise"))
+  {
+    return ConnectorCategory.CrowdStrikeFalconIOC;
+  }
+  else if (dataTypes[0].name.includes("WizIssues"))
+  {
+    return ConnectorCategory.Wiz;
+  }
+  else if (dataTypes[0].name.includes("vectra_isession"))
+  {
+    return ConnectorCategory.VectraStreamAma;
   }
   return "";
 } 

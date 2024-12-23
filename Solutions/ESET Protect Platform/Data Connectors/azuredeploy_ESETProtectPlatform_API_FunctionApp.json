@@ -1,0 +1,629 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Log Analytics workspace associated with Microsoft Sentinel."
+            }
+        },
+        "tableName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the custom Log Analytics table to be created."
+            },
+            "defaultValue": "IntegrationTable_CL",
+            "minLength": 3
+        },
+        "dataCollectionEndpointName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Data Collection Endpoint to be created."
+            },
+            "defaultValue": "integrationDCE",
+            "minLength": 3
+        },
+        "dataCollectionRuleName": {
+			"type": "string",
+			"metadata": {
+                "description": "The name of the Data Collection Rule to be created."
+            },
+            "defaultValue": "integrationDCR",
+            "minLength": 3
+        },
+        "applicationName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Azure Function App to be created. The name must be a unique value. Therefore, the system will add additional characters from your Resource group ID to the name you provide to ensure its uniqueness."
+            },
+            "minLength": 3
+        },
+        "applicationRunInterval": {
+            "type": "int",
+            "defaultValue": 5,
+            "allowedValues": [
+                5,
+                10,
+                15
+            ],
+            "metadata": {
+                "description": "The interval in minutes of sending detections to Microsoft Sentinel e.g. every 5 minutes."
+            }
+        },
+        "objectID": {
+            "type": "string",
+			"metadata": {
+                "description": "The Object ID of the Service Principal associated with the registered application in Microsoft Entra ID."
+            }
+        },
+        "azureClientID": {
+			"type": "string",
+			"metadata": {
+                "description": "The Azure Client ID of the registered application in Microsoft Entra ID."
+            }
+        },
+        "azureClientSecret": {
+            "type": "secureString",
+			"metadata": {
+                "description": "The Azure Client Secret of the registered application in Microsoft Entra ID."
+            }
+        },
+        "azureTenantID": {
+            "type": "string",
+            "metadata": {
+                "description": "The Azure Tenant ID of the registered application in Microsoft Entra ID."
+            }
+        },
+        "login": {
+            "type": "string",
+            "metadata": {
+                "description": "The ESET Connect API user account login (email)."
+            }
+        },
+        "password": {
+            "type": "secureString",
+            "metadata": {
+                "description": "The ESET Connect API user account password."
+            }
+        },
+        "instanceRegion": {
+            "type": "string",
+            "defaultValue": "eu",
+            "allowedValues": [
+                "eu",
+                "us",
+                "jpn",
+                "ca",
+                "de"
+            ],
+            "metadata": {
+                "description": "The region where your ESET Protect/Inspect/ECOS instance is running."
+            }
+        },
+        "keyBase": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Do not change this value. Base string for the key to encrypt/decrypt token data."
+            },
+            "minLength": 36,
+            "maxLength": 36
+        }
+    },
+	"variables": {
+        "tableNameCL": "[if(endsWith(parameters('tableName'), '_CL'), parameters('tableName'), concat(parameters('tableName'), '_CL'))]",
+		"customTableName": "[concat('Custom-', variables('tableNameCL'))]",
+		"applicationName": "[concat(parameters('applicationName'), uniquestring(resourceGroup().id))]",
+        "dataCollectionEndpointId":"[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
+		"dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]",
+        "location": "[resourceGroup().location]",
+        "hostingPlanName": "[variables('applicationName')]",
+        "contentShare": "[variables('applicationName')]",
+        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunction')]",
+		"workspaces_integration_log_analytics_workspace_externalid":"[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "keyBase64": "[base64(substring(parameters('keyBase'), 0, 32))]"
+
+	},
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "name": "[parameters('dataCollectionEndpointName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameCL'))]"
+            ],
+            "apiVersion": "2021-04-01",
+            "properties": {
+                "networkAcls": {
+                "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('workspaceName'), '/', variables('tableNameCL'))]",
+            "location": "[variables('location')]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('tableNameCL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "typeName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "objectName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "networkCommunication",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "detectionUuid",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "objectTypeName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "occurTime",
+                            "type": "string"
+                        },
+                        {
+                            "name": "displayName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "responses",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "objectHashSha1",
+                            "type": "string"
+                        },
+                        {
+                            "name": "severityLevel",
+                            "type": "string"
+                        },
+                        {
+                            "name": "category",
+                            "type": "string"
+                        },
+                        {
+                            "name": "objectUrl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "context",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "groupSize",
+                            "type": "int"
+                        },
+                        {
+                            "name": "severityScore",
+                            "type": "string"
+                        },
+                        {
+                            "name": "deviceDisplayName",
+                            "type": "string"
+                        },
+                                              {
+                            "name": "deviceUuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userNameBase",
+                            "type": "string"
+                        },
+                        {
+                            "name": "processPath",
+                            "type": "string"
+                        },
+                        {
+                            "name": "processUuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "processCommandline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "objectSizeBytes",
+                            "type": "int"
+                        },
+                        {
+                            "name": "edrRuleUuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "note",
+                            "type": "string"
+                        },
+                        {
+                            "name": "resolved",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "cloudOfficeTenantUuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "scanUuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "triggeringEvent",
+                            "type": "dynamic"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2023-03-11",
+            "name": "[parameters('dataCollectionRuleName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameCL'))]",
+                "[variables('dataCollectionEndpointId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+                "streamDeclarations": {
+                    "[variables('customTableName')]": {
+                    "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "typeName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "objectName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "networkCommunication",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "detectionUuid",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "objectTypeName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "occurTime",
+                                "type": "string"
+                            },
+                            {
+                                "name": "displayName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "responses",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "objectHashSha1",
+                                "type": "string"
+                            },
+                            {
+                                "name": "severityLevel",
+                                "type": "string"
+                            },
+                            {
+                                "name": "category",
+                                "type": "string"
+                            },
+                            {
+                                "name": "objectUrl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "context",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "groupSize",
+                                "type": "int"
+                            },
+                            {
+                                "name": "severityScore",
+                                "type": "string"
+                            },
+                            {
+                                "name": "deviceDisplayName",
+                                "type": "string"
+                            },
+                                                  {
+                                "name": "deviceUuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "userNameBase",
+                                "type": "string"
+                            },
+                            {
+                                "name": "processPath",
+                                "type": "string"
+                            },
+                            {
+                                "name": "processUuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "processCommandline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "objectSizeBytes",
+                                "type": "int"
+                            },
+                            {
+                                "name": "edrRuleUuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "note",
+                                "type": "string"
+                            },
+                            {
+                                "name": "resolved",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "cloudOfficeTenantUuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "scanUuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "triggeringEvent",
+                                "type": "dynamic"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaces_integration_log_analytics_workspace_externalid')]",
+                            "name": "[parameters('workspaceName')]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('customTableName')]"
+                        ],
+                        "destinations": [
+                            "[parameters('workspaceName')]"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "[variables('customTableName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(parameters('dataCollectionRuleName'), parameters('objectID'), 'Monitoring Metrics Publisher')]",
+            "scope": "[variables('dataCollectionRuleId')]",
+            "properties": {
+				"roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+				"principalId": "[parameters('objectID')]",
+				"principalType": "ServicePrincipal"
+			},
+            "dependsOn": ["[variables('dataCollectionRuleId')]"]
+        }, 
+        {
+            "apiVersion": "2022-03-01",
+            "name": "[variables('applicationName')]",
+            "type": "Microsoft.Web/sites",
+            "kind": "functionapp,linux",
+            "location": "[resourceGroup().location]",
+            "tags": {},
+            "dependsOn": [
+                "[concat('Microsoft.Web/serverfarms/', variables('hostingPlanName'))]",
+                "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+                "[variables('dataCollectionRuleId')]"
+
+            ],
+            "properties": {
+                "name": "[variables('applicationName')]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(concat('microsoft.insights/components/', variables('applicationName')), '2015-05-01').ConnectionString]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value,';EndpointSuffix=','core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value,';EndpointSuffix=','core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('contentShare'))]"
+                        }, 
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "https://aka.ms/sentinel-EsetProtectionPlatform-FunctionApp"
+                        }, 
+                        {
+                            "name": "ENDPOINT_URI",
+                            "value": "[reference(variables('dataCollectionEndpointId'), '2021-04-01').logsIngestion.endpoint]"
+                        }, 
+                        {
+                            "name": "DCR_IMMUTABLEID",
+                            "value": "[reference(variables('dataCollectionRuleId'), '2023-03-11').immutableId]"
+                        }, 
+                        {
+                            "name": "STREAM_NAME",
+                            "value": "[variables('customTableName')]"
+                        }, 
+                        {
+                            "name": "AZURE_CLIENT_ID",
+                            "value": "[parameters('azureClientID')]"
+                        },
+                        {
+                            "name": "AZURE_CLIENT_SECRET",
+                            "value": "[parameters('azureClientSecret')]"
+                        }, 
+                        {
+                            "name": "AZURE_TENANT_ID",
+                            "value": "[parameters('azureTenantID')]"
+                        }, 
+                                                {
+                            "name": "PASSWORD_INTEGRATION",
+                            "value": "[parameters('password')]"
+                        },
+                        {
+                            "name": "USERNAME_INTEGRATION",
+                            "value": "[parameters('login')]"
+                        },
+                        {
+                            "name": "INTERVAL",
+                            "value": "[parameters('applicationRunInterval')]"
+                        },
+                        {
+                            "name": "PYTHONPATH",
+                            "value": "/home/site/wwwroot/.python_packages/lib/site-packages,/home/site/wwwroot"
+                        }, 
+                        {
+                            "name": "PYTHON_ISOLATE_WORKER_DEPENDENCIES",
+                            "value": "1"
+                        },
+                        {
+                            "name": "KEY_BASE64",
+                            "value": "[variables('keyBase64')]"
+                        },
+                        {
+
+                            "name": "INSTANCE_REGION",
+                            "value": "[parameters('instanceRegion')]"
+                        }
+                    ],
+                    "cors": {
+                        "allowedOrigins": [
+                            "https://portal.azure.com"
+                        ]
+                    },
+                    "use32BitWorkerProcess": false,
+                    "ftpsState": "FtpsOnly",
+                    "linuxFxVersion": "Python|3.11"
+                },
+                "clientAffinityEnabled": false,
+                "publicNetworkAccess": "Enabled",
+                "httpsOnly": true,
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]"
+            },
+            "resources": [
+                {
+                    "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+                    "apiVersion": "2022-09-01",
+                    "name": "[concat(variables('applicationName'), '/scm')]",
+                    "properties": {
+                        "allow": false
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/Sites', variables('applicationName'))]"
+                    ]
+                },
+                {
+                    "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+                    "apiVersion": "2022-09-01",
+                    "name": "[concat(variables('applicationName'), '/ftp')]",
+                    "properties": {
+                        "allow": false
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/Sites', variables('applicationName'))]"
+                    ]
+                }
+            ]
+        },
+        {
+            "apiVersion": "2022-03-01",
+            "name": "[variables('hostingPlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "kind": "linux",
+            "tags": {},
+            "dependsOn": [],
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "workerSize": "0",
+                "workerSizeId": "0",
+                "numberOfWorkers": 1,
+                "reserved": true
+            },
+            "sku": {
+                "Tier": "Dynamic",
+                "Name": "Y1"
+            }
+        },
+        {
+            "apiVersion": "2020-02-02",
+            "name": "[variables('applicationName')]",
+            "type": "microsoft.insights/components",
+            "location": "westeurope",
+            "tags": {},
+            "dependsOn": [],
+            "properties": {
+                "ApplicationId": "[variables('applicationName')]",
+                "Request_Source": "IbizaWebAppExtensionCreate",
+                "Flow_Type": "Redfield",
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[variables('workspaces_integration_log_analytics_workspace_externalid')]"
+            }
+        },
+        {
+            "apiVersion": "2022-05-01",
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {},
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "properties": {
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "defaultToOAuthAuthentication": true
+            }
+        }
+    ]
+}

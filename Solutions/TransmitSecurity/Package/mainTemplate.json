@@ -1,0 +1,451 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Transmit Security",
+    "comments": "Solution template for TransmitSecurity"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "TransmitSecurity",
+    "_solutionVersion": "3.0.1",
+    "solutionId": "transmitsecurity.microsoft-sentinel-solution-transmitsecurity",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "TransmitSecurity",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "TransmitSecurity",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "TransmitSecurity data connector with template version 3.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Transmit Security Connector (using Azure Functions)",
+                  "publisher": "TransmitSecurity",
+                  "descriptionMarkdown": "The [Transmit Security] data connector provides the capability to ingest common Transmit Security API events into Microsoft Sentinel through the REST API. [Refer to API documentation for more information](https://developer.transmitsecurity.com/). The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Activity data received",
+                      "legend": "TransmitSecurityActivity_CL",
+                      "baseQuery": "TransmitSecurityActivity_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "name": "All activities",
+                      "query": "TransmitSecurityActivity_CL\n | sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "TransmitSecurityActivity_CL",
+                      "lastDataReceivedQuery": "TransmitSecurityActivity_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "TransmitSecurityActivity_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(3d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "REST API Client ID",
+                        "description": "**TransmitSecurityClientID** is required. See the documentation to learn more about API on the `https://developer.transmitsecurity.com/`."
+                      },
+                      {
+                        "name": "REST API Client Secret",
+                        "description": "**TransmitSecurityClientSecret** is required. See the documentation to learn more about API on the `https://developer.transmitsecurity.com/`."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to the Transmit Security API to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": "**STEP 1 - Configuration steps for the Transmit Security API**\n\nFollow the instructions to obtain the credentials.\n\n1. Log in to the Transmit Security Portal.\n2. Configure a [management app](https://developer.transmitsecurity.com/guides/user/management_apps/). Give the app a suitable name, for example, MyAzureSentinelCollector.\n3. Save credentials of the new user for using in the data connector."
+                    },
+                    {
+                      "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Transmit Security data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following).",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "Use this method for automated deployment of the Transmit Security data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below.\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-TransmitSecurityAPI-azuredeploy) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/sentinel-TransmitSecurityAPI-azuredeploy-gov)\n\n2. Select the preferred **Subscription**, **Resource Group**, and **Location**.\n\n> **NOTE:** Within the same resource group, you can't mix Windows and Linux apps in the same region. Select an existing resource group without Windows apps in it or create a new resource group.\n\n3. Enter the **TransmitSecurityClientID**, **TransmitSecurityClientSecret**, **TransmitSecurityPullEndpoint**, **TransmitSecurityTokenEndpoint**, and deploy.\n\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n\n5. Click **Purchase** to deploy.",
+                      "title": "Option 1 - Azure Resource Manager (ARM) Template"
+                    },
+                    {
+                      "description": "Use the following step-by-step instructions to deploy the Transmit Security data connector manually with Azure Functions (Deployment via Visual Studio Code).",
+                      "title": "Option 2 - Manual Deployment of Azure Functions"
+                    },
+                    {
+                      "description": "**1. Deploy a Function App**\n\n> **NOTE:** You will need to [prepare VS Code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.\n\n1. Download the [Azure Function App](https://aka.ms/sentinel-TransmitSecurityAPI-functionapp) file. Extract the archive to your local development computer.\n\n2. Start VS Code. Choose **File** in the main menu and select **Open Folder**.\n\n3. Select the top-level folder from the extracted files.\n\n4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.\n\n   If you aren't already signed in, choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose **Sign in to Azure**.\n\n   If you're already signed in, go to the next step.\n\n5. Provide the following information at the prompts:\n\n   a. **Select folder:** Choose a folder from your workspace or browse to one that contains your function app.\n\n   b. **Select Subscription:** Choose the subscription to use.\n\n   c. Select **Create new Function App in Azure** (Don't choose the Advanced option).\n\n   d. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions.\n\n   e. **Select a runtime:** Choose Python 3.11.\n\n   f. Select a location for new resources. For better performance and lower costs, choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.\n\n6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.\n\n7. Go to the Azure Portal for the Function App configuration."
+                    },
+                    {
+                      "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n\n2. Select **Environment variables**.\n\n3. Add each of the following application settings individually, with their respective string values (case-sensitive):\n\n   - **TransmitSecurityClientID**\n   - **TransmitSecurityClientSecret**\n   - **TransmitSecurityPullEndpoint**\n   - **TransmitSecurityTokenEndpoint**\n   - **WorkspaceID**\n   - **WorkspaceKey**\n   - **logAnalyticsUri** (optional)\n\n   > - Use **logAnalyticsUri** to override the log analytics API endpoint for a dedicated cloud. For example, for the public cloud, leave the value empty; for the Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n\n4. Once all application settings have been entered, click **Apply**."
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "TransmitSecurity",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Transmit Security"
+                },
+                "support": {
+                  "name": "Transmit Security",
+                  "tier": "Partner",
+                  "link": "https://transmitsecurity.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Transmit Security Connector (using Azure Functions)",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "TransmitSecurity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Transmit Security"
+        },
+        "support": {
+          "name": "Transmit Security",
+          "tier": "Partner",
+          "link": "https://transmitsecurity.com/support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Transmit Security Connector (using Azure Functions)",
+          "publisher": "TransmitSecurity",
+          "descriptionMarkdown": "The [Transmit Security] data connector provides the capability to ingest common Transmit Security API events into Microsoft Sentinel through the REST API. [Refer to API documentation for more information](https://developer.transmitsecurity.com/). The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.",
+          "graphQueries": [
+            {
+              "metricName": "Activity data received",
+              "legend": "TransmitSecurityActivity_CL",
+              "baseQuery": "TransmitSecurityActivity_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "TransmitSecurityActivity_CL",
+              "lastDataReceivedQuery": "TransmitSecurityActivity_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "TransmitSecurityActivity_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(3d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "name": "All activities",
+              "query": "TransmitSecurityActivity_CL\n | sort by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "REST API Client ID",
+                "description": "**TransmitSecurityClientID** is required. See the documentation to learn more about API on the `https://developer.transmitsecurity.com/`."
+              },
+              {
+                "name": "REST API Client Secret",
+                "description": "**TransmitSecurityClientSecret** is required. See the documentation to learn more about API on the `https://developer.transmitsecurity.com/`."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to the Transmit Security API to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": "**STEP 1 - Configuration steps for the Transmit Security API**\n\nFollow the instructions to obtain the credentials.\n\n1. Log in to the Transmit Security Portal.\n2. Configure a [management app](https://developer.transmitsecurity.com/guides/user/management_apps/). Give the app a suitable name, for example, MyAzureSentinelCollector.\n3. Save credentials of the new user for using in the data connector."
+            },
+            {
+              "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Transmit Security data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following).",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            },
+            {
+              "description": "Use this method for automated deployment of the Transmit Security data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below.\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-TransmitSecurityAPI-azuredeploy) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/sentinel-TransmitSecurityAPI-azuredeploy-gov)\n\n2. Select the preferred **Subscription**, **Resource Group**, and **Location**.\n\n> **NOTE:** Within the same resource group, you can't mix Windows and Linux apps in the same region. Select an existing resource group without Windows apps in it or create a new resource group.\n\n3. Enter the **TransmitSecurityClientID**, **TransmitSecurityClientSecret**, **TransmitSecurityPullEndpoint**, **TransmitSecurityTokenEndpoint**, and deploy.\n\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n\n5. Click **Purchase** to deploy.",
+              "title": "Option 1 - Azure Resource Manager (ARM) Template"
+            },
+            {
+              "description": "Use the following step-by-step instructions to deploy the Transmit Security data connector manually with Azure Functions (Deployment via Visual Studio Code).",
+              "title": "Option 2 - Manual Deployment of Azure Functions"
+            },
+            {
+              "description": "**1. Deploy a Function App**\n\n> **NOTE:** You will need to [prepare VS Code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.\n\n1. Download the [Azure Function App](https://aka.ms/sentinel-TransmitSecurityAPI-functionapp) file. Extract the archive to your local development computer.\n\n2. Start VS Code. Choose **File** in the main menu and select **Open Folder**.\n\n3. Select the top-level folder from the extracted files.\n\n4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.\n\n   If you aren't already signed in, choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose **Sign in to Azure**.\n\n   If you're already signed in, go to the next step.\n\n5. Provide the following information at the prompts:\n\n   a. **Select folder:** Choose a folder from your workspace or browse to one that contains your function app.\n\n   b. **Select Subscription:** Choose the subscription to use.\n\n   c. Select **Create new Function App in Azure** (Don't choose the Advanced option).\n\n   d. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions.\n\n   e. **Select a runtime:** Choose Python 3.11.\n\n   f. Select a location for new resources. For better performance and lower costs, choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.\n\n6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.\n\n7. Go to the Azure Portal for the Function App configuration."
+            },
+            {
+              "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n\n2. Select **Environment variables**.\n\n3. Add each of the following application settings individually, with their respective string values (case-sensitive):\n\n   - **TransmitSecurityClientID**\n   - **TransmitSecurityClientSecret**\n   - **TransmitSecurityPullEndpoint**\n   - **TransmitSecurityTokenEndpoint**\n   - **WorkspaceID**\n   - **WorkspaceKey**\n   - **logAnalyticsUri** (optional)\n\n   > - Use **logAnalyticsUri** to override the log analytics API endpoint for a dedicated cloud. For example, for the public cloud, leave the value empty; for the Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n\n4. Once all application settings have been entered, click **Apply**."
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "TransmitSecurity",
+        "publisherDisplayName": "Transmit Security",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/TransmitSecurity/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The [Transmit Security] data connector provides the capability to ingest common Transmit Security API events into Microsoft Sentinel through the REST API. <a href=\"https://developer.transmitsecurity.com/\">Refer to API documentation for more information</a>. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/refs/heads/master/Logos/Transmit_Security_Logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "TransmitSecurity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Transmit Security"
+        },
+        "support": {
+          "name": "Transmit Security",
+          "tier": "Partner",
+          "link": "https://transmitsecurity.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-06-10",
+        "lastPublishDate": "2024-11-20",
+        "providers": [
+          "TransmitSecurity"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

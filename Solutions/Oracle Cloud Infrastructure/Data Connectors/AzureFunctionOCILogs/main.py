@@ -102,7 +102,7 @@ def get_cursor_by_group(sc, sid, group_name, instance_name):
     return response.data.value
 
 def get_cursor_by_partition(client, stream_id, partition):
-    print("Creating a cursor for partition {}".format(partition))
+    logging.info("Creating a cursor for partition {}".format(partition))
     cursor_details = oci.streaming.models.CreateCursorDetails(
         partition=partition,
         type=oci.streaming.models.CreateCursorDetails.TYPE_TRIM_HORIZON)
@@ -122,7 +122,9 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
             if message:
                 event = b64decode(message.value.encode()).decode()
                 logging.info('event details {}'.format(event))
-                if event != 'Test': 
+                myjson = str(event)
+                if(myjson.startswith("{")):
+                #if event != 'ok' and event != 'Test': 
                     event = json.loads(event)
                     if "data" in event:
                         if "request" in event["data"] and event["type"] != "com.oraclecloud.loadbalancer.access":

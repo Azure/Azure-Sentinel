@@ -1,0 +1,55 @@
+id: 6f1e58bd-cd95-4dfb-8883-94207f30929a
+kind: Scheduled
+name: BTP - Mass user deletion in a sub account
+description: Identifies user account deletion activity where the amount of deleted
+  users exceeds a predefined threshold.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1531
+  - T1485
+  - T1489
+  - T0813
+  - T0826
+  - T0827
+query: |
+  let bulk_delete_threshold = 10;
+  SAPBTPAuditLog_CL
+  | where isnotnull(Message.object)
+  | where Message.object has "scim user" and Message.object has "DELETE"
+  | mv-expand Attributes = Message.attributes
+  | where isnotempty(Attributes.old)
+  | extend DeletedUserName = tostring(parse_json(tostring(Attributes.old)).userName)
+  | where isnotempty(DeletedUserName)
+  | summarize
+      Start = min(UpdatedOn),
+      End = max(UpdatedOn),
+      DeletedUsers = make_set(DeletedUserName, 100)
+      by UserName, Tenant, SpaceId
+  | where array_length(DeletedUsers) > bulk_delete_threshold
+  | project Start, End, UserName, DeletedUsers, Tenant, SpaceId, CloudApp = "SAP BTP"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+version: 3.0.5
