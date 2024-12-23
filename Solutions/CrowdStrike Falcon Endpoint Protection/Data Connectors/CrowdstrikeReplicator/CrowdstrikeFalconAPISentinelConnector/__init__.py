@@ -43,6 +43,7 @@ if not match:
 
 drop_files_array = []
 failed_files_array = []
+file_failure_count = {}
 
 def _create_sqs_client():
     sqs_session = get_session()
@@ -191,12 +192,19 @@ async def process_file(bucket, s3_path, client, semaphore, session, retrycount):
             total_events += sentinel.successfull_sent_events_number
             logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
         except Exception as e:
-            if(retrycount<=0):
-                logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
-                drop_files_array.append({'bucket': bucket, 'path': s3_path})
+            if s3_path in file_failure_count:
+               file_failure_count[s3_path] += 1
             else:
-                logging.warn("Processing file {} was failed after defined no. of retries. Error: {}".format(s3_path,e))
-                failed_files_array.append({'bucket': bucket, 'path': s3_path})
+               file_failure_count[s3_path] = 1
+            if file_failure_count[s3_path] == 1:
+               if not any(f['path'] == s3_path for f in drop_files_array):
+                   logging.warning("Processing file {} failed. Adding to drop_files_array. Error: {}".format(s3_path, e))
+                   drop_files_array.append({'bucket': bucket, 'path': s3_path})
+            else:
+               logging.warning("Processing file {} failed multiple times. Moving to failed_files_array. Error: {}".format(s3_path, e))
+               drop_files_array = [f for f in drop_files_array if f['path'] != s3_path]  # Remove from drop_files_array
+               if not any(f['path'] == s3_path for f in failed_files_array):
+                   failed_files_array.append({'bucket': bucket, 'path': s3_path})
                 
 
 async def download_message_files(msg, session, retrycount):
