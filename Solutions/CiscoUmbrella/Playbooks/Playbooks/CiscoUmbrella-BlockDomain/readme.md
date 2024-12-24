@@ -2,7 +2,7 @@
 
 ## Summary
 
-When a new Sentinel incident is created, this playbook gets triggered and performs the following actions
+When a new sentinel incident is created, this playbook gets triggered and performs the following actions
 
 1. Obtains domains from URL entities in the incident.
 2. Optionally adds these domains to a customer's domain lists using [Cisco Umbrella Enforcement API](https://developer.cisco.com/docs/cloud-security/#!enforcement-overview/overview).
