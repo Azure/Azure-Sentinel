@@ -17,7 +17,7 @@ MessageEndpoint = os.environ['MessageEndpoint']
 StreamOcid = os.environ['StreamOcid'] 
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
-LOG_TYPE = 'OCI_Logs'
+LOG_TYPE = 'OCI_LogsV2'
 CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition',"0")
@@ -41,7 +41,7 @@ def main(mytimer: func.TimerRequest):
     config = get_config()
     oci.config.validate_config(config)
 
-    sentinel_connector = AzureSentinelConnector(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=2000)
+    sentinel_connector = AzureSentinelConnector(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=2000)
 
     stream_client = oci.streaming.StreamClient(config, service_endpoint=MessageEndpoint)
 
@@ -52,6 +52,31 @@ def main(mytimer: func.TimerRequest):
     
     process_events(stream_client, StreamOcid, cursor, limit, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
+
+
+def determine_log_type(event):
+    """
+    Determine the Azure Sentinel log type based on the event type.
+    """
+    # event_type = event.get("type", "default")
+    if event["type"] == "com.oraclecloud.loadbalancer.access" or event["type"] == "com.oraclecloud.loadbalancer.error" or event["type"]=="com.oraclecloud.OraLB-API.ListLoadBalancers":
+        return "OCI_LoadBalancerLogs"
+    # elif event_type == "com.oraclecloud.loadbalancer.error":
+    #     return "OCI_LoadBalancerLogs"
+    if event["type"] == "com.oraclecloud.Audit.ListEvents":
+        return "OCI_AuditLogs"
+    if event["type"] == "com.oraclecloud.computeApi.ListVolumeAttachments" or event["type"] == "com.oraclecloud.computeApi.ListVnicAttachments" or event["type"] == "com.oraclecloud.computeApi.ListBootVolumeAttachments" or event["type"] == "com.oraclecloud.computeApi.GetInstance":
+        return "OCI_ComputeApiLogs"
+    if event["type"] == "com.oraclecloud.sch.serviceconnector.runlog":
+        return "OCI_ServiceConnector_Logs"
+    if "com.oraclecloud.DatabaseService" in event["type"]:
+        return "OCI_DatabaseService_Logs"
+    if "com.oraclecloud.KeyManagementService" in event["type"]:
+        return "OCI_KeyManagementService_Logs"
+    if event["type"] == "com.oraclecloud.vcn.flowlogs.DataEvent" or event["type"] == "com.oraclecloud.vcn.flowlogs.QualityEvent.NoData" or event["type"] == "com.oraclecloud.virtualNetwork.GetVcn" or event["type"] == "com.oraclecloud.virtualNetwork.ListVcns" or event["type"] == "com.oraclecloud.virtualNetwork.GetVnic" or event ["type"] == "com.oraclecloud.virtualNetwork.GetSubnet" or event["type"] == "com.oraclecloud.vcn.flowlogs.QualityEvent.SkipData" or event["type"] == "com.oraclecloud.virtualNetwork.GetVcnDnsResolverAssociation":
+        return "OCI_VirtualNetworkLogs"
+    else:
+        return "OCI_LogsV2"  # Default log type
 
 def parse_key(key_input):
     try:
@@ -127,6 +152,10 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                 #if event != 'ok' and event != 'Test': 
                     event = json.loads(event)
                     if "data" in event:
+                        log_type = determine_log_type(event)
+                        logging.info(
+                            '{} Log type value after determining the log type'.format(log_type))
+                        sentinel.log_type = log_type
                         if "request" in event["data"] and event["type"] != "com.oraclecloud.loadbalancer.access":
                             if event["data"]["request"] is not None and "headers" in event["data"]["request"]:
                                 event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
@@ -143,7 +172,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                             if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
                                 event["data"]["stateChange"]["current"] = json.dumps(
                                     event["data"]["stateChange"]["current"])
-                    sentinel.send(event)
+                    sentinel.send(event, log_type)
 
         sentinel.flush()
         if check_if_script_runs_too_long(start_ts):
