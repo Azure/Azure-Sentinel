@@ -122,6 +122,7 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize the Bloodhound Client connection
+	// TODO: have our hown bloodhound client type that contains key, domain etc.
 	bhClient, err := InitializeBloodhoundClient(config.BloodhoundAPIKey,
 		config.BloodhoundAPIKeyId,
 		config.BloodhoundDomain)
@@ -181,7 +182,7 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	//
 	// do stuff here
 	//
-	logs, err := connector.UploadLogsCallback(bhClient, lastRunTime, azureClient, config.RuleId, config.MAX_UPLOAD_SIZE)
+	logs, err := connector.UploadLogsCallback(bhClient, config.BloodhoundDomain, lastRunTime, azureClient, config.RuleId, config.MAX_UPLOAD_SIZE)
 	if err != nil {
 		sendError(w, fmt.Sprintf("Error in connector: %s logs: %v key: %s keyId: %s", err.Error(), logs, config.BloodhoundAPIKey, config.BloodhoundAPIKeyId))
 		return
