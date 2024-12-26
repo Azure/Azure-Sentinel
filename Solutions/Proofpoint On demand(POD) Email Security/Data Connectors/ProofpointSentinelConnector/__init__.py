@@ -55,6 +55,20 @@ class Proofpoint_api:
         before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes)
         self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
+        
+    def check_and_split_msgParts(self, msg_parts):
+        max_size = 32000
+        if isinstance(msg_parts, (dict, list)):
+            msg_parts = json.dumps(msg_parts)
+
+        msglen = len(msg_parts.encode('utf-8'))
+        if msglen > max_size:
+            split_point = len(msg_parts) // 2
+            msg_parts1 = msg_parts[:split_point]
+            msg_parts2 = msg_parts[split_point:]
+            return msg_parts1, msg_parts2
+        else:
+            return msg_parts, None
 
     def set_websocket_conn(self, event_type):
         max_retries = 3
@@ -109,6 +123,17 @@ class Proofpoint_api:
                     y = json.loads(row)
                     logging.info(f'json row : {y}')
                     y.update({'event_type': event_type})
+                    if 'msgParts' in y:
+                        msg_parts = y['msgParts']
+                        msg_parts1, msg_parts2 = self.check_and_split_msgParts(
+                            msg_parts)
+                        if msg_parts2:
+                            y['msgParts1'] = msg_parts1
+                            y['msgParts2'] = msg_parts2
+                        else:
+                            y['msgParts'] = msg_parts1
+                        if 'msgParts' in y and msg_parts2:
+                            del y['msgParts']
                     obj_array.append(y)
                 logging.info(f'Response Object array : {obj_array}')
 
