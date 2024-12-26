@@ -4,13 +4,15 @@ import typing as t
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-import aiohttp
+from aiohttp import ClientSession
 from aiohttp.client_exceptions import ClientResponseError
+from cryptography.fernet import Fernet, InvalidToken
+from pydantic import ValidationError
+
 from azure.core.exceptions import HttpResponseError, ServiceRequestError
 from azure.data.tables import TableServiceClient
 from azure.identity.aio import DefaultAzureCredential
 from azure.monitor.ingestion.aio import LogsIngestionClient
-from cryptography.fernet import Fernet, InvalidToken
 from integration.exceptions import (
     AuthenticationException,
     InvalidCredentialsException,
@@ -19,7 +21,6 @@ from integration.exceptions import (
 )
 from integration.models import Config, EnvVariables, TokenStorage
 from integration.models_detections import Detection, Detections
-from pydantic import ValidationError
 
 
 class RequestSender:
@@ -31,12 +32,15 @@ class RequestSender:
         self,
         send_request_fun: (
             t.Callable[
-                [aiohttp.client.ClientSession, str, str | None], t.Coroutine[t.Any, t.Any, dict[str, str | int] | t.Any]
+                [ClientSession, dict[str, t.Any] | None, str, str | None, int, str],
+                t.Coroutine[t.Any, t.Any, dict[str, str | int] | t.Any],
             ]
             | t.Callable[
-                [aiohttp.client.ClientSession, str | None], t.Coroutine[t.Any, t.Any, dict[str, str | int] | t.Any]
+                [ClientSession, dict[str, t.Any] | None, str | None],
+                t.Coroutine[t.Any, t.Any, dict[str, str | int] | t.Any],
             ]
         ),
+        session: ClientSession,
         headers: dict[str, t.Any] | None = None,
         *data: t.Any,
     ) -> t.Dict[str, str | int] | None:
@@ -44,12 +48,14 @@ class RequestSender:
 
         while retries < self.config.max_retries:
             try:
-                async with aiohttp.ClientSession(headers=headers, raise_for_status=True) as session:
-                    return await send_request_fun(session, *data)
+                return await send_request_fun(session, headers, *data)
 
             except ClientResponseError as e:
                 if e.status in [400, 401, 403]:
                     raise AuthenticationException(status=e.status, message=e.message)
+                if e.status == 404:
+                    logging.info(f"Endpoint not found.")
+                    return None
 
                 retries += 1
                 logging.error(
@@ -60,29 +66,40 @@ class RequestSender:
         return None
 
     async def send_request_post(
-        self, session: aiohttp.client.ClientSession, grant_type: str | None
+        self, session: ClientSession, headers: dict[str, t.Any] | None, grant_type: str | None
     ) -> t.Dict[str, str | int] | t.Any:
         logging.info("Sending token request")
 
         async with session.post(
             url=f"{self.env_vars.oauth_url}/oauth/token",
+            headers=headers,
             data=urllib.parse.quote(f"grant_type={grant_type}", safe="=&/"),
             timeout=self.config.requests_timeout,
         ) as response:
             return await response.json()
 
     async def send_request_get(
-        self, session: aiohttp.client.ClientSession, last_detection_time: str, next_page_token: str | None
+        self,
+        session: ClientSession,
+        headers: dict[str, t.Any] | None,
+        last_detection_time: str,
+        next_page_token: str | None,
+        page_size: int,
+        data_endpoint: str,
     ) -> t.Dict[str, str | int] | t.Any:
         logging.info("Sending service request")
 
         async with session.get(
-            self.env_vars.detections_url, params=self._prepare_get_request_params(last_detection_time, next_page_token)
+            self.env_vars.detections_url + data_endpoint,
+            headers=headers,
+            params=self._prepare_get_request_params(last_detection_time, next_page_token, page_size),
         ) as response:
             return await response.json()
 
-    def _prepare_get_request_params(self, last_detection_time: str, next_page_token: str | None) -> dict[str, t.Any]:
-        params = {"pageSize": 100}
+    def _prepare_get_request_params(
+        self, last_detection_time: str, next_page_token: str | None, page_size: int = 100
+    ) -> dict[str, t.Any]:
+        params = {"pageSize": page_size}
         if next_page_token not in ["", None]:
             params["pageToken"] = next_page_token  # type: ignore[assignment]
         if last_detection_time:
@@ -117,34 +134,37 @@ class TokenProvider:
                     value = ""
             setattr(self.token, token_param, value)
 
-    async def get_token(self) -> None:
-        logging.info("Getting token")
+    async def get_token(self, session: ClientSession) -> None:
 
-        if not self.token.access_token and (not self.env_vars.username or not self.env_vars.password):
-            raise MissingCredentialsException()
+        if not self.token.access_token or datetime.now(timezone.utc) > self.token.expiration_time:  # type: ignore
+            logging.info("Getting token")
 
-        grant_type = (
-            f"refresh_token&refresh_token={self.token.refresh_token}"
-            if self.token.access_token
-            else f"password&username={self.env_vars.username}&password={self.env_vars.password}"
-        )
+            if not self.token.access_token and (not self.env_vars.username or not self.env_vars.password):
+                raise MissingCredentialsException()
 
-        try:
-            response = await self.requests_sender.send_request(
-                self.requests_sender.send_request_post,
-                {"Content-type": "application/x-www-form-urlencoded"},
-                grant_type,
+            grant_type = (
+                f"refresh_token&refresh_token={self.token.refresh_token}"
+                if self.token.access_token
+                else f"password&username={self.env_vars.username}&password={self.env_vars.password}"
             )
-        except AuthenticationException as e:
-            if not self.token.access_token:
-                raise InvalidCredentialsException(e)
-            else:
-                self.storage_table_handler.input_entity({k: "" for k in self.token.to_dict()})  # type: ignore[call-arg]
-                raise TokenRefreshException(e)
 
-        if response:
-            self.set_token_params_locally_and_in_storage(response)
-            logging.info("Token obtained successfully")
+            try:
+                response = await self.requests_sender.send_request(
+                    self.requests_sender.send_request_post,
+                    session,
+                    {"Content-type": "application/x-www-form-urlencoded", "3rd-integration": "MS-Sentinel"},
+                    grant_type,
+                )
+            except AuthenticationException as e:
+                if not self.token.access_token:
+                    raise InvalidCredentialsException(e)
+                else:
+                    self.storage_table_handler.input_entity({k: "" for k in self.token.to_dict()})  # type: ignore[call-arg]
+                    raise TokenRefreshException(e)
+
+            if response:
+                self.set_token_params_locally_and_in_storage(response)
+                logging.info("Token obtained successfully")
 
     def set_token_params_locally_and_in_storage(self, response: t.Dict[str, str | int]) -> None:
         self.token.access_token = t.cast(str, response["access_token"])
@@ -172,40 +192,46 @@ class TransformerDetections:
             return last_detection, False
         return await self._send_data_to_log_analytics_workspace(validated_detections, last_detection)
 
-    def _validate_detections_data(self, response_data: dict[str, t.Any] | None) -> list[Detection] | None:
+    def _validate_detections_data(self, response_data: dict[str, t.Any] | None) -> list[dict[str, t.Any]] | None:
         if not response_data:
             logging.info("No new detections")
             return None
+
+        response_data["detections"] = (
+            response_data.pop("detectionGroups") if "detectionGroups" in response_data else response_data["detections"]
+        )
         try:
-            return Detections.model_validate(response_data).detections
+            validated_data = Detections.model_validate(response_data)
+            self._update_time_generated(validated_data.detections)
+            return validated_data.model_dump().get("detections")
+
         except ValidationError as e:
             logging.error(e)
             validated_detections = []
+
             for detection in response_data.get("detections"):  # type: ignore
                 try:
                     validated_detections.append(Detection.model_validate(detection))
                 except ValidationError as e:
                     logging.error(e)
 
-            return validated_detections
+            self._update_time_generated(validated_detections)
+            return [d.model_dump() for d in validated_detections]
 
     async def _send_data_to_log_analytics_workspace(
-        self, validated_data: t.List[Detection], last_detection: str | None, successful_data_upload: bool = False
+        self, validated_data: t.List[dict[str, t.Any]], last_detection: str | None, successful_data_upload: bool = False
     ) -> tuple[str | None, bool]:
         credential = DefaultAzureCredential()  # Env vars: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID
         client = LogsIngestionClient(endpoint=self.env_vars.endpoint_uri, credential=credential, logging_enable=True)
 
         async with client:
             try:
-                self._update_time_generated(validated_data)
-                dumped_data = [d.model_dump() for d in validated_data]
-
                 await client.upload(
                     rule_id=self.env_vars.dcr_immutableid,
                     stream_name=self.env_vars.stream_name,
-                    logs=dumped_data,  # type: ignore[arg-type]
+                    logs=validated_data,  # type: ignore[arg-type]
                 )
-                last_detection = max(validated_data, key=lambda detection: detection.occurTime).occurTime
+                last_detection = max(validated_data, key=lambda detection: detection.get("occurTime")).get("occurTime")  # type: ignore
                 successful_data_upload = True
             except ServiceRequestError as e:
                 logging.error(f"Authentication to Azure service failed: {e}")
@@ -263,14 +289,15 @@ class StorageTableHandler:
                     if self.entities
                     else self.table_client.create_entity(entity=entity)
                 )
+                self.entities = next(self.table_client.query_entities(""), None)
                 logging.info(f"Entity: {self.table_name_keys} updated")
         except Exception as e:
             print("Exception occurred:", e)
 
 
 class LastDetectionTimeHandler:
-    def __init__(self, storage_table_conn_str: str, env_last_occur_time: str) -> None:
-        self.storage_table_name = "LastDetectionTime"
+    def __init__(self, storage_table_conn_str: str, env_last_occur_time: str, data_source: str) -> None:
+        self.storage_table_name = f"LastDetectionTime{data_source}"
         self.storage_table_handler = StorageTableHandler(storage_table_conn_str, self.storage_table_name)
         self.storage_table_handler.set_entity()
         self.last_detection_time = self.get_last_occur_time(env_last_occur_time)
@@ -283,7 +310,13 @@ class LastDetectionTimeHandler:
     def get_entity_schema(self, cur_last_detection_time: str) -> dict[str, t.Any]:
         return {
             self.storage_table_name: (
-                datetime.strptime(cur_last_detection_time, "%Y-%m-%dT%H:%M:%SZ") + timedelta(seconds=1)
+                datetime.strptime(
+                    self.transform_date_with_miliseconds_to_second(cur_last_detection_time), "%Y-%m-%dT%H:%M:%SZ"
+                )
+                + timedelta(seconds=1)
             ).isoformat()
             + "Z"
         }
+
+    def transform_date_with_miliseconds_to_second(self, cur_last_detection_time: str) -> str:
+        return cur_last_detection_time if len(cur_last_detection_time) == 20 else cur_last_detection_time[:-5] + "Z"
