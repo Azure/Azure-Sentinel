@@ -184,7 +184,7 @@ class Auth0Connector:
 
                     if self.check_if_script_runs_too_long(script_start_time):
                         logging.info(
-                            f'Script is running too long. Stop processing new events. Finish script.')
+                            f'Script is running too long. Stop processing new events. Finished script.')
                         break
                 except Exception as err:
                     logging.error(
