@@ -1,79 +1,232 @@
 [<img alt="Recorded Future" src="Enrichment\RecordedFuture-IOC_Enrichment\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
 # Recorded Future Intelligence for Microsoft Sentinel
 
-## Roles and Permissions
-
-Microsoft article that describes roles and permissions in Microsoft Sentinel [Roles and permissions in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/roles).
-
-
-During installation, permissions are required on the resource group level to use and authorize the playbooks. [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) and [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
-
-Alternative use [managed identity](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview) authorization for playbook. The user performing the installation needs to have the role of **Owner** or **Role Based Access Control Administrator** on resource group level.
-
 ## Prerequisites  
 
-The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be installed for indicators to be forwarded to Microsoft Sentinel ThreatIntelligenceIndicator log table. The Threat Intelligence Solution contains both the deprecated **Threat Intelligence Platforms Data Connector** and the new **Threat Intelligence Upload Indicators API**.
+### Solution Dependencies  
+
+The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be installed for indicators to be forwarded to Microsoft Sentinel ThreatIntelligenceIndicator log table. The Threat Intelligence Solution contains both the new **Threat Intelligence Upload Indicators API** and the _deprecated_ **Threat Intelligence Platforms Data Connector**.
 
 ![](Images/2023-11-17-22-53-18.png)
 
-## Connectors Authorization 
-Each connector need to be authorized after playbook/logic app installation. Expand all nodes in the logic app after installation and look for blocks marked with a warning sign. Open and authorize all connections.
+### Roles and Permissions
 
-Recorded Future requires API keys to communicate with our API. To obtain API keys. [Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here!](https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta) or visit [Recorded Future Requesting API Tokens](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens) (Require Recorded Future Login) and request API token for ```Recorded Future for Microsoft Sentinel``` or/and ```Recorded Future Sandbox for Microsoft Sentinel```.
+Microsoft article that describes roles and permissions in Microsoft Sentinel <a href="https://learn.microsoft.com/en-us/azure/sentinel/roles" target="_blank">Roles and permissions in Microsoft Sentinel</a>
 
-<img src="Images/2023-09-08-12-13-06.png" width="400"  /><br/>
+- During installation, the person performing the installations of the playbooks require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level, 
+
+- If you use <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">managed identity</a> authorization for playbook (**Recommended**). The user performing the installation needs to have the role of **Owner (highest level)** or **Role Based Access Control Administrator** on resource group level. 
+
+- The users that are to interact with **Microsoft Sentinel** require _**Microsoft Sentinel Contributor**_ permissions
+
+ 
+### Recorded Future API Key
+Recorded Future requires API keys to communicate with our API. To obtain API keys. <a href="https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta" target="_blank">Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here</a> or visit <a href="https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens" target="_blank">Recorded Future Requesting API Tokens</a> (Require Recorded Future Login) and request API token for ```Recorded Future for Microsoft Sentinel``` or/and ```Recorded Future Sandbox for Microsoft Sentinel```.
+
+<details>
+<summary>Expand to see API request form</summary>
+<img src="Images/2023-09-08-12-13-06.png" width="600"  /><br/>
 or\
-<img src="Images/2023-09-08-12-13-54.png" width="400"  />
+<img src="Images/2023-09-08-12-13-54.png" width="600"  />
 
+</details>
+
+### Connectors
 The Recorded Future solution uses the following connectors:
-- **/recordedfuturev2** - [Microsoft power platform connector](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/). 
+- **/recordedfuturev2** - <a href="https://learn.microsoft.com/en-us/connectors/recordedfuturev2/" target="_blank">Microsoft power platform connector</a>. 
 
 - **/RecordedFuture-CustomConnector** - [RecordedFuture-CustomConnector](Connectors/RecordedFuture-CustomConnector/readme.md)
 
-- **/recordedfuturesandbo** - [Microsoft power platform connector](https://learn.microsoft.com/en-us/connectors/recordedfuturesandbo/).
+- **/recordedfuturesandbo** - <a href="https://learn.microsoft.com/en-us/connectors/recordedfuturesandbo/" target="_blank">Microsoft power platform connector</a>.
 
-- **/azuresentinel** - [Documentation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/azuresentinel/)
+- **/azuresentinel** - <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors</a>
 
-- **/microsoftgraphsecurity** - [Documenation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/). The playbooks using this API is being DEPRECATED and will transition to new playbooks using /azuresentinel api.
+- **/azureloganalyticsdatacollector** - <a href="https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/" target="_blank">Documentation on Microsoft azure log analytics data collector</a>
+
+- **/azuremonitorlogs** - <a href="https://learn.microsoft.com/en-us/connectors/azuremonitorlogs/" target="_blank">Documentation on Microsoft azure monitor logs</a>
+
+- **/microsoftgraphsecurity** - <a href="https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/" target="_blank">Documentation on Microsoft power platform connectors</a>. The playbooks using this API is being **_DEPRECATED_** and will transition to new playbooks using **/azuresentinel** API.
 
 ## Ingestion and Operational costs
 Playbook(Logic apps) may result in additional ingestion or operational costs:
 
-1. [Usage metering, billing, and pricing for Azure Logic Apps](https://learn.microsoft.com/en-us/azure/logic-apps/logic-apps-pricing)
+1. <a href="https://learn.microsoft.com/en-us/azure/logic-apps/logic-apps-pricing" target="_blank">Usage metering, billing, and pricing for Azure Logic Apps</a>
 
-1. [Azure Monitor Logs cost calculations and options](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/cost-logs)
+1. <a href="https://learn.microsoft.com/en-us/azure/azure-monitor/logs/cost-logs" target="_blank">Azure Monitor Logs cost calculations and options</a>
 
-Recorded Futures risk lists are generated at different cadences as described in this support article [Risk List Download Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login). It is possible to adjust cadence to decrease cost of data processing.
+Recorded Futures risk lists are generated at different cadences as described in this support article <a href="https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations" target="_blank">Risk List Download Recommendations</a> (Require Recorded Future Login). It is possible to adjust cadence to decrease cost of data processing.
 
 # Installation
 
-If this document is overwhelming follow [enrichment quick start guide](Enrichment/quickstart.md) to get started with enrichments as a first step.
+The recommended way of installing the solution is via Microsoft Sentinel Content Hub, as it will provide templates for Playbooks, Workbooks and Analytic Rules.
 
-There are two options for installing playbooks and starting automate threat response:
+It is possible to install specific playbooks as specified in the [Playbooks](#playbooks) section, as there are some playbooks not included in the content pack. This information is specified in their respective READMEs. Installing a specific playbook is a way to get bugfixes for a specific module.
 
-1. Installing the solution from [Content Hub](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/dontDiscardJourney~/true/id/recordedfuture1605638642586.recorded_future_sentinel_solution). (Recommended)
-
-2. Its possible to install some of the playbooks one by one by directly from this Readme further down.
 
 ## 1. Content Hub Installation
 
-1. Locate the Recorded Future Intelligence Solution in the Content Hub.
+1. Locate the `Recorded Future Intelligence` in Microsoft Sentinel Content Hub.
 ![](Images/2023-04-18-08-39-58.png)
-1. Press **Install** and then **Create** and continue to configure the solution. 
-![](Images/2023-04-18-08-43-42.png)
-1. If the installation was completed successfully, you will now have Workbook templates, Automation Playbook templates and Analytic Rules templates.
+Press **Install**  and continue to configure the solution. 
 
-Note that the solution  install templates and you have to use the templates to install workbooks, playbooks and analytic rules. 
+> [!NOTE] 
+> The Content Hub installation provides templates and you have to create playbooks, workbooks, and analytic rules based on the templates. 
+
 ![](Images/2023-11-20-12-13-25.png)
 
-When installing playbooks from templates, read the description and look for dependencies that have to be installed. Example, install a custom connector that is included in the solution together with the playbook.
+When installing playbooks from templates, read the description and look for dependencies that have to be installed. 
+
+Example, install a custom connector that is included in the solution together with the playbook. Read the documentation for each playbook in sub folders listed [here](#playbooks)
+
 ![](Images/2023-11-20-12-34-15.png)
 
-## 2. Individual Playbook installation
-To install individual playbooks, use the buttons next to the descriptions of the [Playbooks [further down in this document](#Playbooks).
+After pressing the "Create Playbook" specify Subscription, Resource Group and Workspace. This is needed when installing any of the Playbooks.
 
-> [!IMPORTANT] 
-> **Due to internal dependencies, always deploy and activate the ThreatIntelligenceImport playbook before any of the \*-IndicatorImport playbooks.**
+![](Images/2023-04-18-08-43-42.png)
+
+# Playbooks
+Some playbooks are not included in the Content Hub Solution and can be installed from this README. It is stated in the description of each playbook as **'Included in Solution: Yes/No'**. Playbooks not included in the Content Hub installation are provided as previews or examples of how to automate use cases.   
+
+<a id="playbooks"></a>
+## Playbooks
+Consider your organizational use cases and install the corresponding playbooks to fit your needs. For examples and explanations of the use cases, see the [Key Features](../readme.md#key-features) section. 
+
+|Use case| Playbook |
+|-|-|
+|Response| [Enrichment Playbooks](Enrichment/readme.md) |
+| Detect | [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md) |
+| SOC Efficiency | [Alert Playbooks](Alerts/readme.md) |
+| Sandbox | [Sandbox Playbooks](./Sandboxing/readme.md) |
+| Threat Hunt  | [Threat Hunt Playbooks](./ThreatHunting/readme.md) |
+| Custom connectors | [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md) |
+| Deprecated playbooks | [Deprecated Risk List Playbooks](Deprecated/readme.md) |
+
+<a id="connectors-authorization"></a>
+## Connector Authorization
+
+Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type. 
+
+Below are guides that a tailored to our recommended authorization flow, depending on organizational rules, the flow might be different. Please consult with your Azure administrator in those cases.
+
+<details>
+<summary>Expand to see recordedfuturev2 authorization guide</summary>
+
+<br>
+
+After a logic app has been installed, the **Recorded Future Connector V2** needs to be authorized. This only needs to be done once. If there are any uncertainties expand all nodes in the logic app after installation and look for blocks marked with a warning sign.
+
+1. Go to the specific logic app,  in the left menu click on the section _**Development tools**_
+2. Click on **_API connections_**
+3. Click on **_RecordedFuture-ConnectorV2_**
+4. Click on **_General_** in the left menu on the newly opened section
+5. Click on **_Edit API Connection_**
+6. Paste the **Recorded Future API Key** and click **_Save_**   
+
+![apiconnection](Images/apiconnection.png)
+
+</details>
+
+<details>
+<summary>Expand to see azuresentinel managed identity authorization guide</summary>
+
+<br>
+
+The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner (with highest permissions)** or **Role Based Access Control Administrator** on resource group level. 
+
+For more detailed information check out this Micrsoft <a href="https://learn.microsoft.com/en-us/azure/logic-apps/authenticate-with-managed-identity?tabs=consumption" target="_blank">guide</a>
+
+These steps will be needed for each logic app that uses the **azuresentinel** / **RecordedFuture-MicrosoftSentinelConnection**
+1. Go to the specific logic app,  in the left menu click on the section _**Settings**_
+2. Click on _**Identity**_
+2. Click on the _**System Assinged**_ tab at the top of the page
+3. If needed, Toggle the _**Status**_ to _**On**_ then click _**Save**_
+![managedidentity1](Images/managedidentity1.png)
+4. Click on _**Azure role assignments**_
+5. Click on _**Add new role assignment (Preview)**_
+6. Set _**Scope**_ to _**Resource Group**_, choose **Subscription**, choose the **Resource Group** in which the logic app is installed on and set the _**Role**_ to _**Microsoft Sentinel Contributor**_
+![managedidentity2](Images/managedidentity2.png)
+7. Click _**Save**_
+
+</details>
+
+<details>
+<summary>Expand to see azureloganalyticsdatacollector and azuremonitorlogs managed identity authorization guide</summary>
+
+<br>
+
+1. Follow the steps outlined in the **azuresentinel** authorization guide
+2. Add the role _**Log Analytics Contributor**_ instead of _**Microsoft Sentinel Contributor**_
+
+</details>
+
+# Workbooks
+
+Workbook templates are installed as part of the Solution and and can be saved and configured in Sentinel's Workbook-Template section.
+<details>
+<summary>Expand image</summary>
+
+![Workbooks](Images/workbook.png)
+</details>
+
+The Recorded Future Solutions contains the following Workbooks. Note that workbooks have dependencies on corresponding Playbooks configured and running. 
+|Use Case|Workbook Name| Playbook dependency|
+|-|-|-|
+|SOC Efficiency|Alerts Overview|Alert-Importer|
+|SOC Efficiency|Playbook Alerts Overview|PlaybookAlert-Importer|
+|Detect|Domain Correlation|Indicator Import/Risk List Playbooks/TAXII Import|
+|Detect|Hash Correlation|Indicator Import/Risk List Playbooks/TAXII Import|
+|Detect|IP Correlation|Indicator Import/Risk List Playbooks/TAXII Import|
+|Detect|URL Correlation|Indicator Import/Risk List Playbooks/TAXII Import|
+|Threat Hunt|Threat Actor Hunting|Threat Hunt Playbooks|
+|Threat Hunt |Malware Threat Hunting|Threat Hunt Playbooks|
+
+# Analytic Rules
+Recorded Future Solution includes Analytic Rule templates. That can be configured to trigger alerts related to our imported risk lists och threat hunts.
+<details>
+<summary>Expand image</summary>
+
+![Analyticrule](Images/analyticrules.png)
+</details>
+
+When creating Analytic Rules from templates, modify the provided KQL to match you infrastructure. The KQL query below is an example where the ASIM imNetworkSession table can be exchanged for any table containing outgoing IP traffic in your infrastructure. 
+
+```JS
+let ioc_lookBack = 1d;
+// The source table (ASimNetworkSessionLogs) can be replaced by any infrastructure table containing ip data.
+// The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns  
+imNetworkSession
+| where isnotempty(DstIpAddr)
+| join kind=inner (
+ThreatIntelligenceIndicator
+// Only look for IOCs
+| where isnotempty(NetworkIP)
+// Only look at Recorded Future Threat Hunt Indicators.
+| where Description startswith "Recorded Future - Threat Hunt"
+// Only work with the latest indicators  
+| where TimeGenerated >= ago(ioc_lookBack)
+| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+| where Active == true and ExpirationDateTime > now()
+) on $left.DstIpAddr == $right.NetworkIP
+// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.DstIpAddr
+| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
+| project NetworkIP, Description, Type, TimeGenerated, RecordedFuturePortalLink
+```
+
+The following Analytic rules are provided in the Solution. All of them requires configuration and adaption to your infrastructure. 
+
+|User Case|Analytic Rule|
+|-|-|
+|Detect|DomainMalwareC2inDNSEvents|
+|Detect|DomainMalwareC2inSyslogEvents|
+|Detect|HashObservedInUndergroundinCommonSecurityLog|
+|Detect|IPMalwareC2inAzureActivityEvents|
+|Detect|IPMalwareC2inDNSEvents|
+|Detect|UrlReportedbyInsiktGroupinSyslogEvents|
+|Threat Hunt|RecordedFutureThreatHuntingHashAllActors|
+|Threat Hunt|RecordedFutureThreatHuntingIPAllActors|
+|Threat Hunt|RecordedFutureThreatHuntingDomainAllActors|
+|Threat Hunt|RecordedFutureThreatHuntingUrlAllActors|
+
 
 # Upgrade from previous versions
 Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.  
@@ -81,91 +234,10 @@ Information about latest released version number can be found in Recorded Future
 ### From version 2.4
 We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. Going forward, install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Use the same risk lists being downloaded today, same cadence, and use the same description using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting. 
 
-Our support will end when Microsoft shut down the underlying API. More information can be found on [Microsoft Learn](https://learn.microsoft.com/en-us/azure/sentinel/understand-threat-intelligence#add-threat-indicators-to-microsoft-sentinel-with-the-threat-intelligence-platforms-data-connector) (No end date has communicated from Microsoft at this point November 2023).
+Our support will end when Microsoft shut down the underlying API. More information can be found on <a href="https://learn.microsoft.com/en-us/azure/sentinel/understand-threat-intelligence#add-threat-indicators-to-microsoft-sentinel-with-the-threat-intelligence-platforms-data-connector" target="_blank">Microsoft Learn</a> (No end date has communicated from Microsoft at this point November 2023).
 
 ### From version 1
 If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Install the new all IndicatorImport and enrichment -playbooks. Select a different name than the once already installed and reauthenticate them. Configure the IndicatorImport playbooks to pull your selection of risk lists. After validating that the new playbooks works as expected you can deactivate the V1 versions. 
-
-# Configuration 
-## Risk list activation and configuration 
-Verify that the **ThreatIntelligenceImport** logic app is installed and active in your environment before installing the TIProcessing risk lists.
-
-From ```Automation -> Playbook Template```  Select any Recorded Future playbook that ends with IndicatorImport, like **RecordedFuture-IP-IndicatorImport**, press create playbook.
-Note that it is possible to deploy several instances of the same template by giving them unique names. This is how you can pull several risk lists of the same type.
-
-![](Images/2023-04-19-16-49-53.png)
-
-The parameter **PlaybookNameBatching** is the name of the ThreatIntelligenceImport playbook that will handle batch processing of indicators into Microsoft Sentinel. In the last step press **Create and continue to designer**.
-![](Images/2023-04-19-16-51-12.png)
-
-In the designer, locate all steps that show a warning and authenticate these steps. Authentication looks different for each connection. More information on this can be found in the chapter above called Connector Authorization. [More information about playbook authentication](https://learn.microsoft.com/en-us/azure/sentinel/authenticate-playbooks-to-sentinel).
-
-<img src="Images/2023-04-18-14-39-40.png" width="500" />
-
-## Change Risk List 
-To can change Risk List to pull in to your environment. This can be done in the default playbook or you can install several instances of one playbook. 
-Example: You would like to use both ```Actively Communicating Validated C&C Server``` and ```Recent Phishing Host``` ip Risk Lists. 
-Select the **RecordedFuture-IP-IndicatorImport** template from ```Automation -> Playbook``` twice and save with different names like ```Recorded Future - Actively Communicating Validated C&C Server - IndicatorImport``` and ```Recorded Future - Phishing Host - IndicatorImport```. 
-
-Change the Risk List to download and modify the description in the ```RecordedFuture-Threatlntelligencelmport``` step in the logic app. 
-![](Images/2023-09-08-12-01-37.png)
-
-## Configure Cadence of Risk List Ingestion 
-Its possible to adjust the cadence of Risk List download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
-
-The first step of IndicatorImport Playbooks is a recurrence step, adjust the cadence by modifying the interval and frequency parameters.\
-<img src="Images/2023-12-12-10-00-53.png" width="500">
-
-It is critical that you also adjust the expirationDateTime parameter in the final block of that logic app to be synchronized with the recurrence timing. Failure to do so can result in either:
-* Duplication of indicators.
-* Having no active Recorded Future indicators the majority of the time. 
-
-If you are unsure of how to do this, please consult Recorded Future.
-
-![](Images/2023-12-12-10-02-11.png)
-
-## Automate Incident Enrichment
-After enrichment playbooks is installed and all connections are configured. Create an automation rule to automate the enrichment process. This will automate enrichment of Recorded Future intelligence to known entities in all incidents. 
-
-1. Open Microsoft Sentinel.
-2. Go to Automation and select **Create Automation rule**
-3. Name the rule
-4. Select the following options:
-   * Trigger: **When an incident is created**
-   * Action: **Run playbook**
-   * Playbook (must first be successfully configured): 
-     - [**RecordedFuture-IOC_Enrichment**](Enrichment/readme.md#recordedfuture-ioc_enrichment) or
-     - [**RecordedFuture-Sandbox_Enrichment-Url**](Sandboxing/readme.md#recordedfuture-sandbox_enrichment-url)
-5. Done
-
-The enrichment is now configured to run when incidents are triggered, and it will post comments for the following IOC types: IP, Domain, URL, or Hash.
-
-<img src="Enrichment/RecordedFuture-IOC_Enrichment/images/CreateAutomationRule.png" width="500"><br/>
-
-## Collective Insights Configuration
-Recorded Future Collective Insights aggregates data related to Sigma Rules and other indicators, driving collective insights to better identify threats. Anonymized, unattributable data is collected for analytical purposes to identify trends and insights with the Collective Insights. The **RecordedFuture-IOC_Enrichment** playbook contributes to collective insights. 
-[Click here to learn more](https://support.recordedfuture.com/hc/en-us/articles/19308547864339) (Require Recorded Future Login)
-
-To opt-out from Collective insights by setting the CollectiveInsights parameter to [false]
-
-<img src="Enrichment/RecordedFuture-IOC_Enrichment/images/IntelligenceCloudParameter.png" width="500"><br/>
-
-
-
-![](Images/2023-04-18-16-39-00.png)
-
-# Playbooks
-All playbooks are not included in the Content Hub Solution. It is stated in the description of each playbook as 'Included in Solution: Yes/No'. Some of the playbooks are provided as previews or examples of how to automate use cases.   
-
-Playbooks in subfolders:
-- [Enrichment Playbooks](Enrichment/readme.md)
-- [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md)
-- [Alert Playbooks](Alerts/readme.md)
-- [Sandbox Playbooks](./Sandboxing/readme.md)
-- [Threat Hunt Playbooks](./ThreatHunting/readme.md)
-- [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md)
-- [Deprecated Risk List Playbooks](Deprecated/readme.md)
-
 
 # Troubleshooting
 
@@ -191,13 +263,35 @@ ThreatIntelligenceIndicator
 | take 10
 ```
 
-### Report isses/errors
+## "Errors" in RecordedFuture-IOC_Enrichment
+If Recorded Future is missing data for a specific entity, when viewed within the Logic App "Previous Run" section, a error might be seen.
 
-When reporting issues or errors to Recorded Future on logic apps. Please include logic app version identifier that can be found in the version section in the azure portal.
+<details>
+<summary> Example of "phantom error" </summary>
+
+![alt text](Images/ioc_enrichment_error_not.png)
+</details>
+</br>
+
+If the last box (Add Comment to incident (V3)) is green, then a comment has been created on the incident explaining what has happened.
+
+If `http://` or `https://` is missing from URL entities, we will add `https://` to our URL Enrichment.
+
+
+### Report issues/errors
+
+When reporting issues or errors to Recorded Future on logic apps. Please include logic app version identifier that can be found in the `<Logic App> -> Development Tools -> Versions` section in the Azure portal.
 
 ![alt text](Images/LogicAppVersion.png)
 
 # Known Issues 
+## Threat hunting for multi-orgs
+If your Recorded Future Enterprise is configured as [multi-org](https://support.recordedfuture.com/hc/articles/4402787600787-Multi-Org-for-Modules), **it is not currently possible** to do threat hunting for any organisations except your primary organisation. If you try to use an API key connected to a sub-org that is not your primary organisation for threat hunting, you will receive the following error:
+
+```
+{"message":"User doesn't have access to the given organization","status_code":403}
+```
+
 ## Version 3.0
 Microsoft Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
 ![](Images/2023-09-13-19-16-24.png)

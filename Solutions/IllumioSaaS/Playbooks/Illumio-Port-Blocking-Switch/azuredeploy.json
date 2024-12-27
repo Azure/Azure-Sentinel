@@ -1,0 +1,198 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Illumio Containment Switch Playbook",
+        "description": "This playbook leverages Illumio workloads API to contain and isolate a workload based on user inputs.  <img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/Illumio-Port-Blocking-Switch/Images/illumio-port-blocking-switch-playbook.png\"/>.",
+        "prerequisites": [
+            "To use this playbook, ensure that you have valid API key and secret, org id and pce fqdn. Ensure that you deploy the template with the required context."
+        ],
+        "postDeployment": [
+            "After deployment open the playbook in edit mode and configure/authorize all connections and press save. <img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/Illumio-Port-Blocking-Switch/Images/illumio-port-blocking-switch-playbook.png\"/>"
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2024-11-21T00:00:00.000Z",
+        "entities": [
+
+        ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Illumio"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Illumio Containment Switch",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Illumio-Port-Blocking-Switch",
+            "type": "String",
+            "metadata": {
+                "description": "PlayBook Name"
+            }
+        },
+        "FunctionAppName": {
+            "defaultValue": "illumiopbfuncapp",
+            "type": "String",
+            "metadata": {
+                "description": "Function app Name"
+            }
+        }
+    },
+    "variables": {
+        "hostingPlanName": "[parameters('FunctionAppName')]",
+        "storageAccountName": "[parameters('FunctionAppName')]",
+        "functionAppName": "[parameters('FunctionAppName')]",
+        "applicationInsightsName": "[parameters('FunctionAppName')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_HTTP_request_is_received": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "protocol": {
+                                            "type": "integer"
+                                        },
+                                        "port": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "PortBlockingFunction-runTrafficQuery": {
+                            "runAfter": {},
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@triggerBody()",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/runTrafficQuery')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": {
+                            "runAfter": {
+                                "PortBlockingFunction-runTrafficQuery": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-runTrafficQuery')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/fetchVisibilityOnlyWorkloadsFromTrafficResults')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-createVirtualService": {
+                            "runAfter": {
+                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createVirtualService')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-bindWorkloadsToVirtualService": {
+                            "runAfter": {
+                                "PortBlockingFunction-createVirtualService": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-createVirtualService')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/bindWorkloadsToVirtualService')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-createAllowRuleForVirtualService": {
+                            "runAfter": {
+                                "PortBlockingFunction-bindWorkloadsToVirtualService": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-bindWorkloadsToVirtualService')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createAllowRuleForVirtualService')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-changeWorkloadEnforcementState": {
+                            "runAfter": {
+                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/changeWorkloadEnforcementState')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-createDenyRule": {
+                            "runAfter": {
+                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createDenyRule')]"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {}
+                    }
+                }
+            }
+        }
+    ]
+}
