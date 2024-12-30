@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.2.10      | 19-12-2024                     | Updated **Analytical Rule** MFARejectedbyUser.yaml																																			|	    			
 | 3.2.9       | 27-08-2024                     | Updated **Analytical Rule** for missing TTP	    																																		|
 | 3.2.8       | 19-08-2024                     | Exclude Result Reason "RoleAssignmentExists"	from **Analytic Rule** [NRT PIM Elevation Request Rejected]                						                        |
 | 3.2.7       | 12-06-2024                     | Fixed the bugs from **Analytic Rules**        																																		|
