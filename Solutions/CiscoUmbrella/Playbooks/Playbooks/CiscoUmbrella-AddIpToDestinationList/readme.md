@@ -10,11 +10,11 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 <img src="./teams_screenshot.png" width="50%"/><br>
 
-2. Adds an IP to the destination list choosen in the adaptive card.
+2. Adds an IP to the destination list chosen in the adaptive card.
 3. Changes incident status and severity depending on the action chosen in the adaptive card.
 4. Adds comment to the incident with information about the actions taken.
 
-<img src="./commentOnIncident.png" widtd="50%"/><br>
+<img src="./commentOnIncident.png" width="50%"/><br>
 
 ### Prerequisites
 
@@ -25,7 +25,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
     * Teams Group Id: Id of the Teams Group where the adaptive card will be posted
     * Teams Channel Id: Id of the Teams Channel where the adaptive card will be posted
@@ -51,7 +51,7 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Microsoft sentinel, analytical rules should be configured to trigger an incident with a malicious IP. In the *Entity maping* section of the analytics rule creation workflow, malicious IP should be mapped to **Address** identifier of the **IP** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident with a malicious IP. In the *Entity mapping* section of the analytics rule creation workflow, malicious IP should be mapped to **Address** identifier of the **IP** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook.
 
 #### c. Assign Playbook Microsoft Sentinel Responder Role

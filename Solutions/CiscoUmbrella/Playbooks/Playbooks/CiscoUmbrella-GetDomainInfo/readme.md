@@ -26,7 +26,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
     * Keyvault name: Name of the key vault where secrets are stored.
     * Umbrella API Client Id Key Name: Name of the Secrets field from Keyvault where Cisco Umbrella "API Key" value is stored.
@@ -50,7 +50,7 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. In the *Entity maping* section of the analytics rule creation workflow, malicious URL should be mapped to **Url** identitfier of the **URL** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. In the *Entity mapping* section of the analytics rule creation workflow, malicious URL should be mapped to **Url** identitfier of the **URL** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook.
 
 #### c. Assign Playbook Microsoft Sentinel Responder Role
