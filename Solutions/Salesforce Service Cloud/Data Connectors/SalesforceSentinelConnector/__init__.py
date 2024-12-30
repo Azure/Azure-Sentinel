@@ -28,6 +28,8 @@ days_interval = 1
 url = os.environ['SalesforceTokenUri']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
+FIELD_SIZE_LIMIT_BYTES = 1000 * 32
+
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
@@ -63,6 +65,18 @@ def generate_date():
         past_time = current_time - datetime.timedelta(days=days_interval, hours=1)
     return past_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+def check_size(queue):
+    data_bytes_len = len(json.dumps(queue).encode())
+    return data_bytes_len < FIELD_SIZE_LIMIT_BYTES
+
+
+def split_big_request(queue):
+    if check_size(queue):
+        return [queue]
+    else:
+        middle = int(len(queue) / 2)
+        queues_list = [queue[:middle], queue[middle:]]
+        return split_big_request(queues_list[0]) + split_big_request(queues_list[1])
 
 def pull_log_files():
     past_time = generate_date()
@@ -136,6 +150,30 @@ def gen_chunks(file_in_tmp_path):
         obj_array = []
         for row in chunk:
             row = enrich_event_with_user_email(row)
+            if 'action' in row:
+                if ('message' in row['action']) and (len(json.dumps(row['action']['message']).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                    if isinstance(row['action']['message'],list):
+                        queue_list = split_big_request(row['action']['message'])
+                        count = 1
+                        for q in queue_list:
+                            columnname = 'messagePart' + str(count)
+                            row['action'][columnname] = q
+                            count+=1
+                        del row['action']['message']
+                            
+                    elif isinstance(row['action']['message'],dict):
+                        queue_list = list(row['action']['message'].keys())
+                        for count, key in enumerate(queue_list, 1):
+                            if count > 10:
+                                break
+                            row['action'][f"messagePart{key}"] = row['action']['message'][key]
+                        del row['action']['message']
+
+                    else:
+                        pass
+
+                    
+
             obj_array.append(row)
         body = json.dumps(obj_array)
         post_data(customer_id, shared_key, body, log_type, len(obj_array))
