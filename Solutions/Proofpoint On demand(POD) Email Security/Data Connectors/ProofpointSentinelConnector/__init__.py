@@ -62,13 +62,17 @@ class Proofpoint_api:
             msg_parts = json.dumps(msg_parts)
 
         msglen = len(msg_parts.encode('utf-8'))
-        if msglen > max_size:
-            split_point = len(msg_parts) // 2
-            msg_parts1 = msg_parts[:split_point]
-            msg_parts2 = msg_parts[split_point:]
-            return msg_parts1, msg_parts2
+        if msglen > max_size:  # Split if size exceeds the limit
+           split_point = len(msg_parts) // 2
+           part1 = msg_parts[:split_point]
+           part2 = msg_parts[split_point:]
+           # Recursively check and split both parts
+           split_parts = []
+           split_parts.extend(self.check_and_split_msgParts(part1, max_size))
+           split_parts.extend(self.check_and_split_msgParts(part2, max_size))
+           return split_parts
         else:
-            return msg_parts, None
+           return [msg_parts]
 
     def set_websocket_conn(self, event_type):
         max_retries = 3
@@ -125,15 +129,13 @@ class Proofpoint_api:
                     y.update({'event_type': event_type})
                     if 'msgParts' in y:
                         msg_parts = y['msgParts']
-                        msg_parts1, msg_parts2 = self.check_and_split_msgParts(
-                            msg_parts)
-                        if msg_parts2:
-                            y['msgParts1'] = msg_parts1
-                            y['msgParts2'] = msg_parts2
-                        else:
-                            y['msgParts'] = msg_parts1
-                        if 'msgParts' in y and msg_parts2:
-                            del y['msgParts']
+                        split_parts = self.check_and_split_msgParts(msg_parts)
+                        if len(split_parts) == 1:  # No splitting required
+                           y["msgParts"] = split_parts[0]
+                        else:  # Splitting required
+                           for i, part in enumerate(split_parts, start=1):
+                               y[f"msgParts{i}"] = part
+                           del y["msgParts"]
                     obj_array.append(y)
                 logging.info(f'Response Object array : {obj_array}')
 
