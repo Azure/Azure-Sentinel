@@ -15,6 +15,8 @@ This integration is a [ServiceNow application](https://store.servicenow.com/sn_a
 
 <br/>
 
+**Note**: This bi-directional sync app also support SIR module with some modification on ServiceNow side.
+
 ## Prerequisites
 
 This ServiceNow application fully rely on the Microsoft Sentinel Management API to provide bi-directional sync between both platforms.
@@ -198,7 +200,7 @@ You can view your environment's values using the following technique:
 
 ### Verify the “ServiceNow Severity to Sentinel” table mapping
 
-This table is used to map the ServiceNow severity to the Sentinel value, when updating ServiceNow incidents and synchronising the changes to Sentinel.  
+This table is used to map the ServiceNow severity to the Sentinel value, when updating ServiceNow incidents and synchronizing the changes to Sentinel.  
 Review the values to validate that they map your environment's configuration.
 
 ![ServiceNow severity to Sentinel](media/snowToSentinelSev01.png)
@@ -207,7 +209,7 @@ Review the values to validate that they map your environment's configuration.
 
 ### Verify the “ServiceNow State to Sentinel” table mapping
 
-This table is used to map the ServiceNow state to the Sentinel value, when updating ServiceNow incidents and synchronising the changes to Sentinel.  
+This table is used to map the ServiceNow state to the Sentinel value, when updating ServiceNow incidents and synchronizing the changes to Sentinel.  
 Review the values to validate that they map your environment's configuration. Note that because Sentinel has less states than ServiceNow, you will have multiple ServiceNow state mapped to the same Sentinel state.
 
 ![ServiceNow state to Sentinel](media/snowToSentinelState01.png)
@@ -276,14 +278,14 @@ To create such mapping, follow the steps below:
 
 If you configured another incident table to store your Sentinel incidents, you must reflect this change to the two business rules being triggered by changes. You can also add additional filters if needed.
 
-⚠️ **IMPPORTANT** ⚠️  
+⚠️ **IMPORTANT** ⚠️  
 If you are running versions older than _Rome_, verify that the "When to run" value is using **async** and not **async_alway**:
 
 ![Async business rule](media/async.png)
 
 The application uses the following business rules:
 
-- **add_work_note_to_sentinel**: sycnhronizes work notes to sentinel comments
+- **add_work_note_to_sentinel**: synchronizes work notes to sentinel comments
 
   ![Work notes business rule](media/ruleWorkNotes.png)
 
@@ -295,3 +297,85 @@ The application uses the following business rules:
 - **custom_mapping**: business rule that can be used to code specific custom mapping during incidents creation or updates. By default, no custom mapping is performed but we provide some examples in the code
 
   ![Custom mapping business rule](media/ruleCustom.png)
+
+## My Section Title
+
+This is the content of the section.
+
+### Technical FAQ's:
+
+#### 1. Which app on ServiceNow store is a bi-directional sync app and is owned and managed by Microsoft?
+
+**Answer:** In below screenshot Blue shield icon log app tile is the App on ServiceNow store that is owned and managed by Microsoft. The other tile app is owned and managed by ServiceNow.
+
+   ![ServiceNow Store App](media/troubleshoot/StoreScreenshots.png)
+
+#### 2. What configurations are needed on "Workspace configuration" page in ServiceNow-->Microsoft Sentinel?
+**Answer:** Below are the points that needs to be considered:
+   - "Environment Name": Give a meaningful name to distinguish between multiple workspace configurations.
+   - "Caller ID": Specify user record "User Id" value example "sentinel.bot" or sys id of the user created in "User Administration". This user record is a integration User for any incidents created from Sentinel to ServiceNow. When a new incident is created in ServiceNow than the "Caller" field on incident record will be set as this user.
+   - "Subscription": Specify Microsoft Sentinel subscription Id. Name of the subscription should not be used.
+   - "Resource Group": Specify Microsoft Sentinel resource group name.
+   - "Workspace": Specify Microsoft Sentinel workspace name.
+   - "Incident max age(days)": Default is 30 days which means any Sentinel incident who's created date time falls between 30 days will be eligible for any create or update of incident to ServiceNow. If any of the incident is updated after 30 days will not get updated.
+   - "newIncidentsLastSync": When any incident from Sentinel to ServiceNow is created than Sentinel Incident "createdTimeUtc" datetime value will be used. When ServiceNow job runs than the datetime set on this field "newIncidentLastSync" will be used to get new incidents that are created than this datetime field value from Sentinel Rest API.
+   - "modifiedIncidentsLastSync": When any incident from Sentinel to ServiceNow is updated than Sentinel Incident "lastModifiedTimeUtc" datetime value will be used. When ServiceNow job runs than the datetime set on this field "newIncidentLastSync" will be used to get updated incidents that are created than this datetime field value from Sentinel Rest API.
+   - "Incidents Filter": By-default filter used is "(properties/labels/any(i:i/labelName eq 'snow'))" which will look for any incidents on Sentinel tagged with "snow" tag only. Here tag name is case-sensitive. If you want All of the Sentinel incidents to sync on ServiceNow than keep this field value as blank.
+   - "Enabled": When set to "Yes" than a scheduled job file "getSentinelIncidents_job" will get new and modified incidents from Sentinel and sync it to ServiceNow. When set to "No" than there will be no sync of incidents.
+   - "Use Workspace Name in CorrelationId": For multiple Sentinel workspaces there can be duplicate incident ids so we have added a new field in ServiceNow workspace configuration page field "Use Workspace name in CorrelationId". By default this field is false. When its enabled then it will check 'Sentinel-<sentinelWorkspaceName>-<guid>' in Servicenow for any update of records. Enable this field only when you have identified duplicate incident issue. Once enabled make sure to update incidents that are in Servicenow to have 'CorrelationId' field value like 'Sentinel-<sentinelWorkspaceName>-<guid>'. You can make use of "Incident max age(days)" field for which ServiceNow incident CorrelationId field value needs to be updated. Currently old records will be having CorrelationId value as 'Sentinel-<guidValue>' so we are adding workspace name in this field value. Also Sentinel workspace name length should not be more then 50 because CorrelationId field value length is max 100 characters.
+
+#### 3. What configurations are needed on "Service Principals" page in ServiceNow-->Microsoft Sentinel?
+**Answer:** Below are the points that needs to be considered:
+   - "Client Id": Here Client Id is the Sentinel App Registration value. More details on [Create Service Principal In Azure Portal](#azure-create-the-service-principal) section.
+   - "Client Secret": Here Client Secret is the Sentinel App Registration value. More details on [Create Service Principal In Azure Portal](#azure-create-the-service-principal) section. After saving Service Principal record make sure that the secret value is correct. It is observed that due to incorrect way of paste value is changed.
+   - "Default Grant Type": This should be "Client Credentials".
+   - "Application": Scope of the application should be "Microsoft Sentinel".
+   - "Accessible from": Use "This application scope only".
+   - "Token Url": Default value is "https://login.microsoftonline.com/AAD_tenant_id/oauth2/token". Here replace "AAD_tenant_id" with you Azure Tenant Id.
+   - "Redirect URL": Default value is "https://tenant.service-now.com/oauth_redirect.do". Here replace "tenant" with your ServiceNow browser tenant. Example: If your Browser url is "https://dev222103.service-now.com/" then use "dev222103" as your "tenant".
+
+#### 4. What are the changes required for SIR SecOps module?
+**Answer:** Microsoft Sentinel app on ServiceNow supports SIR module with few changes as specified below:
+   - In "ServiceNow-->Microsoft Sentinel-->System Properties" page, table name should be **"sn_si_incident"**. Default table name specified is "incident".
+   - Permissions required for "sn_si_incident": Verify and create records for permission Read, Create and Write if not present in "System Applications-->Application Cross-Scope Access" page. Here the "Target Name" is the table name "sn_si_incident" and "Target Scope" should be "Security Incident Response" and its "Status" should be "Allowed". 
+
+#### 5. How to fix error "ScopeAccessNotGrantedException" when using SIR module?
+**Answer:** When permissions for "sn_si_incident" are not present than we get error "Illegal access to getter method getMessage in class com.glide.script.fencing.access.ScopeAccessNotGrantedException". To fix this error refer point 4 i.e. [Changes required for SIR module](#4-what-are-the-changes-required-for-sir-module).
+
+#### 6. How to fix error "InvalidAuthenticationToken"?
+**Answer:** When you get error like "401; {"error":{"code":"InvalidAuthenticationToken","message":"The access token is invalid."}}" than it means that the Client Secret specified in "ServiceNow-->Microsoft Sentinel-->Service Principals" is not correct. Validate the client id and client secret with Azure portal App Registration. If still not working after validation than regenerate the client id and client secret in Azure portal App Registration. 
+
+#### 7. Changes from ServiceNow to Sentinel not updating or syncing?
+**Answer:** When changes like "Assigned To", "State" or "Severity" etc made on ServiceNow incident record are not reflecting to Sentinel Incident than this can happen due to below:
+   - Mapping for State or Severity missing: Filter "ServiceNow-->Microsoft Sentinel-->Logs" by "Message" as "*error" to see if there are errors. It is observed that if the mapping for "Informational" incidents are missing in "Sentinel Severity to ServiceNow Severity", "ServiceNow Severity to Sentinel Incident" then this will give error and will not update Sentinel incident. In the same way if the mapping for "ServiceNow State to Sentinel State", "Sentinel State to ServiceNow State" mapping is not present than this will prevent any update to Sentinel.
+
+#### 8. What is correlation Id?
+**Answer:** On Sentinel incident record we have a field "Incident Link". This field is a Url and at the end of this Url we have a guid value. This guid value is used as a correlationId value in ServiceNow incident "Correlation Id" field.
+
+#### 9. Why comments in ServiceNow Worknotes showing as HTML like code?
+**Answer:** This is due to setting in ServiceNow. Navigate to ServiceNow, and search for "System Properties" as shown in below screenshot. Now under "System Properties UI Properties" there is a checkbox option you need to update it to "Yes" and click on "Save" button to save the record. Now open any of the incident record and it will now show all "Work Notes" field data in a proper format. If not showing, then please refresh the browser page. 
+
+   ![Html Code Setting in ServiceNow](media/troubleshoot/htmlcode.png)
+
+#### 10. How to add automated tag to Sentinel Incident?
+**Answer:** When a new incident in Sentinel is created than you can add the tag automatically by making use of "Automation Rule". In Azure portal, open your Sentinel workspace and under "Configuration-->Automation" blade 
+
+   ![Azure portal Automation blade](media/troubleshoot/AutomationRulePage.png)
+
+<br/>
+
+   In above image you can create a new automation rule which get triggered when a new incident is created and than adds a new tag "snow". You can have other conditions.
+
+   ![Azure portal Automation Create](media/troubleshoot/AutomationRulePageCreate.png)
+
+#### 11. Can we have different tag name for different workspace?
+**Answer:** Yes, for every workspace specify different tag name. Example: You can use "devsnow", "testsnow", "prodsnow", "dev-snow", "prod-snow" etc or any other combination in ServiceNow-->Microsoft Sentinel-->Workspace Configuration page. But this tag name is case-sensitive.
+
+#### 12: Does Microsoft Sentinel app supports "Assignment Group" in ServiceNow?
+**Answer:** No, currently Microsoft Sentinel app doesn't support "Assignment Group". It currently support single use assignment i.e. "Assigned To" in ServiceNow.
+
+#### 13: Does Microsoft Sentinel app supports "Domain Separation" in ServiceNow?
+**Answer:** No, currently Microsoft Sentinel app doesn't support "Domain Separation" in ServiceNow.
+
+#### 14: How to modify Microsoft Sentinel App code?
+**Answer:** Microsoft Sentinel App code is by default Read-Only. In order to modify
