@@ -59,13 +59,13 @@ def determine_log_type(event):
     Determine the Azure Sentinel log type based on the event type.
     """
     # event_type = event.get("type", "default")
-    if event["type"] == "com.oraclecloud.loadbalancer.access" or event["type"] == "com.oraclecloud.loadbalancer.error" or event["type"]=="com.oraclecloud.OraLB-API.ListLoadBalancers":
+    if "com.oraclecloud.loadbalancer." in event["type"]:
         return "OCI_LoadBalancerLogs"
     # elif event_type == "com.oraclecloud.loadbalancer.error":
     #     return "OCI_LoadBalancerLogs"
-    if event["type"] == "com.oraclecloud.Audit.ListEvents":
+    if "com.oraclecloud.Audit." in event["type"]:
         return "OCI_AuditLogs"
-    if event["type"] == "com.oraclecloud.computeApi.ListVolumeAttachments" or event["type"] == "com.oraclecloud.computeApi.ListVnicAttachments" or event["type"] == "com.oraclecloud.computeApi.ListBootVolumeAttachments" or event["type"] == "com.oraclecloud.computeApi.GetInstance":
+    if "com.oraclecloud.computeApi." in event["type"]:
         return "OCI_ComputeApiLogs"
     if event["type"] == "com.oraclecloud.sch.serviceconnector.runlog":
         return "OCI_ServiceConnector_Logs"
@@ -73,7 +73,7 @@ def determine_log_type(event):
         return "OCI_DatabaseService_Logs"
     if "com.oraclecloud.KeyManagementService" in event["type"]:
         return "OCI_KeyManagementService_Logs"
-    if event["type"] == "com.oraclecloud.vcn.flowlogs.DataEvent" or event["type"] == "com.oraclecloud.vcn.flowlogs.QualityEvent.NoData" or event["type"] == "com.oraclecloud.virtualNetwork.GetVcn" or event["type"] == "com.oraclecloud.virtualNetwork.ListVcns" or event["type"] == "com.oraclecloud.virtualNetwork.GetVnic" or event ["type"] == "com.oraclecloud.virtualNetwork.GetSubnet" or event["type"] == "com.oraclecloud.vcn.flowlogs.QualityEvent.SkipData" or event["type"] == "com.oraclecloud.virtualNetwork.GetVcnDnsResolverAssociation":
+    if "com.oraclecloud.vcn." in event["type"] or "com.oraclecloud.virtualNetwork." in event["type"]:
         return "OCI_VirtualNetworkLogs"
     else:
         return "OCI_LogsV2"  # Default log type
