@@ -228,17 +228,89 @@ function Get-ArmResource($name, $type, $kind, $properties){
     }
 }
 
-function addNewParameter($templateResourceObj, $parameterName, $isSecret = $false) {
+function addNewParameter($templateResourceObj, $parameterName, $isSecret = $false, $minLength = 1) {
     $hasParameter = [bool]($templateResourceObj.parameters.PSobject.Properties.name -match "$parameterName")
     if (!$hasParameter) {
         $templateResourceObj.parameters | Add-Member -NotePropertyName "$parameterName" -NotePropertyValue ([PSCustomObject] @{
             defaultValue = $isSecret ? "-NA-" : "Enter $parameterName value";
             type         = $isSecret ? "securestring" : "string";
-            minLength    = 1;
+            minLength    = $minLength;
         })
     }
 
     return $templateResourceObj;
+}
+
+function Create-GCP($armResource, $templateContentConnections) {
+    $hasServiceAccountEmail = [bool]($armResource.properties.auth.PSobject.Properties.name -match "serviceAccountEmail")
+    if ($hasServiceAccountEmail) {
+        $serviceAccountEmailProperty = $armResource.properties.auth.serviceAccountEmail
+        $placeHoldersMatched = $serviceAccountEmailProperty | Select-String $placeHolderPatternMatches -AllMatches
+        
+        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+            $armResource.properties.auth.serviceAccountEmail = "[[parameters('GCPServiceAccountEmail')]"
+            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'serviceAccountEmail' -isSecret $true
+        }
+    } else {
+        Write-Host "Parameter 'serviceAccountEmail' missing from GCP data connector 'auth' section." -BackgroundColor Red
+        exit 1;
+    }
+
+    $hasProjectNumber = [bool]($armResource.properties.auth.PSobject.Properties.name -match "projectNumber")
+    if ($hasProjectNumber) {
+        $projectNumberProperty = $armResource.properties.auth.projectNumber
+        $placeHoldersMatched = $projectNumberProperty | Select-String $placeHolderPatternMatches -AllMatches
+        
+        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+            $armResource.properties.auth.projectNumber = "[[parameters('GCPProjectNumber')]"
+            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'projectNumber' -isSecret $true
+        }
+    } else {
+        Write-Host "Parameter 'projectNumber' missing from GCP data connector 'auth' section." -BackgroundColor Red
+        exit 1;
+    }
+
+    $hasWorkloadIdentityProviderId = [bool]($armResource.properties.auth.PSobject.Properties.name -match "workloadIdentityProviderId")
+    if ($hasWorkloadIdentityProviderId) {
+        $workloadIdentityProviderIdProperty = $armResource.properties.auth.workloadIdentityProviderId
+        $placeHoldersMatched = $workloadIdentityProviderIdProperty | Select-String $placeHolderPatternMatches -AllMatches
+
+        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+            $armResource.properties.auth.workloadIdentityProviderId = "[[parameters('GCPWorkloadIdentityProviderId')]"
+            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'workloadIdentityProviderId' -isSecret $true
+            }
+    } else {
+        Write-Host "Parameter 'workloadIdentityProviderId' missing from GCP data connector 'auth' section." -BackgroundColor Red
+        exit 1;
+    }
+
+    # Request section projectId property
+    $hasProjectId = [bool]($armResource.properties.request.PSobject.Properties.name -match "projectId")
+    if ($hasProjectId) {
+        $projectIdValue = $armResource.properties.request.projectId
+        $placeHoldersMatched = $projectIdValue | Select-String $placeHolderPatternMatches -AllMatches
+        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+            $armResource.properties.request.project = "[[parameters('GCPProjectId')]"
+            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'ProjectId' -isSecret $false -minLength 4
+        }
+    } else {
+        Write-Host "Parameter 'ProjectId' missing from GCP data connector 'request' section." -BackgroundColor Red
+        exit 1;
+    }
+
+    # Request section subscriptionNames property
+    $hasSubscriptionNames = [bool]($armResource.properties.request.PSobject.Properties.name -match "subscriptionNames")
+    if ($hasSubscriptionNames) {
+        $subscriptionNamesValue = $armResource.properties.request.subscriptionNames
+        $placeHoldersMatched = $subscriptionNamesValue | Select-String $placeHolderPatternMatches -AllMatches
+        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+            $armResource.properties.request.project = "[[parameters('GCPSubscriptionName')]"
+            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'SubscriptionNames' -isSecret $false -minLength 3
+        }
+    } else {
+        Write-Host "Parameter 'subscriptionNames' missing from GCP data connector 'request' section." -BackgroundColor Red
+        exit 1;
+    }
 }
 
 # THIS IS THE STARTUP FUNCTION FOR CCP RESOURCE CREATOR
@@ -401,8 +473,13 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         # if dataCollectionRuleImmutableId property not present then add it 
                         $armResource.properties.dcrConfig | Add-Member -MemberType NoteProperty -Name "dataCollectionRuleImmutableId" -Value "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
                     }
-    
-                    if($armResource.properties.auth.type.ToLower() -eq 'oauth2')
+
+                    # Start: GCP CODE
+                    if ($armResource.kind.ToLower() -eq 'gcp'){
+                        Create-GCP -armResource $armResource -templateContentConnections $templateContentConnections
+                    }
+                    # End: GCP CODE
+                    elseif($armResource.properties.auth.type.ToLower() -eq 'oauth2')
                     {
                         # clientid
                         $hasClientId = [bool]($armResource.properties.auth.PSobject.Properties.name -match "ClientId")
@@ -504,9 +581,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         }
                     }
     
-                    if ($armResource.properties.request.apiEndPoint.contains("{{")) {
+                    if ($armResource.properties.request.PSObject.Properties["apiEndPoint"] -and 
+                        $armResource.properties.request.apiEndPoint.contains("{{")) {
                         # identify any placeholders in apiEndpoint
-                        $endPointUrl = $armResource.properties.request.apiEndPoint                    
+                        $endPointUrl = $armResource.properties.request.apiEndPoint
                         $placeHoldersMatched = $endPointUrl | Select-String $placeHolderPatternMatches -AllMatches
                         
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
