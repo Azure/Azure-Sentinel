@@ -4,16 +4,16 @@
 
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions
 
-<img src="./playbook_screenshot_new.png" width="30%"/><br>
+<img src="./Images/playbook_screenshot_new.png" width="30%"/><br>
 
 1. Get domains from URL entities in the incident.
 2. Enriches incident with security information about domains using [Cisco Umbrella Investigate API](https://developer.cisco.com/docs/cloud-security/investigate-investigate/#investigate).
 
-<img src="./playbook_screenshot1.png" width="70%"/><br>
+<img src="./Images/playbook_screenshot1.png" width="70%"/><br>
 
-<img src="./playbook_screenshot2.png" width="70%"/><br>
+<img src="./Images/playbook_screenshot2.png" width="70%"/><br>
 
-<img src="./playbook_screenshot3.png" width="70%"/><br>
+<img src="./Images/playbook_screenshot3.png" width="70%"/><br>
 
 ### Prerequisites
 
@@ -33,7 +33,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Umbrella API Secret Key Name: Name of the Secrets field from Keyvault where Cisco Umbrella "Key Secret" value is stored.
     * Host End Point: Default is "api.umbrella.com" and is used for any API call to Cisco Umbrella REST API's.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FPlaybooks%2FCiscoUmbrella-GetDomainInfo%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FPlaybooks%2FCiscoUmbrella-GetDomainInfo%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-GetDomainInfo%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-GetDomainInfo%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
@@ -77,4 +77,5 @@ Once deployment is complete, authorize each connection.
 
 #  References
  - [Cisco Umbrella API Documentation](https://developer.cisco.com/docs/cloud-security/authentication/#authentication)
- - [Rest API Request And Response Sample](https://developer.cisco.com/docs/cloud-security/secure-access-api-guides-request-and-response-samples-investigate-investigate/#investigate)
+ - [Rest API Request And Response Sample to Get Security Score Information for Domain](https://developer.cisco.com/docs/cloud-security/secure-access-api-guides-request-and-response-samples-investigate-investigate/#get-security-score-information-for-domain)
+  - [Rest API Request And Response Sample to Get Risk Score for Domain](https://developer.cisco.com/docs/cloud-security/secure-access-api-guides-request-and-response-samples-investigate-investigate/#get-risk-score-for-domain)

@@ -4,17 +4,17 @@
 
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
-<img src="./playbook_screenshot.png" width="28%"/><br>
+<img src="./Images/playbook_screenshot.png" width="28%"/><br>
 
 1. Sends an adaptive card to the Teams channel where the analyst can choose an action to be taken.
 
-<img src="./teams_screenshot.png" width="50%"/><br>
+<img src="./Images/teams_screenshot.png" width="50%"/><br>
 
 2. Adds an IP to the destination list chosen in the adaptive card.
 3. Changes incident status and severity depending on the action chosen in the adaptive card.
 4. Adds comment to the incident with information about the actions taken.
 
-<img src="./commentOnIncident.png" width="50%"/><br>
+<img src="./Images/commentOnIncident.png" width="50%"/><br>
 
 ### Prerequisites
 
@@ -34,7 +34,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Umbrella API Secret Key Name: Name of the Secrets field from Keyvault where Cisco Umbrella "Key Secret" value is stored.
     * Host End Point: Default is "api.umbrella.com" and is used for any API call to Cisco Umbrella REST API's.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FPlaybooks%2FCiscoUmbrella-AddIpToDestinationList%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FPlaybooks%2FCiscoUmbrella-AddIpToDestinationList%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-AddIpToDestinationList%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-AddIpToDestinationList%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 

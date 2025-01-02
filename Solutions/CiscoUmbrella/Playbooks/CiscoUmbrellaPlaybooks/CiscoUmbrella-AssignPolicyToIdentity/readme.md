@@ -4,19 +4,18 @@
 
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions
 
-<img src="./playbook_screenshot_new.png" width="30%"/><br>
+<img src="./Images/playbook_screenshot_new.png" width="30%"/><br>
 
 1. Assigns a new DNS or web policy (*PolicyId* is provided on the playbook deployment step) to an identity (*originId* of the identity provided in the alert custom entities).
 2. Adds comment to the incident with information about the assigned policies.
 
-<img src="./commentOnIncident.png" width="60%"/><br>
+<img src="./Images/commentOnIncident.png" width="60%"/><br>
 
 ### Prerequisites
 
 1. Login to Cisco Umbrella dashboard and navigating to Admin-->API Keys. Create New API Key if not already created and select the appropriate "Key Scope" with Read/Write permission. Store "Api Key" and "Key Secret" to a safe place. This "Api Key" is a "Client Id" and "Key Secret" is a "Secret" used for this Playbook.
-2. Obtain Teams group id and channel id.
-3. Obtain Cisco Umbrella Organization Id, Policy Id.
-4. Store the "Api Key" and "Key Secret" from Step 1 to Key vaults Secrets. Verify if configuration on Settings-->Networking-->Firewalls and Virtual Networks are correct.
+2. Obtain Cisco Umbrella Organization Id, Policy Id.
+3. Store the "Api Key" and "Key Secret" from Step 1 to Key vaults Secrets. Verify if configuration on Settings-->Networking-->Firewalls and Virtual Networks are correct.
 
 ### Deployment instructions
 
@@ -30,7 +29,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Umbrella API Secret Key Name: Name of the Secrets field from Keyvault where Cisco Umbrella "Key Secret" value is stored.
     * Host End Point: Default is "api.umbrella.com" and is used for any API call to Cisco Umbrella REST API's.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FPlaybooks%2FCiscoUmbrella-AssignPolicyToIdentity%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FPlaybooks%2FCiscoUmbrella-AssignPolicyToIdentity%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-AssignPolicyToIdentity%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-AssignPolicyToIdentity%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
@@ -74,4 +73,4 @@ Once deployment is complete, authorize each connection.
 
 #  References
  - [Cisco Umbrella API Documentation](https://developer.cisco.com/docs/cloud-security/authentication/#authentication)
- - [Rest API Request And Response Sample](https://developer.cisco.com/docs/cloud-security/policies/#policies)
+ - [Rest API Request And Response Sample](https://developer.cisco.com/docs/cloud-security/policies/#add-identity-to-policy)
