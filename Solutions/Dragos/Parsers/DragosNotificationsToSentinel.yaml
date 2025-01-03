@@ -1,0 +1,18 @@
+id: b5237116-c40a-4cbe-bac6-c35564a0c578
+Function:
+  Title: Dragos Notifications Sentinel Incidents
+  Version: '1.0.0'
+  LastUpdated: '2024-08-25'
+Category: Microsoft Sentinel Parser
+FunctionName: DragosNotificationsToSentinel
+FunctionAlias: DragosNotificationsToSentinel
+FunctionQuery: |
+  let existingIncidents = SecurityAlert
+    | where ProductName == "Dragos"
+    | extend CustomDetails=tostring(parse_json(ExtendedProperties)["Custom Details"])
+    | extend id = toint(extract_json("$.DragosNotificationId[0]", CustomDetails))
+    | project-keep SystemAlertId, id;
+  union isfuzzy=true DragosPushNotificationsToSentinel, DragosPullNotificationsToSentinel
+    | join kind=leftouter (existingIncidents) on id
+    | where isempty(SystemAlertId)
+    | sort by severity desc
