@@ -18,7 +18,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FPlaybooks%2FCiscoUmbrella-BlockDomain%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FPlaybooks%2FCiscoUmbrella-BlockDomain%2Fazuredeploy.json)
@@ -38,5 +38,5 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Microsoft sentinel, analytical rules should be configured to trigger an incident with a malicious URL. In the *Entity maping* section of the analytics rule creation workflow, malicious URL should be mapped to **Url** identitfier of the **URL** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident with a malicious URL. In the *Entity mapping* section of the analytics rule creation workflow, malicious URL should be mapped to **Url** identifier of the **URL** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook.
