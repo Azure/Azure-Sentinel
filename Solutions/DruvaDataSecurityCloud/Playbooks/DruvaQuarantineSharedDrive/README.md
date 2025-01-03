@@ -19,8 +19,8 @@ This playbook uses Druva-Ransomware-Response capabilities to stop the spread of 
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
-    * keyvaultConnectionName: Name of the keyvault Connection which needs to be deployed to connect with Vault.
+2. Fill in the required parameters:
+    * PlaybookName: Name by which you want to deploy the playbook.
     * keyvaultName: Name of keyvault where secrets are stored.
 3. Validate the deployment:
     * Check if the resources (e.g., Key Vault, API connections, Logic Apps) are created successfully.
@@ -38,7 +38,7 @@ Once deployment is complete, authorize each connection keyvault.
 
 1. Login to the Microsoft Azure protal and in the search box Type API Connections.
 2. Find API connection option.
-3. Check for your Created API connection exists. eg. Druva-KeyVault-Connection
+3. Check for your Created API connection exists. eg. <playbookname>-KeyVault-Connection
 4. Check Status should be ready for the same API Connection.
 
 #### b. Grant permissions
