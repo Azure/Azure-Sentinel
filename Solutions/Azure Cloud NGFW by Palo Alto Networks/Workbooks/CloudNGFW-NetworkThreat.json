@@ -12,8 +12,6 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "query": "",
-        "crossComponentResources": [],
         "parameters": [
           {
             "id": "d0ccb5c6-8a07-4b7e-9abf-38fa4dcc0baf",
@@ -22,7 +20,7 @@
             "type": 4,
             "isRequired": true,
             "value": {
-              "durationMs": 43200000
+              "durationMs": 7776000000
             },
             "typeSettings": {
               "selectableValues": [
@@ -74,6 +72,52 @@
               ],
               "allowCustom": true
             }
+          },
+          {
+            "id": "a2094f99-1479-450e-8a18-e9677a18fdaf",
+            "version": "KqlParameterItem/1.0",
+            "name": "SubType",
+            "label": "Sub Type",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s =~ \"THREAT\"\n| extend message = parse_json(Message)\n| where isnotempty(message.sub_type)\n| distinct tostring(message.sub_type)",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All",
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "value::all"
+            ]
+          },
+          {
+            "id": "51f92c36-ed03-408d-b392-11a1ae74aff3",
+            "version": "KqlParameterItem/1.0",
+            "name": "Severity",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s =~ \"THREAT\"\n| extend message = parse_json(Message)\n| where isnotempty(message.sub_type)\n| distinct tostring(message.severity)",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "value::all"
+            ]
           }
         ],
         "style": "pills",
@@ -86,34 +130,26 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let data = fluentbit_CL\r\n| where isnotempty(FirewallName_s)\r\n| where ident_s =~ 'THREAT';\r\ndata\r\n| summarize Count = count() by threat_content_type\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by threat_content_type)\r\n on threat_content_type\r\n| project-away threat_content_type1, TimeGenerated\r\n| extend threat_content_types = threat_content_type\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend threat_content_type = 'All', threat_content_types = '*' \r\n)\r\n| project threat_content_type, Count, Trend\r\n| order by Count desc\r\n| take 10",
+        "query": "let UrlThreats = fluentbit_CL\r\n    | extend message = parse_json(Message)\r\n    | where isnotempty(message.url_category_list)\r\n    | where ident_s =~ 'THREAT'\r\n    | project FirewallName_s, ident_s, message.url_category_list\r\n    | summarize Count = count(), FirewallName = any(FirewallName_s) by tostring(message_url_category_list);\r\n\r\nlet Threats = fluentbit_CL\r\n| extend message = parse_json(Message)\r\n| where isnotempty(message.sub_type)\r\n| where ident_s =~ 'THREAT'\r\n| project FirewallName_s, ident_s, message.sub_type, message.threat_category\r\n| summarize Count = count(), FirewallName = any(FirewallName_s) by tostring(message_threat_category);\r\n\r\nUrlThreats \r\n| union Threats\r\n| extend Threat = strcat(message_url_category_list, \" \", message_threat_category)\r\n| project FirewallName, Threat, Count",
         "size": 3,
+        "title": "Threats, by subtypes",
+        "timeContextFromParameter": "TimeRange",
         "exportFieldName": "threat_content_type",
         "exportParameterName": "SelectedSubtype",
         "exportDefaultValue": "All",
-        "exportToExcelOptions": "visible",
-        "title": "Threats, by subtypes",
-        "timeContext": {
-          "durationMs": 0
-        },
-        "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "tiles",
         "tileSettings": {
           "titleContent": {
-            "columnMatch": "threat_content_type",
-            "formatter": 1,
-            "formatOptions": {
-              "showIcon": true
-            }
+            "columnMatch": "Threat",
+            "formatter": 1
           },
           "leftContent": {
             "columnMatch": "Count",
             "formatter": 12,
             "formatOptions": {
-              "palette": "auto",
-              "showIcon": true
+              "palette": "auto"
             },
             "numberFormat": {
               "unit": 17,
@@ -123,110 +159,28 @@
               }
             }
           },
-          "secondaryContent": {
-            "columnMatch": "Trend",
-            "formatter": 9,
-            "formatOptions": {
-              "palette": "blueDark",
-              "showIcon": true
-            }
-          },
           "showBorder": false
         }
       },
-      "customWidth": "33",
+      "customWidth": "50",
       "name": "Threats by subtypes"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let data = fluentbit_CL\r\n| where isnotempty(FirewallName_s)\r\n| where ident_s == 'THREAT'\r\n| where threat_content_type == 'wildfire';\r\ndata\r\n| summarize Count = count() by threat_content_name\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by threat_content_name)\r\n on threat_content_name\r\n| project-away threat_content_name1, TimeGenerated\r\n| extend threat_content_names = threat_content_name\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend threat_content_name = 'All', threat_content_names = '*' \r\n)\r\n| project threat_content_name, Count, Trend\r\n| order by Count desc\r\n| take 10",
+        "query": "let data = fluentbit_CL\r\n| where isnotempty(FirewallName_s)\r\n| extend message = parse_json(Message)\r\n| where ident_s == 'THREAT' and isnotempty(message.sub_type);\r\ndata\r\n| summarize Count = count() by tostring(message.severity)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by tostring(message.severity))\r\n on message_severity\r\n| project-away message_severity1, TimeGenerated\r\n| extend message_severities = message_severity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend message_severity = 'All', messsage_severities = '*' \r\n)\r\n| project message_severity, Count, Trend\r\n| order by Count desc\r\n| take 10",
         "size": 3,
-        "exportFieldName": "threat_content_name",
-        "exportParameterName": "SelectedWildfire",
-        "exportDefaultValue": "All",
-        "exportToExcelOptions": "visible",
-        "title": "WildFire verdicts",
-        "timeContext": {
-          "durationMs": 0
-        },
+        "title": "Threats severity",
         "timeContextFromParameter": "TimeRange",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "tiles",
-        "tileSettings": {
-          "titleContent": {
-            "columnMatch": "threat_content_name",
-            "formatter": 1,
-            "formatOptions": {
-              "showIcon": true
-            }
-          },
-          "leftContent": {
-            "columnMatch": "Count",
-            "formatter": 12,
-            "formatOptions": {
-              "palette": "auto",
-              "showIcon": true
-            },
-            "numberFormat": {
-              "unit": 17,
-              "options": {
-                "style": "decimal",
-                "maximumFractionDigits": 2,
-                "maximumSignificantDigits": 3
-              }
-            }
-          },
-          "secondaryContent": {
-            "columnMatch": "Trend",
-            "formatter": 9,
-            "formatOptions": {
-              "palette": "blueDark",
-              "showIcon": true
-            }
-          },
-          "showBorder": false
-        }
-      },
-      "customWidth": "33",
-      "name": "WildFire verdicts"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "let data = fluentbit_CL\r\n| where isnotempty(FirewallName_s)\r\n| where ident_s == 'THREAT' and threat_content_type != 'url' and threat_content_type != 'file';\r\ndata\r\n| summarize Count = count() by severity\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by severity)\r\n on severity\r\n| project-away severity1, TimeGenerated\r\n| extend severitys = severity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend severity = 'All', severitys = '*' \r\n)\r\n| project severity, Count, Trend\r\n| order by Count desc\r\n| take 10",
-        "size": 3,
         "exportFieldName": "severity",
         "exportParameterName": "SelectedSeverity",
         "exportDefaultValue": "All",
-        "exportToExcelOptions": "visible",
-        "title": "Threats severity",
-        "timeContext": {
-          "durationMs": 0
-        },
-        "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "tiles",
         "gridSettings": {
           "formatters": [
-            {
-              "columnMatch": "severity",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Count",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
             {
               "columnMatch": "Trend",
               "formatter": 9,
@@ -235,23 +189,18 @@
                 "showIcon": true
               }
             }
-          ],
-          "labelSettings": []
+          ]
         },
         "tileSettings": {
           "titleContent": {
-            "columnMatch": "severity",
-            "formatter": 1,
-            "formatOptions": {
-              "showIcon": true
-            }
+            "columnMatch": "message_severity",
+            "formatter": 1
           },
           "leftContent": {
             "columnMatch": "Count",
             "formatter": 12,
             "formatOptions": {
-              "palette": "auto",
-              "showIcon": true
+              "palette": "auto"
             },
             "numberFormat": {
               "unit": 17,
@@ -261,31 +210,19 @@
               }
             }
           },
-          "secondaryContent": {
-            "columnMatch": "Trend",
-            "formatter": 9,
-            "formatOptions": {
-              "palette": "blueDark",
-              "showIcon": true
-            }
-          },
           "showBorder": false
         }
       },
-      "customWidth": "33",
+      "customWidth": "50",
       "name": "Threats severity"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT' and threat_content_type != 'url' and threat_content_type != 'file' and threat_content_type != 'wildfire'\n| where '{SelectedSubtype}' == \"All\" or '{SelectedSubtype}' == threat_content_type\n| where '{SelectedWildfire}' == \"All\" or '{SelectedWildfire}' == threat_content_name\n| where '{SelectedSeverity}' == \"All\" or '{SelectedSeverity}' == severity\n| summarize count() by bin(TimeGenerated, 1h), threat_content_type\n| render timechart\n",
+        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| extend message = parse_json(Message)\n| where ident_s == 'THREAT' and isnotempty(message.sub_type)\n| where \"{SubType:label}\" == \"All\" or message.sub_type in ({SubType})\n| where \"{Severity:label}\" == \"All\" or message.severity in ({Severity})\n| summarize count() by bin(TimeGenerated, 1h), tostring(message.sub_type)\n| render timechart\n",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Threat subtypes over time",
-        "timeContext": {
-          "durationMs": 0
-        },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces"
@@ -297,13 +234,9 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT' and threat_content_type != 'url' and threat_content_type != 'file' and threat_content_type != 'wildfire'\n| where '{SelectedSubtype}' == \"All\" or '{SelectedSubtype}' == threat_content_type\n| where '{SelectedWildfire}' == \"All\" or '{SelectedWildfire}' == threat_content_type\n| where '{SelectedSeverity}' == \"All\" or '{SelectedSeverity}' == severity\n| summarize count() by bin(TimeGenerated, 1h), severity\n| render timechart\n",
+        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT'\n| extend message = parse_json(Message)\n| where '{SubType:label}' == \"All\" or message.sub_type in ({SubType})\n| where '{Severity:label}' == \"All\" or message.severity in ({Severity})\n| summarize count() by bin(TimeGenerated, 1h), tostring(message.severity)\n| render timechart\n",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Threat severity over time",
-        "timeContext": {
-          "durationMs": 0
-        },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces"
@@ -315,26 +248,15 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let data = fluentbit_CL\r\n| where isnotempty(FirewallName_s)\r\n| where ident_s == 'THREAT' and threat_content_type != 'url' and threat_content_type != 'file' and threat_content_type != 'wildfire'\r\n| where '{SelectedSubtype}' == \"All\" or '{SelectedSubtype}' == threat_content_type\r\n| where '{SelectedSeverity}' == \"All\" or '{SelectedSeverity}' == severity\r\n| summarize Count = count() by app = parse_json(Message).app\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by app)\r\n on app\r\n| project-away app1, TimeGenerated\r\n| extend ApplicationProtocols = app\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend app = 'All', ApplicationProtocols = '*' \r\n)\r\n| project ApplicationProtocol = app, Count, Trend\r\n| order by Count desc\r\n| take 10",
+        "query": "fluentbit_CL\r\n| extend message = parse_json(Message)\r\n| where isnotempty(message.sub_type)\r\n| where ident_s =~ 'THREAT'\r\n| project TimeGenerated,FirewallName_s, ident_s, message.sub_type, message.threat_category, message.app\r\n| summarize Count = count() by bin(TimeGenerated, 1h), tostring(message_app)\r\n| render timechart ",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Threats, by application",
-        "timeContext": {
-          "durationMs": 0
-        },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "table",
+        "visualization": "linechart",
         "gridSettings": {
           "formatters": [
-            {
-              "columnMatch": "ApplicationProtocol",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
             {
               "columnMatch": "Count",
               "formatter": 4,
@@ -350,8 +272,7 @@
                 "showIcon": true
               }
             }
-          ],
-          "labelSettings": []
+          ]
         },
         "tileSettings": {
           "titleContent": {
@@ -394,19 +315,14 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT'\n| where '{SelectedSubtype}' == \"All\" or '{SelectedSubtype}' == threat_content_type\n| where '{SelectedWildfire}' == \"All\" or '{SelectedWildfire}' == threat_content_type\n| where '{SelectedSeverity}' == \"All\" or '{SelectedSeverity}' == severity\n| project TimeGenerated, LogSeverity=severity, DeviceAction=action, ['URL Category'] = category, DestinationPort=dport, DestinationIP=dst, Message, SourcePort=sport, SourceIP=src_ip, DestinationUserID",
+        "query": "fluentbit_CL\n| extend message = parse_json(Message)\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT'\n| project TimeGenerated, FirewallName=FirewallName_s, LogSeverity=message.severity, DeviceAction=message.action, ['Threat Category'] = message.threat_category, App=message.app, SourceIP=message.src_ip, SourcePort=message.sport, DestinationIP=message.dst, DestinationPort=message.dport",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Threat events",
-        "timeContext": {
-          "durationMs": 0
-        },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "gridSettings": {
-          "filter": true,
-          "labelSettings": []
+          "filter": true
         }
       },
       "name": "All Threat Events"
@@ -422,32 +338,14 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT'\n| where Message.threat_content_type =~ 'vulnerability' or Message.threat_content_type =~ 'wildfire'\n| extend ThreatId = coalesce(\n                            column_ifexists(\"Message.threat_content_name\", \"\"),\n                            extract('cat=([^;]+)',1,Message),\n                            \"\"\n                        )\n| summarize Amount=count() by ThreatId, Message.severity\n| top 20 by Amount",
+        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT'\n| extend message = parse_json(Message)\n| where message.sub_type =~ 'vulnerability' or message.sub_content_type =~ 'wildfire'\n| extend ThreatId = coalesce(\n                            column_ifexists(\"threat_content_name\", \"\"),\n                            extract(\"\\\\((.*?)\\\\)\",1,tostring(message.threat_content_name)),\n                            \"\"\n                        )\n| summarize Amount=count() by ThreatId, tostring(message.severity)\n| top 20 by Amount",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Top vulnerability events",
-        "timeContext": {
-          "durationMs": 0
-        },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "gridSettings": {
           "formatters": [
-            {
-              "columnMatch": "ThreatId",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Message.severity",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
             {
               "columnMatch": "Amount",
               "formatter": 4,
@@ -465,91 +363,19 @@
               }
             }
           ],
-          "filter": true,
-          "labelSettings": []
+          "filter": true
         }
       },
-      "customWidth": "50",
+      "customWidth": "100",
       "name": "Top vulnerability events"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT'\n| search threat_content_type in ('virus', 'wildfire', 'wildfire-virus')\n| summarize Amount=count() by Message, threat_content_type, Message.dst, Message.src_ip, Message.app\n| top 20 by Amount",
+        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT'\n| extend message = parse_json(Message)\n| extend ThreatId = coalesce(\n                            column_ifexists(\"threat_content_name\", \"\"),\n                            extract(\"\\\\((.*?)\\\\)\",1,tostring(message.threat_content_name)),\n                            \"\"\n                        )\n| extend ThreatCategory = tostring(message.threat_category)\n| summarize Amount=count() by ThreatId, ThreatCategory, tostring(message.severity)\n| top 20 by Amount",
         "size": 0,
-        "exportToExcelOptions": "visible",
-        "title": "Virus and malware events",
-        "timeContext": {
-          "durationMs": 0
-        },
-        "timeContextFromParameter": "TimeRange",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "gridSettings": {
-          "formatters": [
-            {
-              "columnMatch": "Message",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "threat_content_type",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Message.dst",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Message.src_ip",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Message.app",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Amount",
-              "formatter": 4,
-              "formatOptions": {
-                "palette": "coldHot",
-                "showIcon": true
-              }
-            }
-          ],
-          "filter": true,
-          "labelSettings": []
-        }
-      },
-      "customWidth": "50",
-      "name": "Virus and malware events"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "fluentbit_CL\n| where isnotempty(FirewallName_s)\n| where ident_s == 'THREAT'\n| extend ThreatId = coalesce(\n                            tostring(Message.threat_content_type),\n                            \"\"\n                        )\n| extend ThreatCategory = tostring(Message.threat_category)\n| summarize Amount=count() by ThreatId, ThreatCategory, Message.severity\n| top 20 by Amount",
-        "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Top correlation events",
-        "timeContext": {
-          "durationMs": 0
-        },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
@@ -557,27 +383,6 @@
         "gridSettings": {
           "formatters": [
             {
-              "columnMatch": "ThreatId",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "ThreatCategory",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "severity",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
               "columnMatch": "Amount",
               "formatter": 4,
               "formatOptions": {
@@ -585,14 +390,12 @@
                 "showIcon": true
               }
             }
-          ],
-          "labelSettings": []
+          ]
         }
       },
       "name": "Top correlation events"
     }
   ],
-  "styleSettings": {},
   "fromTemplateId": "sentinel-PaloAltoNetworkThreat",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
