@@ -14,8 +14,12 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Prerequisites
 
 1. Login to Cisco Umbrella dashboard and navigating to Admin-->API Keys. Create New API Key if not already created and select the appropriate "Key Scope" with Read/Write permission. Store "Api Key" and "Key Secret" to a safe place. This "Api Key" is a "Client Id" and "Key Secret" is a "Secret" used for this Playbook.
-2. Obtain Cisco Umbrella Organization Id, Policy Id.
-3. Store the "Api Key" and "Key Secret" from Step 1 to Key vaults Secrets. Verify if configuration on Settings-->Networking-->Firewalls and Virtual Networks are correct.
+2. Store the "Api Key" and "Key Secret" from previous step to Key vault Secrets. 
+3. To obtain the Organization ID and Policy ID, press F12 or right-click on the page and select 'Inspect' in your browser on the Cisco Umbrella dashboard page. Then, navigate to the 'Policies' section and click on the 'All Policies' tab. Now open the 'Network' tab and search with 'policy'. Open the 'Response' tab of the request to get the Policy ID and Organization ID as shown in the screenshot below.
+
+    > **NOTE:** The **ID** and **OrganizationID** values in the screenshot below are for illustration purposes only and are not intended for actual use.
+
+<img src="./Images/orgIdAndPolicyId.png" width="60%"/><br>
 
 ### Deployment instructions
 

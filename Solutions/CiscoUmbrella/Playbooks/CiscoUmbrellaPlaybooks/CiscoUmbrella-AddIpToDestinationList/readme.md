@@ -19,8 +19,8 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Prerequisites
 
 1. Login to Cisco Umbrella dashboard and navigating to Admin-->API Keys. Create New API Key if not already created and select the appropriate "Key Scope" with Read/Write permission. Store "Api Key" and "Key Secret" to a safe place. This "Api Key" is a "Client Id" and "Key Secret" is a "Secret" used for this Playbook.
-2. Obtain Teams group id and channel id.
-3. Store the "Api Key" and "Key Secret" from Step 1 to Key vaults Secrets. Verify if configuration on Settings-->Networking-->Firewalls and Virtual Networks are correct.
+2. Store the "Api Key" and "Key Secret" from previous step to Key vault Secrets.
+3. To send notification to Microsoft Teams, Teams group id and channel id is needed at the time of playbook creation.
 
 ### Deployment instructions
 

@@ -17,11 +17,8 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, Cisco Umbrella Investigate API Connector needs to be deployed under the same subscription.
-2. Obtain Cisco Umbrella API credentials. Refer to Cisco Umbrella Investigate API Custom Connector documentation.
-
 1. Login to Cisco Umbrella dashboard and navigating to Admin-->API Keys. Create New API Key if not already created and select the appropriate "Key Scope" with Read/Write permission. Store "Api Key" and "Key Secret" to a safe place. This "Api Key" is a "Client Id" and "Key Secret" is a "Secret" used for this Playbook.
-2. Store the "Api Key" and "Key Secret" from previous step to Key vaults Secrets. Verify if configuration on Settings-->Networking-->Firewalls and Virtual Networks are correct.
+2. Store the "Api Key" and "Key Secret" from previous step to Key vault Secrets.
 
 ### Deployment instructions
 
