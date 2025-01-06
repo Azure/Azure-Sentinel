@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.0       | 06-01-2025                     | Added support for the enhanced Telemetry feature of Jamf Protect and support for Data Collection Endpoints and Data Collection Rules using a new Data Connector.
 | 3.1.1       | 30-04-2024                     | Repackaged for parser issue fix while reinstall.
 | 3.1.0       | 12-01-2024                     | Improved data normalization in the parser JamfProtect, ParentProcess is better mapped now, productVersion has been added and more. Added new macOS Hunting Queries including recent malware IOCs.
 | 3.0.1       | 05-12-2023                     | Minor tweak to parser related to signerType
