@@ -48,9 +48,11 @@ def lambda_handler(event, context):
  
         # Check if 'ingestionTime' exists before dropping
         if 'ingestionTime' in df.columns:
-            fileToS3 = df.drop(columns=["ingestionTime"])
+            fileToS3 = df.drop(columns=["ingestionTime", "id"])
+        elif 'timestamp' in df.columns:
+            fileToS3 = df.drop(columns=["timestamp", "id"])
         else:
-            fileToS3 = df  # Use the DataFrame as is if 'ingestionTime' doesn't exist
+            fileToS3 = df.drop(columns=["id"])  # Use the DataFrame as is if 'ingestionTime' doesn't exist
  
         # Prepare date-based folder structure
         current_date = datetime.utcnow().strftime('%Y/%m/%d')  # Format as YYYY/MM/DD
