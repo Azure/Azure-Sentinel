@@ -20,9 +20,11 @@ container_name = "sentinelcontainer"
 blob_name = "timestamp"
 
 cs = os.environ.get('AzureWebJobsStorage')
+backfill_days = int(os.environ.get('NumberOfDaysToBackfill', "2")) # this is just for testing
 
 customer_id = os.environ.get('AzureSentinelWorkspaceId','')
 shared_key = os.environ.get('AzureSentinelSharedKey')
+
 verify = False
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
@@ -114,19 +116,34 @@ def main(mytimer: func.TimerRequest) -> None:
         secret_name = "access-token"
         qsdk_token = client.get_secret(secret_name).value
         headers["authtoken"] = "QSDK " + qsdk_token
+        
+        companyId_url = f"{url}/v2/WhoAmI"
+        company_response = requests.get(companyId_url, headers=headers, verify=verify)
+        if company_response.status_code == 200:
+            company_data = company_response.json().get("company", {})
+            companyId = company_data.get("companyId")
+            audit_url = f"{url}/V4/Company/{companyId}/SecurityPartners/Register/6"
+            logging.info(f"Company Id : {companyId}")            
+            audit_response = requests.put(audit_url, headers=headers, verify=verify)
+            if audit_response.status_code == 200:
+                logging.info(f"Audit Log request sent Successfully. Audit Response : {audit_response.json()}" )
+            else:
+                logging.error(f"Failed to send Audit Log request with status code : {audit_response.status_code}")
+        else:
+            logging.error(f"Failed to get Company Id with status code : {company_response.status_code}")
         ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=true&showAnomalous=true"
         f_url = url + ustring
         current_date = datetime.now(timezone.utc)
         to_time = int(current_date.timestamp())
         fromtime = read_blob(cs, container_name, blob_name)
         if fromtime is None:
-            fromtime = int((current_date - timedelta(days=2)).timestamp())
+            fromtime = int((current_date - timedelta(days=backfill_days)).timestamp())
             logging.info("From Time : [{}] , since the time read from blob is None".format(fromtime))
         else:
             fromtime_dt = datetime.fromtimestamp(fromtime, tz=timezone.utc)
             time_diff = current_date - fromtime_dt
-            if time_diff > timedelta(days=2):
-                updatedfromtime = int((current_date - timedelta(days=2)).timestamp())
+            if time_diff > timedelta(days=backfill_days):
+                updatedfromtime = int((current_date - timedelta(days=backfill_days)).timestamp())
                 logging.info("From Time : [{}] , since the time read from blob : [{}] is older than 2 days".format(updatedfromtime,fromtime))
                 fromtime = updatedfromtime
             elif time_diff < timedelta(minutes = 5):
@@ -140,6 +157,7 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("Event endpoint : [{}]".format(event_endpoint))
         response = requests.get(event_endpoint, headers=headers, verify=verify)
         logging.info("Response Status Code : " + str(response.status_code))
+        
         if response.status_code == 200:
             events = response.json()
             logging.info("Events Data")
@@ -625,8 +643,11 @@ def upload_timestamp_blob(connection_string, container_name, blob_name, timestam
         timestamp_str = str(timestamp)
 
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-
+        
         container_client = blob_service_client.get_container_client(container_name)
+        
+        if not container_client.exists():
+            container_client.create_container()
 
         blob_client = container_client.get_blob_client(blob_name)
 
