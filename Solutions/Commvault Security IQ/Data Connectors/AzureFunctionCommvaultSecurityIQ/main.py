@@ -120,8 +120,10 @@ def main(mytimer: func.TimerRequest) -> None:
         companyId_url = f"{url}/v2/WhoAmI"
         company_response = requests.get(companyId_url, headers=headers, verify=verify)
         if company_response.status_code == 200:
-            company_data = company_response.json().get("company", {})
-            companyId = company_data.get("companyId")
+            company_data_json = company_response.json()
+            logging.info(f"Company Response : {company_data_json}")
+            company_data = company_data_json.get("company", {})
+            companyId = company_data.get("id")
             audit_url = f"{url}/V4/Company/{companyId}/SecurityPartners/Register/6"
             logging.info(f"Company Id : {companyId}")            
             audit_response = requests.put(audit_url, headers=headers, verify=verify)
