@@ -24,6 +24,9 @@ time_delay_minutes = 60
 event_types = ["maillog","message"]
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
+FIELD_SIZE_LIMIT_BYTES = 1000 * 32
+
+
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
@@ -31,6 +34,19 @@ pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("ProofpointPOD: Invalid Log Analytics Uri.")
+
+def check_size(queue):
+        data_bytes_len = len(json.dumps(queue).encode())
+        return data_bytes_len < FIELD_SIZE_LIMIT_BYTES
+
+
+def split_big_request(queue):
+        if check_size(queue):
+            return [queue]
+        else:
+            middle = int(len(queue) / 2)
+            queues_list = [queue[:middle], queue[middle:]]
+            return split_big_request(queues_list[0]) + split_big_request(queues_list[1])
 
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
@@ -107,6 +123,26 @@ class Proofpoint_api:
             for row in chunk:
                 if row != None and row != '':
                     y = json.loads(row)
+                    if ('msgParts' in y) and (len(json.dumps(y['msgParts']).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                        if isinstance(y['msgParts'],list):
+                            queue_list = split_big_request(y['msgParts'])
+                            count = 1
+                            for q in queue_list:
+                                columnname = 'msgParts' + str(count)
+                                y[columnname] = q
+                                count+=1
+                            del y['msgParts']
+                            
+                        elif isinstance(y['msgParts'],dict):
+                            queue_list = list(y['msgParts'].keys())
+                            for count, key in enumerate(queue_list, 1):
+                                if count > 10:
+                                    break
+                                y[f"msgParts{key}"] = y['msgParts'][key]
+
+                            del y['msgParts']
+                        else:
+                            pass
                     y.update({'event_type': event_type})
                     obj_array.append(y)
 

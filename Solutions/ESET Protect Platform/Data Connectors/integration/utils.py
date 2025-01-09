@@ -6,13 +6,13 @@ from datetime import datetime, timedelta, timezone
 
 from aiohttp import ClientSession
 from aiohttp.client_exceptions import ClientResponseError
+from cryptography.fernet import Fernet, InvalidToken
+from pydantic import ValidationError
+
 from azure.core.exceptions import HttpResponseError, ServiceRequestError
 from azure.data.tables import TableServiceClient
 from azure.identity.aio import DefaultAzureCredential
 from azure.monitor.ingestion.aio import LogsIngestionClient
-from cryptography.fernet import Fernet, InvalidToken
-from pydantic import ValidationError
-
 from integration.exceptions import (
     AuthenticationException,
     InvalidCredentialsException,
@@ -53,6 +53,9 @@ class RequestSender:
             except ClientResponseError as e:
                 if e.status in [400, 401, 403]:
                     raise AuthenticationException(status=e.status, message=e.message)
+                if e.status == 404:
+                    logging.info(f"Endpoint not found.")
+                    return None
 
                 retries += 1
                 logging.error(
