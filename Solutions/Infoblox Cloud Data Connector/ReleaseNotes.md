@@ -1,5 +1,6 @@
 | **Version**   | **Date Modified**              | **Change History**                                                     |
 |---------------|--------------------------------|------------------------------------------------------------------------|
+| 3.0.5         | 06-01-2025                     | Removed Deprecated **Data Connector**                                  |
 | 3.0.4         | 12-07-2024                     | Deprecating data connectors                                            |
 | 3.0.3         | 30-04-2024                     | Updated package for parser issue fix while reinstall   |
 | 3.0.2         | 05-03-2024                     | Updated InfobloxCDC parser to manually parse with extract() rather than dynamically due to slowness   |
