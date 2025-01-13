@@ -2,12 +2,13 @@ id: e3b6a9e7-4c3a-45e6-8baf-1d3bfa8e0c2b
 name: GSA - Detect Abnormal Deny Rate for Source to Destination IP
 description: |
   Identifies abnormal deny rate for specific source IP to destination IP based on the normal average and standard deviation learned during a configured period. This can indicate potential exfiltration, initial access, or C2, where an attacker tries to exploit the same vulnerability on machines in the organization but is being blocked by firewall rules.
-configurableParameters:
-  - minimumOfStdsThreshold: The number of stds to use in the threshold calculation. Default is set to 3.
-  - learningPeriodTime: Learning period for threshold calculation in days. Default is set to 5.
-  - binTime: Learning buckets time in hours. Default is set to 1 hour.
-  - minimumThreshold: Minimum threshold for alert. Default is set to 5.
-  - minimumBucketThreshold: Minimum learning buckets threshold for alert. Default is set to 5.
+  
+  Configurable Parameters:
+      - minimumOfStdsThreshold: The number of stds to use in the threshold calculation. Default is set to 3.
+      - learningPeriodTime: Learning period for threshold calculation in days. Default is set to 5.
+      - binTime: Learning buckets time in hours. Default is set to 1 hour.
+      - minimumThreshold: Minimum threshold for alert. Default is set to 5.
+      - minimumBucketThreshold: Minimum learning buckets threshold for alert. Default is set to 5.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -30,11 +31,11 @@ query: |
   let MinThreshold = 5.0;
   let MinLearningBuckets = 5;
   let TrafficLogs = NetworkAccessTraffic
-    | where Action == 'Denied'
+    | where Action == "Denied"
     | where isnotempty(DestinationIp) and isnotempty(SourceIp);
   let LearningSrcIpDenyRate = TrafficLogs
     | where TimeGenerated between (ago(LearningPeriod + 1d) .. ago(1d))
-    | summarize count() by SourceIp, bin(TimeGenerated, BinTime), DestinationIp
+    | summarize count_ = count() by SourceIp, bin(TimeGenerated, BinTime), DestinationIp
     | summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by SourceIp, DestinationIp
     | where LearningTimeBuckets > MinLearningBuckets;
   let AlertTimeSrcIpDenyRate = TrafficLogs
@@ -44,7 +45,7 @@ query: |
     | join kind=leftouter (LearningSrcIpDenyRate) on SourceIp, DestinationIp
     | extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
     | where AlertTimeSrcIpDenyRateCount > LearningThreshold
-    | project SourceIp, DestinationIp, AlertTimeSrcIpDenyRateCount, LearningThreshold    
+    | project SourceIp, DestinationIp, AlertTimeSrcIpDenyRateCount, LearningThreshold
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -54,5 +55,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: DestinationIp
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
