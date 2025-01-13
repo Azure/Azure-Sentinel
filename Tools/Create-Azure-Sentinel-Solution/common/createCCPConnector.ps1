@@ -288,29 +288,9 @@ function CreateRestApiPollerResourceProperties() {
         # ApiKey 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'apikey' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -minLength 4
     }
-    elseif($armResource.properties.auth.type.ToLower() -eq 'JwtToken')
-    {
-        # userName object check
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.auth -propertyName 'userName' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -minLength 4
-
-        # userName object should have key
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.auth.userName -propertyName 'key' -isInnerObject $true -innerObjectName 'userName' -kindType $kindType -isSecret $false -isRequired $true -minLength 4
-
-        # userName object should have value
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.auth.userName -propertyName 'value' -isInnerObject $true -innerObjectName 'userName' -kindType $kindType -isSecret $false -isRequired $true -minLength 4
-
-        # password object check
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.auth -propertyName 'password' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -minLength 4
-
-        # password object should have key
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.auth.password -propertyName 'key' -isInnerObject $true -innerObjectName 'password' -kindType $kindType -isSecret $false -isRequired $true -minLength 4
-
-        # password object should have value
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.auth.password -propertyName 'value' -isInnerObject $true -innerObjectName 'password' -kindType $kindType -isSecret $true -isRequired $true -minLength 4
-    }
     else 
     {
-        Write-Host "Error: For kind RestApiPoller, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'APIKey' or 'JwtToken'" -BackgroundColor Red
+        Write-Host "Error: For kind RestApiPoller, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2' or 'APIKey'." -BackgroundColor Red
         exit 1;
     }
 
@@ -493,16 +473,6 @@ function ProcessPropertyPlaceholders($armResource, $templateContentConnections,
             Write-Host "Error: Attribute '$($propertyName)' missing from '$($kindType)' data connector poller 'properties' section." -BackgroundColor Red
             exit 1;
         }
-    }
-}
-
-function ProcessPropertyPlaceholders1($armResource, $templateContentConnections, $propertyName, $isSecret, $minLength = 1) 
-{
-    $placeHoldersMatched = $armResource.properties.$($propertyName) | Select-String $placeHolderPatternMatches -AllMatches
-    if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-        $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-        $armResource.properties.dcrConfig.streamName = "[[parameters('$($placeHolderName)')]"
-        $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $isSecret -minLength $minLength
     }
 }
 
