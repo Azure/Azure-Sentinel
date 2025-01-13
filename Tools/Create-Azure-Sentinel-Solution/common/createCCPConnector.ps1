@@ -413,41 +413,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         # if dataCollectionRuleImmutableId property not present then add it 
                         $armResource.properties.dcrConfig | Add-Member -MemberType NoteProperty -Name "dataCollectionRuleImmutableId" -Value "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
                     }
-                    if ($armResource.kind.ToLower() -eq 'gcp' ) {
-                        $hasServiceAccountEmail = [bool]($armResource.properties.auth.PSobject.Properties.name -match "serviceAccountEmail")
-                        if ($hasServiceAccountEmail) {
-                            $serviceAccountEmailProperty = $armResource.properties.auth.serviceAccountEmail
-                            $placeHoldersMatched = $serviceAccountEmailProperty | Select-String $placeHolderPatternMatches -AllMatches
-                                
-                            if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $armResource.properties.auth.serviceAccountEmail = "[[parameters('GCPServiceAccountEmail')]"
-                                $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'serviceAccountEmail' -isSecret $true
-                            }
-                        }
-                        
-                        $hasProjectNumber = [bool]($armResource.properties.auth.PSobject.Properties.name -match "projectNumber")
-                        if ($hasProjectNumber) {
-                            $projectNumberProperty = $armResource.properties.auth.projectNumber
-                            $placeHoldersMatched = $projectNumberProperty | Select-String $placeHolderPatternMatches -AllMatches
-                            
-                            if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $armResource.properties.auth.projectNumber = "[[parameters('GCPProjectNumber')]"
-                                $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'projectNumber' -isSecret $true
-                            }
-                        }
-
-                        $hasWorkloadIdentityProviderId = [bool]($armResource.properties.auth.PSobject.Properties.name -match "workloadIdentityProviderId")
-                        if ($hasWorkloadIdentityProviderId) {
-                            $projectNumberProperty = $armResource.properties.auth.workloadIdentityProviderId
-                            $placeHoldersMatched = $projectNumberProperty | Select-String $placeHolderPatternMatches -AllMatches
-                            
-                            if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $armResource.properties.auth.workloadIdentityProviderId = "[[parameters('GCPWorkloadIdentityProviderId')]"
-                                $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'workloadIdentityProviderId' -isSecret $true
-                            }
-                        } 
-                    }
-                    elseif ($armResource.kind.ToLower() -eq 'push' ) {
+                    
+                    if ($armResource.kind.ToLower() -eq 'push' ) {
 
                         $templateContentConnections.properties.mainTemplate = Add-NewObjectParameter `
                             -TemplateResourceObj $templateContentConnections.properties.mainTemplate `
