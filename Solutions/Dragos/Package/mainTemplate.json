@@ -80,18 +80,18 @@
     },
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "dataConnectorCCPVersion": "1.0.0",
-    "_dataConnectorContentIdConnectorDefinition1": "DragosSitestoreCCPDefinition",
+    "_dataConnectorContentIdConnectorDefinition1": "DragosSitestoreCCP",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
-    "_dataConnectorContentIdConnections1": "DragosSitestoreCCPDefinitionConnections",
+    "_dataConnectorContentIdConnections1": "DragosSitestoreCCPConnections",
     "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
     "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
     "analyticRuleObject1": {
-      "analyticRuleVersion1": "1.0.2",
+      "analyticRuleVersion1": "1.0.0",
       "_analyticRulecontentId1": "9a74fe72-4c21-4ac5-80d9-37434e809721",
       "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '9a74fe72-4c21-4ac5-80d9-37434e809721')]",
       "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('9a74fe72-4c21-4ac5-80d9-37434e809721')))]",
-      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','9a74fe72-4c21-4ac5-80d9-37434e809721','-', '1.0.2')))]"
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','9a74fe72-4c21-4ac5-80d9-37434e809721','-', '1.0.0')))]"
     },
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
@@ -251,7 +251,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "Dragos Notifications Sentinel Incidents",
+                "displayName": "Dragos Pull Notifications Sentinel Incidents",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "DragosPullNotificationsToSentinel",
                 "query": "let Addresses = DragosAlerts_CL\n| mv-expand asset=assets\n| mv-expand address=asset.addresses\n| extend SentinelEntities=case(address.type == \"IP\",\n                                bag_pack(\"Type\", \"IP\", \"Address\", address.value, \"AddressScope\", address.networkId),\n                                address.type == \"HOSTNAME\",\n                                bag_pack(\"Type\", \"Host\", \"HostName\", address.value),\n                                address.type == \"DOMAIN\",\n                                bag_pack(\"Type\", \"Host\", \"HostName\", split(address.value, '.')[0], \"DnsDomain\", strcat_array(array_slice(split(address.value, '.'), 1, -1), '.')),\n                                dynamic(null))\n| extend MacAddresses = case(address.type == 'MAC', address.value, '')\n| extend IpAddresses = case(address.type == \"IP\", address.value, '');\nlet MitreThreatInfo = DragosAlerts_CL\n| mv-expand threat=threatInfo\n| extend MitreTactics=case(threat.framework == \"MITRE ATT&CK FOR ICS\" and threat.tactic.name != \"N/A\", replace_string(tostring(threat.tactic.name), \" \", \"\"), '')\n| extend MitreTechniques=case(threat.framework == \"MITRE ATT&CK FOR ICS\", threat.technique.id, '');\nlet existingIncidents = SecurityAlert\n    | where ProductName == \"Dragos\"\n    | extend CustomDetails=tostring(parse_json(ExtendedProperties)[\"Custom Details\"])\n    | extend id = toint(extract_json(\"$.DragosNotificationId[0]\", CustomDetails))\n    | project-keep SystemAlertId, id;\nDragosAlerts_CL\n| extend detectionQuads=strcat_array(detectionQuads, \",\")\n| extend threatInfo=strcat_array(threatInfo, \",\")\n| join kind=leftouter Addresses on id\n| join kind=leftouter MitreThreatInfo on id\n| extend notification_id = id\n| summarize SentinelEntities=make_list(SentinelEntities, 250), MacAddresses=make_list(MacAddresses, 250), IpAddresses=make_list(IpAddresses, 250), MitreTactics=make_set_if(MitreTactics, strlen(MitreTactics) > 0), MitreTechniques=make_set_if(MitreTechniques, strlen(MitreTechniques) > 0)  by id=notification_id, source, summary, content, severity, detectionQuads, createdAt, firstSeenAt, lastSeenAt, occurredAt, state, threatInfo\n| extend MacAddresses = set_difference(MacAddresses,dynamic([\"\"]))\n| extend IpAddresses = set_difference(IpAddresses,dynamic([\"\"]))\n| extend MitreTactics=strcat_array(MitreTactics, \",\")\n| extend AlertProductName=\"Dragos\"\n| extend DragosConnectorSource=\"DragosCcp\"\n| extend MSSentinelSeverity = DragosSeverityToSentinelSeverity(severity)\n| join kind=leftouter (existingIncidents) on id\n| where isempty(SystemAlertId)\n| summarize arg_max(createdAt, *) by id\n",
@@ -303,7 +303,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('parserObject2').parserContentId2]",
         "contentKind": "Parser",
-        "displayName": "Dragos Notifications Sentinel Incidents",
+        "displayName": "Dragos Pull Notifications Sentinel Incidents",
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.0')))]",
         "version": "[variables('parserObject2').parserVersion2]"
@@ -316,7 +316,7 @@
       "location": "[parameters('workspace-location')]",
       "properties": {
         "eTag": "*",
-        "displayName": "Dragos Notifications Sentinel Incidents",
+        "displayName": "Dragos Pull Notifications Sentinel Incidents",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "DragosPullNotificationsToSentinel",
         "query": "let Addresses = DragosAlerts_CL\n| mv-expand asset=assets\n| mv-expand address=asset.addresses\n| extend SentinelEntities=case(address.type == \"IP\",\n                                bag_pack(\"Type\", \"IP\", \"Address\", address.value, \"AddressScope\", address.networkId),\n                                address.type == \"HOSTNAME\",\n                                bag_pack(\"Type\", \"Host\", \"HostName\", address.value),\n                                address.type == \"DOMAIN\",\n                                bag_pack(\"Type\", \"Host\", \"HostName\", split(address.value, '.')[0], \"DnsDomain\", strcat_array(array_slice(split(address.value, '.'), 1, -1), '.')),\n                                dynamic(null))\n| extend MacAddresses = case(address.type == 'MAC', address.value, '')\n| extend IpAddresses = case(address.type == \"IP\", address.value, '');\nlet MitreThreatInfo = DragosAlerts_CL\n| mv-expand threat=threatInfo\n| extend MitreTactics=case(threat.framework == \"MITRE ATT&CK FOR ICS\" and threat.tactic.name != \"N/A\", replace_string(tostring(threat.tactic.name), \" \", \"\"), '')\n| extend MitreTechniques=case(threat.framework == \"MITRE ATT&CK FOR ICS\", threat.technique.id, '');\nlet existingIncidents = SecurityAlert\n    | where ProductName == \"Dragos\"\n    | extend CustomDetails=tostring(parse_json(ExtendedProperties)[\"Custom Details\"])\n    | extend id = toint(extract_json(\"$.DragosNotificationId[0]\", CustomDetails))\n    | project-keep SystemAlertId, id;\nDragosAlerts_CL\n| extend detectionQuads=strcat_array(detectionQuads, \",\")\n| extend threatInfo=strcat_array(threatInfo, \",\")\n| join kind=leftouter Addresses on id\n| join kind=leftouter MitreThreatInfo on id\n| extend notification_id = id\n| summarize SentinelEntities=make_list(SentinelEntities, 250), MacAddresses=make_list(MacAddresses, 250), IpAddresses=make_list(IpAddresses, 250), MitreTactics=make_set_if(MitreTactics, strlen(MitreTactics) > 0), MitreTechniques=make_set_if(MitreTechniques, strlen(MitreTechniques) > 0)  by id=notification_id, source, summary, content, severity, detectionQuads, createdAt, firstSeenAt, lastSeenAt, occurredAt, state, threatInfo\n| extend MacAddresses = set_difference(MacAddresses,dynamic([\"\"]))\n| extend IpAddresses = set_difference(IpAddresses,dynamic([\"\"]))\n| extend MitreTactics=strcat_array(MitreTactics, \",\")\n| extend AlertProductName=\"Dragos\"\n| extend DragosConnectorSource=\"DragosCcp\"\n| extend MSSentinelSeverity = DragosSeverityToSentinelSeverity(severity)\n| join kind=leftouter (existingIncidents) on id\n| where isempty(SystemAlertId)\n| summarize arg_max(createdAt, *) by id\n",
@@ -650,7 +650,7 @@
               "kind": "Customizable",
               "properties": {
                 "connectorUiConfig": {
-                  "id": "DragosSitestoreCCPDefinition",
+                  "id": "DragosSitestoreCCP",
                   "title": " Dragos Notifications via Cloud Sitestore",
                   "publisher": "Dragos",
                   "descriptionMarkdown": "The [Dragos Platform](https://www.dragos.com/) is the leading Industrial Cyber Security platform it offers a comprehensive Operational Technology (OT) cyber threat detection built by unrivaled industrial cybersecurity expertise. This solution enables Dragos Platform notification data to be viewed in Microsoft Sentinel so that security analysts are able to triage potential cyber security events occurring in their industrial environments.",
@@ -1082,7 +1082,7 @@
       "kind": "Customizable",
       "properties": {
         "connectorUiConfig": {
-          "id": "DragosSitestoreCCPDefinition",
+          "id": "DragosSitestoreCCP",
           "title": " Dragos Notifications via Cloud Sitestore",
           "publisher": "Dragos",
           "descriptionMarkdown": "The [Dragos Platform](https://www.dragos.com/) is the leading Industrial Cyber Security platform it offers a comprehensive Operational Technology (OT) cyber threat detection built by unrivaled industrial cybersecurity expertise. This solution enables Dragos Platform notification data to be viewed in Microsoft Sentinel so that security analysts are able to triage potential cyber security events occurring in their industrial environments.",
@@ -1332,7 +1332,7 @@
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
               "properties": {
-                "connectorDefinitionName": "DragosSitestoreCCPDefinition",
+                "connectorDefinitionName": "DragosSitestoreCCP",
                 "dataType": "Dragos Sitestore Alerts",
                 "dcrConfig": {
                   "streamName": "Custom-DragosAlerts_CL",
@@ -1425,15 +1425,21 @@
                     "dataTypes": [
                       "DragosAlerts_CL"
                     ],
-                    "connectorId": "Dragos"
+                    "connectorId": "DragosSitestoreCCPDefinition"
+                  },
+                  {
+                    "dataTypes": [
+                      "CommonSecurityLog"
+                    ],
+                    "connectorId": "CefAma"
                   }
                 ],
                 "entityMappings": [
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "Entities",
-                        "columnName": "SentinelEntities"
+                        "columnName": "SentinelEntities",
+                        "identifier": "Entities"
                       }
                     ],
                     "entityType": "SentinelEntities"
@@ -1443,22 +1449,21 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "DragosSource": "source",
-                  "DragosOccurredAt": "occurredAt",
-                  "DragosLastSeenAt": "lastSeenAt",
-                  "DragosConnectSrc": "DragosConnectorSource",
-                  "DragosNotificationId": "id",
-                  "DragosMacAddresses": "MacAddresses",
-                  "DragosThreatInfo": "threatInfo",
-                  "DragosSeverity": "severity",
-                  "DragosDetectionQuads": "detectionQuads",
-                  "DragosFirstSeenAt": "firstSeenAt",
                   "DragosIpAddresses": "IpAddresses",
+                  "DragosSeverity": "severity",
+                  "DragosOccurredAt": "occurredAt",
+                  "DragosDetectionQuads": "detectionQuads",
+                  "DragosConnectSrc": "DragosConnectorSource",
                   "DragosCreatedAt": "createdAt",
-                  "DragosState": "state"
+                  "DragosMacAddresses": "MacAddresses",
+                  "DragosNotificationId": "id",
+                  "DragosSource": "source",
+                  "DragosFirstSeenAt": "firstSeenAt",
+                  "DragosState": "state",
+                  "DragosLastSeenAt": "lastSeenAt",
+                  "DragosThreatInfo": "threatInfo"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "{{content}}",
                   "alertTacticsColumnName": "MitreTactics",
                   "alertDynamicProperties": [
                     {
@@ -1471,19 +1476,20 @@
                     }
                   ],
                   "alertSeverityColumnName": "MSSentinelSeverity",
+                  "alertDescriptionFormat": "{{content}}",
                   "alertDisplayNameFormat": "Dragos: {{summary}}"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "lookbackDuration": "PT1H",
-                    "enabled": true,
-                    "reopenClosedIncident": false,
                     "groupByCustomDetails": [
                       "DragosNotificationId"
                     ],
+                    "reopenClosedIncident": false,
+                    "enabled": true,
+                    "lookbackDuration": "PT1H",
                     "matchingMethod": "Selected"
-                  },
-                  "createIncident": true
+                  }
                 }
               }
             },
