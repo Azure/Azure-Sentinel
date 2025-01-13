@@ -60,6 +60,7 @@ DEVICE_FIELD_LIST = [
     "plcModule",
     "purdueLevel",
     "firmwareVersion",
+    "dataSources"
 ]
 MAX_RETRY = 5
 FUNCTION_APP_TIMEOUT_SECONDS = 570
@@ -502,7 +503,6 @@ class AzureSentinel:
         resource = "/api/logs"
         rfc1123date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
         content_length = len(body)
-        timestamp_date = "armis_device_time"
         try:
             signature = self.build_signature(
                 rfc1123date,
@@ -529,8 +529,7 @@ class AzureSentinel:
             "content-type": content_type,
             "Authorization": signature,
             "Log-Type": log_type,
-            "x-ms-date": rfc1123date,
-            "time-generated-field": timestamp_date,
+            "x-ms-date": rfc1123date
         }
         try:
             response = requests.post(uri, data=body, headers=headers)
