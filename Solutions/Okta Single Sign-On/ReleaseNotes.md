@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.1.2       | 06-01-2025                     | Removing Custom Entity mappings from **Analytic Rule**                         |
 | 3.1.1       | 08-11-2024                     | Fixed CCP **Data Connector** connection bug                          |
 | 3.1.0       | 27-11-2024                     | Fixed Solution version in Maintemplate and resolved ARM template error                           |
 | 3.0.10      | 08-11-2024                     | Updated **Parser** to fix the schema                          |
