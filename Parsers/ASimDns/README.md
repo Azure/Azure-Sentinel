@@ -1,6 +1,6 @@
 # Advanced Security Information Model (ASIM) Dns parsers 
 
-This template deploys all ASIM Dns parsers.
+This template deploys all ASIM Dns parsers. 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
