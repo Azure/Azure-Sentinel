@@ -224,24 +224,24 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                             $dataFlowStreams = $fileContent.properties.dataFlows;
                             foreach ($dcrDataFlowStream in $dataFlowStreams) {
                                 $dcrStreamName = $dcrDataFlowStream.streams[0]
-                                if ($dcrStreamName.contains('Microsoft-')) {
-                                    # this is a standard table
+
+                                if (!$dcrStreamName.Contains('Custom-')) {
                                     . "$PSScriptRoot/standardLogStreams.ps1" # load standard data connector poller and dcr mapper
                                     $dcPollerStreamNameValue = GetKeyValue -key $ccpPollerFile.DCPollerStreamName
+
                                     if ($null -eq $dcPollerStreamNameValue) {
                                         # not found in mapping
-                                        Write-Host "Error For given CCP Data Connector poller, mapping not found in StandardLogStreams. Please make sure that StreamName in Data Connector poller file and that in DCR Stream name are correct. Refer StandardLogStreams.ps1 file for Standard mapping." -BackgroundColor Red
+                                        Write-Host "Error For given CCP Data Connector poller, mapping not found in StandardLogStreams. Please make sure that StreamName in Data Connector poller file and that in DCR Stream name are correct. Refer StandardLogStreams.ps1 file for Standard mapping. Refer Tools/Create-Azure-Sentinel-Solution/common/StandardLogStreams.ps1 file for Standard mapping." -BackgroundColor Red
+                                        exit 1; 
+                                    } elseif ($dcrDataFlowStream.streams[0] -ne $dcPollerStreamNameValue) {
+                                        # when dc poller streamname expected mapping value is not equal to dcr file stream name
+                                        Write-Host "Error For given CCP, DCR file 'stream' value is not correct. Please make sure that StreamName in Data Connector poller file and that in DCR Stream name are correct. Refer Tools/Create-Azure-Sentinel-Solution/common/StandardLogStreams.ps1 file for Standard mapping." -BackgroundColor Red
                                         exit 1; 
                                     } else {
-                                        if ($dcrDataFlowStream.streams[0] -ne $dcPollerStreamNameValue) {
-                                            # when dc poller streamname expected mapping value is not eqault to dcr file stream name
-                                            Write-Host "Error For given CCP, DCR file 'stream' value is not correct. Please make sure that StreamName in Data Connector poller file and that in DCR Stream name are correct. Refer StandardLogStreams.ps1 file for Standard mapping." -BackgroundColor Red
-                                            exit 1; 
-                                        } else {
-                                            $ccpPollerFile.DCRFilePath = $inputFile.FullName
-                                        }
+                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName
                                     }
-                                } else {
+                                }
+                                else {
                                     # this is a custom table
                                     if ($dcrDataFlowStream.streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
                                         $ccpPollerFile.DCRFilePath = $inputFile.FullName
