@@ -5,7 +5,7 @@ import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals.js";
 import { IsValidSupportObject } from "./validSupportObject.js";
 import { IsValidBrandingContent } from "./validMSBranding.js";
 import { IsValidSolutionID } from "./validSolutionID.js";
-import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, InvalidSolutionIDValidationError } from "../utils/validationError";
+import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, InvalidSolutionIDValidationError } from "../utils/validationError.js";
 
 
 
