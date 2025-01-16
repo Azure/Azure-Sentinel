@@ -2,7 +2,7 @@ import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { GetPRDetails } from "./utils/gitHubWrapper";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
-import gitP, { SimpleGit } from 'simple-git/promise';
+import gitP, { SimpleGit } from 'simple-git';
 import { readFileSync } from 'fs';
 
 const workingDir: string = process.cwd();
