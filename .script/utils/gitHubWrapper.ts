@@ -1,7 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
-import * as logger from "./logger";
-import "./stringExtenssions";
+import * as logger from "./logger.js";
+import "./stringExtenssions.js";
 
 
 const _owner = process.env.REPO_OWNER;
