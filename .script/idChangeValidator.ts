@@ -1,7 +1,7 @@
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { GetPRDetails } from "./utils/gitHubWrapper";
-import { ExitCode } from "./utils/exitCode";
-import * as logger from "./utils/logger";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { GetPRDetails } from "./utils/gitHubWrapper.js";
+import { ExitCode } from "./utils/exitCode.js";
+import * as logger from "./utils/logger.js";
 import gitP, { SimpleGit } from 'simple-git';
 import { readFileSync } from 'fs';
 

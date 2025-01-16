@@ -1,5 +1,5 @@
-import { PlaybookValidationError } from "../validationError";
-import { ArmTemplate, ArmTemplateResource } from "./Models/armTemplateModels";
+import { PlaybookValidationError } from "../validationError.js";
+import { ArmTemplate, ArmTemplateResource } from "./Models/armTemplateModels.js";
 import { getTemplatePlaybookResources, PlaybookNameParameter, ResourceLocationFromResourceGroupValue } from "./playbookARMTemplateUtils";
 
 export function validatePlaybookResource(filePath: string, playbookARMTemplate: ArmTemplate<any>): void {
