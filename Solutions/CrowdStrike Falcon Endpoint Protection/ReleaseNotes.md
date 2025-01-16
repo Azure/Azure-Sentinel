@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.0.10      | 15-01-2025                     | Resolve **Workbook** data type dependency issue                                    |
 | 3.0.9       | 12-11-2024                     | Removed deprecated data connectors                                             |
 |             |                                | Updated the python runtime version to 3.11                                                                               |
 | 3.0.8 	  | 10-07-2024 					   | Deprecated **Data Connector** 										            |
