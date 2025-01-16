@@ -1,6 +1,6 @@
 import fs from "fs";
-import { WorkbookValidationError } from "../validationError";
-import { WorkbookMetadata } from "../workbookMetadata";
+import { WorkbookValidationError } from "../validationError.js";
+import { WorkbookMetadata } from "../workbookMetadata.js";
 
 // Load the skip list from the JSON file
 const skipListFile = "./.script/utils/workbookCheckers/WorkbookPreviewImageValidationSkipList.json";

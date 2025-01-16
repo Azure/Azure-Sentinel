@@ -1,7 +1,7 @@
-import { GetDiffFiles, GetPRDetails } from "../gitHubWrapper";
-import { WorkbookMetadata } from "../workbookMetadata";
+import { GetDiffFiles, GetPRDetails } from "../gitHubWrapper.js";
+import { WorkbookMetadata } from "../workbookMetadata.js";
 import gitP, { SimpleGit } from 'simple-git';
-import { WorkbookValidationError } from "../validationError";
+import { WorkbookValidationError } from "../validationError.js";
 
 const workingDir:string = process.cwd();
 const git: SimpleGit = gitP(workingDir);
