@@ -6,7 +6,7 @@ This playbook uses Druva-Ransomware-Response capabilities to stop the spread of 
 
 ### Prerequisites
 
-1. Verify ARR (Accelerated Ransomeware Recovery) should be enabled for the respective Device using Resource ID on the [Druva Security Cloud Platform](https://console.druva.com/).
+1. Verify ARR (Accelerated Ransomware Recovery) should be enabled for the respective Device using Resource ID on the [Druva Security Cloud Platform](https://console.druva.com/).
 2. Generate Druva API Client Credentials
     * Use the following link to navigate to Druva's documentation page and refer the steps to generate API Client Credentials.
     * [Druva's Documentation Page](https://help.druva.com/en/articles/8580838-create-and-manage-api-credentials)
@@ -36,9 +36,9 @@ This playbook uses Druva-Ransomware-Response capabilities to stop the spread of 
 
 Once deployment is complete, authorize each connection keyvault.
 
-1. Login to the Microsoft Azure protal and in the search box Type API Connections.
+1. Login to the Microsoft Azure portal and in the search box type API Connections.
 2. Find API connection option.
-3. Check for your Created API connection exists. eg. <playbookname>-KeyVault-Connection
+3. Check for your created API connection exists. eg. <playbookname>-KeyVault-Connection
 4. Check Status should be ready for the same API Connection.
 
 #### b. Grant permissions
