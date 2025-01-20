@@ -25,9 +25,9 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
-    * Playbook Name: Enter the playbook name here
-    * Cisco Umbrella Organization Id: Organization id in Cisco Umbrella
-    * Cisco Umbrella Policy Id: ID of the DNS or web policy to act upon
+    * Playbook Name: Enter the playbook name here.
+    * Cisco Umbrella Organization Id: Organization id in Cisco Umbrella.
+    * Cisco Umbrella Policy Id: ID of the DNS or web policy to act upon.
     * Keyvault name: Name of the key vault where secrets are stored.
     * Umbrella API Client Id Key Name: Name of the Secrets field from Keyvault where Cisco Umbrella "API Key" value is stored.
     * Umbrella API Secret Key Name: Name of the Secrets field from Keyvault where Cisco Umbrella "Key Secret" value is stored.
