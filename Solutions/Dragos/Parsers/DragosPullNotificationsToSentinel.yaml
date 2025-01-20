@@ -1,0 +1,46 @@
+id: b5237116-c40a-4cbe-bac6-c35564a0c578
+Function:
+  Title: Dragos Pull Notifications Sentinel Incidents
+  Version: '1.0.0'
+  LastUpdated: '2024-08-25'
+Category: Microsoft Sentinel Parser
+FunctionName: DragosPullNotificationsToSentinel
+FunctionAlias: DragosPullNotificationsToSentinel
+FunctionQuery: |
+  let Addresses = DragosAlerts_CL
+  | mv-expand asset=assets
+  | mv-expand address=asset.addresses
+  | extend SentinelEntities=case(address.type == "IP",
+                                  bag_pack("Type", "IP", "Address", address.value, "AddressScope", address.networkId),
+                                  address.type == "HOSTNAME",
+                                  bag_pack("Type", "Host", "HostName", address.value),
+                                  address.type == "DOMAIN",
+                                  bag_pack("Type", "Host", "HostName", split(address.value, '.')[0], "DnsDomain", strcat_array(array_slice(split(address.value, '.'), 1, -1), '.')),
+                                  dynamic(null))
+  | extend MacAddresses = case(address.type == 'MAC', address.value, '')
+  | extend IpAddresses = case(address.type == "IP", address.value, '');
+  let MitreThreatInfo = DragosAlerts_CL
+  | mv-expand threat=threatInfo
+  | extend MitreTactics=case(threat.framework == "MITRE ATT&CK FOR ICS" and threat.tactic.name != "N/A", replace_string(tostring(threat.tactic.name), " ", ""), '')
+  | extend MitreTechniques=case(threat.framework == "MITRE ATT&CK FOR ICS", threat.technique.id, '');
+  let existingIncidents = SecurityAlert
+      | where ProductName == "Dragos"
+      | extend CustomDetails=tostring(parse_json(ExtendedProperties)["Custom Details"])
+      | extend id = toint(extract_json("$.DragosNotificationId[0]", CustomDetails))
+      | project-keep SystemAlertId, id;
+  DragosAlerts_CL
+  | extend detectionQuads=strcat_array(detectionQuads, ",")
+  | extend threatInfo=strcat_array(threatInfo, ",")
+  | join kind=leftouter Addresses on id
+  | join kind=leftouter MitreThreatInfo on id
+  | extend notification_id = id
+  | summarize SentinelEntities=make_list(SentinelEntities, 250), MacAddresses=make_list(MacAddresses, 250), IpAddresses=make_list(IpAddresses, 250), MitreTactics=make_set_if(MitreTactics, strlen(MitreTactics) > 0), MitreTechniques=make_set_if(MitreTechniques, strlen(MitreTechniques) > 0)  by id=notification_id, source, summary, content, severity, detectionQuads, createdAt, firstSeenAt, lastSeenAt, occurredAt, state, threatInfo
+  | extend MacAddresses = set_difference(MacAddresses,dynamic([""]))
+  | extend IpAddresses = set_difference(IpAddresses,dynamic([""]))
+  | extend MitreTactics=strcat_array(MitreTactics, ",")
+  | extend AlertProductName="Dragos"
+  | extend DragosConnectorSource="DragosCcp"
+  | extend MSSentinelSeverity = DragosSeverityToSentinelSeverity(severity)
+  | join kind=leftouter (existingIncidents) on id
+  | where isempty(SystemAlertId)
+  | summarize arg_max(createdAt, *) by id
