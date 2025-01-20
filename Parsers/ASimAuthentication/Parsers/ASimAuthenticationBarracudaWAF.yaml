@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Authentication parser for Barracuda WAF
-  Version: '0.1'
-  LastUpdated: Jun 13 2023
+  Version: '0.2.1'
+  LastUpdated: Jun 18, 2024
 Product:
   Name: Barracuda WAF
 Normalization:
@@ -11,11 +11,11 @@ References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Logs type Description in Barracuda WAF
   Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
 Description: |
-  This ASIM parser supports normalizing the Barracuda WAF logs to the ASIM authentication normalized schema.
+  This ASIM parser supports normalizing the Barracuda WAF logs ingested in 'barracuda_CL' table to the ASIM authentication normalized schema.
 ParserName: ASimAuthenticationBarracudaWAF
 EquivalentBuiltInParser: _ASim_Authentication_BarracudaWAF
 ParserParams:
@@ -132,84 +132,6 @@ ParserQuery: |
           ManagementGroupName,
           SourceIP,
           Reason;
-  let BarracudaCEF = 
-      CommonSecurityLog
-      | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
-      | where DeviceEventCategory == "AUDIT"
-          and (toupper(ProcessName) in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
-      | parse trim(@'[^\w(")]+', Message) with * "Reason=" Reason:string
-      | extend Reason = trim(@'(")', Reason)
-      | lookup EventResultDetailsLookup on Reason
-      | extend ProcessName = toupper(ProcessName)
-      | lookup EventTypeLookup on $left.ProcessName == $right.EventName_s
-      | extend 
-          EventType = EventType_lookup,
-          severity = toint(LogSeverity)
-      | lookup SeverityLookup on severity
-      | extend
-          Dvc = DeviceName,
-          EventCount = toint(1),
-          EventProduct = "WAF",
-          EventSchema = "Authentication",
-          EventSchemaVersion = "0.1.3",
-          EventVendor = "Barracuda"
-      | extend
-          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
-          SrcPortNumber = toint(SourcePort),
-          DvcIpAddr = DeviceAddress,
-          SrcIpAddr = SourceIP,
-          DvcHostname = DeviceName,
-          ActorUsername= DestinationUserName
-      | extend
-          ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
-          ActorUserType = iff(isnotempty(ActorUsername), "Admin", "")
-      | extend
-          IpAddr = SrcIpAddr,
-          Src = SrcIpAddr,
-          EventEndTime = EventStartTime
-      | project-away
-          ThreatConfidence,
-          EventType_lookup,
-          CommunicationDirection,
-          AdditionalExtensions,
-          Device*,
-          Source*,
-          Destination*,
-          Activity,
-          LogSeverity,
-          ApplicationProtocol,
-          ProcessID,
-          ExtID,
-          Protocol,
-          Reason,
-          ReceiptTime,
-          SimplifiedDeviceAction,
-          OriginalLogSeverity,
-          ProcessName,
-          EndTime,
-          ExternalID,
-          File*,
-          ReceivedBytes,
-          Message,
-          Old*,
-          EventOutcome,
-          Request*,
-          StartTime,
-          Field*,
-          Flex*,
-          Remote*,
-          Malicious*,
-          severity,
-          ThreatSeverity,
-          IndicatorThreatType,
-          ThreatDescription,
-          _ResourceId,
-          SentBytes,
-          ReportReferenceLink,
-          Computer,
-          TenantId;
-  union isfuzzy = true 
-    BarracudaCustom,
-    BarracudaCEF
+    BarracudaCustom
   };
   parser(disabled=disabled)
