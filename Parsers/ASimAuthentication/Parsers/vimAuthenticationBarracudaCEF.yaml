@@ -1,0 +1,214 @@
+Parser:
+  Title: ASIM Authentication parser for Barracuda CEF
+  Version: '0.2.2'
+  LastUpdated: Jun 18, 2024
+Product:
+  Name: Barracuda CEF
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Logs type Description in Barracuda CEF
+  Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
+Description: |
+  This ASIM parser supports normalizing the Barracuda WAF logs ingested in 'CommonSecurityLog' table to the ASIM authentication normalized schema.
+ParserName: vimAuthenticationBarracudaCEF
+EquivalentBuiltInParser: _Im_Authentication_BarracudaCEF
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let SeverityLookup = datatable (severity: int, EventSeverity: string)
+        [
+        0, "High", 
+        1, "High", 
+        2, "High", 
+        3, "Medium",
+        4, "Low",
+        5, "Low", 
+        6, "Informational",
+        7, "Informational" 
+    ];
+    let EventTypeLookup = datatable (
+        EventName_s: string,
+        EventType_lookup: string,
+        EventResult: string
+    )
+        [
+        "LOGIN", "Logon", "Success",
+        "UNSUCCESSFUL_LOGIN", "Logoff", "Failure",
+        "LOGOUT", "Logoff", "Success"
+    ];
+    let EventResultDetailsLookup = datatable (
+        Reason: string,
+        EventResultDetails: string
+    )
+        [
+        "Invalid Username/Password", "Incorrect password",
+        "Account Lockout", "User locked",
+        "Expired or Disabled Accounts", "User disabled",
+        "IP Blocking", "Logon violates policy",
+        "Session Timeouts", "Session expired",
+        "CAPTCHA Verification", "Other"
+    ];
+    let parser = (
+        starttime: datetime=datetime(null), 
+        endtime: datetime=datetime(null), 
+        username_has_any: dynamic = dynamic([]),
+        targetappname_has_any: dynamic = dynamic([]),
+        srcipaddr_has_any_prefix: dynamic = dynamic([]),
+        srchostname_has_any: dynamic = dynamic([]),
+        eventtype_in: dynamic = dynamic([]),
+        eventresultdetails_in: dynamic = dynamic([]),
+        eventresult: string = '*',
+        disabled: bool=false
+        ) { 
+        let BarracudaCEF = 
+            CommonSecurityLog
+            | where not(disabled)
+            | where (isnull(starttime) or TimeGenerated >= starttime)
+                and (isnull(endtime) or TimeGenerated <= endtime)
+                and DeviceVendor startswith "Barracuda"
+                and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
+            | where DeviceEventCategory == "AUDIT"
+                and (toupper(ProcessName) in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
+                and ((array_length(username_has_any) == 0) or (DestinationUserName has_any (username_has_any)))
+                and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+                and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix))
+                and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
+            // Filtering for eventtype_in done later in the parser
+            // Filtering for eventresultdetails_in done later in the parser
+            // Filtering for eventresult done later in the parser
+            | parse trim(@'[^\w(")]+', Message) with * "Reason=" Reason: string
+            | extend Reason = trim(@'(")', Reason)
+            | lookup EventResultDetailsLookup on Reason
+            // Filtering on eventresultdetails_in
+            | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+            | extend ProcessName = toupper(ProcessName)
+            | lookup EventTypeLookup on $left.ProcessName == $right.EventName_s
+            | extend 
+                EventType = EventType_lookup,
+                severity = toint(LogSeverity)
+            // Filtering on eventtype_in and eventresult
+            | where ((array_length(eventtype_in) == 0) or EventType in~ (eventtype_in))
+            | lookup SeverityLookup on severity
+            | extend
+                Dvc = DeviceName,
+                EventCount = toint(1),
+                EventProduct = "WAF",
+                EventSchema = "Authentication",
+                EventSchemaVersion = "0.1.3",
+                EventVendor = "Barracuda"
+            | extend
+                SrcPortNumber = toint(SourcePort),
+                DvcIpAddr = DeviceAddress,
+                SrcIpAddr = SourceIP,
+                DvcHostname = DeviceName,
+                ActorUsername = DestinationUserName,
+                EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime) - tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime)))
+            // mapping ASimMatchingUsername
+            | extend temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+            // TargetUsername not coming from source. Hence, not mapped.
+            | extend ASimMatchingUsername = case(
+                                        array_length(username_has_any) == 0,
+                                        "-",
+                                        temp_isMatchActorUsername,
+                                        "ActorUsername",
+                                        "No match"
+                                    )
+            | extend
+                ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+                ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""), 
+                EventEndTime = EventStartTime
+            | extend
+                IpAddr = SrcIpAddr,
+                Src = SrcIpAddr
+            | project-away
+                ThreatConfidence,
+                EventType_lookup,
+                CommunicationDirection,
+                AdditionalExtensions,
+                Device*,
+                Source*,
+                Destination*,
+                temp_*,
+                Activity,
+                LogSeverity,
+                ApplicationProtocol,
+                ProcessID,
+                ExtID,
+                Protocol,
+                Reason,
+                ReceiptTime,
+                SimplifiedDeviceAction,
+                OriginalLogSeverity,
+                ProcessName,
+                EndTime,
+                ExternalID,
+                File*,
+                ReceivedBytes,
+                Message,
+                Old*,
+                EventOutcome,
+                Request*,
+                StartTime,
+                Field*,
+                Flex*,
+                Remote*,
+                Malicious*,
+                severity,
+                ThreatSeverity,
+                IndicatorThreatType,
+                ThreatDescription,
+                _ResourceId,
+                SentBytes,
+                ReportReferenceLink,
+                Computer,
+                TenantId,
+                CollectorHostName,
+                ASimMatchingUsername;
+            BarracudaCEF
+    };
+    parser (
+      starttime=starttime,
+      endtime=endtime,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      eventtype_in=eventtype_in,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled)
