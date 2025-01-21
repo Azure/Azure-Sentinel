@@ -1,12 +1,12 @@
 import fs from "fs";
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
-import { isValidSchema } from "./utils/jsonSchemaChecker";
-import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
-import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
-import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
-import * as logger from "./utils/logger";
-import { ConnectorCategory } from "./utils/dataConnector";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
+import { isValidSchema } from "./utils/jsonSchemaChecker.js";
+import { isValidId } from "./utils/dataConnectorCheckers/idChecker.js";
+import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker.js";
+import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker.js";
+import * as logger from "./utils/logger.js";
+import { ConnectorCategory } from "./utils/dataConnector.js";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
 

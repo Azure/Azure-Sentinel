@@ -1,5 +1,5 @@
-import { ArmTemplate, ArmTemplateResource } from "./Models/armTemplateModels";
-import { PlaybookTemplateMetadata } from "./Models/playbookTemplateMetadata";
+import { ArmTemplate, ArmTemplateResource } from "./Models/armTemplateModels.js";
+import { PlaybookTemplateMetadata } from "./Models/playbookTemplateMetadata.js";
 
 export type PlaybookArmTemplate = ArmTemplate<PlaybookTemplateMetadata>;
 
