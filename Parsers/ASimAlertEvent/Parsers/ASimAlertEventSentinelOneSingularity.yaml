@@ -1,0 +1,113 @@
+Parser:
+  Title: Alert Event ASIM parser for SentinelOne Singularity platform
+  Version: '0.1.0'
+  LastUpdated: Oct 09, 2024
+Product:
+  Name: SentinelOne
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the SentinelOne alerts to the ASIM Alert normalized schema.
+ParserName: ASimAlertEventSentinelOneSingularity
+EquivalentBuiltInParser: _ASim_AlertEvent_SentinelOneSingularity
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let AlertVerdictLookup = datatable (analystVerdict_s: string, AlertVerdict: string)
+    [
+    "Undefined", "Unknown",
+    "true_positive", "True Positive",
+    "suspicious", "True Positive",
+    "false_positive", "False Positive"
+  ];
+  let ThreatCategoryArray = dynamic(["Malware", "Ransomware", "Trojan", "Virus", "Worm", "Adware", "Spyware", "Rootkit", "Cryptominor", "Phishing", "Spam", "MaliciousUrl", "Spoofing", "Security Policy Violation", "Unknown", "SuspiciousActivity"]);
+  let DetectionMethodLookup = datatable (
+      threatInfo_engines_s: string,
+      DetectionMethod: string
+  )
+      [
+      "Intrusion Detection", "Intrusion Detection",
+      "User-Defined Blocklist", "User Defined Blocked List",
+      "Reputation", "Reputation"
+  ];
+  let parser = (
+      disabled: bool=false) {
+      SentinelOne_CL
+      | where not(disabled)
+      | where event_name_s in ("Threats.")
+      // Mapping Inspection Fields
+      | extend 
+        AlertId = threatInfo_threatId_s,
+        AlertName = threatInfo_threatName_s,
+        AlertStatus = iif(threatInfo_incidentStatus_s == "resolved", "Closed", "Active"),
+        AlertOriginalStatus = threatInfo_incidentStatus_s,
+        Names = extract_all('"name":"([^"]+)"', dynamic([1]), indicators_s),
+        ThreatId = threatInfo_threatId_s,
+        ThreatName = threatInfo_threatName_s,
+        ThreatFirstReportedTime = threatInfo_identifiedAt_t,
+        ThreatLastReportedTime = threatInfo_updatedAt_t,
+        ThreatCategory = iif(threatInfo_classification_s in (ThreatCategoryArray), threatInfo_classification_s, ""),
+        ThreatOriginalCategory = threatInfo_classification_s
+    | extend
+        AttackTechniques = tostring(extract_all('"(T[0-9]+\\.[0-9]+|T[0-9]+)"', dynamic([1]), tostring(Names))),
+        AttackTactics = tostring(extract_all('"([^T][^0-9]+)"', dynamic([1]), tostring(Names)))
+    | project-away Names
+    | lookup DetectionMethodLookup on threatInfo_engines_s
+    | extend analystVerdict_s = threatInfo_analystVerdict_s
+    | lookup AlertVerdictLookup on analystVerdict_s
+      // Mapping Dvc Fields
+      | extend 
+          DvcHostname = agentRealtimeInfo_agentComputerName_s,
+          DvcOs =  agentRealtimeInfo_agentOsName_s,
+          DvcOsVersion =  agentRealtimeInfo_agentOsRevision_s,
+          DvcId =  agentRealtimeInfo_agentId_s,
+          DvcIdType = "Other",
+          DvcDomain = agentRealtimeInfo_agentDomain_s,
+          DvcDomainType = "Windows",
+          DvcIpAddr = agentDetectionInfo_agentIpV4_s
+      // Mapping Process Entity
+      | extend
+          ProcessCommandLine = threatInfo_maliciousProcessArguments_s,
+          ProcessName = threatInfo_originatorProcess_s
+      // Mapping File Fields
+      | extend 
+          FileMD5 = threatInfo_md5_g,
+          FileSHA1 = threatInfo_sha1_s,
+          FileSHA256 = threatInfo_sha256_s,
+          FilePath=threatInfo_filePath_s,
+          FileSize = threatInfo_fileSize_d
+      // Mapping User Fields
+      | extend 
+          Username = coalesce(agentDetectionInfo_agentLastLoggedInUpn_s, threatInfo_processUser_s)
+      | extend UsernameType = _ASIM_GetUsernameType(Username)
+      // Event Fields
+      | extend
+          EventType = 'Alert',
+          EventOriginalType = event_name_s,
+          EventUid = threatInfo_threatId_s,
+          EventCount = int(1),
+          EventEndTime = TimeGenerated,
+          EventStartTime = TimeGenerated,
+          EventProduct = 'Singularity',
+          EventVendor = 'SentinelOne',
+          EventSchemaVersion = '0.1',
+          EventSchema = "AlertEvent"
+      | extend EventSubType = "Threat"
+      // Aliases
+      | extend
+          IpAddr = DvcIpAddr,
+          User = Username,
+          Hostname = DvcHostname
+      | project-away *_s, *_g, SourceSystem, ManagementGroupName, Computer, RawData, *_t, *_b, *_d
+  };
+  parser (
+      disabled = disabled
+  )

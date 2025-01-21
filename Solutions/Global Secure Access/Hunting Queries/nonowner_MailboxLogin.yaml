@@ -1,0 +1,67 @@
+id: 0a8f410d-38b5-4d75-90da-32b472b97230
+name: GSA Enriched Office 365 - Non-owner mailbox login activity
+description: |
+  'Finds non-owner mailbox access by admin/delegate permissions. Whitelist valid users and check others for unauthorized access.'
+description-detailed: |
+  'This will help you determine if mailbox access observed with Admin/Delegate Logontype. 
+  The logon type indicates mailbox accessed from non-owner user. Exchange allows Admin 
+  and delegate permissions to access other user's inbox.
+  If your organization has valid admin, delegate access given to users, you can whitelist those and investigate other results.
+  References: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#logontype'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+    let starttime = todatetime('{{StartTimeISO}}');
+      let endtime = todatetime('{{EndTimeISO}}');
+      // Enriched Logs Query for Mailbox Logins (non-owner)
+      let EnrichedMailboxLogins = EnrichedMicrosoft365AuditLogs
+          | where TimeGenerated between (starttime .. endtime)
+          | where Workload == "Exchange"
+          | where Operation == "MailboxLogin"
+          | extend Logon_Type = tostring(parse_json(tostring(AdditionalProperties)).LogonType)
+          | extend MailboxOwnerUPN = tostring(parse_json(tostring(AdditionalProperties)).MailboxOwnerUPN)
+          | where Logon_Type != "Owner"
+          | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Operation, UserType, UserId, MailboxOwnerUPN, Logon_Type, ClientIp
+          | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+          | extend IP_0_Address = ClientIp
+          | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix;
+      // Office Activity Query for Mailbox Logins (non-owner)
+      let OfficeMailboxLogins = OfficeActivity
+          | where TimeGenerated between (starttime .. endtime)
+          | where OfficeWorkload == "Exchange"
+          | where Operation == "MailboxLogin" and Logon_Type != "Owner"
+          | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Operation, OrganizationName, UserType, UserId, MailboxOwnerUPN, Logon_Type, ClientIP
+          | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+          | extend IP_0_Address = ClientIP
+          | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix;
+      // Combine both results
+      let CombinedMailboxLogins = EnrichedMailboxLogins
+          | union OfficeMailboxLogins
+          | summarize arg_min(StartTime, *) by UserId, MailboxOwnerUPN, Logon_Type;
+      // Final output
+      CombinedMailboxLogins
+          | project StartTime, EndTime, Operation, UserId, MailboxOwnerUPN, Logon_Type, Account_0_Name, Account_0_UPNSuffix, IP_0_Address
+          | order by StartTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IP_0_Address
+version: 2.0.1

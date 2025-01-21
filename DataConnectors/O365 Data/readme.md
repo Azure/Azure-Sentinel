@@ -10,7 +10,7 @@ The Office 365 data connector in Azure Sentinel supports ongoing user and admin 
 
 | Content Type | Description | Azure Sentinel Mapping |
 | ------------ | ----------- | ---------------------- |
-| Audit.AzureActiveDirectory | Azure Active Directory logs that’s relates to Office 365 only | Supported with the default connector for [Office 365](https://docs.microsoft.com/azure/sentinel/connect-office-365) in Azure Sentinel |
+| Audit.AzureActiveDirectory | Microsoft Entra ID logs that’s relates to Office 365 only | Supported with the default connector for [Office 365](https://docs.microsoft.com/azure/sentinel/connect-office-365) in Azure Sentinel |
 | Audit.Exchange | User and Admin Activities in Exchange Online | Supported with the default connector for [Office 365](https://docs.microsoft.com/azure/sentinel/connect-office-365) in Azure Sentinel |
 | Audit.SharePoint | User and Admin Activities in SharePoint Online | Supported with the default connector for [Office 365](https://docs.microsoft.com/azure/sentinel/connect-office-365) in Azure Sentinel |
 | Audit.General | Includes all other workloads not included in the previous content types | Not supported with the default connector for Office 365 in Azure Sentinel |

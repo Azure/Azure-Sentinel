@@ -1,0 +1,54 @@
+id: f6a8d6a5-3e9f-47c8-a8d5-1b2b9d3b7d6a
+name: GSA - Detect Protocol Changes for Destination Ports
+description: |
+  Identifies changes in the protocol used for specific destination ports, comparing the current runtime with a learned baseline.
+  This can indicate potential protocol misuse or configuration changes.
+  Configurable Parameters:
+  - Learning period: The time range to establish the baseline. Default is set to 7 days.
+  - Run time: The time range for current analysis. Default is set to 1 day.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - NetworkAccessTrafficLogs
+queryFrequency: 1h
+queryPeriod: 8d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - DefenseEvasion
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  let LearningPeriod = 7d;
+  let RunTime = 1d;
+  let StartLearningPeriod = ago(LearningPeriod + RunTime);
+  let EndRunTime = ago(RunTime);
+  let LearningPortToProtocol = 
+    NetworkAccessTraffic
+    | where TimeGenerated between (StartLearningPeriod .. EndRunTime)
+    | where isnotempty(DestinationPort)
+    | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = TransportProtocol, SourceIp, DestinationFqdn;
+  let AlertTimePortToProtocol = 
+    NetworkAccessTraffic
+    | where TimeGenerated between (EndRunTime .. now())
+    | where isnotempty(DestinationPort)
+    | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = TransportProtocol, SourceIp, DestinationFqdn;
+  AlertTimePortToProtocol
+    | join kind=leftouter (LearningPortToProtocol) on $left.AlertTimeDstPort == $right.LearningTimeDstPort and $left.SourceIp == $right.SourceIp and $left.DestinationFqdn == $right.DestinationFqdn
+    | where isnull(LearningTimeProtocol) or LearningTimeProtocol != AlertTimeProtocol
+    | project AlertTimeDstPort, AlertTimeProtocol, LearningTimeProtocol, SourceIp, DestinationFqdn
+    | extend IPCustomEntity = SourceIp, FqdnCustomEntity = DestinationFqdn
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: FqdnCustomEntity
+version: 1.0.2
+kind: Scheduled

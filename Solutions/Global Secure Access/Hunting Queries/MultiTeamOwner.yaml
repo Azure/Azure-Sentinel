@@ -1,0 +1,74 @@
+id: 558f15dd-3171-4b11-bf24-31c0610a20e0
+name: GSA Enriched Office 365 - User made Owner of multiple teams
+description: |
+  This hunting query identifies users who have been made Owner of multiple Teams.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+    let max_owner_count = 3;  
+    // Adjust this value to change how many teams a user is made owner of before detecting
+    // OfficeActivity Query: Identify users who have been made owners of more than 'max_owner_count' teams
+    let high_owner_count_office = (
+        OfficeActivity
+        | where OfficeWorkload =~ "MicrosoftTeams"
+        | where Operation =~ "MemberRoleChanged"
+        | extend Member = tostring(parse_json(Members)[0].UPN) 
+        | extend NewRole = toint(parse_json(Members)[0].Role)
+        | where NewRole == 2  // Role 2 corresponds to "Owner"
+        | summarize TeamCount = dcount(TeamName) by Member
+        | where TeamCount > max_owner_count
+        | project Member
+    );
+    // OfficeActivity Query: Fetch details for users with high ownership count
+    let OfficeEvents = OfficeActivity
+        | where OfficeWorkload =~ "MicrosoftTeams"
+        | where Operation =~ "MemberRoleChanged"
+        | extend Member = tostring(parse_json(Members)[0].UPN)
+        | extend NewRole = toint(parse_json(Members)[0].Role)
+        | where NewRole == 2  // Role 2 corresponds to "Owner"
+        | where Member in (high_owner_count_office)
+        | extend AccountName = tostring(split(Member, "@")[0]), AccountUPNSuffix = tostring(split(Member, "@")[1]);
+    // EnrichedMicrosoft365AuditLogs Query: Identify users who have been made owners of more than 'max_owner_count' teams
+    let high_owner_count_enriched = (
+        EnrichedMicrosoft365AuditLogs
+        | where Workload == "MicrosoftTeams"
+        | where Operation == "MemberRoleChanged"
+        | extend Member = tostring(UserId)
+        | extend NewRole = toint(parse_json(tostring(AdditionalProperties)).Role)
+        | where NewRole == 2  // Role 2 corresponds to "Owner"
+        | summarize TeamCount = dcount(ObjectId) by Member
+        | where TeamCount > max_owner_count
+        | project Member
+    );
+    // EnrichedMicrosoft365AuditLogs Query: Fetch details for users with high ownership count
+    let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+        | where Workload == "MicrosoftTeams"
+        | where Operation == "MemberRoleChanged"
+        | extend Member = tostring(UserId)
+        | extend NewRole = toint(parse_json(tostring(AdditionalProperties)).Role)
+        | where NewRole == 2  // Role 2 corresponds to "Owner"
+        | where Member in (high_owner_count_enriched)
+        | extend AccountName = tostring(split(Member, "@")[0]), AccountUPNSuffix = tostring(split(Member, "@")[1]);
+    // Combine Office and Enriched Logs
+    let CombinedEvents = OfficeEvents
+        | union EnrichedEvents
+        | summarize by Member, AccountName, AccountUPNSuffix;
+    // Final Output
+    CombinedEvents
+    | order by Member asc
+    | project Member, AccountName, AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.2
+kind: Scheduled
