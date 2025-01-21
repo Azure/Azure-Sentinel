@@ -1,6 +1,6 @@
-import { MainTemplateDomainVerticalValidationError } from "./../utils/validationError";
-import * as logger from "./../utils/logger";
-import { ExitCode } from "../utils/exitCode";
+import { MainTemplateDomainVerticalValidationError } from "./../utils/validationError.js";
+import * as logger from "./../utils/logger.js";
+import { ExitCode } from "../utils/exitCode.js";
 import fs from "fs";
 
 // initialize arrays to store valid domains and verticals
