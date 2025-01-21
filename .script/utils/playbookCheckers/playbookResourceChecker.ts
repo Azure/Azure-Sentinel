@@ -1,6 +1,6 @@
-import { PlaybookValidationError } from "../validationError";
-import { ArmTemplate, ArmTemplateResource } from "./Models/armTemplateModels";
-import { getTemplatePlaybookResources, PlaybookNameParameter, ResourceLocationFromResourceGroupValue } from "./playbookARMTemplateUtils";
+import { PlaybookValidationError } from "../validationError.js";
+import { ArmTemplate, ArmTemplateResource } from "./Models/armTemplateModels.js";
+import { getTemplatePlaybookResources, PlaybookNameParameter, ResourceLocationFromResourceGroupValue } from "./playbookARMTemplateUtils.js";
 
 export function validatePlaybookResource(filePath: string, playbookARMTemplate: ArmTemplate<any>): void {
     // Template can contain several playbooks that invoke one another, and we want to validate only the 'main' playbook that calls that others
