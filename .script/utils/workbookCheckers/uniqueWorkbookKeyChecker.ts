@@ -1,5 +1,5 @@
-import { WorkbookValidationError } from "../validationError";
-import { WorkbookMetadata } from "../workbookMetadata";
+import { WorkbookValidationError } from "../validationError.js";
+import { WorkbookMetadata } from "../workbookMetadata.js";
 
 export function isUniqueKeys(items: Array<WorkbookMetadata>) {
   if (items.length > new Set(items.map((metadata) => metadata.workbookKey)).size) {
