@@ -1,4 +1,4 @@
-More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../readme.md).
+More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../../../readme.md).
 
 
 ## RecordedFuture-CustomConnector

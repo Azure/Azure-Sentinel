@@ -1,0 +1,205 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Export URL Entity to TISC",
+        "description":  "This playbook leverages the ServiceNow TISC API to export URL indicators found in Microsoft Sentinel incidents to TISC Workspace",
+        "prerequisites":  [
+            "ServiceNow TISC Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription."
+        ],
+        "postDeployment":  [
+            "1. Once deployment is complete, you will need to configure/authorize each connection.",
+            "2. Navigate to playbook > API Connections > Select connections one by one > configure/authorize each connection > Save"
+        ],
+        "prerequisitesDeployTemplateFile":  "../../Connectors/ServiceNowTISCCustomConnector/azuredeploy.json",
+        "lastUpdateTime":  "2025-01-10T00:00:00.000Z",
+        "entities":  ["url"],
+        "tags": ["Threat Intelligence", "ServiceNow TISC"],
+        "support":  {
+            "tier":  "partner",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "ServiceNow"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "ServiceNowTISC-Export_URL_Entity",
+            "type":  "string"
+        },
+        "CustomConnectorName":  {
+            "defaultValue":  "ServiceNowTISCCustomConnector",
+            "type":  "string",
+            "metadata": {
+                "description": "Name of the custom connector, if you want to change the default name, make sure to use the same when you were installing ServiceNowTISC custom connector"
+            }            
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "ServiceNowTISC-MicrosoftSentinelConnection",
+        "ServicenowTISCCustomConnectorConnectionName":  "[concat('Connection-', parameters('CustomConnectorName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_entity":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "path":  "/entity/@{encodeURIComponent('UrlEntity')}"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Parse_URL_Entity":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@triggerBody()?['Entity']",
+                                "schema":  {
+                                    "type":  "object",
+                                    "properties":  {
+                                        "type":  {
+                                            "type":  "string"
+                                        },
+                                        "kind":  {
+                                            "type":  "string"
+                                        },
+                                        "properties":  {
+                                            "type":  "object",
+                                            "properties":  {
+                                                "friendlyName":  {
+                                                    "type":  "string"
+                                                },
+                                                "url":  {
+                                                    "type":  "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Add_Observable_TISC_API_-_URL":  {
+                            "runAfter":  {
+                                "Parse_URL_Entity":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['ServicenowTISCCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "body":  {
+                                    "source":  "Microsoft Sentinel",
+                                    "observables":  [
+                                        {
+                                            "value":  "@{body('Parse_URL_Entity')?['properties']?['url']}",
+                                            "type":  "url"
+                                        }
+                                    ]
+                                },
+                                "path":  "/api/sn_sec_tisc/threat_intel_data/add_observables"
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "ServicenowTISCCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('ServicenowTISCCustomConnectorConnectionName'))]",
+                                "connectionName":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "ServiceNowTISC-Export_URL_Entity",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('ServicenowTISCCustomConnectorConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        }
+    ]
+}

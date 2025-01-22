@@ -1,7 +1,7 @@
-import { GetDiffFiles, GetPRDetails } from "../gitWrapper";
-import { WorkbookMetadata } from "../workbookMetadata";
-import gitP, { SimpleGit } from 'simple-git/promise';
-import { WorkbookValidationError } from "../validationError";
+import { GetDiffFiles, GetPRDetails } from "../gitHubWrapper.js";
+import { WorkbookMetadata } from "../workbookMetadata.js";
+import gitP, { SimpleGit } from 'simple-git';
+import { WorkbookValidationError } from "../validationError.js";
 
 const workingDir:string = process.cwd();
 const git: SimpleGit = gitP(workingDir);
@@ -22,7 +22,7 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
     if(changedFiles && changedFiles.length > 0){
       const options = [pr.targetBranch, pr.sourceBranch, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
         const diffSummary = await git.diff(options);
-        const diffLinesArray = diffSummary.split('\n').map(l => l.trim());
+        const diffLinesArray: string[] = diffSummary.split('\n').map((l: string) => l.trim());
         const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
 
       items
