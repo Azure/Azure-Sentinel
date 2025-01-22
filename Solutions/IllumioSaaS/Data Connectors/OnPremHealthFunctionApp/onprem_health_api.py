@@ -28,8 +28,12 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         logging.info("[TimedApi] Error in response {}".format(response))
         return
 
-    body = json.loads(response.text)
+    parsed_response = json.loads(response.text)
+    sanitized_response = json.dumps(parsed_response)
+    sanitized_response = sanitized_response.replace("'", "\\'")
 
     return func.HttpResponse(
-        json.dumps(body), status_code=response.status_code, mimetype="application/json"
+        sanitized_response,
+        status_code=response.status_code,
+        mimetype="application/json",
     )

@@ -143,7 +143,9 @@ def getWorkloads(pce_fqdn, port, org, api_key, api_secret):
 async def main(mytimer: func.TimerRequest) -> None:
 
     for pce_type in getPceType():
+        pce_fqdn = None
         if pce_type == "onprem":
+            pce_fqdn = ONPREM_PCE_FQDN
             response = getWorkloads(
                 ONPREM_PCE_FQDN,
                 ONPREM_PCE_PORT,
@@ -152,6 +154,7 @@ async def main(mytimer: func.TimerRequest) -> None:
                 ONPREM_API_SECRET,
             )
         else:
+            pce_fqdn = PCE_FQDN
             response = getWorkloads(
                 PCE_FQDN,
                 PORT,
@@ -186,7 +189,7 @@ async def main(mytimer: func.TimerRequest) -> None:
                 "vens_by_enforcement_mode": vens_by_enf_mode,
                 "vens_by_status": vens_by_status,
                 "vens_by_sync_state": vens_by_sync_state,
-                "pce_fqdn": PCE_FQDN,
+                "pce_fqdn": pce_fqdn,
             }
         )
 
