@@ -97,7 +97,7 @@ If recurrence is changed from default (24h), also change `valid_until_delta_hour
 <br/>
 <br/>
 <details>
-<summary>Expand Advance parameters</summary>
+<summary>Expand Advanced parameters</summary>
 It's possible to restrict indicators downloaded by actor or malware. If several downloads are running use the `Threat Hunt description` field to keep them apart. 
 
 ![alt text](Images/advanceindicatorconfig.png)
