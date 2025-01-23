@@ -7,9 +7,6 @@ Threat hunting is the proactive and iterative process of searching for and detec
 
 - <a href="https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future" target="_blank">More about Automated threat hunt</a> (requires Recorded Future login)
 
-> [!NOTE]
-> If your Recorded Future Enterprise is using [multi-org](https://support.recordedfuture.com/hc/articles/4402787600787-Multi-Org-for-Modules), then threat hunting currently does not work for sub-orgs. See [known issues](../readme.md#threat-hunting-for-multi-orgs) for more detail.
-
 # Playbooks
 
 ## RecordedFuture-ThreatMap-Importer
@@ -109,3 +106,10 @@ Find individual Ids the treat map workbook once it setup by open `Open Generic D
 
 ![alt text](Images/GenericDetails.png)
 </details>
+
+## Threat hunting for multi-orgs
+
+If your Recorded Future Enterprise is using [multi-org](https://support.recordedfuture.com/hc/articles/4402787600787-Multi-Org-for-Modules), then which threat map you see depends on which API key is used.
+
+- If the API key is tied to one specific organisation, then you will see that organisation's threat map.
+- If the API key is tied to multiple organisations (not recommended), then you will see the first threat map available, which could belong to any of your organisations.
