@@ -17,7 +17,7 @@ MessageEndpoint = os.environ['MessageEndpoint']
 StreamOcid = os.environ['StreamOcid'] 
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
-LOG_TYPE = 'OCI_LogsV2'
+LOG_TYPE = 'OCI_LogsV3'
 CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition',"0")
@@ -60,23 +60,23 @@ def determine_log_type(event):
     """
     # event_type = event.get("type", "default")
     if "com.oraclecloud.loadbalancer." in event["type"]:
-        return "OCI_LoadBalancerLogs"
+        return "OCI_LoadBalancerLogsV3"
     # elif event_type == "com.oraclecloud.loadbalancer.error":
     #     return "OCI_LoadBalancerLogs"
     if "com.oraclecloud.Audit." in event["type"]:
-        return "OCI_AuditLogs"
+        return "OCI_AuditLogsV3"
     if "com.oraclecloud.computeApi." in event["type"]:
-        return "OCI_ComputeApiLogs"
+        return "OCI_ComputeApiLogsV3"
     if event["type"] == "com.oraclecloud.sch.serviceconnector.runlog":
-        return "OCI_ServiceConnector_Logs"
+        return "OCI_ServiceConnector_LogsV3"
     if "com.oraclecloud.DatabaseService" in event["type"]:
-        return "OCI_DatabaseService_Logs"
+        return "OCI_DatabaseService_LogsV3"
     if "com.oraclecloud.KeyManagementService" in event["type"]:
-        return "OCI_KeyManagementService_Logs"
+        return "OCI_KeyManagementService_LogsV3"
     if "com.oraclecloud.vcn." in event["type"] or "com.oraclecloud.virtualNetwork." in event["type"]:
-        return "OCI_VirtualNetworkLogs"
+        return "OCI_VirtualNetworkLogsV3"
     else:
-        return "OCI_LogsV2"  # Default log type
+        return "OCI_LogsV3"  # Default log type
 
 def parse_key(key_input):
     try:
