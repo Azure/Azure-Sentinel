@@ -773,7 +773,8 @@ function ProcessPropertyPlaceholders($armResource, $templateContentConnections,
     $isSecret, # false
     $isRequired, # true, if true then it checks if the field is present or not else give error and exit
     $fileType, #either dataConnectorDefinitions or dataConnectors poller or dataCollectionRules or tables
-    $minLength = 1 # default 1
+    $minLength = 1, # default 1
+    $isCreateArray = $false # create if true then create array else string
     )
 {
     $placeHolderPatternMatches = '\{{[a-zA-Z0-9]+\}}'
@@ -787,7 +788,14 @@ function ProcessPropertyPlaceholders($armResource, $templateContentConnections,
             if ($null -ne $placeHoldersMatched -and $placeHoldersMatched.Matches.Value.Count -gt 0) 
             {
                 $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                $propertyObject.$($propertyName) = "[[parameters('$($placeHolderName)')]"
+                if ($isCreateArray) {
+                    # create array
+                    $propertyObject.$($propertyName) = @("[[parameters('$($placeHolderName)')]")
+                } else {
+                    # normal string field
+                    $propertyObject.$($propertyName) = "[[parameters('$($placeHolderName)')]"
+                }
+
                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $isSecret -minLength $minLength
             }
         }
@@ -815,35 +823,35 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
     if($armResource.properties.auth.type.ToLower() -eq 'oauth2')
     {
         # clientid
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
         # client secret
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientSecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientSecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
         # authorization code
         if($armResource.properties.auth.grantType -eq 'authorization_code')
         {
-            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AuthorizationCode' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AuthorizationCode' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
         }
 
         # AuthorizationEndpoint placeholder
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AuthorizationEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AuthorizationEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
 
         # TokenEndpoint placeholder 
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
     }
     elseif ($armResource.properties.auth.type.ToLower() -eq 'basic') 
     {
         # username
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'username' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'username' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
         # password 
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'password' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'password' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
     elseif ($armResource.properties.auth.type.ToLower() -eq 'apikey') 
     {
         # ApiKey 
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'apikey' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'apikey' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
     else 
     {
@@ -935,57 +943,54 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
 
 function CreateGCPResourceProperties($armResource, $templateContentConnections, $fileType) {
     $kindType = 'GCP'
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'connectorDefinitionName' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'connectorDefinitionName' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dcrConfig -propertyName 'streamName' -isInnerObject $true -innerObjectName 'dcrConfig' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dcrConfig -propertyName 'streamName' -isInnerObject $true -innerObjectName 'dcrConfig' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'auth' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'auth' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'serviceAccountEmail' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'serviceAccountEmail' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'projectNumber' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 1
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'projectNumber' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 1 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'workloadIdentityProviderId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -minLength 4
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'workloadIdentityProviderId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -minLength 4 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'request' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'request' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.request -propertyName 'projectId' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.request -propertyName 'projectId' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
     # Request section subscriptionNames property
-    $hasSubscriptionNames = [bool]($armResource.properties.request.PSobject.Properties.name -match "subscriptionNames")
-    if ($hasSubscriptionNames) {
-        $subscriptionNamesValue = $armResource.properties.request.subscriptionNames
-        $placeHoldersMatched = $subscriptionNamesValue | Select-String $placeHolderPatternMatches -AllMatches
-        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-            $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-            $armResource.properties.request.subscriptionNames = @("[[parameters('$($placeHolderName)')]")
-            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $false -minLength 3
-        }
-    } else {
-        Write-Host "Error: Attribute 'subscriptionNames' missing from GCP data connector poller 'request' section." -BackgroundColor Red
-        exit 1;
-    }
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.request -propertyName 'subscriptionNames' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $true
 }
+
+$awsSolutions = @('VMware Carbon Black Cloud')
 
 function CreateAwsResourceProperties($armResource, $templateContentConnections, $fileType) {
     $kindType = 'AmazonWebServicesS3'
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dataTypes' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dataTypes' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.dataTypes -propertyName 'logs' -isInnerObject $true -innerObjectName 'dataTypes' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.dataTypes -propertyName 'logs' -isInnerObject $true -innerObjectName 'dataTypes' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dataTypes.logs -propertyName 'state' -isInnerObject $true -innerObjectName 'logs' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dataTypes.logs -propertyName 'state' -isInnerObject $true -innerObjectName 'logs' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dcrConfig -propertyName 'streamName' -isInnerObject $true -innerObjectName 'dcrConfig' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    if ($awsSolutions.Contains($solutionName)) {
+        # Handle properties destinationTable and streamName in dc poller file for this solutions as a special case
+        $armResource.properties.dcrConfig.streamName = "[[parameters('streamName')[0]]"
+        $armResource.properties.destinationTable = "[[concat(parameters('streamName')[0],'_CL')]"
+        $templateContentConnections.properties.mainTemplate.parameters | Add-Member -NotePropertyName "streamName" -NotePropertyValue ([PSCustomObject] @{ type = "array" })
+    } else {
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dcrConfig -propertyName 'streamName' -isInnerObject $true -innerObjectName 'dcrConfig' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'destinationTable' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'destinationTable' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    }
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'roleArn' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'roleArn' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'sqsUrls' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'sqsUrls' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $true
 }
