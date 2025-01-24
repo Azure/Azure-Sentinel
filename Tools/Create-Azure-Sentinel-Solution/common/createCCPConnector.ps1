@@ -804,16 +804,16 @@ function ProcessPropertyPlaceholders($armResource, $templateContentConnections,
     {
         if ($isRequired -and $isInnerObject)
         {
-            Write-Host "Error: Attribute '$($propertyName)' missing from '$($innerObjectName)' Object from $($kindType) $($(fileType)) 'properties' section." -BackgroundColor Red
+            Write-Host "Error: Attribute '$($propertyName)' missing from '$($innerObjectName)' Object from $($kindType) $($fileType) 'properties' section." -BackgroundColor Red
             exit 1;
         }
         elseif ($isRequired -and $isInnerObject -eq $false)
         {
-            Write-Host "Error: Attribute '$($propertyName)' missing from '$($kindType)' $($(fileType)) 'properties' section." -BackgroundColor Red
+            Write-Host "Error: Attribute '$($propertyName)' missing from '$($kindType)' $($fileType) 'properties' section." -BackgroundColor Red
             exit 1;
         }
         else {
-            Write-Host "Warning: Attribute '$($propertyName)' missing from $($(fileType))."
+            Write-Host "Warning: Attribute '$($propertyName)' missing from $($fileType)."
         }
     }
 }
