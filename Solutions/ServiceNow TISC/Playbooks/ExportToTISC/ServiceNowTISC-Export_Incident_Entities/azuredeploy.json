@@ -1,0 +1,490 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Export all Incident Entities to TISC",
+        "description":  "This playbook leverages the ServiceNow TISC API to export IP, Domain, URL, and Hash indicators found in Microsoft Sentinel incidents to TISC Workspace.",
+        "prerequisites":  [
+            "ServiceNow TISC Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription."
+        ],
+        "postDeployment":  [
+            "1. Once deployment is complete, you will need to configure/authorize each connection.",
+            "2. Navigate to playbook > API Connections > Select connections one by one > configure/authorize each connection > Save"
+        ],
+        "prerequisitesDeployTemplateFile":  "../../Connectors/ServiceNowTISCCustomConnector/azuredeploy.json",
+        "lastUpdateTime":  "2025-01-10T00:00:00.000Z",
+        "entities":  ["ip","filehash","url","dns"],
+        "tags": ["Threat Intelligence", "ServiceNow TISC"],
+        "support":  {
+            "tier":  "partner",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "ServiceNow"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "ServiceNowTISC-Export_Incident_Entities",
+            "type":  "string"
+        },
+        "CustomConnectorName":  {
+            "defaultValue":  "ServiceNowTISCCustomConnector",
+            "type":  "string",
+            "metadata": {
+                "description": "Name of the custom connector, if you want to change the default name, make sure to use the same when you were installing ServiceNowTISC custom connector"
+            }            
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "ServiceNowTISC-MicrosoftSentinelConnection",
+        "ServicenowTISCCustomConnectorConnectionName":  "[concat('Connection-', parameters('CustomConnectorName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "For_each":  {
+                            "foreach":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                            "actions":  {
+                                "Parse_Entity":  {
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@items('For_each')",
+                                        "schema":  {
+                                            "properties":  {
+                                                "id":  {
+                                                    "type":  "string"
+                                                },
+                                                "kind":  {
+                                                    "type":  "string"
+                                                },
+                                                "properties":  {
+                                                    "type":  "object"
+                                                },
+                                                "type":  {
+                                                    "type":  "string"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        }
+                                    }
+                                },
+                                "Switch_on_Entity_Kind":  {
+                                    "runAfter":  {
+                                        "Parse_Entity":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "cases":  {
+                                        "Domain":  {
+                                            "case":  "DnsResolution",
+                                            "actions":  {
+                                                "Parse_JSON_-_DNS_Resolution":  {
+                                                    "type":  "ParseJson",
+                                                    "inputs":  {
+                                                        "content":  "@body('Parse_Entity')?['properties']",
+                                                        "schema":  {
+                                                            "properties":  {
+                                                                "domainName":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "friendlyName":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_to_Domain_value_to_array":  {
+                                                    "runAfter":  {
+                                                        "Parse_JSON_-_DNS_Resolution":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "AppendToArrayVariable",
+                                                    "inputs":  {
+                                                        "name":  "ObservablesArray",
+                                                        "value":  {
+                                                            "value":  "@{body('Parse_JSON_-_DNS_Resolution')?['domainName']}",
+                                                            "type":  "domain_name"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "FileHash":  {
+                                            "case":  "FileHash",
+                                            "actions":  {
+                                                "Parse_JSON_-_File_Hash":  {
+                                                    "type":  "ParseJson",
+                                                    "inputs":  {
+                                                        "content":  "@body('Parse_Entity')?['properties']",
+                                                        "schema":  {
+                                                            "properties":  {
+                                                                "algorithm":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "friendlyName":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "hashValue":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Switch_on_Hash_Algorithm":  {
+                                                    "runAfter":  {
+                                                        "Parse_JSON_-_File_Hash":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "cases":  {
+                                                        "MD5":  {
+                                                            "case":  "MD5",
+                                                            "actions":  {
+                                                                "Append_MD5_hash_value_to_array":  {
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "ObservablesArray",
+                                                                        "value":  {
+                                                                            "value":  "@{body('Parse_JSON_-_File_Hash')?['hashValue']}",
+                                                                            "type":  "md5_hash"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "SHA256":  {
+                                                            "case":  "SHA256",
+                                                            "actions":  {
+                                                                "Apend_SHA256_hash_value_to_array":  {
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "ObservablesArray",
+                                                                        "value":  {
+                                                                            "value":  "@{body('Parse_JSON_-_File_Hash')?['hashValue']}",
+                                                                            "type":  "sha256_hash"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "default":  {
+                                                        "actions":  {
+                                                        }
+                                                    },
+                                                    "expression":  "@body('Parse_JSON_-_File_Hash')?['algorithm']",
+                                                    "type":  "Switch"
+                                                }
+                                            }
+                                        },
+                                        "Url":  {
+                                            "case":  "Url",
+                                            "actions":  {
+                                                "Parse_JSON_-_Url":  {
+                                                    "type":  "ParseJson",
+                                                    "inputs":  {
+                                                        "content":  "@body('Parse_Entity')?['properties']",
+                                                        "schema":  {
+                                                            "properties":  {
+                                                                "friendlyName":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "url":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_URL_value_to_array":  {
+                                                    "runAfter":  {
+                                                        "Parse_JSON_-_Url":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "AppendToArrayVariable",
+                                                    "inputs":  {
+                                                        "name":  "ObservablesArray",
+                                                        "value":  {
+                                                            "value":  "@{body('Parse_JSON_-_Url')?['url']}",
+                                                            "type":  "url"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Ip":  {
+                                            "case":  "Ip",
+                                            "actions":  {
+                                                "Parse_JSON_-_Ip":  {
+                                                    "type":  "ParseJson",
+                                                    "inputs":  {
+                                                        "content":  "@body('Parse_Entity')?['properties']",
+                                                        "schema":  {
+                                                            "properties":  {
+                                                                "address":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "friendlyName":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Check_if_it_is_IPv6_address_format":  {
+                                                    "actions":  {
+                                                        "Append_IPv6_value_to_array":  {
+                                                            "type":  "AppendToArrayVariable",
+                                                            "inputs":  {
+                                                                "name":  "ObservablesArray",
+                                                                "value":  {
+                                                                    "value":  "@{body('Parse_JSON_-_Ip')?['address']}",
+                                                                    "type":  "ip_v6_address"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter":  {
+                                                        "Parse_JSON_-_Ip":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else":  {
+                                                        "actions":  {
+                                                            "Append_to_IPv4_value_to_array":  {
+                                                                "type":  "AppendToArrayVariable",
+                                                                "inputs":  {
+                                                                    "name":  "ObservablesArray",
+                                                                    "value":  {
+                                                                        "value":  "@{body('Parse_JSON_-_Ip')?['address']}",
+                                                                        "type":  "ip_v4_address"
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression":  {
+                                                        "and":  [
+                                                            {
+                                                                "equals":  [
+                                                                    "@contains(body('Parse_JSON_-_Ip')?['address'],':')",
+                                                                    true
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type":  "If"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default":  {
+                                        "actions":  {
+                                        }
+                                    },
+                                    "expression":  "@body('Parse_Entity')?['kind']",
+                                    "type":  "Switch"
+                                }
+                            },
+                            "runAfter":  {
+                                "Parameter_Default_Values":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Declare_Observables_Array":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ObservablesArray",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Condition_-_Have_entities_to_export":  {
+                            "actions":  {
+                                "Add_Observables_TISC_API":  {
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['ServicenowTISCCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "post",
+                                        "body":  {
+                                            "source":  "Microsoft Sentinel",
+                                            "observables":  "@variables('ObservablesArray')"
+                                        },
+                                        "path":  "/api/sn_sec_tisc/threat_intel_data/add_observables"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "For_each":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                }
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "greater":  [
+                                            "@length(variables('ObservablesArray'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Parameter_Default_Values":  {
+                            "runAfter":  {
+                                "Declare_Observables_Array":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  {
+                                    "type":  "domain_name",
+                                    "reputation":  "malicious",
+                                    "confidence":  "90"
+                                },
+                                "schema":  {
+                                    "type":  "object",
+                                    "properties":  {
+                                        "type":  {
+                                            "type":  "string"
+                                        },
+                                        "reputation":  {
+                                            "type":  "string"
+                                        },
+                                        "confidence":  {
+                                            "type":  "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "ServicenowTISCCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('ServicenowTISCCustomConnectorConnectionName'))]",
+                                "connectionName":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "ServiceNowTISC-Export_Incident_Entities",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('ServicenowTISCCustomConnectorConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        }
+    ]
+}

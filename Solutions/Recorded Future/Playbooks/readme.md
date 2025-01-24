@@ -285,6 +285,7 @@ When reporting issues or errors to Recorded Future on logic apps. Please include
 ![alt text](Images/LogicAppVersion.png)
 
 # Known Issues 
+
 ## Version 3.0
 Microsoft Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
 ![](Images/2023-09-13-19-16-24.png)
