@@ -1,8 +1,8 @@
 import fs from "fs";
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
-import * as logger from "./utils/logger";
-import { isValidSampleData } from "./utils/sampleDataCheckers/sampleDataCheckers";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
+import * as logger from "./utils/logger.js";
+import { isValidSampleData } from "./utils/sampleDataCheckers/sampleDataCheckers.js";
 export async function IsValidSampleDataSchema(filePath: string): Promise<ExitCode> {
     let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
     isValidSampleData(jsonFile);

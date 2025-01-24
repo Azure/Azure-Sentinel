@@ -1,12 +1,12 @@
 Parser:
   Title: Network Session ASIM parser for Cisco ASA
-  Version: '1.0'
-  LastUpdated: August 03, 2022
+  Version: '0.1.1'
+  LastUpdated: Jan 09, 2025
 Product:
   Name: CiscoASA
 Normalization:
   Schema: NetworkSession
-  Version: '0.2.4'
+  Version: '0.2.6'
 References:
   - Title: ASIM Network Session Schema
     Link: https://aka.ms/ASimNetworkSessionDoc
@@ -246,7 +246,7 @@ ParserQuery: |
                 | where DeviceVendor == "Cisco" and DeviceProduct == "ASA"
                 | where DeviceEventClassID in ("106001","106006","106015","106016","106021","106022","106010","106014","106018","106023","302013","302015","302014","302016","302020","302021","710002","710003","710004","710005","106007","106017","106100","106002","106012","106013","106020")
                 | lookup ActionResultLookup on DeviceEventClassID
-                | project DeviceVendor, DeviceProduct, DeviceEventClassID, LogSeverity, OriginalLogSeverity, Computer, CommunicationDirection, DestinationIP, DestinationPort, DeviceAddress, DeviceName, Message, Protocol, SourceIP, SourcePort, DeviceVersion, DeviceCustomString2, DvcAction, EventResult, TimeGenerated, DeviceAction;
+                | project DeviceVendor,Type, DeviceProduct, DeviceEventClassID, LogSeverity, OriginalLogSeverity, Computer, CommunicationDirection, DestinationIP, DestinationPort, DeviceAddress, DeviceName, Message, Protocol, SourceIP, SourcePort, DeviceVersion, DeviceCustomString2, DvcAction, EventResult, TimeGenerated, DeviceAction;
       let parsedData = allLogs
                 | where isnotempty(SourceIP)
                 | project-rename NetworkRuleName = DeviceCustomString2,
@@ -256,7 +256,7 @@ ParserQuery: |
                                  DstPortNumber = DestinationPort;
       let unparsedData = allLogs
                 | where isempty(SourceIP)
-                | project DeviceVendor, DeviceProduct, DeviceEventClassID, LogSeverity, OriginalLogSeverity, Computer, DeviceAddress, DeviceName, Message, DeviceVersion, Protocol, DvcAction, EventResult, TimeGenerated, DeviceAction;
+                | project DeviceVendor,Type, DeviceProduct, DeviceEventClassID, LogSeverity, OriginalLogSeverity, Computer, DeviceAddress, DeviceName, Message, DeviceVersion, Protocol, DvcAction, EventResult, TimeGenerated, DeviceAction;
       let all_106001_alike = parsedData
                 | where DeviceEventClassID in ("106001", "106006", "106015", "106016", "106021", "106022") 
                 | parse Message with * " interface " DstInterfaceName;
@@ -273,6 +273,9 @@ ParserQuery: |
       let all_106023_unparsed = unparsedData
                 | where DeviceEventClassID == "106023" and not(Message has "protocol 41")
                 | parse Message with * ":" DeviceAction " " Protocol " src " SrcInterfaceName ":" SrcIpAddrAndPort "(" SrcUsername ") dst " DstInterfaceName ":" DstIpAddrAndPort " " NetworkIcmpInfo 'by access-group "' NetworkRuleName '" [' * "]"
+                | parse Message with * ":" DeviceAction " " Protocol " src " SrcInterfaceName ":" SrcIpAddrAndPort " dst " DstInterfaceName ":" DstIpAddrAndPort " " NetworkIcmpInfo 'by access-group "' NetworkRuleName '" [' * "]"
+                | extend SrcIpAddrAndPort = split(SrcIpAddrAndPort, "(")[0]
+                | extend SrcUsername = iff(isnotempty(SrcUsername), SrcUsername, "")
                 | parse NetworkIcmpInfo with "(type " NetworkIcmpType ", code " NetworkIcmpCode:int ") "
                 | extend SrcIpAddrAndPort = split(SrcIpAddrAndPort,"/"), DstIpAddrAndPort = split(DstIpAddrAndPort,"/")
                 | extend SrcIpAddr = tostring(SrcIpAddrAndPort[0]),
