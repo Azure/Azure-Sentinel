@@ -24,9 +24,6 @@ time_delay_minutes = 60
 event_types = ["maillog","message"]
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-FIELD_SIZE_LIMIT_BYTES = 1000 * 32
-
-
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
@@ -34,19 +31,6 @@ pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("ProofpointPOD: Invalid Log Analytics Uri.")
-
-def check_size(queue):
-        data_bytes_len = len(json.dumps(queue).encode())
-        return data_bytes_len < FIELD_SIZE_LIMIT_BYTES
-
-
-def split_big_request(queue):
-        if check_size(queue):
-            return [queue]
-        else:
-            middle = int(len(queue) / 2)
-            queues_list = [queue[:middle], queue[middle:]]
-            return split_big_request(queues_list[0]) + split_big_request(queues_list[1])
 
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
@@ -71,6 +55,20 @@ class Proofpoint_api:
         before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes)
         self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
+        
+    def check_and_split_msgParts(self, msg_parts):
+        max_size = 32000
+        if isinstance(msg_parts, (dict, list)):
+            msg_parts = json.dumps(msg_parts)
+
+        msglen = len(msg_parts.encode('utf-8'))
+        if msglen > max_size:
+            split_point = len(msg_parts) // 2
+            msg_parts1 = msg_parts[:split_point]
+            msg_parts2 = msg_parts[split_point:]
+            return msg_parts1, msg_parts2
+        else:
+            return msg_parts, None
 
     def set_websocket_conn(self, event_type):
         max_retries = 3
@@ -123,28 +121,21 @@ class Proofpoint_api:
             for row in chunk:
                 if row != None and row != '':
                     y = json.loads(row)
-                    if ('msgParts' in y) and (len(json.dumps(y['msgParts']).encode()) > FIELD_SIZE_LIMIT_BYTES):
-                        if isinstance(y['msgParts'],list):
-                            queue_list = split_big_request(y['msgParts'])
-                            count = 1
-                            for q in queue_list:
-                                columnname = 'msgParts' + str(count)
-                                y[columnname] = q
-                                count+=1
-                            del y['msgParts']
-                            
-                        elif isinstance(y['msgParts'],dict):
-                            queue_list = list(y['msgParts'].keys())
-                            for count, key in enumerate(queue_list, 1):
-                                if count > 10:
-                                    break
-                                y[f"msgParts{key}"] = y['msgParts'][key]
-
-                            del y['msgParts']
-                        else:
-                            pass
+                    logging.info(f'json row : {y}')
                     y.update({'event_type': event_type})
+                    if 'msgParts' in y:
+                        msg_parts = y['msgParts']
+                        msg_parts1, msg_parts2 = self.check_and_split_msgParts(
+                            msg_parts)
+                        if msg_parts2:
+                            y['msgParts1'] = msg_parts1
+                            y['msgParts2'] = msg_parts2
+                        else:
+                            y['msgParts'] = msg_parts1
+                        if 'msgParts' in y and msg_parts2:
+                            del y['msgParts']
                     obj_array.append(y)
+                logging.info(f'Response Object array : {obj_array}')
 
             sentinel = AzureSentinelConnector(
                 log_analytics_uri=logAnalyticsUri,
@@ -154,6 +145,7 @@ class Proofpoint_api:
                 queue_size=5000
             )
             for event in obj_array:
+                logging.info(f'Response event : {event}')
                 sentinel.send(event)
             sentinel.flush()
 
