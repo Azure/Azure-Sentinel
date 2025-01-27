@@ -15,7 +15,12 @@ This integration is a [ServiceNow application](https://store.servicenow.com/sn_a
 
 <br/>
 
-**Note**: This bi-directional sync app also support SIR module with some modification on ServiceNow side.
+**Note:** 
+   - Traditional Azure Logic/playbook app integration or the existing solution does not cleanly support bi-directional synchronization. 
+   - Bi-directional sync app on ServiceNow store also supports SIR module with some modification on ServiceNow side. Refer Technical FAQ's for more at the bottom of this page.
+
+**Limitations:** 
+   - Microsoft Sentinel app works on individual ServiceNow instance and doesn't support domain separation. 
 
 ## Prerequisites
 
@@ -135,15 +140,17 @@ In addition to the workspace values (available in Microsoft Sentinel), provide t
 
 **Note**: In addition to the workspace configuration, you have the following properties:
 
-- **Incident max age (days)**: maximum incident age, in days, for incidents to be created in ServiceNow, based on the incident's creation time
+- **Incident max age (days)**: maximum incident age, in days, for incidents to be created in ServiceNow, based on the incident's creation time. Default is 30 days. If any of the Sentinel incident created or updated after 30 days of creation then such incidents will not get synced to ServiceNow.
 
 - **newIncidentsLastSync**: timestamp automatically updated once the app successfully contact the Sentinel API to retrieve the new incidents since last update. If needed, you can manually change the value to query incidents older than your specified date
 
 - **modifiedIncidentsLastSync**: timestamp automatically updated once the app successfully contact the Sentinel API to retrieve the updated incidents since last update
 
-- **Incidents filter**: filter used to retrieve only the matching incidents from Sentinel API. By default, it filters the incidents with a tag “snow”. To get all incidents, just delete the content of this field. You can also use another tag name. Please note that the value is case sensitive!
+- **Incidents filter**: filter used to retrieve only the matching incidents from Sentinel API. By default, it filters the incidents with a tag “snow”. To get all incidents, just delete the content of this field. You can also use another tag name. Please note that the value is case sensitive. When you have multiple instances of "Workspace configurations" in ServiceNow than make sure to have different tag name. Eg: "devsnow" or "testsnow" or "prodsnow" etc.
 
-- **Enabled**: boolean value to specify if the workspace is enabled or not. When disabled, the incidents are not retrieved and the timestamps are not updated
+- **Enabled**: boolean value to specify if the workspace is enabled or not. When disabled, the incidents are not retrieved and the timestamps are not updated.
+
+- **Use workspace name in CorrelationId**: For multiple Sentinel workspaces there can be duplicate incident ids so we have added a new field in ServiceNow workspace configuration page field "Use Workspace name in CorrelationId". By default this field is false. When its enabled then it will check 'Sentinel-<sentinelWorkspaceName>-<guid>' in Servicenow for any update of records. Enable this field only when you have identified duplicate incident issue. Once enabled make sure to update incidents that are in Servicenow to have 'CorrelationId' field value like 'Sentinel-<sentinelWorkspaceName>-<guid>'. Currently old records will be having CorrelationId value as 'Sentinel-<guidValue>' so we are adding workspace name in this field value. Also Sentinel workspace name length should not be more then 50 because CorrelationId field value length is max 100 characters.
 
 <br/>
 
@@ -212,7 +219,7 @@ Review the values to validate that they map your environment's configuration.
 This table is used to map the ServiceNow state to the Sentinel value, when updating ServiceNow incidents and synchronizing the changes to Sentinel.  
 Review the values to validate that they map your environment's configuration. Note that because Sentinel has less states than ServiceNow, you will have multiple ServiceNow state mapped to the same Sentinel state.
 
-![ServiceNow state to Sentinel](media/snowToSentinelState01.png)
+![ServiceNow state to Sentinel](media/SnowToSentinelState01.png)
 
 <br/>
 
@@ -298,10 +305,6 @@ The application uses the following business rules:
 
   ![Custom mapping business rule](media/ruleCustom.png)
 
-## My Section Title
-
-This is the content of the section.
-
 ### Technical FAQ's:
 
 #### 1. Which app on ServiceNow store is a bi-directional sync app and is owned and managed by Microsoft?
@@ -348,6 +351,7 @@ This is the content of the section.
 #### 7. Changes from ServiceNow to Sentinel not updating or syncing?
 **Answer:** When changes like "Assigned To", "State" or "Severity" etc made on ServiceNow incident record are not reflecting to Sentinel Incident than this can happen due to below:
    - Mapping for State or Severity missing: Filter "ServiceNow-->Microsoft Sentinel-->Logs" by "Message" as "*error" to see if there are errors. It is observed that if the mapping for "Informational" incidents are missing in "Sentinel Severity to ServiceNow Severity", "ServiceNow Severity to Sentinel Incident" then this will give error and will not update Sentinel incident. In the same way if the mapping for "ServiceNow State to Sentinel State", "Sentinel State to ServiceNow State" mapping is not present than this will prevent any update to Sentinel.
+   - Remove the "Role" "x_mioms_azsentinel.az sentinel admin" set on the business rules "update changes to Sentinel" and "add worknotes to Sentinel" from "When to run" tab.
 
 #### 8. What is correlation Id?
 **Answer:** On Sentinel incident record we have a field "Incident Link". This field is a Url and at the end of this Url we have a guid value. This guid value is used as a correlationId value in ServiceNow incident "Correlation Id" field.
@@ -369,7 +373,7 @@ This is the content of the section.
    ![Azure portal Automation Create](media/troubleshoot/AutomationRulePageCreate.png)
 
 #### 11. Can we have different tag name for different workspace?
-**Answer:** Yes, for every workspace specify different tag name. Example: You can use "devsnow", "testsnow", "prodsnow", "dev-snow", "prod-snow" etc or any other combination in ServiceNow-->Microsoft Sentinel-->Workspace Configuration page. But this tag name is case-sensitive.
+**Answer:** Yes, It is recommended to have different tag name for every workspace. Example: You can use "devsnow", "testsnow", "prodsnow", "dev-snow", "prod-snow" etc or any other combination in ServiceNow-->Microsoft Sentinel-->Workspace Configuration page. This tag name is case-sensitive.
 
 #### 12: Does Microsoft Sentinel app supports "Assignment Group" in ServiceNow?
 **Answer:** No, currently Microsoft Sentinel app doesn't support "Assignment Group". It currently support single use assignment i.e. "Assigned To" in ServiceNow.
@@ -377,5 +381,31 @@ This is the content of the section.
 #### 13: Does Microsoft Sentinel app supports "Domain Separation" in ServiceNow?
 **Answer:** No, currently Microsoft Sentinel app doesn't support "Domain Separation" in ServiceNow.
 
-#### 14: How to modify Microsoft Sentinel App code?
-**Answer:** Microsoft Sentinel App code is by default Read-Only. In order to modify
+#### 14: Can I change the scheduled job run time?
+**Answer:** Yes, navigate to Scheduled Jobs in ServiceNow and search for "getSentinelIncidents_job" scheduled job. Bydefault job runs every 1 minute which you can set according to your needs.
+
+#### 15: How to verify changes in each of the version in ServiceNow?
+**Answer:** Open ServiceNow Store app in browser and search for "Microsoft Sentinel". On the right hand side of the page we have "Version" section as shown in below screenshot. Click on "Other App Versions" to see what changes were made in each of the version.
+
+   ![Version Changes](media/VersionDetails.png)
+
+#### 16: Which region of ServiceNow the Microsoft Sentinel app supports?
+**Answer:** Open ServiceNow Store app in browser and search for "Microsoft Sentinel". On the right hand side of the page we have "Compatibility" section as shown in below screenshot. If ServiceNow has new region but is not listed the ServiceNow Store of "Microsoft Sentinel" app then send an email to "SentinelIntegrations@microsoft.com".
+
+   ![Regions Supported](media/RegionsSupported.png)
+
+#### 17: How to modify Microsoft Sentinel App code?
+**Answer:** Microsoft Sentinel App code is by default Read-Only. In order to modify this code follow below work around:
+   - Create a new Script Include file of "SentinelIncidents" and name it like "SentinelIncidents_copy". Copy paste all code from original file "SentinelIncidents" into this new file and make sure to rename the highlighted name to "SentinelIncidents_copy" as shown below:
+
+   ![Sentinel Incidents Renaming](media/SentinelIncidentsRenaming.png)
+
+   - Rename scheduled job reference "SentinelIncidents" to "SentinelIncidents_copy" like below. In below screenshot just update this name only which will then refer the new file "SentinelIncidents_copy" file code.
+
+   ![Rename in Scheduled job for SentinelIncidents](media/RenameInScheduledJob.png)
+
+   - Rename in business rules "update Changes to Sentinel Incident" and "add Worknotes to Sentinel" update the class name like below:
+
+   ![Rename in Business rules for SentinelIncidents](media/RenameInBusinessRule.png)
+
+   **Note:** When there is a new version of the app then it is recommended to take back of all the changes or mapping done and then perform upgrade. Always perform upgrade on the lower instance of ServiceNow like dev/test/uat instance of ServiceNow instead of Prod instance.
