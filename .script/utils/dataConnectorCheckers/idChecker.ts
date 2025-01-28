@@ -1,4 +1,4 @@
-import { DataConnectorValidationError } from "../validationError";
+import { DataConnectorValidationError } from "../validationError.js";
 
 export function isValidId(dataConnectorId: string) {
   if (/\s/.test(dataConnectorId)) {

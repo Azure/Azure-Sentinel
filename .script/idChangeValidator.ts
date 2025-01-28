@@ -1,8 +1,8 @@
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { GetPRDetails } from "./utils/gitWrapper";
-import { ExitCode } from "./utils/exitCode";
-import * as logger from "./utils/logger";
-import gitP, { SimpleGit } from 'simple-git/promise';
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { GetPRDetails } from "./utils/gitHubWrapper.js";
+import { ExitCode } from "./utils/exitCode.js";
+import * as logger from "./utils/logger.js";
+import gitP, { SimpleGit } from 'simple-git';
 import { readFileSync } from 'fs';
 
 const workingDir: string = process.cwd();
@@ -23,11 +23,30 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
         console.log(filePath);
 
         if (typeof pr === "undefined") {
-            console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
+            console.log("Pull Request couldn't be fetched. If issue persists - please open an issue");
             return ExitCode.ERROR;
         }
 
-        const options = [pr.targetBranch, pr.sourceBranch, filePath];
+        // Fetch the base and head branches before running the diff
+        const branches = await git.branch();
+        if (!branches.all.includes(pr.base.ref)) {
+            try {
+                await git.fetch(['origin', pr.base.ref + ':' + pr.base.ref]);
+            } catch (e) {
+                console.error(`Error fetching branch ${pr.base.ref} from git:`, e);
+                return ExitCode.ERROR;
+            }
+        }
+        if (!branches.all.includes(pr.head.ref)) {
+            try {
+                    await git.fetch(['origin', pr.head.ref + ':' + pr.head.ref]);
+            } catch (e) {
+                console.error(`Error fetching branch ${pr.head.ref} from git:`, e);
+                return ExitCode.ERROR;
+            }
+        }
+
+        const options = [pr.base.ref, pr.head.ref, filePath];
         const diffSummary = await git.diff(options);
         const idPosition = diffSummary.search(templateIdRegex);
         const idHasChanged = idPosition > 0;
