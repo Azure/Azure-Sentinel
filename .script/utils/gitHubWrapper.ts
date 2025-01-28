@@ -72,7 +72,7 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
   console.log(`${changedFiles.length} files changed in current PR`);
 
   const filterChangedFiles = changedFiles
-    .filter(change => fileKinds.includes(change.status))
+    .filter(change => fileKinds.map(kind => kind.toLowerCase()).includes(change.status.toLowerCase()))
     .map(change => change.filename)
     .filter(filePath => typeof fileTypeSuffixes === "undefined" || filePath.endsWithAny(fileTypeSuffixes))
     .filter(filePath => typeof filePathFolderPreffixes === "undefined" || filePath.startsWithAny(filePathFolderPreffixes))
