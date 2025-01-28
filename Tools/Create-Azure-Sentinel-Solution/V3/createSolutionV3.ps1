@@ -320,5 +320,5 @@ try {
     }
 }
 catch {
-    Write-Host "Error occured in catch of createSolutionV3 file Error details are $_"
+    Write-Host "Error occurred in catch of createSolutionV3 file Error details are $_"
 }
