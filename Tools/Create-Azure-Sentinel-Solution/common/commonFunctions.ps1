@@ -2195,7 +2195,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
                         $connectDataSourcesLink = [PSCustomObject] @{
-                            name    = "dataconnectors-link2";
+                            name    = "dataconnectors-link$($global:connectorCounter)";
                             type    = "Microsoft.Common.TextBlock";
                             options = [PSCustomObject] @{
                                 link = [PSCustomObject] @{
@@ -2207,6 +2207,16 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         if ($isParserAvailable) {
                             $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $parserTextElement
                         }
+
+                        # if same link is present then increment the link number
+                        $dataConnectorList = $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements
+                        foreach($dcStep in $dataConnectorList) {
+                            if ($dcStep.name -eq $connectDataSourcesLink.name) {
+                                $counterValue = $global:connectorCounter + 1
+                                $connectDataSourcesLink.name = "dataconnectors-link$($counterValue)"
+                            }
+                        }
+
                         $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
                     }
 

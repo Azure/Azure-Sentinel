@@ -89,7 +89,7 @@ function New-ParametersForConnectorInstuctions($instructions) {
         }
         else {
             $instructionType = $instruction.type;
-            Write-Host "Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"
+            Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"
         }
     }
 }
