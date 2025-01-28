@@ -198,7 +198,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                         }
                     }
                     catch {
-                        Write-Host "Error occured while identifying relation between definition and poller File. Identified error in " + $inputFile.Name + ". Error Details : $_"
+                        Write-Host "Error occurred while identifying relation between definition and poller File. Identified error in " + $inputFile.Name + ". Error Details : $_"
                     }
                 }
             }
@@ -220,19 +220,57 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     }
 
                     try {
-                        if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules" -and $fileContent.properties.dataFlows.streams -is [System.Object[]]) {
+                        if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules" -and $fileContent.properties.dataFlows.streams -is [System.String]) {
                             $dataFlowStreams = $fileContent.properties.dataFlows;
                             foreach ($dcrDataFlowStream in $dataFlowStreams) {
-                                if ($dcrDataFlowStream.streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
-                                    $ccpPollerFile.DCRFilePath = $inputFile.FullName
-                                    if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
-                                        $ccpPollerFile.TableOutputStream = $dcrDataFlowStream.outputStream.Replace('Custom-', '')
-                                        $ccpPollerFile.DCROutputStream = $dcrDataFlowStream.outputStream
+                                $dcrStreamName = $dcrDataFlowStream.streams[0]
+
+                                if (!$dcrStreamName.Contains('Custom-')) {
+                                    . "$PSScriptRoot/standardLogStreams.ps1" # load standard data connector poller and dcr mapper
+                                    $dcPollerStreamNameValue = GetKeyValue -key $ccpPollerFile.DCPollerStreamName
+
+                                    if ($null -eq $dcPollerStreamNameValue) {
+                                        # not found in mapping
+                                        Write-Host "Error For given CCP Data Connector poller, mapping not found in StandardLogStreams. Please make sure that StreamName in Data Connector poller file and that in DCR Stream name are correct. Refer StandardLogStreams.ps1 file for Standard mapping. Refer Tools/Create-Azure-Sentinel-Solution/common/StandardLogStreams.ps1 file for Standard mapping." -BackgroundColor Red
+                                        exit 1; 
+                                    } elseif ($dcrDataFlowStream.streams[0] -ne $dcPollerStreamNameValue) {
+                                        # when dc poller streamname expected mapping value is not equal to dcr file stream name
+                                        Write-Host "Error For given CCP, DCR file 'stream' value is not correct. Please make sure that StreamName in Data Connector poller file and that in DCR Stream name are correct. Refer Tools/Create-Azure-Sentinel-Solution/common/StandardLogStreams.ps1 file for Standard mapping." -BackgroundColor Red
+                                        exit 1; 
+                                    } else {
+                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                    }
+                                }
+                                else {
+                                    # this is a custom table
+                                    if ($dcrDataFlowStream.streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
+                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                        if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
+                                            $ccpPollerFile.TableOutputStream = $dcrDataFlowStream.outputStream.Replace('Custom-', '')
+                                            $ccpPollerFile.DCROutputStream = $dcrDataFlowStream.outputStream
+                                        }
                                     }
                                 }
                             }
                         } else {
                             if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
+                                if ($fileContent.properties.dataFlows.Count -gt 1) {
+                                    foreach ($dataFlowItem in $fileContent.properties.dataFlows) {
+                                        $dataFlowStreamName = $dataFlowItem.streams[0]
+                                        $dataFlowOutputStreamName = $dataFlowItem.outputStream
+
+                                        if ($dataFlowStreamName -eq $ccpPollerFile.DCPollerStreamName) {
+                                            $ccpPollerFile.DCRFilePath = $inputFile.FullName
+
+                                            if ($dataFlowOutputStreamName.contains('Custom-')) {
+                                                $ccpPollerFile.TableOutputStream = $dataFlowStreamName.Replace('Custom-', '')
+                                                $ccpPollerFile.DCROutputStream = $dataFlowOutputStreamName
+                                            }
+                                            
+                                            break
+                                        }
+                                    }
+                                }
                                 if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
                                     $ccpPollerFile.DCRFilePath = $inputFile.FullName
                                     if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
@@ -244,7 +282,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                         }
                     }
                     catch {
-                        Write-Host "Error occured while identifying relation between Poller and DCR File. Identified error in " + $inputFile.Name + ". Error Details : $_"
+                        Write-Host "Error occurred while identifying relation between Poller and DCR File. Identified error in " + $inputFile.Name + ". Error Details : $_"
                     }
                 }
             }
@@ -283,7 +321,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                         }
                     }
                     catch {
-                        Write-Host "Error occured while identifying relation between DCR and Table File. Identified error in " + $inputFile.Name + ". Error Details : $_"
+                        Write-Host "Error occurred while identifying relation between DCR and Table File. Identified error in " + $inputFile.Name + ". Error Details : $_"
                     }
                 }
             }
@@ -293,10 +331,11 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
     # THROW ERROR IF THERE IS NO RELATION BETWEEN DEFINITION->POLLER AND/OR POLLER->DCR
     if ($ccpDict.Count -gt 0) {
         foreach($localCCPDist in $ccpDict) {
-            if ($localCCPDist.DCDefinitionId -eq "" -or $localCCPDist.DCDefinitionFilePath -eq "" -or
-            $localCCPDist.DCPollerFilePath -eq "" -or $localCCPDist.DCPollerStreamName -eq "" -or $localCCPDist.DCRFilePath -eq "") 
+            if (($localCCPDist.DCDefinitionId -eq "" -or $localCCPDist.DCDefinitionFilePath -eq "" -or
+            $localCCPDist.DCPollerFilePath -eq "" -or $localCCPDist.DCPollerStreamName -eq "" -or $localCCPDist.DCRFilePath -eq "") -and
+            $localCCPDist.PollerKind -eq 'RestApiPoller') 
             {
-                Write-Host "Please verify if there is a mapping between ConnectorDefiniton with Poller file and/or Poller file with DCR file! If mapping is correct then check type property for ccp files!"
+                Write-Host "Please verify if there is a mapping between ConnectorDefinition with Poller file and/or Poller file with DCR file! If mapping is correct then check type property for ccp files!"
                 exit 1
             }
         }
