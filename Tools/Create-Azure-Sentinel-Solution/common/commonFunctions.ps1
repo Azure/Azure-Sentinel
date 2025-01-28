@@ -3112,6 +3112,9 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             if ($null -ne $global:baseCreateUiDefinition.parameters.steps -and 
             $($global:baseCreateUiDefinition.parameters.steps).GetType() -ne [System.Object[]]) {
                 $global:baseCreateUiDefinition.parameters.steps = @($global:baseCreateUiDefinition.parameters.steps)
+            } elseif ($null -eq $global:baseCreateUiDefinition.parameters.steps) {
+                # when there is no content then create ui fails as step is null
+                $global:baseCreateUiDefinition.parameters.steps = @(@{}) # [{}]
             }
             $global:baseCreateUiDefinition | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $createUiDefinitionOutputPath -Encoding utf8
         }
