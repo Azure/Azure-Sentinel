@@ -1,5 +1,16 @@
+
+param(
+    [string]$SolutionDataFolderPath = $null
+)
+
 Write-Host '=======Starting Package Creation using V3 tool========='
-$path = Read-Host "Enter solution data file path "
+if ($null -eq $SolutionDataFolderPath -or $SolutionDataFolderPath -eq '') {
+    $path = Read-Host "Enter solution data folder path "
+} else {
+    $path = $SolutionDataFolderPath
+    Write-Host "Solution Data folder path specified is : $path"
+}
+
 $defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
@@ -320,5 +331,5 @@ try {
     }
 }
 catch {
-    Write-Host "Error occured in catch of createSolutionV3 file Error details are $_"
+    Write-Host "Error occurred in catch of createSolutionV3 file Error details are $_"
 }
