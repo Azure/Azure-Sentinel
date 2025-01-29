@@ -31,7 +31,7 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
         const branches = await git.branch();
         if (!branches.all.includes(pr.base.ref)) {
             try {
-                await git.fetch(['origin', pr.base.ref + ':' + pr.base.ref]);
+                await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.base.repo.clone_url, pr.base.ref + ':' + pr.base.ref]);
             } catch (e) {
                 console.error(`Error fetching branch ${pr.base.ref} from git:`, e);
                 return ExitCode.ERROR;
@@ -39,7 +39,7 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
         }
         if (!branches.all.includes(pr.head.ref)) {
             try {
-                    await git.fetch(['origin', pr.head.ref + ':' + pr.head.ref]);
+                    await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.head.repo.clone_url , pr.head.ref + ':' + pr.head.ref]);
             } catch (e) {
                 console.error(`Error fetching branch ${pr.head.ref} from git:`, e);
                 return ExitCode.ERROR;
