@@ -24,9 +24,6 @@ time_delay_minutes = 60
 event_types = ["maillog","message"]
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-FIELD_SIZE_LIMIT_BYTES = 1000 * 32
-
-
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
@@ -34,19 +31,6 @@ pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("ProofpointPOD: Invalid Log Analytics Uri.")
-
-def check_size(queue):
-        data_bytes_len = len(json.dumps(queue).encode())
-        return data_bytes_len < FIELD_SIZE_LIMIT_BYTES
-
-
-def split_big_request(queue):
-        if check_size(queue):
-            return [queue]
-        else:
-            middle = int(len(queue) / 2)
-            queues_list = [queue[:middle], queue[middle:]]
-            return split_big_request(queues_list[0]) + split_big_request(queues_list[1])
 
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
@@ -73,8 +57,8 @@ class Proofpoint_api:
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
 
     def set_websocket_conn(self, event_type):
-        max_retries = 3
         url = f"wss://logstream.proofpoint.com:443/v1/stream?cid={self.cluster_id}&type={event_type}&sinceTime={self.after_time}&toTime={self.before_time}"
+        logging.info('Opening Websocket logstream {}'.format(url))
         # defining headers for websocket connection (do not change this)
         header = {
             "Connection": "Upgrade",
@@ -88,24 +72,19 @@ class Proofpoint_api:
             'ca_certs': certifi.where(),
             'check_hostname': True
         }
-        for attempt in range(max_retries):
-            try:
-                logging.info('Opening Websocket logstream {}'.format(url))
-                ws = websocket.create_connection(url, header=header, sslopt=sslopt)
-                ws.settimeout(20)
-                time.sleep(2)
-                logging.info(
-                    'Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
-                print('Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
-                return ws
-            except Exception as err:
-                logging.error('Error while connectiong to websocket {}'.format(err))
-                print('Error while connectiong to websocket {}'.format(err))
-                if attempt < max_retries - 1:
-                    logging.info('Retrying connection in 5 seconds...')
-                    time.sleep(5)  # Wait for a while before retrying
-                else:
-                    return None
+        try:
+            ws = websocket.create_connection(url, header=header, sslopt=sslopt)
+            ws.settimeout(20)
+            time.sleep(2)
+            logging.info(
+                'Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
+            print(
+                'Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
+            return ws
+        except Exception as err:
+            logging.error('Error while connectiong to websocket {}'.format(err))
+            print('Error while connectiong to websocket {}'.format(err))
+            return None
 
     def gen_chunks_to_object(self,data,chunksize=100):
         chunk = []
@@ -123,26 +102,6 @@ class Proofpoint_api:
             for row in chunk:
                 if row != None and row != '':
                     y = json.loads(row)
-                    if ('msgParts' in y) and (len(json.dumps(y['msgParts']).encode()) > FIELD_SIZE_LIMIT_BYTES):
-                        if isinstance(y['msgParts'],list):
-                            queue_list = split_big_request(y['msgParts'])
-                            count = 1
-                            for q in queue_list:
-                                columnname = 'msgParts' + str(count)
-                                y[columnname] = q
-                                count+=1
-                            del y['msgParts']
-                            
-                        elif isinstance(y['msgParts'],dict):
-                            queue_list = list(y['msgParts'].keys())
-                            for count, key in enumerate(queue_list, 1):
-                                if count > 10:
-                                    break
-                                y[f"msgParts{key}"] = y['msgParts'][key]
-
-                            del y['msgParts']
-                        else:
-                            pass
                     y.update({'event_type': event_type})
                     obj_array.append(y)
 
