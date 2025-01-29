@@ -21,15 +21,15 @@ shared_key = os.environ['WorkspaceKey']
 cluster_id = os.environ['ProofpointClusterID']
 _token = os.environ['ProofpointToken']
 time_delay_minutes = 60
-event_types = ["maillog","message"]
+event_types = ["maillog", "message"]
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-match = re.match(pattern,str(logAnalyticsUri))
-if(not match):
+match = re.match(pattern, str(logAnalyticsUri))
+if not match:
     raise Exception("ProofpointPOD: Invalid Log Analytics Uri.")
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -56,23 +56,28 @@ class Proofpoint_api:
         self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
         
-    def check_and_split_msgParts(self, msg_parts):
-        max_size = 32000
+    def check_and_split_msgParts(self, msg_parts, max_size=32000):
+        # If msg_parts is a list or dictionary, convert it to a string (JSON format)
         if isinstance(msg_parts, (dict, list)):
             msg_parts = json.dumps(msg_parts)
 
+        # Calculate the length of the message in bytes
         msglen = len(msg_parts.encode('utf-8'))
-        if msglen > max_size:  # Split if size exceeds the limit
-           split_point = len(msg_parts) // 2
-           part1 = msg_parts[:split_point]
-           part2 = msg_parts[split_point:]
-           # Recursively check and split both parts
-           split_parts = []
-           split_parts.extend(self.check_and_split_msgParts(part1, max_size))
-           split_parts.extend(self.check_and_split_msgParts(part2, max_size))
-           return split_parts
+
+        # If the message size exceeds the max size, split it
+        if msglen > max_size:
+            split_point = len(msg_parts) // 2
+            part1 = msg_parts[:split_point]
+            part2 = msg_parts[split_point:]
+
+            # Recursively split both parts if they are still too large
+            split_parts = []
+            split_parts.extend(self.check_and_split_msgParts(part1, max_size))  # Corrected
+            split_parts.extend(self.check_and_split_msgParts(part2, max_size))  # Corrected
+
+            return split_parts
         else:
-           return [msg_parts]
+            return [msg_parts]
 
     def set_websocket_conn(self, event_type):
         max_retries = 3
@@ -109,7 +114,7 @@ class Proofpoint_api:
                 else:
                     return None
 
-    def gen_chunks_to_object(self,data,chunksize=100):
+    def gen_chunks_to_object(self, data, chunksize=100):
         chunk = []
         for index, line in enumerate(data):
             if (index % chunksize == 0 and index > 0):
@@ -118,7 +123,7 @@ class Proofpoint_api:
             chunk.append(line)
         yield chunk
 
-    def gen_chunks(self,data,event_type):
+    def gen_chunks(self, data, event_type):
         for chunk in self.gen_chunks_to_object(data, chunksize=10000):
             print(len(chunk))
             obj_array = []
@@ -163,7 +168,7 @@ class Proofpoint_api:
                     events.append(data)
                     sent_events += 1
                     if len(events) > 500:
-                        self.gen_chunks(events,event_type)
+                        self.gen_chunks(events, event_type)
                         events = []
                 except websocket._exceptions.WebSocketTimeoutException:
                     break
@@ -177,7 +182,7 @@ class Proofpoint_api:
                 logging.error('Error while closing socket: {}'.format(err))
                 print('Error while closing socket: {}'.format(err))                
             if sent_events > 0:
-                self.gen_chunks(events,event_type)           
+                self.gen_chunks(events, event_type)           
         logging.info('Total events sent: {}. Type: {}. Period(UTC): {} - {}'.format(sent_events, event_type,
                                                                                             self.after_time,
                                                                                             self.before_time))
