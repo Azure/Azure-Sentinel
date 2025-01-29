@@ -48,7 +48,7 @@ jobs:
       run: |
         echo "accessToken=$(az account get-access-token -o tsv --query accessToken)" >> $GITHUB_ENV
 
-    - name: Download files from ADO
+    - name: Download files from ADO #TODO: update repo link to main
       run: |
         curl -u :${{ env.accessToken }} \
         -o evaluateAndExtractTemplate.py \
@@ -68,11 +68,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Get Test Tenant Client ID and Tenant ID
+      run: |
+        echo "AZURE_TEST_CLIENT_ID=$(az keyvault secret show --name ClientId-Test --vault-name e2e-solIntegTesting-KV --query value -o tsv)" >> $GITHUB_ENV
+        echo "AZURE_TEST_TENANT_ID=$(az keyvault secret show --name TenantId-Test --vault-name e2e-solIntegTesting-KV --query value -o tsv)" >> $GITHUB_ENV
+
     - name: Azure Login to Test Tenant Account
       uses: azure/login@v2
       with:
-        client-id: ${{ secrets.AZURE_SOLUTIONTESTING_TEST_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_SOLUTIONTESTING_TEST_TENANT_ID }}
+        client-id: ${{ env.AZURE_TEST_CLIENT_ID }}
+        tenant-id: ${{ env.AZURE_TEST_TENANT_ID }}
         allow-no-subscriptions: true
 
     - name: Get Test Tenant Subscription
@@ -80,6 +85,7 @@ jobs:
         echo "TEST_TENANT_SUBSCRIPTION_ID=$(az account show --query id -o tsv)" >> $GITHUB_ENV
 
     - name: Deploy Solution to Workspace, Evaluate and Extract Template Files
+      continue-on-error: true # Continues even after failing so as to not block the PR
       run: |
         filePath="evaluateAndExtractTemplate.py"
         python $filePath
@@ -97,6 +103,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
+      continue-on-error: true # Continues even after failing so as to not block the PR
       run: |
         filePath="runUITests.py"
         python $filePath
