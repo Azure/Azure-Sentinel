@@ -1,0 +1,26 @@
+id: 38d6e2fb-a804-4170-8d32-d251ecd6bcd2
+name: Top outbound recipient domains sending inbound emails with threats
+description: |
+  This query helps hunting for top outbound recipient domains which are sending inbound emails with threats
+description-detailed: |
+  This query helps hunting for top outbound recipient domains which are sending inbound emails with threats. 
+  Top outbound recipient domains by volume and number of inbound emails from the same domains as senders with threats.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  EmailEvents
+  | where EmailDirection == "Outbound"
+  | project RecipientDomain = tostring(split(RecipientEmailAddress, "@")[1])
+  | summarize count() by RecipientDomain
+  | project OutboundCount=count_, RecipientDomain, SenderFromDomain=RecipientDomain
+  | join (EmailEvents | where EmailDirection == "Inbound" and isempty(ThreatTypes)==false) on SenderFromDomain
+  | summarize max(OutboundCount),count() by SenderFromDomain
+  | project SenderFromDomain, OutboundEmails=max_OutboundCount, IncomingEmailsWithThreats=count_
+  | sort by OutboundEmails
+version: 1.0.0
