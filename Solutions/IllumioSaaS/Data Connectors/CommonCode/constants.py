@@ -34,6 +34,7 @@ ONPREM_API_KEY = os.environ.get("ONPREM_API_KEY", None)
 ONPREM_API_SECRET = os.environ.get("ONPREM_API_SECRET", None)
 ONPREM_PCE_FQDN = os.environ.get("ONPREM_PCE_FQDN", None)
 ONPREM_PCE_PORT = int(os.environ.get("ONPREM_PCE_PORT", 443))
+ONPREM_PCE_ORGID = int(os.environ.get("ONPREM_PCE_ORGID", 1))
 
 # Azure config
 AZURE_TENANT_ID = os.environ["AZURE_TENANT_ID"]
