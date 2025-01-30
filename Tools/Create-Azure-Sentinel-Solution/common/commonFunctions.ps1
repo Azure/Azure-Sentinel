@@ -2207,8 +2207,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         if ($isParserAvailable) {
                             $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $parserTextElement
                         }
-
-
                         $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
                     }
 
