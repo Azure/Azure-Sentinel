@@ -25,7 +25,6 @@ backfill_days = int(os.environ.get('NumberOfDaysToBackfill', "2")) # this is jus
 customer_id = os.environ.get('AzureSentinelWorkspaceId','')
 shared_key = os.environ.get('AzureSentinelSharedKey')
 
-verify = False
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 key_vault_name = os.environ.get("KeyVaultName","Commvault-Integration-KV")
@@ -118,7 +117,7 @@ def main(mytimer: func.TimerRequest) -> None:
         headers["authtoken"] = "QSDK " + qsdk_token
         
         companyId_url = f"{url}/v2/WhoAmI"
-        company_response = requests.get(companyId_url, headers=headers, verify=verify)
+        company_response = requests.get(companyId_url, headers=headers)
         if company_response.status_code == 200:
             company_data_json = company_response.json()
             logging.info(f"Company Response : {company_data_json}")
@@ -126,7 +125,7 @@ def main(mytimer: func.TimerRequest) -> None:
             companyId = company_data.get("id")
             audit_url = f"{url}/V4/Company/{companyId}/SecurityPartners/Register/6"
             logging.info(f"Company Id : {companyId}")            
-            audit_response = requests.put(audit_url, headers=headers, verify=verify)
+            audit_response = requests.put(audit_url, headers=headers)
             if audit_response.status_code == 200:
                 logging.info(f"Audit Log request sent Successfully. Audit Response : {audit_response.json()}" )
             else:
@@ -157,7 +156,7 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("Starts at: [{}]".format(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")))
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
         logging.info("Event endpoint : [{}]".format(event_endpoint))
-        response = requests.get(event_endpoint, headers=headers, verify=verify)
+        response = requests.get(event_endpoint, headers=headers)
         logging.info("Response Status Code : " + str(response.status_code))
         
         if response.status_code == 200:
@@ -312,7 +311,7 @@ def get_files_list(job_id) -> list:
         "advConfig": {"browseAdvancedConfigBrowseByJob": {"jobId": int(job_id)}}
     }
     f_url = url+"/DoBrowse"
-    response = requests.post(f_url, headers=headers, json=job_details_body, verify=verify)
+    response = requests.post(f_url, headers=headers, json=job_details_body)
     resp = response.json()
     browse_responses = resp.get("browseResponses", [])
     file_list = []
@@ -342,7 +341,7 @@ def get_subclient_content_list(subclient_id) -> dict:
     """
 
     f_url = url + "/Subclient/" + str(subclient_id)
-    resp = requests.get(f_url, headers=headers, verify=verify).json()
+    resp = requests.get(f_url, headers=headers).json()
     resp = resp.get("subClientProperties", [{}])[0].get("content")
     return resp
 
@@ -384,7 +383,7 @@ def get_job_details(job_id, url, headers):
     """
 
     f_url = f"{url}/Job/{job_id}"
-    response = requests.get(f_url, headers=headers, verify=verify)
+    response = requests.get(f_url, headers=headers)
     data = response.json()
     if ("totalRecordsWithoutPaging" in data) and (
             int(data["totalRecordsWithoutPaging"]) > 0
@@ -410,7 +409,7 @@ def get_user_details(client_name):
     """
 
     f_url = f"{url}/Client/byName(clientName='{client_name}')"
-    response = requests.get(f_url, headers=headers, verify=False).json()
+    response = requests.get(f_url, headers=headers).json()
     user_id = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userId']
     user_name = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userName']
     return user_id, user_name
