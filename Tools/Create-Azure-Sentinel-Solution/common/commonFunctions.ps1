@@ -2208,14 +2208,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $parserTextElement
                         }
 
-                        # if same link is present then increment the link number
-                        $dataConnectorList = $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements
-                        foreach($dcStep in $dataConnectorList) {
-                            if ($dcStep.name -eq $connectDataSourcesLink.name) {
-                                $counterValue = $global:connectorCounter + 1
-                                $connectDataSourcesLink.name = "dataconnectors-link$($counterValue)"
-                            }
-                        }
 
                         $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
                     }

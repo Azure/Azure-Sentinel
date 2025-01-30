@@ -743,7 +743,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             $currentStepNum = $global:baseCreateUiDefinition.parameters.steps.Count - 1
             $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $baseDataConnectorTextElement
             $connectDataSourcesLink = [PSCustomObject] @{
-                name    = "dataconnectors-link2";
+                name    = "dataconnectors-link$($global:connectorCounter)";
                 type    = "Microsoft.Common.TextBlock";
                 options = [PSCustomObject] @{
                     link = [PSCustomObject] @{
