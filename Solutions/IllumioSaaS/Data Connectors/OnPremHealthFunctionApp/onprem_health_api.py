@@ -23,14 +23,17 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     response = requests.request("GET", URL, headers=headers, data={})
 
     if response:
-        logging.info("[TimedApi] Response from url is {}".format(response.headers))
+        logging.info("[OnPremHealth] Response from url is {}".format(response.headers))
     else:
-        logging.info("[TimedApi] Error in response {}".format(response))
+        logging.info("[OnPremHealth] Error in response {}".format(response))
         return
 
     parsed_response = json.loads(response.text)
+    # if this has a notifications, just remove it.
+    if "notifications" in parsed_response[0].keys():
+        del parsed_response[0]["notifications"]
+
     sanitized_response = json.dumps(parsed_response)
-    sanitized_response = sanitized_response.replace("'", "\\'")
 
     return func.HttpResponse(
         sanitized_response,
