@@ -1,0 +1,298 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "LogAnalyticsWorkspaceName": {
+            "type": "string",
+            "metadata": {
+              "description": "Log Analytics Workspace Name"
+          }
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights'),'/alertRules/4807b4a5-1354-4c4a-b8b2-4beb1a07c37e')]",
+            "name": "[concat(parameters('LogAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/4807b4a5-1354-4c4a-b8b2-4beb1a07c37e')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Security Copilot - TI map IP entity to Security Copilot Audit Prompts",
+                "description": "Identifies a match in SecurityCopilot Audit Logs prompts activity from any IP IOC from TI",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let dt_lookBack = 1h;\r\nlet ioc_lookBack = 14d;\r\nThreatIntelligenceIndicator\r\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\r\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\r\n| where Active == true\r\n// Picking up only IOC's that contain the entities we want\r\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\r\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\r\n// Taking the first non-empty value based on potential IOC match availability\r\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\r\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\r\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\r\n//Exclude local addresses, using the ipv4_is_private operator\r\n| where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\r\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\r\n| join kind=innerunique (\r\n CloudAppEvents\r\n| where parse_json(RawEventData)[\"AppIdentity\"] == 'Copilot.Security.SecurityCopilot'\r\n| where parse_json(RawEventData)[\"Workload\"] == 'Copilot'\r\n| extend RecordType = RawEventData.RecordType\r\n| where RecordType == 261\r\n| where TimeGenerated >= ago(dt_lookBack)\r\n| extend Operation = RawEventData.Operation\r\n| extend ClientIP = tostring(RawEventData.ClientIP)\r\n| project TimeGenerated, Operation , sessionoid = tostring(parse_json(tostring(RawEventData.CopilotEventData)).CorrelationId), EvaluationId = tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotEventData)).Messages))[0].Id), ISPrompt = tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotEventData)).Messages))[0].isPrompt), UserId = AccountDisplayName, RecordType, ClientIP, AccountDisplayName, AppHost = tostring(parse_json(tostring(RawEventData.CopilotEventData)).AppHost)\r\n| where isnotempty(ClientIP)\r\n| extend CFS_TimeGenerated = TimeGenerated\r\n)\r\non $left.TI_ipEntity == $right.ClientIP\r\n| where CFS_TimeGenerated < ExpirationDateTime\r\n| summarize CFS_TimeGenerated = arg_max(CFS_TimeGenerated, *) by IndicatorId, ClientIP\r\n| project CFS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TI_ipEntity,  ClientIP, NetworkIP, NetworkDestinationIP, NetworkSourceIP, UserId,EmailSourceIpAddress\r\n| extend timestamp = CFS_TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIP",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        },
+        {        
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights'),'/alertRules/ea3b0624-539a-440c-b20d-687daac975a7')]",
+            "name": "[concat(parameters('LogAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/ea3b0624-539a-440c-b20d-687daac975a7')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Security Copilot - Anomalous Operations by Security Copilot for User",
+                "description": "Detect Anomalous audit operations involving actions such as \"DisableCopilotPlugin\" , \"DeleteFile\" , \"UpdatePluginSettings\" , or  \"DeleteCopilotPromptBook\"",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "CloudAppEvents\r\n| where parse_json(RawEventData)[\"AppIdentity\"] == 'Copilot.Security.SecurityCopilot'\r\n| where parse_json(RawEventData)[\"Workload\"] == 'Copilot'\r\n| extend ClientIP = tostring(RawEventData.ClientIP)\r\n| where isnotempty( AccountDisplayName) and isnotempty( ClientIP)\r\n| extend Operation = RawEventData.Operation\r\n| where Operation contains \"DisableCopilotPlugin\" or Operation contains \"DeleteFile\" or Operation contains \"UpdatePluginSettings\" or Operation contains \"DeleteCopilotPromptBook\"\r\n| project TimeGenerated, AccountDisplayName, ClientIP\r\n| evaluate basket()\r\n| join kind=leftouter  (CloudAppEvents\r\n| extend Operation = RawEventData.Operation\r\n| extend ClientIP = tostring(RawEventData.ClientIP)\r\n| where Operation contains \"DisableCopilotPlugin\" or Operation contains \"DeleteFile\" or Operation contains \"UpdatePluginSettings\" or Operation contains \"DeleteCopilotPromptBook\"\r\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by AccountDisplayName, ClientIP) on AccountDisplayName,ClientIP\r\n| extend timestamp = StartTime, AccountCustomEntity = AccountDisplayName, IPCustomEntity = ClientIP , ClientIP\r\n| project-away AccountDisplayName1, ClientIP1\r\n| extend timestamp = StartTime, AccountCustomEntity = AccountDisplayName, IPCustomEntity = ClientIP",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution"
+                ],
+                "techniques": [
+                    "T0863",
+                    "T1651"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights'),'/alertRules/dd3244af-ee41-4cf6-885c-a50d426d27fe')]",
+            "name": "[concat(parameters('LogAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/dd3244af-ee41-4cf6-885c-a50d426d27fe')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Security Copilot - Anomalous sign-in activity by Security Copilot user",
+                "description": "This rule detects anomalous user log on and resource access associated with usage of Copilot for Security where any of these operations have been executed: DeleteCopilotPromptBook,DisableCopilotPlugin,DeleteFile or EnableCopilotPlugin",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "BehaviorAnalytics\r\n| where ActionType =~ \"Sign-in\"\r\n| where ActivityInsights.FirstTimeConnectionFromCountryObservedInTenant == True or ActivityInsights.CountryUncommonlyConnectedFromAmongPeers == True or ActivityInsights.ResourceUncommonlyAccessedAmongPeers == True            \r\n| join kind=inner (\r\n    SigninLogs\r\n    )\r\n    on $left.SourceRecordId == $right._ItemId\r\n| extend\r\n    UserPrincipalName = iff(UserPrincipalName has \"#EXT#\", replace_string(tostring(split(UserPrincipalName, \"#\")[0]), \"_\", \"@\"), UserPrincipalName),\r\n    UserName = iff(UserName has \"#EXT#\", replace_string(tostring(split(UserPrincipalName, \"#\")[0]), \"_\", \"@\"), UserName)\r\n| join CloudAppEvents on $left.UserPrincipalName == $right.AccountDisplayName\r\n| where parse_json(RawEventData)[\"AppIdentity\"] == 'Copilot.Security.SecurityCopilot'\r\n| where parse_json(RawEventData)[\"Workload\"] == 'Copilot'\r\n| extend Operation = RawEventData.Operation\r\n| extend BlastRadius_ = tostring(UsersInsights.BlastRadius)\r\n| where Operation in (\"DeleteCopilotPromptBook\",\"DisableCopilotPlugin\",\"DeleteFile\",\"EnableCopilotPlugin\")\r\n| project\r\n    TimeGenerated,\r\n    AccountDisplayName,\r\n    UserPrincipalName,\r\n    UsersInsights,\r\n    ActivityType,\r\n    ActionType,\r\n    [\"Evidence\"]=ActivityInsights,\r\n    ResourceDisplayName,\r\n    AppDisplayName,\r\n    SourceIPAddress,\r\n    SourceIPLocation,\r\n    SourceDevice,\r\n    DevicesInsights,\r\n    InvestigationPriority,\r\n    BlastRadius_\r\n    | extend\r\n    Name=split(UserPrincipalName, \"@\")[0],\r\n    UPNSuffix=split(UserPrincipalName, \"@\")[1]",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountDisplayName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AppDisplayName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights'),'/alertRules/5e5fc31d-d9e0-4fad-b659-b183b0643aac')]",
+            "name": "[concat(parameters('LogAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/5e5fc31d-d9e0-4fad-b659-b183b0643aac')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Security Copilot-Audit logging settings changes",
+                "description": "This rule detects changes to logging settings",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "CloudAppEvents\r\n| where parse_json(RawEventData)[\"AppIdentity\"] == 'Copilot.Security.SecurityCopilot'\r\n| where parse_json(RawEventData)[\"Workload\"] == 'Copilot'\r\n| where RawEventData.Operation == \"UpdateCopilotSettings\"\r\n| extend NewSetting = case(tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotSettingsEventData)).Resource))[0].NewValue) == \"False\", \"Off\", tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotSettingsEventData)).Resource))[0].NewValue) == \"True\", \"On\", tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotSettingsEventData)).Resource))[0].NewValue))\r\n| extend PreviousSetting = case(tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotSettingsEventData)).Resource))[0].OriginalValue) == \"False\", \"Off\", tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotSettingsEventData)).Resource))[0].OriginalValue) == \"True\", \"On\", tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotSettingsEventData)).Resource))[0].OriginalValue))\r\n| extend SettingChanged = tostring(parse_json(tostring(parse_json(tostring(RawEventData.CopilotSettingsEventData)).Resource))[0].Property)\r\n| project TimeGenerated, User= AccountDisplayName, Operation=RawEventData.Operation, PreviousSetting, NewSetting, SettingChanged, ClientIP = tostring(RawEventData.ClientIP)",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "Operation": "Operation",
+                    "PreviousSetting": "PreviousSetting",
+                    "NewSetting": "NewSetting"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "User"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
