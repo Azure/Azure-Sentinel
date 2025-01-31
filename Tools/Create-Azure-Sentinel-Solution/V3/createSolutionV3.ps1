@@ -11,7 +11,7 @@ if ($null -eq $SolutionDataFolderPath -or $SolutionDataFolderPath -eq '') {
     Write-Host "Solution Data folder path specified is : $path"
 }
 
-$defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
+$defaultPackageVersion = "3.1.0" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
 if ($path.length -eq 0)
@@ -127,7 +127,10 @@ try {
         $offerId = "$solutionOfferId"
         $offerDetails = GetCatalogDetails $offerId
         $userInputPackageVersion = $contentToImport.version
-        $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
+        $packageVersion = "3.1.0"#GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
+        Write-Output "blabla $userInputPackageVersion"
+
+
         if ($packageVersion -ne $contentToImport.version) {
             $contentToImport.PSObject.Properties.Remove('version')
             $contentToImport | Add-Member -MemberType NoteProperty -Name 'version' -Value $packageVersion 
