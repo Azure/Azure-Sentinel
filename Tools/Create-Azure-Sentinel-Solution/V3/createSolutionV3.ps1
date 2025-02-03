@@ -127,8 +127,7 @@ try {
         $offerId = "$solutionOfferId"
         $offerDetails = GetCatalogDetails $offerId
         $userInputPackageVersion = $contentToImport.version
-        $packageVersion = "3.1.0"#GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
-        Write-Output "blabla $userInputPackageVersion"
+        $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
 
 
         if ($packageVersion -ne $contentToImport.version) {
