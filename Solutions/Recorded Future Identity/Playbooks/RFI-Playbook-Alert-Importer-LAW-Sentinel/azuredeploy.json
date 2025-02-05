@@ -6,111 +6,113 @@
             "defaultValue": "RFI-Playbook-Alert-Importer-LAW-Sentinel",
             "type": "string"
         },
-        "save_to_log_analytics_workspace": {
-            "type": "Bool",
+        "RFICustomConnector": {
+            "defaultValue": "RFI-CustomConnector-0-2-0",
             "metadata": {
-                "description": "Enter value for save_to_log_analytics_workspace"
-            }
-        },
-        "active_directory_security_group_id": {
-            "type": "String",
-            "metadata": {
-                "description": "Enter value for active_directory_security_group_id"
-            }
-        },
-        "create_incident": {
-            "type": "Bool",
-            "metadata": {
-                "description": "Enter value for create_incident"
-            }
+                "description": "Name of the logic app connector which performs Recorded Future Communication. Normaly this dont change from RFI-CustomConnector-0-2-0"
+            },
+            "type": "string"
         },
         "active_directory_domain": {
-            "type": "String",
             "defaultValue": "",
             "metadata": {
                 "description": "Enter value for active_directory_domain"
-            }
+            },
+            "type": "String"
+        },
+        "active_directory_security_group_id": {
+            "metadata": {
+                "description": "Enter value for active_directory_security_group_id"
+            },
+            "type": "String"
+        },
+        "create_incident": {
+            "metadata": {
+                "description": "Enter value for create_incident"
+            },
+            "type": "Bool"
         },
         "playbook_alert_log_analytics_custom_log_name": {
-            "type": "String",
             "defaultValue": "RecordedFutureIdentity_PlaybookAlertResults_CL",
             "metadata": {
                 "description": "Enter value for playbook_alert_log_analytics_custom_log_name"
-            }
+            },
+            "type": "String"
         },
-        "RFICustomConnector": {
-            "defaultValue": "RFI-CustomConnector-0-2-0",
-            "type": "string",
+        "save_to_log_analytics_workspace": {
             "metadata": {
-                "description": "Name of the logic app connector which performs Recorded Future Communication. Normaly this dont change from RFI-CustomConnector-0-2-0"
-            }
+                "description": "Enter value for save_to_log_analytics_workspace"
+            },
+            "type": "Bool"
         }
-    },
-    "variables": {
-        "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]",
-        "AzureadipConnectionName": "[concat('Azureadip-', parameters('PlaybookName'))]",
-        "AzuresentinelConnectionName": "[concat('Azuresentinel-', parameters('PlaybookName'))]",
-        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-        "Rfi-Customconnector-0-2-0ConnectionName": "RFI-CustomConnector-0-2-0"
     },
     "resources": [
         {
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureadipConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuresentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "location": "[resourceGroup().location]",
+            "name": "[parameters('PlaybookName')]",
             "properties": {
-                "provisioningState": "Succeeded",
-                "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        },
-                        "save_to_log_analytics_workspace": {
-                            "defaultValue": "[parameters('save_to_log_analytics_workspace')]",
-                            "type": "Bool"
-                        },
-                        "active_directory_security_group_id": {
-                            "defaultValue": "[parameters('active_directory_security_group_id')]",
-                            "type": "String"
-                        },
-                        "create_incident": {
-                            "defaultValue": "[parameters('create_incident')]",
-                            "type": "Bool"
-                        },
-                        "active_directory_domain": {
-                            "defaultValue": "[parameters('active_directory_domain')]",
-                            "type": "String"
-                        },
-                        "playbook_alert_log_analytics_custom_log_name": {
-                            "defaultValue": "[parameters('playbook_alert_log_analytics_custom_log_name')]",
-                            "type": "String"
-                        }
-                    },
-                    "triggers": {
-                        "Recurrence": {
-                            "recurrence": {
-                                "interval": 15,
-                                "frequency": "Minute"
-                            },
-                            "evaluatedRecurrence": {
-                                "interval": 15,
-                                "frequency": "Minute"
-                            },
-                            "type": "Recurrence"
-                        }
-                    },
                     "actions": {
                         "For_each": {
-                            "foreach": "@body('Playbook_Alerts_-_Search_for_novel_identity_exposures')?['pba_items']",
                             "actions": {
-                                "Get_User_-_Check_if_the_user_exists_in_Active_Directory": {
+                                "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": {
+                                    "inputs": {
+                                        "body": {
+                                            "@@odata.id": "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuread']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/v1.0/groups/@{encodeURIComponent(parameters('active_directory_security_group_id'))}/members/$ref"
+                                    },
                                     "runAfter": {
-                                        "If_Active_Directory_domain_parameter_is_not_null_and_not_empty": [
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                            "Succeeded"
+                                        ],
+                                        "Workaround_-_Current_Time": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "ApiConnection",
+                                    "type": "ApiConnection"
+                                },
+                                "Confirm_a_risky_user_as_compromised": {
+                                    "inputs": {
+                                        "body": {
+                                            "userIds": [
+                                                "@body('Get_risky_user')?['id']"
+                                            ]
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/riskyUsers/confirmCompromised"
+                                    },
+                                    "runAfter": {
+                                        "Get_risky_user": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Get_User_-_Check_if_the_user_exists_in_Active_Directory": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -119,53 +121,15 @@
                                         },
                                         "method": "get",
                                         "path": "/v1.0/users/@{encodeURIComponent(variables('user_principal_name'))}"
-                                    }
-                                },
-                                "Workaround_-_Current_Time": {
-                                    "runAfter": {
-                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
-                                            "Succeeded",
-                                            "Failed"
-                                        ]
                                     },
-                                    "type": "Expression",
-                                    "kind": "CurrentTime",
-                                    "inputs": {},
-                                    "description": "This step is only here to handle a specific case where the user is not found but we have a alert id. Without this, the whole run would be seen as \"Failed\" even though it did everything correct"
-                                },
-                                "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": {
                                     "runAfter": {
-                                        "Workaround_-_Current_Time": [
-                                            "Succeeded"
-                                        ],
-                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                        "If_Active_Directory_domain_parameter_is_not_null_and_not_empty": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuread']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "body": {
-                                            "@@odata.id": "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']"
-                                        },
-                                        "path": "/v1.0/groups/@{encodeURIComponent(parameters('active_directory_security_group_id'))}/members/$ref"
-                                    }
+                                    "type": "ApiConnection"
                                 },
                                 "Get_risky_user": {
-                                    "runAfter": {
-                                        "Workaround_-_Current_Time": [
-                                            "Succeeded"
-                                        ],
-                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -174,277 +138,35 @@
                                         },
                                         "method": "get",
                                         "path": "/beta/riskyUsers/@{encodeURIComponent(body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id'])}"
-                                    }
-                                },
-                                "Confirm_a_risky_user_as_compromised": {
+                                    },
                                     "runAfter": {
-                                        "Get_risky_user": [
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
                                             "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azureadip']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "body": {
-                                            "userIds": [
-                                                "@body('Get_risky_user')?['id']"
-                                            ]
-                                        },
-                                        "path": "/beta/riskyUsers/confirmCompromised"
-                                    }
-                                },
-                                "If_Create_incident_OR_Save_to_LAW": {
-                                    "actions": {
-                                        "Create_Microsoft_Sentinel_Incident": {
-                                            "actions": {
-                                                "Create_incident": {
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "put",
-                                                        "body": {
-                                                            "title": "Identity Exposure: @{item()?['identity']}",
-                                                            "severity": "Medium",
-                                                            "status": "New",
-                                                            "description": "@body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['html_description']",
-                                                            "tagsToAdd": {
-                                                                "TagsToAdd": [
-                                                                    {
-                                                                        "Tag": "Recorded Future Identity Alert"
-                                                                    }
-                                                                ]
-                                                            }
-                                                        },
-                                                        "path": "/Incidents/subscriptions/@{encodeURIComponent('5129b3ff-c0c6-4e86-bd1c-70e5fcd579cf')}/resourceGroups/@{encodeURIComponent('RF-Erik')}/workspaces/@{encodeURIComponent('ErikLogAnalyticWorkspace')}"
-                                                    }
-                                                },
-                                                "Add_comment_to_incident_(V3)": {
-                                                    "runAfter": {
-                                                        "Create_incident": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": {
-                                                            "incidentArmId": "@body('Create_incident')?['id']",
-                                                            "message": "<p class=\"editor-paragraph\">@{body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['html_comment']}</p>"
-                                                        },
-                                                        "path": "/Incidents/Comment"
-                                                    }
-                                                }
-                                            },
-                                            "runAfter": {
-                                                "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "else": {
-                                                "actions": {}
-                                            },
-                                            "expression": {
-                                                "and": [
-                                                    {
-                                                        "equals": [
-                                                            "@parameters('create_incident')",
-                                                            true
-                                                        ]
-                                                    }
-                                                ]
-                                            },
-                                            "type": "If"
-                                        },
-                                        "If_Save_to_Log_Analytics_Workspace": {
-                                            "actions": {
-                                                "Send_Data_-_Save_Playbook_alert_to_LogAnalytics_Custom_Log": {
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": "@string(body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['result'])",
-                                                        "headers": {
-                                                            "Log-Type": "@parameters('playbook_alert_log_analytics_custom_log_name')"
-                                                        },
-                                                        "path": "/api/logs"
-                                                    }
-                                                }
-                                            },
-                                            "runAfter": {
-                                                "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "else": {
-                                                "actions": {}
-                                            },
-                                            "expression": {
-                                                "and": [
-                                                    {
-                                                        "equals": [
-                                                            "@parameters('save_to_log_analytics_workspace')",
-                                                            true
-                                                        ]
-                                                    }
-                                                ]
-                                            },
-                                            "type": "If"
-                                        },
-                                        "Playbook_Alerts_-_Update_Playbook_Alert_-_Incident_created": {
-                                            "runAfter": {
-                                                "Create_Microsoft_Sentinel_Incident": [
-                                                    "Succeeded",
-                                                    "Skipped"
-                                                ],
-                                                "If_Save_to_Log_Analytics_Workspace": [
-                                                    "Succeeded",
-                                                    "Skipped"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "body": {
-                                                    "alert_id": "@item()?['alert_id']",
-                                                    "log_entry": "User found. \nPlaced into security group. \nConfirmed as risky user if present in that list.\n@{if(equals(parameters('create_incident'),true), string('Incident created in Microsoft Sentinel'), '')}",
-                                                    "status": "Resolved",
-                                                    "onward_action": "identity_novel_exposures.placed_in_risky_group"
-                                                },
-                                                "path": "/playbook-alerts/update"
-                                            }
-                                        },
-                                        "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": {
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "get",
-                                                "path": "/playbook-alerts/@{encodeURIComponent(item()?['alert_id'])}",
-                                                "queries": {
-                                                    "return_html": true
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Confirm_a_risky_user_as_compromised": [
-                                            "Succeeded",
-                                            "Failed",
-                                            "Skipped"
                                         ],
-                                        "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "Playbook_Alerts_-_Update_Playbook_Alert-_If_user_found": {
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "put",
-                                                    "body": {
-                                                        "alert_id": "@item()?['alert_id']",
-                                                        "log_entry": "User found. Placed into security group. Confirmed as risky user if present in that list.",
-                                                        "status": "Resolved",
-                                                        "onward_action": "identity_novel_exposures.placed_in_risky_group"
-                                                    },
-                                                    "path": "/playbook-alerts/update"
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "or": [
-                                            {
-                                                "equals": [
-                                                    "@parameters('create_incident')",
-                                                    true
-                                                ]
-                                            },
-                                            {
-                                                "equals": [
-                                                    "@parameters('save_to_log_analytics_workspace')",
-                                                    true
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type": "If"
-                                },
-                                "Playbook_Alerts_-_Update_Playbook_Alert_-_If_user_not_found": {
-                                    "runAfter": {
                                         "Workaround_-_Current_Time": [
                                             "Succeeded"
-                                        ],
-                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
-                                            "Failed"
                                         ]
                                     },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                            }
-                                        },
-                                        "method": "put",
-                                        "body": {
-                                            "alert_id": "@item()?['alert_id']",
-                                            "log_entry": "User not found. Might be false positive. Dismissed",
-                                            "status": "Dismissed"
-                                        },
-                                        "path": "/playbook-alerts/update"
-                                    }
+                                    "type": "ApiConnection"
                                 },
                                 "If_Active_Directory_domain_parameter_is_not_null_and_not_empty": {
                                     "actions": {
                                         "Set_Active_Directory_user_principal_name_to_user_email's_username_+_AD_domain": {
-                                            "type": "SetVariable",
                                             "inputs": {
                                                 "name": "user_principal_name",
                                                 "value": "@concat(split(item()?['identity'], '@')[0], '@', parameters('active_directory_domain'))"
-                                            }
+                                            },
+                                            "type": "SetVariable"
                                         }
                                     },
                                     "else": {
                                         "actions": {
                                             "Set_Active_Directory_user_principal_name_to_user's_email": {
-                                                "type": "SetVariable",
                                                 "inputs": {
                                                     "name": "user_principal_name",
                                                     "value": "@item()?['identity']"
-                                                }
+                                                },
+                                                "type": "SetVariable"
                                             }
                                         }
                                     },
@@ -469,8 +191,250 @@
                                         ]
                                     },
                                     "type": "If"
+                                },
+                                "If_Create_incident_OR_Save_to_LAW": {
+                                    "actions": {
+                                        "Create_Microsoft_Sentinel_Incident": {
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)": {
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@body('Create_incident')?['id']",
+                                                            "message": "<p class=\"editor-paragraph\">@{body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['html_comment']}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    },
+                                                    "runAfter": {
+                                                        "Create_incident": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection"
+                                                },
+                                                "Create_incident": {
+                                                    "inputs": {
+                                                        "body": {
+                                                            "description": "@body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['html_description']",
+                                                            "severity": "Medium",
+                                                            "status": "New",
+                                                            "tagsToAdd": {
+                                                                "TagsToAdd": [
+                                                                    {
+                                                                        "Tag": "Recorded Future Identity Alert"
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "title": "Identity Exposure: @{item()?['identity']}"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/Incidents/subscriptions/@{encodeURIComponent('5129b3ff-c0c6-4e86-bd1c-70e5fcd579cf')}/resourceGroups/@{encodeURIComponent('RF-Erik')}/workspaces/@{encodeURIComponent('ErikLogAnalyticWorkspace')}"
+                                                    },
+                                                    "type": "ApiConnection"
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {}
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('create_incident')",
+                                                            true
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "If_Save_to_Log_Analytics_Workspace": {
+                                            "actions": {
+                                                "Send_Data_-_Save_Playbook_alert_to_LogAnalytics_Custom_Log": {
+                                                    "inputs": {
+                                                        "body": "@string(body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['result'])",
+                                                        "headers": {
+                                                            "Log-Type": "@parameters('playbook_alert_log_analytics_custom_log_name')"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/api/logs"
+                                                    },
+                                                    "type": "ApiConnection"
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {}
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('save_to_log_analytics_workspace')",
+                                                            true
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": {
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/playbook-alerts/@{encodeURIComponent(item()?['alert_id'])}",
+                                                "queries": {
+                                                    "return_html": true
+                                                }
+                                            },
+                                            "type": "ApiConnection"
+                                        },
+                                        "Playbook_Alerts_-_Update_Playbook_Alert_-_Incident_created": {
+                                            "inputs": {
+                                                "body": {
+                                                    "alert_id": "@item()?['alert_id']",
+                                                    "log_entry": "User found. \nPlaced into security group. \nConfirmed as risky user if present in that list.\n@{if(equals(parameters('create_incident'),true), string('Incident created in Microsoft Sentinel'), '')}",
+                                                    "onward_action": "identity_novel_exposures.placed_in_risky_group",
+                                                    "status": "Resolved"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/playbook-alerts/update"
+                                            },
+                                            "runAfter": {
+                                                "Create_Microsoft_Sentinel_Incident": [
+                                                    "Succeeded",
+                                                    "Skipped"
+                                                ],
+                                                "If_Save_to_Log_Analytics_Workspace": [
+                                                    "Succeeded",
+                                                    "Skipped"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Playbook_Alerts_-_Update_Playbook_Alert-_If_user_found": {
+                                                "inputs": {
+                                                    "body": {
+                                                        "alert_id": "@item()?['alert_id']",
+                                                        "log_entry": "User found. Placed into security group. Confirmed as risky user if present in that list.",
+                                                        "onward_action": "identity_novel_exposures.placed_in_risky_group",
+                                                        "status": "Resolved"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "put",
+                                                    "path": "/playbook-alerts/update"
+                                                },
+                                                "type": "ApiConnection"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "equals": [
+                                                    "@parameters('create_incident')",
+                                                    true
+                                                ]
+                                            },
+                                            {
+                                                "equals": [
+                                                    "@parameters('save_to_log_analytics_workspace')",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": [
+                                            "Succeeded"
+                                        ],
+                                        "Confirm_a_risky_user_as_compromised": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Playbook_Alerts_-_Update_Playbook_Alert_-_If_user_not_found": {
+                                    "inputs": {
+                                        "body": {
+                                            "alert_id": "@item()?['alert_id']",
+                                            "log_entry": "User not found. Might be false positive. Dismissed",
+                                            "status": "Dismissed"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/playbook-alerts/update"
+                                    },
+                                    "runAfter": {
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                            "Failed"
+                                        ],
+                                        "Workaround_-_Current_Time": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Workaround_-_Current_Time": {
+                                    "description": "This step is only here to handle a specific case where the user is not found but we have a alert id. Without this, the whole run would be seen as \"Failed\" even though it did everything correct",
+                                    "inputs": {},
+                                    "kind": "CurrentTime",
+                                    "runAfter": {
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Expression"
                                 }
                             },
+                            "foreach": "@body('Playbook_Alerts_-_Search_for_novel_identity_exposures')?['pba_items']",
                             "runAfter": {
                                 "Initialize_user_principal_name": [
                                     "Succeeded"
@@ -479,12 +443,6 @@
                             "type": "Foreach"
                         },
                         "Initialize_user_principal_name": {
-                            "runAfter": {
-                                "Playbook_Alerts_-_Search_for_novel_identity_exposures": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
@@ -492,18 +450,16 @@
                                         "type": "string"
                                     }
                                 ]
-                            }
+                            },
+                            "runAfter": {
+                                "Playbook_Alerts_-_Search_for_novel_identity_exposures": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
                         },
                         "Playbook_Alerts_-_Search_for_novel_identity_exposures": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
                             "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
                                 "body": {
                                     "lookback_days": 7,
                                     "priorities": [
@@ -511,11 +467,59 @@
                                         "Moderate"
                                     ]
                                 },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
                                 "path": "/playbook-alerts/search"
-                            }
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
                         }
                     },
-                    "outputs": {}
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "active_directory_domain": {
+                            "defaultValue": "[parameters('active_directory_domain')]",
+                            "type": "String"
+                        },
+                        "active_directory_security_group_id": {
+                            "defaultValue": "[parameters('active_directory_security_group_id')]",
+                            "type": "String"
+                        },
+                        "create_incident": {
+                            "defaultValue": "[parameters('create_incident')]",
+                            "type": "Bool"
+                        },
+                        "playbook_alert_log_analytics_custom_log_name": {
+                            "defaultValue": "[parameters('playbook_alert_log_analytics_custom_log_name')]",
+                            "type": "String"
+                        },
+                        "save_to_log_analytics_workspace": {
+                            "defaultValue": "[parameters('save_to_log_analytics_workspace')]",
+                            "type": "Bool"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "evaluatedRecurrence": {
+                                "frequency": "Minute",
+                                "interval": 15
+                            },
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 15
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
                 },
                 "parameters": {
                     "$connections": {
@@ -530,20 +534,20 @@
                                 "connectionName": "[variables('AzureadipConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureadip')]"
                             },
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuresentinelConnectionName'))]",
-                                "connectionName": "[variables('AzuresentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
-                                "connectionProperties": {
-                                    "authentication": {
-                                        "type": "ManagedServiceIdentity"
-                                    }
-                                }
-                            },
                             "azureloganalyticsdatacollector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
                                 "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuresentinelConnectionName'))]",
+                                "connectionName": "[variables('AzuresentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
                             },
                             "rfi-customconnector-0-2-0": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
@@ -552,94 +556,90 @@
                             }
                         }
                     }
-                }
+                },
+                "provisioningState": "Succeeded",
+                "state": "Enabled"
             },
-            "name": "[parameters('PlaybookName')]",
-            "type": "Microsoft.Logic/workflows",
-            "location": "[resourceGroup().location]",
             "tags": {},
-            "identity": {
-                "type": "SystemAssigned"
-            },
-            "apiVersion": "2017-07-01",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureadipConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzuresentinelConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]"
-            ]
+            "type": "Microsoft.Logic/workflows"
         },
         {
-            "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('AzureadConnectionName')]",
-            "location": "[resourceGroup().location]",
             "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzureadConnectionName')]",
             "properties": {
-                "displayName": "[variables('AzureadConnectionName')]",
-                "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
-                }
-            }
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzureadConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
         },
         {
-            "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('AzureadipConnectionName')]",
-            "location": "[resourceGroup().location]",
             "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzureadipConnectionName')]",
             "properties": {
-                "displayName": "[variables('AzureadipConnectionName')]",
-                "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureadip')]"
-                }
-            }
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzureadipConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
         },
         {
-            "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('AzuresentinelConnectionName')]",
-            "location": "[resourceGroup().location]",
             "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzuresentinelConnectionName')]",
             "properties": {
-                "displayName": "[variables('AzuresentinelConnectionName')]",
-                "customParameterValues": {},
-                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
-                }
-            }
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzuresentinelConnectionName')]",
+                "parameterValueType": "Alternative"
+            },
+            "type": "Microsoft.Web/connections"
         },
         {
-            "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-            "location": "[resourceGroup().location]",
             "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
             "properties": {
-                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                }
-            }
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
         },
         {
-            "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]",
-            "location": "[resourceGroup().location]",
             "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]",
             "properties": {
-                "displayName": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]",
-                "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('RFICustomConnector'))]"
-                }
-            }
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
         }
-    ]
+    ],
+    "variables": {
+        "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]",
+        "AzureadipConnectionName": "[concat('Azureadip-', parameters('PlaybookName'))]",
+        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "AzuresentinelConnectionName": "[concat('Azuresentinel-', parameters('PlaybookName'))]",
+        "Rfi-Customconnector-0-2-0ConnectionName": "RFI-CustomConnector-0-2-0"
+    }
 }
