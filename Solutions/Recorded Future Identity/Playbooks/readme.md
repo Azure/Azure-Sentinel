@@ -217,7 +217,7 @@ The Recorded Future identity solution uses the following connectors, some are re
 
 | Connector | Description |
 |-|-|
-| **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](Connectors/RecordedFuture-CustomConnector/readme.md) <br/> [How to obtain Recorded Future API token](#how_to_obtain_Recorded_Future_API_token) |
+| **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](../../Recorded%20Future/Playbooks/Connectors/RecordedFuture-CustomConnector/readme.md) <br/> [How to obtain Recorded Future API token](#how_to_obtain_Recorded_Future_API_token) |
 | **/azuread** | [Microsoft Entra ID power platform connectors](https://learn.microsoft.com/en-us/connectors/azuread/). |
 | **/azureadip** | [Azure AD Identity Protection](https://learn.microsoft.com/en-us/connectors/azureadip/) |
 | **/azureloganalyticsdatacollector** (Optional) | [Azure Log Analytics Data Collector](https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/) <br/> [How to find Log Analytics Workspace key.](https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id) 
@@ -226,13 +226,13 @@ The Recorded Future identity solution uses the following connectors, some are re
 
 Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type. 
 
-Below are guides that a tailored to our recommended authorization flow (Managed Identity), depending on organizational rules, the flow might be different. Please consult with your Azure administrator in those cases. Multi-tenant authorizations are untested, please consult with your Azure administrators for proper authorization flow.
+Below are guides that a tailored to our recommended authorization flow (Managed Identity, when possible), depending on organizational rules, the flow might be different. Please consult with your Azure administrator in those cases. Multi-tenant authorizations are untested, please consult with your Azure administrators for proper authorization flow.
 <details>
 <summary>Expand to see rfi-custom-connector authorization guide</summary>
 
 <br>
 
-After a logic app has been installed, the **Recorded Future Connector V2** needs to be authorized. This only needs to be done once. If there are any uncertainties expand all nodes in the logic app after installation and look for blocks marked with a warning sign.
+After a logic app has been installed, the **RFI-CustomConnector-0-2-0** needs to be authorized. This only needs to be done once. If there are any uncertainties expand all nodes in the logic app after installation and look for blocks marked with a warning sign.
 
 1. Go to the specific logic app,  in the left menu click on the section _**Development tools**_
 2. Click on **_API connections_**
@@ -243,6 +243,16 @@ After a logic app has been installed, the **Recorded Future Connector V2** needs
 
 ![apiconnection](images/apiconnection.png)
 
+</details>
+
+<details>
+<summary>Expand to see azuread authorization information</summary>
+The Microsoft Entra ID is a very powerful connector, the default authorization mode is with OAuth, the only authorization type that has been tested by us. For more information on the connector, please advise <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank">this</a> article.
+</details>
+
+<details>
+<summary>Expand to see azureadip authorization information</summary>
+The Azure AD Identity Protection is a very powerful connector, the default authorization mode is with OAuth, the only authorization type that has been tested by us. Read on how to authorize it <a href="https://learn.microsoft.com/en-us/connectors/aadinvitationmanager/#set-up-an-microsoft-entra-id-application-for-your-custom-connector" target="_blank">here</a> for an alternative(untested by us) method. 
 </details>
 <br>
 
@@ -287,17 +297,15 @@ These steps will be needed for each logic app that uses the **azuresentinel** / 
 Recorded Future clients interested in API access for custom scripts or to enable a paid integration can request an API Token via this [Integration Support Ticket form](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens).  Please fill out the following fields, based on intended API usage.
 
 <details>
-<summary>Expand for example image of request form. CHANGE IMAGE</summary> 
+<summary>Expand for example image of request form</summary> 
 
-**CHANGE IMAGE**
-
-![API request form](images/APIRequest.png)
+![API request form](images/APIRequest2.png)
 </details>
 Select:
 
 - Recorded Future API Services - Playbook Alert API
 - Integration Partner Category - Recorded Future Owned Integrations (Premier)
-- Premier Integration - Recorded Future Identity Intelligence for Azure Active Directory (Entra ID) **DOUBLE CHECK**
+- Premier Integration - Recorded Future Identity Intelligence for Azure Active Directory (Entra ID)
 - Select Your Type of Inquiry (optional) - New Installation
 
 Recorded Future Support will connect with your account team to confirm licensing and ensure the token is set up with the correct specifications and permissions. Additional questions about API token requests not covered by the above can be sent via email to our support team, support@recordedfuture.com.
@@ -341,20 +349,6 @@ To see Log Analytics Custom Logs:
 -   From then Azure Portal, navigate to the `Log Analytics workspaces` service
 -   There, select the Log Analytic Workspace in which you have deployed the Solution
 -   There, in the left-side menu click on Logs, and expand second left side menu, and select Custom Logs
-
-## Troubleshooting
-
-If you use the `RFI-lookup-and-save-user` playbook to Lookup leaks info for an email and response lookup data is empty (for specified email and look back range) - the playbook will still save empty results to the Log Analytics Custom Log. 
-
-This case is possible if you set up the Playbooks in that way that Lookup look back range (`lookup_lookback_days`) in `RFI-lookup-and-save-user` playbook is smaller than Search look back range (`search_lookback_days`) in `RFI-search-workforce-user` or `RFI-search-external-user` playbooks.
-
-In that case you will see some empty records in the corresponding Log Analytics Custom Log (see the screenshot). 
-
-<details>
-<summary>Expand screenshot</summary>
-<img src="./images/empty_lookup_results.png" alt="Empty Lookup results" width="60%"/>
-</details>
-Another way to cover this case - you can add a corresponding check to RFI-lookup-and-save-user playbook and not save the results to Log Analytics if the result is empty.
 
 
 <a id="useful_documentation"></a>
