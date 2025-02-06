@@ -1,6 +1,6 @@
-import { PlaybookValidationError } from "../validationError";
-import { ArmTemplate, ArmTemplateParameter } from "./Models/armTemplateModels";
-import { isNullOrUndefined, PlaybookNameParameter } from "./playbookARMTemplateUtils";
+import { PlaybookValidationError } from "../validationError.js";
+import { ArmTemplate, ArmTemplateParameter } from "./Models/armTemplateModels.js";
+import { isNullOrUndefined, PlaybookNameParameter } from "./playbookARMTemplateUtils.js";
 
 export function validateTemplateParameters(filePath: string, playbookARMTemplate: ArmTemplate<any>): void {
     validateTemplateHasPlaybookNameParameter(filePath, playbookARMTemplate);

@@ -21,32 +21,16 @@ shared_key = os.environ['WorkspaceKey']
 cluster_id = os.environ['ProofpointClusterID']
 _token = os.environ['ProofpointToken']
 time_delay_minutes = 60
-event_types = ["maillog","message"]
+event_types = ["maillog", "message"]
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
-
-FIELD_SIZE_LIMIT_BYTES = 1000 * 32
-
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-match = re.match(pattern,str(logAnalyticsUri))
-if(not match):
+match = re.match(pattern, str(logAnalyticsUri))
+if not match:
     raise Exception("ProofpointPOD: Invalid Log Analytics Uri.")
-
-def check_size(queue):
-        data_bytes_len = len(json.dumps(queue).encode())
-        return data_bytes_len < FIELD_SIZE_LIMIT_BYTES
-
-
-def split_big_request(queue):
-        if check_size(queue):
-            return [queue]
-        else:
-            middle = int(len(queue) / 2)
-            queues_list = [queue[:middle], queue[middle:]]
-            return split_big_request(queues_list[0]) + split_big_request(queues_list[1])
 
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
@@ -71,6 +55,29 @@ class Proofpoint_api:
         before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes)
         self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
+        
+    def check_and_split_msgParts(self, msg_parts, max_size=32000):
+        # If msg_parts is a list or dictionary, convert it to a string (JSON format)
+        if isinstance(msg_parts, (dict, list)):
+            msg_parts = json.dumps(msg_parts)
+
+        # Calculate the length of the message in bytes
+        msglen = len(msg_parts.encode('utf-8'))
+
+        # If the message size exceeds the max size, split it
+        if msglen > max_size:
+            split_point = len(msg_parts) // 2
+            part1 = msg_parts[:split_point]
+            part2 = msg_parts[split_point:]
+
+            # Recursively split both parts if they are still too large
+            split_parts = []
+            split_parts.extend(self.check_and_split_msgParts(part1, max_size))  # Corrected
+            split_parts.extend(self.check_and_split_msgParts(part2, max_size))  # Corrected
+
+            return split_parts
+        else:
+            return [msg_parts]
 
     def set_websocket_conn(self, event_type):
         max_retries = 3
@@ -107,7 +114,7 @@ class Proofpoint_api:
                 else:
                     return None
 
-    def gen_chunks_to_object(self,data,chunksize=100):
+    def gen_chunks_to_object(self, data, chunksize=100):
         chunk = []
         for index, line in enumerate(data):
             if (index % chunksize == 0 and index > 0):
@@ -116,35 +123,26 @@ class Proofpoint_api:
             chunk.append(line)
         yield chunk
 
-    def gen_chunks(self,data,event_type):
+    def gen_chunks(self, data, event_type):
         for chunk in self.gen_chunks_to_object(data, chunksize=10000):
             print(len(chunk))
             obj_array = []
             for row in chunk:
                 if row != None and row != '':
                     y = json.loads(row)
-                    if ('msgParts' in y) and (len(json.dumps(y['msgParts']).encode()) > FIELD_SIZE_LIMIT_BYTES):
-                        if isinstance(y['msgParts'],list):
-                            queue_list = split_big_request(y['msgParts'])
-                            count = 1
-                            for q in queue_list:
-                                columnname = 'msgParts' + str(count)
-                                y[columnname] = q
-                                count+=1
-                            del y['msgParts']
-                            
-                        elif isinstance(y['msgParts'],dict):
-                            queue_list = list(y['msgParts'].keys())
-                            for count, key in enumerate(queue_list, 1):
-                                if count > 10:
-                                    break
-                                y[f"msgParts{key}"] = y['msgParts'][key]
-
-                            del y['msgParts']
-                        else:
-                            pass
+                    #logging.info(f'json row : {y}')
                     y.update({'event_type': event_type})
+                    if 'msgParts' in y:
+                        msg_parts = y['msgParts']
+                        split_parts = self.check_and_split_msgParts(msg_parts)
+                        if len(split_parts) == 1:  # No splitting required
+                           y["msgParts"] = split_parts[0]
+                        else:  # Splitting required
+                           for i, part in enumerate(split_parts, start=1):
+                               y[f"msgParts{i}"] = part
+                           del y["msgParts"]
                     obj_array.append(y)
+                #logging.info(f'Response Object array : {obj_array}')
 
             sentinel = AzureSentinelConnector(
                 log_analytics_uri=logAnalyticsUri,
@@ -154,6 +152,7 @@ class Proofpoint_api:
                 queue_size=5000
             )
             for event in obj_array:
+                #logging.info(f'Response event : {event}')
                 sentinel.send(event)
             sentinel.flush()
 
@@ -169,7 +168,7 @@ class Proofpoint_api:
                     events.append(data)
                     sent_events += 1
                     if len(events) > 500:
-                        self.gen_chunks(events,event_type)
+                        self.gen_chunks(events, event_type)
                         events = []
                 except websocket._exceptions.WebSocketTimeoutException:
                     break
@@ -183,7 +182,7 @@ class Proofpoint_api:
                 logging.error('Error while closing socket: {}'.format(err))
                 print('Error while closing socket: {}'.format(err))                
             if sent_events > 0:
-                self.gen_chunks(events,event_type)           
+                self.gen_chunks(events, event_type)           
         logging.info('Total events sent: {}. Type: {}. Period(UTC): {} - {}'.format(sent_events, event_type,
                                                                                             self.after_time,
                                                                                             self.before_time))
