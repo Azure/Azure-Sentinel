@@ -359,6 +359,33 @@ To see Log Analytics Custom Logs:
 -   There, select the Log Analytic Workspace in which you have deployed the Solution
 -   There, in the left-side menu click on Logs, and expand second left side menu, and select Custom Logs
 
+<a id="customization"></a>
+## Customization
+Recorded Future Identity Solution is a baseline solution, there are ways to customize it to your preferred workflow.
+
+#### Playbook Alert Onward Actions
+By default the Playbook Alert Update steps have been configured with `added_actions_taken` set to `identity_novel_exposures.placed_in_risky_group`, if the solution is extended with actions such as blocking users or forcing password resets, you can submit this information to Recorded Future, currently the following actions are supported.
+   
+| Action |
+|-|
+identity_novel_exposures.enforced_password_reset
+identity_novel_exposures.placed_in_risky_group
+identity_novel_exposures.reviewed_incident_report
+identity_novel_exposures.account_disabled_or_terminated
+identity_novel_exposures.account_remediated
+identity_novel_exposures.other
+
+To change/add actions, modify the items under `added_actions_taken` parameter in the Playbook Alerts Update step
+
+![alt text](images/added_actions_taken.png)
+
+<a id="known_issues"></a>
+## Known Issues
+
+Microsoft Entra ID Protection is a premium feature. You need an Microsoft Entra ID P1 or P2 license to access the `riskDetection` API (note: P1 licenses receive limited risk information). The `riskyUsers` API is only available to Microsoft Entra ID P2 licenses only. If your organization does not have P1 or P2 license, then the `Get risky user` step will fail, but the run will continue and complete.
+
+![alt text](images/risky_user_fail.png)
+
 
 <a id="useful_documentation"></a>
 ## Useful Azure documentation
