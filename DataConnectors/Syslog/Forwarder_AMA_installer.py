@@ -266,7 +266,7 @@ def set_syslog_ng_configuration():
                     comment_line = False
                 # write line correctly
                 fout.write(line if not comment_line else ("#" + line))
-    command_tokens = ["sudo", "cp", temp_file_path, rsyslog_conf_path]
+    command_tokens = ["sudo", "cp", temp_file_path, syslog_ng_conf_path]
     write_new_content = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     time.sleep(3)
     o, e = write_new_content.communicate()
