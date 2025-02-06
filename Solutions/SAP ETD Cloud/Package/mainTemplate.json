@@ -93,7 +93,7 @@
                   "description": "Synch alerts coming in from SAP® enterprise threat detection into Microsoft Sentinel (one way)",
                   "displayName": "SAP ETD - Synch alerts",
                   "enabled": false,
-                  "query": "let minThreshold= 1;\nlet minScore= 50;\nlet lookBack= 70d;\nETDAlerts_CL\n// | where CreationTimestamp > ago(lookBack)\n| where PatternName <> \"Logon from external with SAP standard users\"\n| summarize arg_max(TimeGenerated, *) by AlertId, Id\n| project-away TenantId, Type, Version, EventSourceId, Technical*\n| where Threshold >= minThreshold and Score >= minScore\n| order by Timestamp\n| extend NewEvent= split(OriginalEvent, \"\\n\")\n| mv-expand NewEvent to typeof(string)\n| parse NewEvent with Key: string \":\" Value: string\n| extend\n    Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value),\n    Key= iff(isempty(Key) and isnotempty(NewEvent), EventLogType, Key)\n| extend KV= bag_pack(Key, Value)\n| summarize\n    KeyValues= make_bag(KV),\n    take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, OriginalEvent)\n    by AlertId, Id\n| extend\n    SystemId= KeyValues.sid,\n    ClienId= KeyValues.client,\n    Host= KeyValues.instance_host,\n    Instance= KeyValues.instance_name,\n    User= KeyValues.user_name,\n    IP= KeyValues.user_ip\n",
+                  "query": "let minThreshold= 1;\nlet minScore= 50;\nlet lookBack= 70d;\nSAPETDAlerts_CL\n// | where CreationTimestamp > ago(lookBack)\n| where PatternName <> \"Logon from external with SAP standard users\"\n| summarize arg_max(TimeGenerated, *) by AlertId, Id\n| project-away TenantId, Type, Version, EventSourceId, Technical*\n| where Threshold >= minThreshold and Score >= minScore\n| order by Timestamp\n| extend NewEvent= split(OriginalEvent, \"\\n\")\n| mv-expand NewEvent to typeof(string)\n| parse NewEvent with Key: string \":\" Value: string\n| extend\n    Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value),\n    Key= iff(isempty(Key) and isnotempty(NewEvent), EventLogType, Key)\n| extend KV= bag_pack(Key, Value)\n| summarize\n    KeyValues= make_bag(KV),\n    take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, OriginalEvent)\n    by AlertId, Id\n| extend\n    SystemId= KeyValues.sid,\n    ClienId= KeyValues.client,\n    Host= KeyValues.instance_host,\n    Instance= KeyValues.instance_name,\n    User= KeyValues.user_name,\n    IP= KeyValues.user_ip\n",
                   "queryFrequency": "PT1H",
                   "queryPeriod": "P2D",
                   "severity": "Medium",
@@ -105,7 +105,7 @@
                   "requiredDataConnectors": [
                     {
                       "dataTypes": [
-                        "ETDAlerts_CL"
+                        "SAPETDAlerts_CL"
                       ],
                       "connectorId": "SAPETDAlerts"
                     }
@@ -170,7 +170,7 @@
                   "description": "Identifies logons from an unexpected network.\r\nSource Action: Logon to the backend system from an IP address which is not assigned to one of the networks.\r\networks can be maintained in the \"SAP - Networks\" watchlist of the Microsoft Sentinel Solution for SAP package.\r\n*Data Sources: SAP Enterprise Thread Detection Solution -  Alerts*",
                   "displayName": "SAP ETD - Login from unexpected network",
                   "enabled": false,
-                  "query": "let regex_ip = @\"user_ip:(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\";\nlet regex_user = @\"user_name:(\\w+)\";\nlet regex_sid = @\"sid:(\\w{3})\";\nlet regex_client = @\"client:(\\d{3})\";\nlet regex_instance_name = @\"instance_name:(\\w+)\";\nlet regex_instance_host = @\"instance_host:([\\w-]+)\";\nlet SAPNetworks = _GetWatchlist('SAP - Networks');\nETDAlerts_CL\n| mv-expand TriggeringEvents\n| extend sapOriginalEvent = tostring(TriggeringEvents.OriginalEvent)\n| extend Id_ = TriggeringEvents.Id\n| extend extracted_user_ip = extract(regex_ip, 1, sapOriginalEvent)\n| extend extracted_sap_user = extract(regex_user, 1, sapOriginalEvent)\n| extend extracted_sid = extract(regex_sid, 1, sapOriginalEvent)\n| extend extracted_client = extract(regex_client, 1, sapOriginalEvent)\n| extend extracted_instance_name = extract(regex_instance_name, 1, sapOriginalEvent)\n| extend extracted_instance_host = extract(regex_instance_host, 1, sapOriginalEvent)\n| evaluate ipv4_lookup(SAPNetworks, extracted_user_ip, Network, return_unmatched = true)\n| where isempty(Network)\n| project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status\n| extend GeoLocation= iff(ipv4_is_private( extracted_user_ip), dynamic({\"IsPrivate\": true}), geo_info_from_ip_address(extracted_user_ip))",
+                  "query": "let regex_ip = @\"user_ip:(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\";\nlet regex_user = @\"user_name:(\\w+)\";\nlet regex_sid = @\"sid:(\\w{3})\";\nlet regex_client = @\"client:(\\d{3})\";\nlet regex_instance_name = @\"instance_name:(\\w+)\";\nlet regex_instance_host = @\"instance_host:([\\w-]+)\";\nlet SAPNetworks = _GetWatchlist('SAP - Networks');\nSAPETDAlerts_CL\n| mv-expand TriggeringEvents\n| extend sapOriginalEvent = tostring(TriggeringEvents.OriginalEvent)\n| extend Id_ = TriggeringEvents.Id\n| extend extracted_user_ip = extract(regex_ip, 1, sapOriginalEvent)\n| extend extracted_sap_user = extract(regex_user, 1, sapOriginalEvent)\n| extend extracted_sid = extract(regex_sid, 1, sapOriginalEvent)\n| extend extracted_client = extract(regex_client, 1, sapOriginalEvent)\n| extend extracted_instance_name = extract(regex_instance_name, 1, sapOriginalEvent)\n| extend extracted_instance_host = extract(regex_instance_host, 1, sapOriginalEvent)\n| evaluate ipv4_lookup(SAPNetworks, extracted_user_ip, Network, return_unmatched = true)\n| where isempty(Network)\n| project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status\n| extend GeoLocation= iff(ipv4_is_private( extracted_user_ip), dynamic({\"IsPrivate\": true}), geo_info_from_ip_address(extracted_user_ip))",
                   "queryFrequency": "PT1H",
                   "queryPeriod": "PT1H",
                   "severity": "Medium",
@@ -182,7 +182,7 @@
                   "requiredDataConnectors": [
                     {
                       "dataTypes": [
-                        "ETDAlerts_CL"
+                        "SAPETDAlerts_CL"
                       ],
                       "connectorId": "SAPETDAlerts"
                     }
@@ -304,7 +304,7 @@
                     "id": "SAPETDAlerts",
                     "publisher": "Microsoft",
                     "descriptionMarkdown": "The SAP ETD data connector enables ingestion of security alerts from ETD into Microsoft Sentinel, supporting cross-correlation, alerting, and threat hunting.",
-                    "graphQueriesTableName": "ETDAlerts_CL",
+                    "graphQueriesTableName": "SAPETDAlerts_CL",
                     "graphQueries": [
                       {
                         "metricName": "Total events received",
@@ -489,7 +489,7 @@
                 "kind": "[variables('blanks')]",
                 "properties": {
                   "streamDeclarations": {
-                    "Custom-ETDAlerts_CL": {
+                    "Custom-SAPETDAlerts_CL": {
                       "columns": [
                         {
                           "name": "Version",
@@ -554,27 +554,27 @@
                   "dataFlows": [
                     {
                       "streams": [
-                        "Custom-ETDAlerts_CL"
+                        "Custom-SAPETDAlerts_CL"
                       ],
                       "destinations": [
                         "clv2ws1"
                       ],
                       "transformKql": "source| extend TimeGenerated = now()",
-                      "outputStream": "Custom-ETDAlerts_CL"
+                      "outputStream": "Custom-SAPETDAlerts_CL"
                     }
                   ],
                   "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]"
                 }
               },
               {
-                "name": "ETDAlerts_CL",
+                "name": "SAPETDAlerts_CL",
                 "apiVersion": "2022-10-01",
                 "type": "Microsoft.OperationalInsights/workspaces/tables",
                 "location": "[parameters('workspace-location')]",
                 "kind": null,
                 "properties": {
                   "schema": {
-                    "name": "ETDAlerts_CL",
+                    "name": "SAPETDAlerts_CL",
                     "columns": [
                       {
                         "name": "TimeGenerated",
@@ -656,7 +656,7 @@
             "id": "SAPETDAlerts",
             "publisher": "Microsoft",
             "descriptionMarkdown": "The SAP ETD data connector enables ingestion of security alerts from ETD into Microsoft Sentinel, supporting cross-correlation, alerting, and threat hunting.",
-            "graphQueriesTableName": "ETDAlerts_CL",
+            "graphQueriesTableName": "SAPETDAlerts_CL",
             "graphQueries": [
               {
                 "metricName": "Total events received",
@@ -930,9 +930,9 @@
                   "dcrConfig": {
                     "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
                     "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
-                    "streamName": "Custom-ETDAlerts_CL"
+                    "streamName": "Custom-SAPETDAlerts_CL"
                   },
-                  "dataType": "ETDAlerts_CL",
+                  "dataType": "SAPETDAlerts_CL",
                   "addOnAttributes": {
                     "SubaccountName": "[[parameters('etdHost')]"
                   },
