@@ -1,2 +1,3 @@
-print("Hello world")
-exit(1)
+import os
+print("HELLO WORLD!")
+exit(0)
