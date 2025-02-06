@@ -19,22 +19,24 @@ query: |
   let minScore= 50;
   let lookBack= 70d;
   SAPETDAlerts_CL
+  | mv-expand TriggeringEvents
+  | extend sapOriginalEvent = tostring(TriggeringEvents.OriginalEvent)
   // | where CreationTimestamp > ago(lookBack)
   | where PatternName <> "Logon from external with SAP standard users"
   | summarize arg_max(TimeGenerated, *) by AlertId
   | project-away TenantId, Type, Version, EventSourceId, Technical*
   | where Threshold >= minThreshold and Score >= minScore
   | order by Timestamp
-  | extend NewEvent= split(OriginalEvent, "\n")
+  | extend NewEvent= split(sapOriginalEvent, "\n")
   | mv-expand NewEvent to typeof(string)
   | parse NewEvent with Key: string ":" Value: string
   | extend
       Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value),
-      Key= iff(isempty(Key) and isnotempty(NewEvent), EventLogType, Key)
+      Key= iff(isempty(Key) and isnotempty(NewEvent), TriggeringEvents.EventLogType, Key)
   | extend KV= bag_pack(Key, Value)
   | summarize
       KeyValues= make_bag(KV),
-      take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, OriginalEvent)
+      take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, TriggeringEvents.EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, TriggeringEvents.OriginalEvent)
       by AlertId
   | extend
       SystemId= KeyValues.sid,
