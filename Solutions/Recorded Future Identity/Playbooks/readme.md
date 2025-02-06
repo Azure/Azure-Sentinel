@@ -247,12 +247,21 @@ After a logic app has been installed, the **RFI-CustomConnector-0-2-0** needs to
 
 <details>
 <summary>Expand to see azuread authorization information</summary>
-The Microsoft Entra ID is a very powerful connector, the default authorization mode is with OAuth, the only authorization type that has been tested by us. For more information on the connector, please advise <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank">this</a> article.
+
+<br>
+
+The Microsoft Entra ID connector needs to be authorized via **OAuth** by a user who has the `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All` permissions. For more information, see <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank">this article</a>.
+
+<br>
+
 </details>
 
 <details>
 <summary>Expand to see azureadip authorization information</summary>
-The Azure AD Identity Protection is a very powerful connector, the default authorization mode is with OAuth, the only authorization type that has been tested by us. Read on how to authorize it <a href="https://learn.microsoft.com/en-us/connectors/aadinvitationmanager/#set-up-an-microsoft-entra-id-application-for-your-custom-connector" target="_blank">here</a> for an alternative(untested by us) method. 
+
+<br>
+
+The Azure AD Identity Protection needs to be authorized via **OAuth**. For more information, see <a href="https://learn.microsoft.com/en-us/connectors/azureadip/" target="_blank">this article</a>. 
 </details>
 <br>
 
