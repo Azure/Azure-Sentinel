@@ -2,7 +2,8 @@ name: Solution Integration Testing
 run-name: Running Solution Integration Testing on ${{ github.ref_name }} 
 
 on: 
-  pull_request:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
     branches:
       - master
     paths:
@@ -42,15 +43,17 @@ jobs:
     - name: Whitelist Runner IP
       run: |
         agentIP=$(curl -s https://api.ipify.org/)
-        az keyvault network-rule add --name e2e-solIntegTesting-KV --ip-address $agentIP
+        az keyvault network-rule add --name e2e-solIntegTesting-KV --ip-address $agentIP --query properties.networkAcls.ipRules
 
-    - name: Get Access Token
+    - name: Delete Scripts from branch
       run: |
-        echo "accessToken=$(az account get-access-token -o tsv --query accessToken)" >> $GITHUB_ENV
+        if [ -f "./evaluateAndExtractTemplate.py" ]; then rm ./evaluateAndExtractTemplate.py; fi
+        if [ -f "./runUITests.py" ]; then rm ./runUITests.py; fi
+        if [ -f "./requirements.txt" ]; then rm ./requirements.txt; fi
 
     - name: Download files from ADO #TODO: update repo link to main
       run: |
-        curl -u :${{ env.accessToken }} \
+        curl -u :$(az account get-access-token -o tsv --query accessToken) \
         -o evaluateAndExtractTemplate.py \
         "https://dev.azure.com/msazure/One/_apis/git/repositories/Sentinel-CATUtilities/items?path=/SolutionIntegrationTesting/.scripts/evaluateAndExtractTemplate.py&versionDescriptor.versionType=Branch&versionDescriptor.version=users/tanishqarora/solutionIntegrationTesting&api-version=6.0" \
         -o runUITests.py \
@@ -68,16 +71,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Get Test Tenant Client ID and Tenant ID
-      run: |
-        echo "AZURE_TEST_CLIENT_ID=$(az keyvault secret show --name ClientId-Test --vault-name e2e-solIntegTesting-KV --query value -o tsv)" >> $GITHUB_ENV
-        echo "AZURE_TEST_TENANT_ID=$(az keyvault secret show --name TenantId-Test --vault-name e2e-solIntegTesting-KV --query value -o tsv)" >> $GITHUB_ENV
-
     - name: Azure Login to Test Tenant Account
       uses: azure/login@v2
       with:
-        client-id: ${{ env.AZURE_TEST_CLIENT_ID }}
-        tenant-id: ${{ env.AZURE_TEST_TENANT_ID }}
+        client-id: $(az keyvault secret show --name ClientId-Test --vault-name e2e-solIntegTesting-KV --query value -o tsv)
+        tenant-id: $(az keyvault secret show --name TenantId-Test --vault-name e2e-solIntegTesting-KV --query value -o tsv)
         allow-no-subscriptions: true
 
     - name: Get Test Tenant Subscription
@@ -112,4 +110,4 @@ jobs:
       if: '!cancelled()'
       run: |
         agentIP=$(curl -s https://api.ipify.org/)
-        az keyvault network-rule remove --name e2e-solIntegTesting-KV --ip-address $agentIP
+        az keyvault network-rule remove --name e2e-solIntegTesting-KV --ip-address $agentIP --query properties.networkAcls.ipRules
