@@ -63,9 +63,10 @@ Recorded Future recommend deploying playbooks in this solution from this README,
 
 ### Prerequisites
 
-- A Microsoft EntraID Tenant and subscription.
-- For the Entra ID connector, the permissions required for the user that authorizes the connector are `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a>
-- Azure subscription Owner or Contributor permissions so you can install the Logic Apps. [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
+- A Microsoft Entra ID Tenant and subscription.
+- A Microsoft Entra ID security group to which you want to assign any users who have leaked credentials.
+- The user who installs the Logic Apps requires the permissions Azure Subscription Owner or Contributor. [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
+- The user who authorizes the Entra ID connector requires the permissions `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a>
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
 
 - For `Recorded Future Identity` Connections you will need `Recorded Future Identity API` token. To obtain one - check out [this section](#how_to_obtain_Recorded_Future_API_token).
@@ -105,7 +106,7 @@ This connector is used by other playbooks in this solution to communicate with R
 | **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Connector-Name**  | Connector name to use for this playbook (ex. "RFI-CustomConnector-0-2-0"). |
+| **Connector-Name**  | Connector name to use for this playbook (ex. `RFI-CustomConnector-0-2-0`). |
 |**Service Endpoint**| API Endpoint, always use the default ```https://api.recordedfuture.com/gw/azure-identity```|
 </details>
 <hr/>
@@ -119,17 +120,21 @@ Search the Recorded Future Identity Intelligence Module for compromised identiti
 <details>
 <summary> Workflow of Alert Playbooks</summary>
 
-| # | Action |
-|-|-|
-| 1 | Pull novel identity exposures from Recorded Future Identity API based on previously done Playbook Alert setup |
-| 2 | For each user, check if they exist within the domain, if so, place them in a specified security group, if they are placed within in "Risky users" list, confirm them as risky.|
-| 3 | (Optional) Save all information related to the Playbook Alert in Log Analytics Workspace|
-| 3 | (Optional) Create a Microsoft Sentinel incident with information pertaining the identity exposure|
-| 4 | Report back actions taken for each specific Playbook Alert, for viewing in Recorded Future Portal|
+| # | Action                                                                                                                                                                                       |
+|-|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | Pull novel identity exposure Playbook Alerts from Recorded Future based on previously done Playbook Alert setup.                                                                             |
+| 2 | For each user, check if they exist within the domain, if so, place them in a specified security group. If the user is already flagged as a "Risky user" by Microsoft, confirm them as risky. |
+| 3 | (Optional) Save all information related to the Playbook Alert in a Log Analytics Workspace.                                                                                                  |
+| 3 | (Optional) Create a Microsoft Sentinel incident with information pertaining the identity exposure.                                                                                           |
+| 4 | Report back actions taken for each specific Playbook Alert to Recorded Future, for viewing in Recorded Future Portal.                                                                        |
 
 </details>
 
-Depending on use case, choose the playbook that fits. The `RFI-playbook-alert-importer` playbook contains the base use case, ingesting novel identity exposures and remediation of those exposures trough Entra ID. `RFI-playbook-alert-importer-law` extends previous functionality by saving detailed information to a Log Analytics Workspace (LAW). Lastly, `RFI-playbook-alert-importer-law-sentinel` does all of the above and creates a **Microsoft Sentinel** incident, for easier investigation and follow up.
+Depending on your use case, deploy **one** of the following playbooks:
+
+- `RFI-playbook-alert-importer` contains the base use case, ingesting novel identity exposures and remediation of those exposures trough Entra ID.
+- `RFI-playbook-alert-importer-law` does all of the above and saves detailed information to a Log Analytics Workspace (LAW).
+- `RFI-playbook-alert-importer-law-sentinel` does all of the above and creates a **Microsoft Sentinel** incident, for easier investigation and follow up.
 
 <a id="RFI-playbook-alert-importer"></a>
 ### Deployment RFI-playbook-alert-importer
@@ -140,15 +145,15 @@ Depending on use case, choose the playbook that fits. The `RFI-playbook-alert-im
 <details>
 <summary>Expand deployment parameters:</summary>
 
-| Parameter | Description |
-|-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook Name** | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer"). |
-|**Active_directory_security_group_id**| ID of the the group in which to place risky users|
-|**Active_directory_domain**| (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
-|**RFI Custom Connector**| Name of the custom connector which to connect to Recorded Future with, should not deviate from "RFI-CustomConnector-0-2-0"|
+| Parameter                      | Description                                                                                                                                                            |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Subscription**               | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
+| **Resource group**             | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
+| **Region**                     | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
+| **Playbook Name**              | Playbook name to use for this playbook (ex. `RFI-Playbook-Alert-Importer`).                                                                                            |
+| **Entra_id_security_group_id** | ID of the the group in which to place risky users.                                                                                                                     |
+| **Entra_id_domain**            | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
+| **RFI Custom Connector**       | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`                                   |
 </details>
 <hr/>
 
@@ -161,17 +166,17 @@ Depending on use case, choose the playbook that fits. The `RFI-playbook-alert-im
 <details>
 <summary>Expand deployment parameters:</summary>
 
-| Parameter | Description |
-|-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook Name** | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW"). |
-|**Save_to_log_analytics_workspace**|Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
-|**Active_directory_security_group_id**| ID of the the group in which to place risky users|
-|**Active_directory_domain**| (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
-|**Playbook_alert_log_analytics_custom_log_name**|Name of the custom log in Log Analytics Workspace, defaults to "RecordedFutureIdentity_PlaybookAlertResults_CL"|
-|**RFI Custom Connector**| Name of the custom connector which to connect to Recorded Future with, should not deviate from "RFI-CustomConnector-0-2-0"|
+| Parameter                                        | Description                                                                                                                                                            |
+|--------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Subscription**                                 | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
+| **Resource group**                               | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
+| **Region**                                       | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
+| **Playbook Name**                                | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW").                                                                                        |
+| **Save_to_log_analytics_workspace**              | Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW).                                   |
+| **Entra_id_security_group_id**                   | ID of the the group in which to place risky users                                                                                                                      |
+| **Entra_id_domain**                              | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
+| **Playbook_alert_log_analytics_custom_log_name** | Name of the custom log in Log Analytics Workspace, defaults to "RecordedFutureIdentity_PlaybookAlertResults_CL"                                                        |
+| **RFI Custom Connector**                         | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`                                   |
 </details>
 <hr/>
 
@@ -184,18 +189,18 @@ Depending on use case, choose the playbook that fits. The `RFI-playbook-alert-im
 <details>
 <summary>Expand deployment parameters:</summary>
 
-| Parameter | Description |
-|-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook Name** | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW-Sentinel"). |
-|**Save_to_log_analytics_workspace**|Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
-|**Active_directory_security_group_id**| ID of the the group in which to place risky users|
-|**Create_incident**|Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
-|**Active_directory_domain**| (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
-|**Playbook_alert_log_analytics_custom_log_name**|Name of the custom log in Log Analytics Workspace, defaults to "RecordedFutureIdentity_PlaybookAlertResults_CL"|
-|**RFI Custom Connector**| Name of the custom connector which to connect to Recorded Future with, should not deviate from "RFI-CustomConnector-0-2-0"|
+| Parameter                                        | Description |
+|--------------------------------------------------|-|
+| **Subscription**                                 | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
+| **Resource group**                               | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
+| **Region**                                       | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
+| **Playbook Name**                                | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW-Sentinel"). |
+| **Save_to_log_analytics_workspace**              |Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
+| **Entra_id_security_group_id**                   | ID of the the group in which to place risky users|
+| **Create_incident**                              |Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
+| **Entra_id_domain**                              | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
+| **Playbook_alert_log_analytics_custom_log_name** |Name of the custom log in Log Analytics Workspace, defaults to "RecordedFutureIdentity_PlaybookAlertResults_CL"|
+| **RFI Custom Connector**                         | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`|
 </details>
 <hr/>
 
@@ -275,7 +280,7 @@ The Azure AD Identity Protection needs to be authorized via **OAuth**. For more 
 
 The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner (with highest permissions)** or **Role Based Access Control Administrator** on resource group level.
 
-For more detailed information check out this Micrsoft <a href="https://learn.microsoft.com/en-us/azure/logic-apps/authenticate-with-managed-identity?tabs=consumption" target="_blank">guide</a>
+For more detailed information check out this Microsoft <a href="https://learn.microsoft.com/en-us/azure/logic-apps/authenticate-with-managed-identity?tabs=consumption" target="_blank">guide</a>
 
 These steps will be needed for each logic app that uses the **azuresentinel** / **RecordedFuture-MicrosoftSentinelConnection**
 1. Go to the specific logic app,  in the left menu click on the section _**Settings**_
@@ -370,12 +375,12 @@ By default the Playbook Alert Update steps have been configured with `added_acti
 
 | Action |
 |-|
-identity_novel_exposures.enforced_password_reset
-identity_novel_exposures.placed_in_risky_group
-identity_novel_exposures.reviewed_incident_report
-identity_novel_exposures.account_disabled_or_terminated
-identity_novel_exposures.account_remediated
-identity_novel_exposures.other
+|identity_novel_exposures.enforced_password_reset|
+|identity_novel_exposures.placed_in_risky_group|
+|identity_novel_exposures.reviewed_incident_report|
+|identity_novel_exposures.account_disabled_or_terminated|
+|identity_novel_exposures.account_remediated|
+|identity_novel_exposures.other|
 
 To change/add actions, modify the items under `added_actions_taken` parameter in the Playbook Alerts Update step
 
