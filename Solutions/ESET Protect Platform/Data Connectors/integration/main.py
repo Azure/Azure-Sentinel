@@ -7,12 +7,7 @@ from datetime import datetime, timezone
 from aiohttp import ClientSession
 
 from integration.models import Config, EnvVariables, TokenStorage
-from integration.utils import (
-    LastDetectionTimeHandler,
-    RequestSender,
-    TokenProvider,
-    TransformerDetections,
-)
+from integration.utils import LastDetectionTimeHandler, RequestSender, TokenProvider, TransformerDetections
 
 
 class ServiceClient:
@@ -34,7 +29,9 @@ class ServiceClient:
         start_time = time.time()
         try:
             await asyncio.gather(
-                self._process_integration("EI", start_time), self._process_integration("ECOS", start_time)
+                self._process_integration("EP", start_time),
+                self._process_integration("EI", start_time),
+                self._process_integration("ECOS", start_time),
             )
         except Exception as e:
             logging.error("Unexpected error happened", exc_info=e)
@@ -42,15 +39,36 @@ class ServiceClient:
         finally:
             await self.close()
 
+    def _validate_if_run_instance(self, data_source: str) -> bool:
+        if data_source == "EP" and self.env_vars.ep_instance == "yes" and self.env_vars.ei_instance == "no":
+            return True
+        if data_source == "EI" and self.env_vars.ei_instance == "yes":
+            return True
+        if data_source == "ECOS" and self.env_vars.ecos_instance == "yes":
+            return True
+        if data_source != "EP" and all(
+            v == "" for v in [self.env_vars.ep_instance, self.env_vars.ei_instance, self.env_vars.ecos_instance]
+        ):
+            self.config.version = "3.0.0"
+            return True
+        return False
+
     async def _process_integration(self, data_source: str, start_time: float) -> None:
+        if not self._validate_if_run_instance(data_source):
+            return
+
         last_detection_time_handler = LastDetectionTimeHandler(
             self.env_vars.conn_str, self.env_vars.last_detection_time, data_source=data_source
         )
         next_page_token: str | None = None
         cur_ld_time: str | None = None
-        max_duration = self.env_vars.interval * 60
+        max_duration: int = self.env_vars.interval * 60
 
-        if data_source == "EI" and not last_detection_time_handler.storage_table_handler.entities:
+        if (
+            self.config.version == "3.0.0"
+            and data_source == "EI"
+            and not last_detection_time_handler.storage_table_handler.entities
+        ):
             data_source, last_detection_time_handler = await self._check_if_ei_is_right_data_source(
                 last_detection_time_handler, next_page_token
             )
@@ -123,6 +141,7 @@ class ServiceClient:
                         "Authorization": f"Bearer {self.token_provider.token.access_token}",
                         "Content-Type": "application/json",
                         "3rd-integration": "MS-Sentinel",
+                        "Version": self.config.version,
                     },
                     last_detection_time_handler.last_detection_time,
                     next_page_token,
