@@ -2195,7 +2195,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
                         $connectDataSourcesLink = [PSCustomObject] @{
-                            name    = "dataconnectors-link2";
+                            name    = "dataconnectors-link$($global:connectorCounter)";
                             type    = "Microsoft.Common.TextBlock";
                             options = [PSCustomObject] @{
                                 link = [PSCustomObject] @{
