@@ -2718,6 +2718,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 {
                                     $alertRule.entityMappings = @($alertRule.entityMappings);
                                 }
+                                elseif($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2)
+                                {
+                                    $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
+                                }
                             }
                         }
                         # Create Alert Rule Resource Object
