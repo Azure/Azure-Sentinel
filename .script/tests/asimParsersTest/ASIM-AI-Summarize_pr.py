@@ -31,7 +31,7 @@ def get_git_diff():
     git_fetch_upstream_command = "git fetch upstream"
     subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
 
-    GetModifiedFiles = f"git diff upstream/master {current_directory}/../../../Parsers/"
+    GetModifiedFiles = f"git diff upstream/master {current_directory}/../../../Parsers/'*.yaml'"
     try:
         Changes = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
         return Changes.stdout
