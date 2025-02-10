@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.14       |  30-01-2025                    | Fix the name of `IntelligenceCloud` parameter in `RecordedFuture-CustomConnector` + other minor renames	|
+| 3.2.13       |  08-01-2025                    | Removed Custom Entity mappings from **Analytic rules**	|
 | 3.2.12       |  28-11-2024                    | Fix API connection bug in RecordedFuture-AlertImporter |
 | 3.2.11       |  31-10-2024                    | Fix API connection bug in RecordedFuture-ThreatMap-Importer, documentation improvements |
 | 3.2.10       |  01-10-2024                    | Updated install README for multiple playbooks, added protocol check for URL enrichments in RecordedFuture-IOC_Enrichment **Playbook**, moved parameters from important to advanced and internal in RecordedFuture-CustomConnector|
