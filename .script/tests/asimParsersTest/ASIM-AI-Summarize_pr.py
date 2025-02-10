@@ -82,7 +82,7 @@ try:
             },
             {
                 "role": "user",
-                "content": "Please perform a preliminary code review before the human review, flagging potential issues like syntax errors, inefficient code, or deviations from Sentinel/ASIM best practices."
+                "content": "Please perform a preliminary code review before the human review, flagging potential issues like syntax errors, inefficient code, or deviations from Sentinel/ASIM best practices and suggest improvements."
             }
     ],
         max_tokens=4096,
