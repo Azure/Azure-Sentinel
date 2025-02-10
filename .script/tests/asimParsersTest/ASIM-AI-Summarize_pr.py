@@ -5,6 +5,7 @@ import logging
 import sys
 import subprocess
 import json
+import requests
 
 # Get the Github token from the environment variables
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -67,43 +68,33 @@ client = AzureOpenAI(
     api_version="2024-05-01-preview",
 )
 
-completion = client.chat.completions.create(
-    model="ASIM-gpt-4o",
-    messages= [
-    {
-        "role": "system",
-        "content": "You are an AI assistant that helps people by writing and reviewing Microsoft Sentinel ASIM parsers. You can answer queries related to ASIM normalization."
-    },
+try:
+    completion = client.chat.completions.create(
+        model="ASIM-gpt-4o",
+        messages= [
         {
-            "role": "user",
-            "content": f"Summarize the following Microsoft ASIM github PR changes: {git_diff}"
+            "role": "system",
+            "content": "You are an AI assistant that helps people by writing and reviewing Microsoft Sentinel ASIM parsers. You can answer queries related to ASIM normalization."
         },
-        {
-            "role": "user",
-            "content": "Please perform a preliminary code review before the human review, flagging potential issues like syntax errors, inefficient code, or deviations from Sentinel/ASIM best practices."
-        }
-],
-    max_tokens=4096,
-    temperature=0,
-    top_p=1,
-    frequency_penalty=0,
-    presence_penalty=0,
-    stop=None
-    # extra_body={
-    #     "data_sources": [
-    #         {
-    #             "type": "azure_search",
-    #             "parameters": {
-    #                 "endpoint": os.environ["AZURE_AI_SEARCH_ENDPOINT"],
-    #                 "index_name": os.environ["AZURE_AI_SEARCH_INDEX"],
-    #                 "authentication": {
-    #                     "type": "azure_ad"
-    #                 }
-    #             }
-    #         }
-    #     ]
-    # }
-)
+            {
+                "role": "user",
+                "content": f"Summarize the following Microsoft ASIM github PR changes: {git_diff}"
+            },
+            {
+                "role": "user",
+                "content": "Please perform a preliminary code review before the human review, flagging potential issues like syntax errors, inefficient code, or deviations from Sentinel/ASIM best practices."
+            }
+    ],
+        max_tokens=4096,
+        temperature=0,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0,
+        stop=None
+    )
+except Exception as e:
+    logging.error('Failed to get completion from OpenAI: ', exc_info=True)
+    sys.exit(1)
 
 # Assuming completion.model_dump_json() returns the response as a string, parse it
 response = json.loads(completion.model_dump_json())
@@ -120,9 +111,11 @@ github_api_url = f"https://api.github.com/repos/Azure/Azure-Sentinel/issues/{GIT
 headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
 data = {"body": f"### AI-Generated PR Summary\n\n{content.strip()}"}
 
-response = requests.post(github_api_url, headers=headers, json=data)
-
-if response.status_code == 201:
-    print("Successfully posted PR summary comment.")
-else:
-    print(f"Failed to post comment: {response.status_code}, {response.text}")
+try:
+    response = requests.post(github_api_url, headers=headers, json=data)
+    if response.status_code == 201:
+        print("Successfully posted PR summary comment.")
+    else:
+        logging.error(f"Failed to post comment: {response.status_code}, {response.text}")
+except Exception as e:
+    logging.error('Failed to post comment to GitHub: ', exc_info=True)
