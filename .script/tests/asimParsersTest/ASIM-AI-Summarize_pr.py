@@ -6,6 +6,12 @@ import sys
 import subprocess
 import json
 
+# Get the Github token from the environment variables
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+# Get the PR number from the environment variables
+GITHUB_PR_NUMBER = os.getenv("GITHUB_PR_NUMBER")
+
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 
@@ -105,7 +111,18 @@ response = json.loads(completion.model_dump_json())
 # Extract the actual content from the response
 content = response['choices'][0]['message']['content']
 
-# Print the extracted content in a clean format
-print("\n---- Formatted Summary ----\n")
-print(f"Summary:\n{content.strip()}")
+# # Print the extracted content in a clean format
+# print("\n---- Formatted Summary ----\n")
+# print(f"Summary:\n{content.strip()}")
 
+# Post the summary as a comment on the PR
+github_api_url = f"https://api.github.com/repos/Azure/Azure-Sentinel/issues/{GITHUB_PR_NUMBER}/comments"
+headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+data = {"body": f"### AI-Generated PR Summary\n\n{content.strip()}"}
+
+response = requests.post(github_api_url, headers=headers, json=data)
+
+if response.status_code == 201:
+    print("Successfully posted PR summary comment.")
+else:
+    print(f"Failed to post comment: {response.status_code}, {response.text}")
