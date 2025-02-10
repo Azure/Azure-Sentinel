@@ -1,0 +1,197 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Google Threat Intelligence - FileHash Enrichment",
+        "description": "This playbook will enrich FileHash entities.",
+        "prerequisites": [
+            "You will need to register to Google Threat Intelligence for an API key"
+        ],
+        "postDeployment": [
+            "You can trigger manually in entities"
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2024-11-15T00:00:00Z",
+        "entities": [
+            "filehash"
+        ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Google"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "FileHash Enrichment - Google Threat Intelligence report",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GoogleThreatIntelligence-IOCEnrichmentFileHash",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "GoogleThreatIntelligenceConnectionName": "GoogleThreatIntelligence-Connector",
+        "AzureSentinelConnectionName": "GoogleThreatIntelligence-MicrosoftSentinelConnection"
+    },
+    "functions": [],
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateVersion": "2.8"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('GoogleThreatIntelligenceConnectionName'))]"
+            ],
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "triggers": {
+                        "Microsoft_Sentinel_entity": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/entity/@{encodeURIComponent('FileHash')}"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_File_Report": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['googlethreatintelligence']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/files/@{encodeURIComponent(triggerBody()?['Entity']?['properties']?['Value'])}"
+                            },
+                            "runAfter": {}
+                        },
+                        "Condition": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['IncidentArmID']",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "<h1 class=\"editor-heading-h1\"><u><b><strong style=\"font-size: 18px;\" class=\"editor-text-bold editor-text-underline\">GTI File Report</strong></b></u></h1><p class=\"editor-paragraph\">Hash: @{body('Get_File_Report')?['data']?['id']}</p><p class=\"editor-paragraph\">Reputation is: @{body('Get_File_Report')?['data']?['attributes']?['reputation']}</p><p class=\"editor-paragraph\">Harmless: @{body('Get_File_Report')?['data']?['attributes']?['last_analysis_stats']?['harmless']}</p><p class=\"editor-paragraph\">Malicious: @{body('Get_File_Report')?['data']?['attributes']?['last_analysis_stats']?['malicious']}</p><p class=\"editor-paragraph\">Suspicious: @{body('Get_File_Report')?['data']?['attributes']?['last_analysis_stats']?['suspicious']}</p><p class=\"editor-paragraph\">Timeout: @{body('Get_File_Report')?['data']?['attributes']?['last_analysis_stats']?['timeout']}</p><p class=\"editor-paragraph\">Undetected: @{body('Get_File_Report')?['data']?['attributes']?['last_analysis_stats']?['undetected']}</p><p class=\"editor-paragraph\">Total votes harmless: @{body('Get_File_Report')?['data']?['attributes']?['total_votes']?['harmless']} </p><p class=\"editor-paragraph\">Total votes malicious: @{body('Get_File_Report')?['data']?['attributes']?['total_votes']?['malicious']}</p><h2 class=\"editor-heading-h2\"><u><span style=\"font-size: 15px;\" class=\"editor-text-underline\">GTI Assessment</span></u></h2><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">-Score</strong></b>: @{body('Get_File_Report')?['data']?['attributes']?['gti_assessment']?['threat_score']?['value']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">-Verdict</strong></b>: @{body('Get_File_Report')?['data']?['attributes']?['gti_assessment']?['verdict']?['value']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">-Severity</strong></b>: @{body('Get_File_Report')?['data']?['attributes']?['gti_assessment']?['severity']?['value']}</p><br>"
+                                        },
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "Get_File_Report": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object",
+                            "defaultValue": {}
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "googlethreatintelligence": {
+                                "id": "[concat(resourceGroup().id,'/providers/Microsoft.Web/customApis/GoogleThreatIntelligence-CustomConnector')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('GoogleThreatIntelligenceConnectionName'))]",
+                                "connectionName": "[variables('GoogleThreatIntelligenceConnectionName')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('GoogleThreatIntelligenceConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(resourceGroup().id,'/providers/Microsoft.Web/customApis/GoogleThreatIntelligence-CustomConnector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

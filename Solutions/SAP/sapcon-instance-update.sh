@@ -208,7 +208,7 @@ while IFS= read -r contname; do
 			# Image is on preview, and no newer version is available
 			log "Current agent is in preview branch, and release branch has an older build (current release id is $containerreleaseid, latest is $imagereleaseid). Not updating this agent"
 		else
-			log_update "Agent image for agent $contname is newer than the one in the container registry. Agent release id $containerreleaseid, release id of image available in container registry: $imagereleaseid. Not updating this agent"
+			log "Agent image for agent $contname is newer than the one in the container registry. Agent release id $containerreleaseid, release id of image available in container registry: $imagereleaseid. Not updating this agent"
 		fi
 		continue
 	elif [ "$imagereleaseid" -gt "$containerreleaseid" ] || [ "$FORCE" == 1 ]; then	

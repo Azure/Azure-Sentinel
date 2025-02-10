@@ -1,5 +1,5 @@
-id: bff093b2-500e-4ae5-bb49-a5b1423cbd5b
-name: External User Added and Removed in Short Timeframe
+id: 1a8f1297-23a4-4f09-a20b-90af8fc3641a
+name: GSA Enriched Office 365 - External User Added and Removed in Short Timeframe
 description: |
   This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.
 severity: Low
@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -17,27 +20,47 @@ tactics:
 relevantTechniques:
   - T1136
 query: |
-    let TeamsAddDel = (Op:string){
+  let TeamsAddDelOffice = (Op:string){
+    OfficeActivity
+    | where OfficeWorkload =~ "MicrosoftTeams"
+    | where Operation == Op
+    | where Members has ("#EXT#")
+    | mv-expand Members
+    | extend UPN = tostring(Members.UPN)
+    | where UPN has ("#EXT#")
+    | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIP
+  };
+  let TeamsAddDelEnriched = (Op:string){
     EnrichedMicrosoft365AuditLogs
-      | where Workload =~ "MicrosoftTeams"
-      | where Operation == Op
-      | where tostring(AdditionalProperties.Members) has ("#EXT#")
-      | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))
-      | extend UPN = tostring(Members.UPN)
-      | where UPN has ("#EXT#")
-      | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(AdditionalProperties.TeamName), ClientIP = SourceIp
-    };
-    let TeamsAdd = TeamsAddDel("MemberAdded")
+    | where Workload =~ "MicrosoftTeams"
+    | where Operation == Op
+    | where tostring(AdditionalProperties.Members) has ("#EXT#")
+    | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))
+    | extend UPN = tostring(Members.UPN)
+    | where UPN has ("#EXT#")
+    | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), ClientIP = SourceIp
+  };
+  let TeamsAddOffice = TeamsAddDelOffice("MemberAdded")
     | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;
-    let TeamsDel = TeamsAddDel("MemberRemoved")
+  let TeamsDelOffice = TeamsAddDelOffice("MemberRemoved")
     | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;
-    TeamsAdd
-    | join kind = inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved
-    | where TimeDeleted > TimeAdded
-    | project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName
-    | extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, "@")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded_Removed, "@")[1])
-    | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, "@")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, "@")[1])
-    | extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, "@")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, "@")[1])
+  let TeamsAddEnriched = TeamsAddDelEnriched("MemberAdded")
+    | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;
+  let TeamsDelEnriched = TeamsAddDelEnriched("MemberRemoved")
+    | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;
+  let TeamsAdd = TeamsAddOffice
+    | union TeamsAddEnriched
+    | project TimeAdded, Operation, MemberAdded, UserWhoAdded, TeamName, ClientIP;
+  let TeamsDel = TeamsDelOffice
+    | union TeamsDelEnriched
+    | project TimeDeleted, Operation, MemberRemoved, UserWhoDeleted, TeamName, ClientIP;
+  TeamsAdd
+  | join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved
+  | where TimeDeleted > TimeAdded
+  | project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, ClientIP
+  | extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, "@")[0]), MemberAdded_RemovedAccountUPNSuffix = tostring(split(MemberAdded_Removed, "@")[1])
+  | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, "@")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, "@")[1])
+  | extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, "@")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -46,7 +69,7 @@ entityMappings:
       - identifier: Name
         columnName: MemberAdded_RemovedAccountName
       - identifier: UPNSuffix
-        columnName: MemberAddedAccountUPNSuffix
+        columnName: MemberAdded_RemovedAccountUPNSuffix
   - entityType: Account
     fieldMappings:
       - identifier: FullName
@@ -66,6 +89,6 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ClientIp
-version: 2.1.2
+        columnName: ClientIP
+version: 2.1.4
 kind: Scheduled

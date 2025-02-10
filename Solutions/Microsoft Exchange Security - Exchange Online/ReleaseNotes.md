@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.6       | 30-08-2024                     | Correct bug on LasdtReceivedData of DataConnector. and change parser     |
 | 3.1.5       | 15-05-2024                     | Enhancement in existing **Parser**       |
 | 3.1.4       | 30-04-2024                     | Repackaged for parser issue       |
 | 3.1.3       | 25-04-2024                     | Repackaged for parser issue with old names       |

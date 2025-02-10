@@ -1,5 +1,5 @@
-id: fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
-name: Office Policy Tampering
+id: 0f1f2b17-f9d6-4d2a-a0fb-a7ae1659e3eb
+name: GSA Enriched Office 365 - Office Policy Tampering
 description: |
   Identifies if any tampering is done to either audit log, ATP Safelink, SafeAttachment, AntiPhish, or Dlp policy. 
   An adversary may use this technique to evade detection or avoid other policy-based defenses.
@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Exchange)
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -21,27 +24,69 @@ relevantTechniques:
   - T1098
   - T1562
 query: |
-  let opList = EnrichedMicrosoft365AuditLogs 
-    | summarize by Operation
-    | where Operation has_any ("Remove", "Disable")
-    | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
-    | summarize make_set(Operation, 500);
-  EnrichedMicrosoft365AuditLogs
-    | where RecordType == "ExchangeAdmin"
-    | where UserType in~ ("Admin", "DcAdmin")
-    | where Operation in~ (opList)
-    | extend ClientIPOnly = case( 
-        ClientIp has ".", tostring(split(ClientIp, ":")[0]), 
-        ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))),
-        ClientIp
-      )  
-    | extend Port = case(
-        ClientIp has ".", tostring(split(ClientIp, ":")[1]),
-        ClientIp has "[", tostring(split(ClientIp, "]:")[1]),
-        ""
-      )
-    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters)
-    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  // Query for EnrichedMicrosoft365AuditLogs
+  let enrichedOpList = EnrichedMicrosoft365AuditLogs 
+      | summarize by Operation
+      | where Operation has_any ("Remove", "Disable")
+      | where Operation contains "AntiPhish" 
+          or Operation contains "SafeAttachment" 
+          or Operation contains "SafeLinks" 
+          or Operation contains "Dlp" 
+          or Operation contains "Audit"
+      | summarize make_set(Operation, 500);
+  
+  let enrichedLogs = EnrichedMicrosoft365AuditLogs
+      | where RecordType == "ExchangeAdmin"
+      | where UserType in~ ("Admin", "DcAdmin")
+      | where Operation in~ (enrichedOpList)
+      | extend ClientIPOnly = case( 
+          ClientIp has ".", tostring(split(ClientIp, ":")[0]), 
+          ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))),
+          ClientIp
+        )  
+      | extend Port = case(
+          ClientIp has ".", tostring(split(ClientIp, ":")[1]),
+          ClientIp has "[", tostring(split(ClientIp, "]:")[1]),
+          ""
+        )
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() 
+          by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters)
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  
+  // Query for OfficeActivity
+  let officeOpList = OfficeActivity 
+      | summarize by Operation
+      | where Operation has_any ("Remove", "Disable")
+      | where Operation contains "AntiPhish" 
+          or Operation contains "SafeAttachment" 
+          or Operation contains "SafeLinks" 
+          or Operation contains "Dlp" 
+          or Operation contains "Audit"
+      | summarize make_set(Operation, 500);
+  
+  let officeLogs = OfficeActivity
+      | where RecordType =~ "ExchangeAdmin"
+      | where UserType in~ ("Admin","DcAdmin")
+      | where Operation in~ (officeOpList)
+      | extend ClientIPOnly = case( 
+          ClientIP has ".", tostring(split(ClientIP,":")[0]), 
+          ClientIP has "[", tostring(trim_start(@'[[]', tostring(split(ClientIP,"]")[0]))),
+          ClientIP
+        )  
+      | extend Port = case(
+          ClientIP has ".", tostring(split(ClientIP,":")[1]),
+          ClientIP has "[", tostring(split(ClientIP, "]:")[1]),
+          ""
+        )
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() 
+          by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  
+  // Combine Enriched Logs and Office Activity Logs
+  union isfuzzy=true enrichedLogs, officeLogs
+  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), TotalOperationCount = sum(OperationCount) 
+      by Operation, UserType, UserId, ClientIP, Port, ResultStatus, Parameters, AccountName, AccountUPNSuffix
+  | order by StartTimeUtc desc;
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -55,5 +100,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: ClientIP
-version: 2.0.3
+version: 2.0.6
 kind: Scheduled

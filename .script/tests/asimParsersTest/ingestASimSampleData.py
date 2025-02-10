@@ -1,7 +1,16 @@
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 import requests
 import yaml
 import re
-import os
 import subprocess
 import csv
 import json
@@ -9,7 +18,6 @@ from azure.monitor.ingestion import LogsIngestionClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import HttpResponseError
 import time
-import sys
 
 def get_modified_files(current_directory):
     # Add upstream remote if not already present
@@ -68,19 +76,36 @@ def convert_schema_csv_to_json(csv_file):
     return data
 
 def convert_data_csv_to_json(csv_file):
+    def convert_value(value):
+        # Try to convert the value to an integer, then to a float, and keep it as a string if those fail
+        try:
+            # Try integer conversion
+            return int(value)
+        except ValueError:
+            try:
+                # Try float conversion
+                return float(value)
+            except ValueError:
+                # Return the value as-is (string) if it's not numeric
+                return value
+
     data = []
-    with open(csv_file, 'r',encoding='utf-8-sig') as file:
+    with open(csv_file, 'r', encoding='utf-8-sig') as file:
         reader = csv.DictReader(file)
         for row in reader:
-            table_name=row['Type']
-            data.append(row)
+            table_name = row['Type']
+            # Convert each value in the row to its appropriate type
+            processed_row = {key: convert_value(value) for key, value in row.items()}
+            data.append(processed_row)
+        
         for item in data:
             for key in list(item.keys()):
-                # If the key matches 'TimeGenerated [UTC]', rename it
-                if key.endswith('[UTC]'):
-                    substring = key.split(" [")[0] 
-                    item[substring] = item.pop(key)                               
-    return data , table_name
+                # If the key matches '[UTC]' or '[Local Time]', rename it
+                if key.endswith(('[UTC]', '[Local Time]')):
+                    substring = key.split(" [")[0]
+                    item[substring] = item.pop(key)
+
+    return data, table_name
 
 def check_for_custom_table(table_name):
     if table_name in lia_supported_builtin_table:
@@ -142,6 +167,8 @@ def get_schema_for_builtin(query_table):
     schema=[]
     for each in json.loads(query_response.text).get('tables')[0].get('rows'):
         if each[0] in reserved_columns:
+            continue
+        elif each[0] in guid_columns:
             continue
         elif each[3] == "bool":
             schema.append({        
@@ -239,16 +266,44 @@ def extract_event_vendor_product(parser_query,parser_file):
 
     match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_vendor = match.group(1).replace(" ", "")
+        event_vendor = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventVendor' as 'Microsoft'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_vendor = 'Microsoft'
     else:
         print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
 
     match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_product = match.group(1).replace(" ", "")
+        event_product = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventProduct' as SchemaName + 'NativeTable'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_product = 'NativeTable'
     else:
         print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
     return event_vendor, event_product ,schema_name   
+
+def convert_data_type(schema_result, data_result):
+    for data in data_result:
+        for schema in schema_result:
+            field_name = schema["name"]
+            field_type = schema["type"]
+            
+            if field_name in data:
+                value = data[field_name]
+                
+                # Handle conversion based on schema type
+                
+                if field_type == "string":
+                    # Convert to string
+                    data[field_name] = str(value)
+                elif field_type == "boolean":
+                    # Convert to boolean
+                    if isinstance(value, str) and value.lower() in ["true", "false"]:
+                        data[field_name] = value.lower() == "true"
+
+    return data_result
+
 
 #main starting point of script
 
@@ -275,15 +330,29 @@ commit_number = get_current_commit_number()
 prnumber = sys.argv[1]
 
 for file in parser_yaml_files:
+    SchemaNameMatch = re.search(r'ASim(\w+)/', file)
+    if SchemaNameMatch:
+        SchemaName = SchemaNameMatch.group(1)
+    else:
+        SchemaName = None
+    # Check if changed file is a union or empty parser. If Yes, skip the file
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
+        print(f"Ignoring this {file} because it is a union or empty parser file")
+        continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
+    print(f"Reading Asim Parser file from : {asim_parser_url}")
     asim_parser = read_github_yaml(asim_parser_url)
     parser_query = asim_parser.get('ParserQuery', '')
+    normalization = asim_parser.get('Normalization', {})
+    schema = normalization.get('Schema')
+    equivalent_built_in_parser = asim_parser.get('EquivalentBuiltInParser')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
-    SampleDataFile = f'{event_vendor}_{event_product}_{schema_name}_IngestedLogs.csv'
+    SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
     SampleDataUrl = sample_data_url+SampleDataFile
+    print(f"Sample data log file reading from url: {SampleDataUrl}")
     response = requests.get(SampleDataUrl)
     if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
@@ -306,7 +375,11 @@ for file in parser_yaml_files:
         else:
             print(f"::error::An error occurred while trying to get content of Schema file located at {schemaUrl}: {response.text}")
             continue        
-        schema_result = convert_schema_csv_to_json('tempfile.csv') 
+        schema_result = convert_schema_csv_to_json('tempfile.csv')
+        data_result = convert_data_type(schema_result, data_result)
+        # conversion of datatype is needed for boolean and string values because during testing it has been observed that 
+        # boolean values are consider as string and numerical value of type string are consider 
+        # as integer which leds to non ingestion of those value in sentinel    
         # create table 
         request_body, url_to_call , method_to_use = create_table(json.dumps(schema_result, indent=4),table_name)
         response_body=hit_api(url_to_call,request_body,method_to_use)
@@ -339,10 +412,32 @@ for file in parser_yaml_files:
     elif log_ingestion_supported == True and table_type == "builtin":
         flag=0 #flag value is used to check if DCR is created for the table or not
         #create dcr for ingestion
+        guid_columns = []
         schema = get_schema_for_builtin(table_name)
+        data_result = convert_data_type(schema, data_result)
         request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
         response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of DCR creation: {response_body.text}") 
+        print(f"Response of DCR creation: {response_body.text}")
+        if response_body.status_code == 400 and "InvalidTransformOutput" in response_body.text:
+            guid_flag=0
+            print("*********Checking if failure reason is GUID Type columns and present in schema***********")
+            str_match = json.loads(response_body.text).get('error').get('details')[0].get('message')
+            match = re.findall(r'(\w+\s*\[produced:\s*\'String\',\s*output:\s*\'Guid\'\])', str_match)
+            print(f"Mismatched Column and there types : {match}")
+            for item in match:
+                if "Guid" not in item:
+                    guid_flag=1
+                    print(f"Provided column Type other than GUID TYPE is not matching with Output Stream : {item}")
+            if guid_flag == 1:
+                print("Please provide Same Type of columns in stream declaration that matches with output stream of DCR")
+                exit(1)
+            cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
+            guid_columns = cleaned_guid_columns
+            print("Re trying DCR creation after removing GUID columns")
+            schema = get_schema_for_builtin(table_name)
+            request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
+            response_body=hit_api(url_to_call,request_body,method_to_use)
+            print(f"Response of DCR creation: {response_body.text}")       
         dcr_directory.append({
         'DCRname':table_name+'_DCR'+str(prnumber),
         'imutableid':json.loads(response_body.text).get('properties').get('immutableId'),

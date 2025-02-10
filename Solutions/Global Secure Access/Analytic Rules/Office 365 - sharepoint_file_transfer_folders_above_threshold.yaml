@@ -1,13 +1,16 @@
-id: bfe81463-814b-4fa5-9885-c95a579f1957
-name: Office365 Sharepoint File Transfer Above Threshold
+id: abd6976d-8f71-4851-98c4-4d086201319c
+name: GSA Enriched Office 365 - Sharepoint File Transfer Above Threshold
 description: |
-  Identifies Office365 Sharepoint File Transfers with a distinct folder count above a certain threshold in a 15-minute time period.
-  Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.
+  'Identifies Office365 SharePoint file transfers with a distinct folder count above a certain threshold in a 15-minute time period. Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
 severity: Medium
+status: Available
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
 queryFrequency: 15m
 queryPeriod: 15m
 triggerOperator: gt
@@ -17,15 +20,44 @@ tactics:
 relevantTechniques:
   - T1020
 query: |
-  let threshold = 500;
-  EnrichedMicrosoft365AuditLogs
-  | where Workload has_any("SharePoint", "OneDrive") and Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
-  | extend EventSource = tostring(parse_json(tostring(AdditionalProperties)).EventSource)
-  | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
-  | summarize count_distinct_ObjectId = dcount(ObjectId), dirlist = make_set(ObjectId, 10000) by UserId, ClientIp, UserAgent, bin(TimeGenerated, 15m)
-  | where count_distinct_ObjectId >= threshold
-  | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField","_", tostring(hash(tostring(dirlist)))))
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  let threshold = 5000;
+  // EnrichedMicrosoft365AuditLogs Query
+  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+    | where Workload has_any("SharePoint", "OneDrive")
+    | where Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
+    | extend UserAgent = tostring(AdditionalProperties["UserAgent"])
+    | summarize count_distinct_ObjectId = dcount(ObjectId),
+                fileslist = make_set(ObjectId, 10000),
+                any_UserAgent = any(UserAgent)
+      by UserId, ClientIP = ClientIp, bin(TimeGenerated, 15m)
+    | where count_distinct_ObjectId >= threshold
+    | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]),
+                 strcat("SeeFilesListField_", tostring(hash(tostring(fileslist)))))
+    | extend AccountName = tostring(split(UserId, "@")[0]),
+             AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  // OfficeActivity Query
+  let OfficeEvents = OfficeActivity
+    | where EventSource == "SharePoint"
+    | where OfficeWorkload has_any("SharePoint", "OneDrive")
+    | where Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
+    | summarize count_distinct_ObjectId = dcount(OfficeObjectId),
+                fileslist = make_set(OfficeObjectId, 10000),
+                any_UserAgent = any(UserAgent)
+      by UserId, ClientIP, bin(TimeGenerated, 15m)
+    | where count_distinct_ObjectId >= threshold
+    | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]),
+                 strcat("SeeFilesListField_", tostring(hash(tostring(fileslist)))))
+    | extend AccountName = tostring(split(UserId, "@")[0]),
+             AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  // Combine Office and Enriched Logs
+  let CombinedEvents = OfficeEvents
+    | union EnrichedEvents
+    | summarize arg_min(TimeGenerated, *) by UserId, ClientIP, any_UserAgent;
+  // Final Output
+  CombinedEvents
+    | extend TransferCount = count_distinct_ObjectId
+    | project TimeGenerated, UserId, ClientIP, AccountName, AccountUPNSuffix, FileSample, UserAgent = any_UserAgent, TransferCount, fileslist
+    | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -38,24 +70,22 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ClientIp
+        columnName: ClientIP
   - entityType: File
     fieldMappings:
       - identifier: Name
-        columnName: DirSample
+        columnName: FileSample
 customDetails:
-  TransferCount: count_distinct_ObjectId
-  FilesList: dirlist
+  TransferCount: TransferCount
+  FilesList: fileslist
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: true
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: Selected
     groupByEntities:
       - Account
-    groupByAlertDetails: []
-    groupByCustomDetails: []
-version: 1.0.4
+version: 2.0.8
 kind: Scheduled

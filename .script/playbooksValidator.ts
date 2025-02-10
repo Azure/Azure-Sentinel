@@ -1,14 +1,14 @@
 import fs from "fs";
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
-import { isValidSchema } from "./utils/jsonSchemaChecker";
-import * as logger from "./utils/logger";
-import { ArmTemplate, ArmTemplateResource } from "./utils/playbookCheckers/Models/armTemplateModels";
-import { PlaybookTemplateMetadata } from "./utils/playbookCheckers/Models/playbookTemplateMetadata";
-import { validateTemplateMetadata } from "./utils/playbookCheckers/playbookArmTemplateMetadataChecker";
-import { validateTemplateParameters } from "./utils/playbookCheckers/playbookArmTemplateParametersChecker";
-import { getTemplatePlaybookResources } from "./utils/playbookCheckers/playbookARMTemplateUtils";
-import { validatePlaybookResource } from "./utils/playbookCheckers/playbookResourceChecker";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
+import { isValidSchema } from "./utils/jsonSchemaChecker.js";
+import * as logger from "./utils/logger.js";
+import { ArmTemplate, ArmTemplateResource } from "./utils/playbookCheckers/Models/armTemplateModels.js";
+import { PlaybookTemplateMetadata } from "./utils/playbookCheckers/Models/playbookTemplateMetadata.js";
+import { validateTemplateMetadata } from "./utils/playbookCheckers/playbookArmTemplateMetadataChecker.js";
+import { validateTemplateParameters } from "./utils/playbookCheckers/playbookArmTemplateParametersChecker.js";
+import { getTemplatePlaybookResources } from "./utils/playbookCheckers/playbookARMTemplateUtils.js";
+import { validatePlaybookResource } from "./utils/playbookCheckers/playbookResourceChecker.js";
 
 export async function IsValidTemplate(filePath: string): Promise<ExitCode> {
   let playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata> = JSON.parse(fs.readFileSync(filePath, "utf8"));

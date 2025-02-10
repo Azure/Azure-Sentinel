@@ -13,12 +13,12 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     Returns:
         str: result of Activity function
     """
-    applogger.debug("{} AnomalyOrchestrator function called!".format(LOGS_STARTS_WITH))
+    applogger.info("{} AnomalyOrchestrator function called!".format(LOGS_STARTS_WITH))
     json_data = context.get_input()
     result1 = yield context.call_activity(
         "RubrikActivity", {"data": json_data, "log_type": ANOMALY_LOG_TYPE}
     )
-    applogger.debug(
+    applogger.info(
         "{} AnomalyOrchestrator function completed!".format(LOGS_STARTS_WITH)
     )
     return result1
