@@ -6,7 +6,7 @@ Link to [Recorded Future Identity main readme](../readme.md)
 
 1. [Overview](#overview)
 1. [Deployment](#deployment)
-1. [Prerequisites](#prerequisites)  
+1. [Prerequisites](#prerequisites)
 1. [Playbooks](#playbooks)
    1. ["Connector" playbooks](#connector_playbooks)
       1. [RFI-CustomConnector](#RFI-CustomConnector)
@@ -31,9 +31,9 @@ Link to [Recorded Future Identity main readme](../readme.md)
 <a id="overview"></a>
 ## Overview
 
-This Solution contains two different **sub solutions** that consists of 9 playbooks (Logic Apps). Due to inconsistent naming of Logic Apps in Microsoft security products like Sentinel we will use the name playbooks instead of Logic Apps in this README. Depending on which **sub solution** that is chosen, follow the appropriate **readme**. This **readme** is for the recommended **Novel Identity Exposures** solution. For the **Identity** solution, see this [readme](v3/readme.md)
+This Solution contains two different **sub solutions** that consists of 9 playbooks (Logic Apps). Due to inconsistent naming of Logic Apps in Microsoft security products like Sentinel we will use the name playbooks instead of Logic Apps in this README. Depending on which **sub solution** that is chosen, follow the appropriate **readme**. This **readme** is for the recommended **Novel Identity Exposures** solution. For the **Identity** solution, see this [readme](v3.0/readme.md)
 
-The playbooks need to be installed in the following order: custom-connector, and one of the alert playbooks. 
+The playbooks need to be installed in the following order: custom-connector, and one of the alert playbooks.
 
 <details>
 <summary>Expand playbook overview</summary>
@@ -41,7 +41,7 @@ The playbooks need to be installed in the following order: custom-connector, and
 <br/>
 
 Connector playbooks:
-Custom connector are used to communicate and authorize towards Recorded Future backend API. 
+Custom connector are used to communicate and authorize towards Recorded Future backend API.
 
 | Playbook Name| Description  |
 |-|-|
@@ -59,12 +59,12 @@ These are the main playbooks
 
 ## Deployment
 
-Recorded Future recommend deploying playbooks in this solution from this README, first the connector and then deploy a playbook dependent on your use case. After installation configure connectors inside of the playbook. Lastly configure playbook parameters in the playbook. 
+Recorded Future recommend deploying playbooks in this solution from this README, first the connector and then deploy a playbook dependent on your use case. After installation configure connectors inside of the playbook. Lastly configure playbook parameters in the playbook.
 
 ### Prerequisites
 
 - A Microsoft EntraID Tenant and subscription.
-- For the Entra ID connector, the permissions required for the user that authorizes the connector are `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a> 
+- For the Entra ID connector, the permissions required for the user that authorizes the connector are `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a>
 - Azure subscription Owner or Contributor permissions so you can install the Logic Apps. [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
 
@@ -74,23 +74,23 @@ Recorded Future recommend deploying playbooks in this solution from this README,
 #### Optional prerequisites
 These prerequisites is required for the playbooks **RFI-playbook-alert-importer-law** and **RFI-playbook-alert-importer-law-sentinel**
 - A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these logic apps will be created automatically if they don’t already exist. Note the name of the Log Analytic Workspace, it will be used at a later stage of the deployment.
-- During installation, the person performing the installations of the playbooks require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level, 
+- During installation, the person performing the installations of the playbooks require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level,
 
 
 <a id="playbooks"></a>
 ## Playbooks
 
 > [!IMPORTANT]
-> Deploy connector before deploying the alert importer playbooks. 
+> Deploy connector before deploying the alert importer playbooks.
 
 <a id="connector_playbooks"></a>
 ### Connector-playbooks
 
-Connector playbooks are used by other playbooks in this solution to communicate with Recorded Future backend API. 
+Connector playbooks are used by other playbooks in this solution to communicate with Recorded Future backend API.
 
 ## RFI-CustomConnector
 
-This connector is used by other playbooks in this solution to communicate with Recorded Future backend API. 
+This connector is used by other playbooks in this solution to communicate with Recorded Future backend API.
 
 ### Deployment
 
@@ -106,7 +106,7 @@ This connector is used by other playbooks in this solution to communicate with R
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
 | **Connector-Name**  | Connector name to use for this playbook (ex. "RFI-CustomConnector-0-2-0"). |
-|**Service Endpoint**| API Endpoint, always use the default ```https://api.recordedfuture.com/gw/azure-identity```| 
+|**Service Endpoint**| API Endpoint, always use the default ```https://api.recordedfuture.com/gw/azure-identity```|
 </details>
 <hr/>
 
@@ -134,7 +134,7 @@ Depending on use case, choose the playbook that fits. The `RFI-playbook-alert-im
 <a id="RFI-playbook-alert-importer"></a>
 ### Deployment RFI-playbook-alert-importer
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2Ffeat-identity-pba-importer%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2Ffeat-identity-pba-importer%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
@@ -155,7 +155,7 @@ Depending on use case, choose the playbook that fits. The `RFI-playbook-alert-im
 <a id="RFI-playbook-alert-importer-law"></a>
 ### Deployment RFI-playbook-alert-importer-law
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2Ffeat-identity-pba-importer%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2Ffeat-identity-pba-importer%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
@@ -178,7 +178,7 @@ Depending on use case, choose the playbook that fits. The `RFI-playbook-alert-im
 <a id="RFI-playbook-alert-importer-law-sentinel"></a>
 ### Deployment RFI-playbook-alert-importer-law-sentinel
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2Ffeat-identity-pba-importer%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW-Sentinel%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a> 
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2Ffeat-identity-pba-importer%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW-Sentinel%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW-Sentinel%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
@@ -215,18 +215,18 @@ After deployment - create/validate the Connections in each of deployed Playbooks
 
 <a id="API-connector-authorization"></a>
 ### API connector authorization
-The Recorded Future identity solution uses the following connectors, some are required and and some optional. Information on how to authorize connectors is documented in the provided links. Playbooks use connectors that have to be individually authorized during deployment.  
+The Recorded Future identity solution uses the following connectors, some are required and and some optional. Information on how to authorize connectors is documented in the provided links. Playbooks use connectors that have to be individually authorized during deployment.
 
 | Connector | Description |
 |-|-|
 | **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](../../Recorded%20Future/Playbooks/Connectors/RecordedFuture-CustomConnector/readme.md) <br/> [How to obtain Recorded Future API token](#how_to_obtain_Recorded_Future_API_token) |
 | **/azuread** | [Microsoft Entra ID power platform connectors](https://learn.microsoft.com/en-us/connectors/azuread/). |
 | **/azureadip** | [Azure AD Identity Protection](https://learn.microsoft.com/en-us/connectors/azureadip/) |
-| **/azureloganalyticsdatacollector** (Optional) | [Azure Log Analytics Data Collector](https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/) <br/> [How to find Log Analytics Workspace key.](https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id) 
+| **/azureloganalyticsdatacollector** (Optional) | [Azure Log Analytics Data Collector](https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/) <br/> [How to find Log Analytics Workspace key.](https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id)
 | **/azuresentinel** (Optional)| <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors </a> |
 
 
-Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type. 
+Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type.
 
 Below are guides that a tailored to our recommended authorization flow (Managed Identity, when possible), depending on organizational rules, the flow might be different. Please consult with your Azure administrator in those cases. Multi-tenant authorizations are untested, please consult with your Azure administrators for proper authorization flow.
 <details>
@@ -241,7 +241,7 @@ After a logic app has been installed, the **RFI-CustomConnector-0-2-0** needs to
 3. Click on **_RFI-CustomConnector-0-2-0_**
 4. Click on **_General_** in the left menu on the newly opened section
 5. Click on **_Edit API Connection_**
-6. Paste the **Recorded Future API Key** and click **_Save_**   
+6. Paste the **Recorded Future API Key** and click **_Save_**
 
 ![apiconnection](images/apiconnection.png)
 
@@ -263,7 +263,7 @@ The Microsoft Entra ID connector needs to be authorized via **OAuth** by a user 
 
 <br>
 
-The Azure AD Identity Protection needs to be authorized via **OAuth**. For more information, see <a href="https://learn.microsoft.com/en-us/connectors/azureadip/" target="_blank">this article</a>. 
+The Azure AD Identity Protection needs to be authorized via **OAuth**. For more information, see <a href="https://learn.microsoft.com/en-us/connectors/azureadip/" target="_blank">this article</a>.
 </details>
 <br>
 
@@ -273,7 +273,7 @@ The Azure AD Identity Protection needs to be authorized via **OAuth**. For more 
 
 <br>
 
-The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner (with highest permissions)** or **Role Based Access Control Administrator** on resource group level. 
+The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner (with highest permissions)** or **Role Based Access Control Administrator** on resource group level.
 
 For more detailed information check out this Micrsoft <a href="https://learn.microsoft.com/en-us/azure/logic-apps/authenticate-with-managed-identity?tabs=consumption" target="_blank">guide</a>
 
@@ -308,7 +308,7 @@ These steps will be needed for each logic app that uses the **azuresentinel** / 
 Recorded Future clients interested in API access for custom scripts or to enable a paid integration can request an API Token via this [Integration Support Ticket form](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens).  Please fill out the following fields, based on intended API usage.
 
 <details>
-<summary>Expand for example image of request form</summary> 
+<summary>Expand for example image of request form</summary>
 
 ![API request form](images/APIRequest2.png)
 </details>
@@ -335,7 +335,7 @@ Example shows all parameters, number of parameters depends on playbook used
 
 - **You need to create a Microsoft EntraID Group, and provide the Object ID as a parameter to the Playbook. For more information, see [Microsoft EntraID Groups](https://learn.microsoft.com/en-us/entra/fundamentals/how-to-manage-groups) documentation.**
 
-| Parameter | Description | 
+| Parameter | Description |
 |-|-|
 | **active_directory_security_group_id** | Object ID of Microsoft EntraID Group for users at risk. You need to pre-create it by hand: search for "Groups" in Service search at the top of the page. For more information, see [Microsoft EntraID Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation. |
 | **active_directory_domain** | (Optional, can be left empty) - in case your Microsoft EntraID domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Microsoft EntraID (ex. Compromised email: leaked@mycompany.com), your Microsoft EntraID domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Microsoft EntraID: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
@@ -367,7 +367,7 @@ Recorded Future Identity Solution is a baseline solution, there are ways to cust
 
 #### Playbook Alert Onward Actions
 By default the Playbook Alert Update steps have been configured with `added_actions_taken` set to `identity_novel_exposures.placed_in_risky_group`, if the solution is extended with actions such as blocking users or forcing password resets, you can submit this information to Recorded Future, currently the following actions are supported.
-   
+
 | Action |
 |-|
 identity_novel_exposures.enforced_password_reset
@@ -405,6 +405,6 @@ Permissions / Roles:
 <a id="how_to_contact_Recorded_Future"></a>
 ## How to contact Recorded Future
 
-If you are already a Recorded Future client and wish to learn more about using Recorded Future’s Microsoft integrations, including how to obtain an API Token to enable an integration contact us at **support@recordedfuture.com**. 
+If you are already a Recorded Future client and wish to learn more about using Recorded Future’s Microsoft integrations, including how to obtain an API Token to enable an integration contact us at **support@recordedfuture.com**.
 
 If you not a current Recorded Future client and wish to become one, contact **sales@recordedfuture.com** to setup a discussion with one of our business development associates.
