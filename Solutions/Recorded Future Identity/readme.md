@@ -18,8 +18,8 @@ They include:
 
 1. Searches for compromised workforce or external customer users
 1. Looking up existing users and saving the compromised user data to a Log file
-1. Confirming high risk Microsoft Entra ID (EntraID) users
-1. Adding a compromised user to an EntraID security group
+1. Confirming high risk Microsoft Entra ID users
+1. Adding a compromised user to an Entra ID security group
 
 [Installation guide](Playbooks/readme.md)
 
