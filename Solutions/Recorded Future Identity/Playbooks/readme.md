@@ -200,6 +200,7 @@ Depending on your use case, deploy **one** of the following playbooks:
 | **Save_to_log_analytics_workspace**              |Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
 | **Entra_id_security_group_id**                   | ID of the the group in which to place risky users|
 | **Create_incident**                              |Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
+| **Sentinel_workspace_name**                      |Workspace name in which to create Microsoft Sentinel incidents|
 | **Entra_id_domain**                              | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
 | **Playbook_alert_log_analytics_custom_log_name** |Name of the custom log in Log Analytics Workspace, defaults to `RecordedFutureIdentity_PlaybookAlertResults_CL`|
 | **RFI Custom Connector**                         | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`|
