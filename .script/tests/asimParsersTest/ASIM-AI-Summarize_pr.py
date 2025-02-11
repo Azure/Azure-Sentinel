@@ -1,8 +1,16 @@
+import sys
 import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules. 
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 import logging
-import sys
 import subprocess
 import json
 import requests
