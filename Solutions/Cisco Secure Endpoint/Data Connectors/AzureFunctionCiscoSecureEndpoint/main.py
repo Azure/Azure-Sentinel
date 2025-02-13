@@ -94,7 +94,7 @@ class CiscoAMPClient:
             'limit': 500
         }
         if isinstance(start_time, datetime.datetime):
-            start_time = start_time + datetime.timedelta(microseconds=1)
+            start_time = start_time + datetime.timedelta(seconds=1)
             start_time = start_time.isoformat()
             params['start_time'] = start_time
         res = requests.get(url, params=params, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
@@ -117,7 +117,7 @@ class CiscoAMPClient:
             'limit': 500
         }
         if isinstance(start_time, datetime.datetime):
-            start_time = start_time + datetime.timedelta(microseconds=1)
+            start_time = start_time + datetime.timedelta(seconds=1)
             start_time = start_time.isoformat()
             params['start_date'] = start_time
         res = requests.get(url, params=params, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
