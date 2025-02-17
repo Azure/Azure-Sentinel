@@ -2195,7 +2195,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
                         $connectDataSourcesLink = [PSCustomObject] @{
-                            name    = "dataconnectors-link2";
+                            name    = "dataconnectors-link$($global:connectorCounter)";
                             type    = "Microsoft.Common.TextBlock";
                             options = [PSCustomObject] @{
                                 link = [PSCustomObject] @{
@@ -2717,6 +2717,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 if($yamlField -eq "entityMappings" -and $yaml.$yamlField.length -lt 2)
                                 {
                                     $alertRule.entityMappings = @($alertRule.entityMappings);
+                                }
+                                elseif($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2)
+                                {
+                                    $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
                                 }
                             }
                         }
