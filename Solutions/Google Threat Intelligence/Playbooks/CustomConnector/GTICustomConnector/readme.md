@@ -92,6 +92,15 @@ This document provides detailed descriptions of all actions available in the Goo
     * **Input:** Analysis ID (string).
     * **Output:** Analysis information (object) including status and results.
 
+### Threat List
+
+* **Get Threat List**
+
+    * **Description:**  Retrieval of all google threat information for the last hour in a specific category.
+    * **Input:** Category (string).
+    * **Output:** JSON bundle with indicators in STIX format.
+
+
 **Note:** All actions require an API key for authentication.  Please refer to the "Pre-requisites" section in the `readme.md` file for instructions on obtaining and using your API key.
 
 
