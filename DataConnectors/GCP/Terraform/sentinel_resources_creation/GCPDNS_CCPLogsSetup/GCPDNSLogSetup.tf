@@ -15,7 +15,7 @@ data "google_project" "project" {
 
 variable "topic-name" {
   type    = string
-  default = "sentinel-topic"
+  default = "sentineldns-topic"
   description = "Name of existing topic"
 }
 
@@ -30,8 +30,8 @@ resource "google_project_service" "enable-logging-api" {
   project = data.google_project.project.project_id
 }
 
-resource "google_pubsub_topic" "sentinel-topic" {
-  count = "${var.topic-name != "sentinel-topic" ? 0 : 1}"
+resource "google_pubsub_topic" "sentineldns-topic" {
+  count = "${var.topic-name != "sentineldns-topic" ? 0 : 1}"
   name = var.topic-name
   project = data.google_project.project.project_id
 }
@@ -40,7 +40,7 @@ resource "google_pubsub_subscription" "sentinel-subscription" {
   project = data.google_project.project.project_id
   name  = "sentinel-subscription-DNSlogs"
   topic = var.topic-name
-  depends_on = [google_pubsub_topic.sentinel-topic]
+  depends_on = [google_pubsub_topic.sentineldns-topic]
 }
 
 resource "google_logging_project_sink" "sentinel-sink" {
@@ -48,7 +48,7 @@ resource "google_logging_project_sink" "sentinel-sink" {
   count = var.organization-id == "" ? 1 : 0
   name = "DNS-logs-sentinel-sink"
   destination = "pubsub.googleapis.com/projects/${data.google_project.project.project_id}/topics/${var.topic-name}"
-  depends_on = [google_pubsub_topic.sentinel-topic]
+  depends_on = [google_pubsub_topic.sentineldns-topic]
 
   filter = "resource.type=gce_subnetwork AND logName:DNS"
   unique_writer_identity = true
