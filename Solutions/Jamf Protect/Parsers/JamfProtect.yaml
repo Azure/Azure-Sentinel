@@ -1,816 +1,852 @@
 id: d941b837-88fa-4c77-a4d8-76af0044cac0
 Function:
   Title: Parser for JamfProtect
-  Version: '3.1.0'
-  LastUpdated: '2024-01-12'
+  Version: '3.2.0'
+  LastUpdated: '2025-01-06'
 Category: Microsoft Sentinel Parser
 FunctionName: JamfProtect
 FunctionAlias: JamfProtect
 FunctionQuery: |
-  let JamfProtectAlerts_view  = view () {
-      jamfprotect_CL
-  | where topicType_s == "alert"
-      and input_eventType_s <> "GPUnifiedLogEvent"
-      and isnotempty(input_match_severity_d)
-  // JSON Parsing at earliest stage
-  | extend 
-      Related_users = parse_json(input_related_users_s),
-      Related_files = parse_json(input_related_files_s),
-      Related_binaries = parse_json(input_related_binaries_s),
-      Related_groups = parse_json(input_related_groups_s),
-      Related_processes = parse_json(input_related_processes_s),
-      Match_facts = parse_json(input_match_facts_s),
-      Match_tags = parse_json(input_match_tags_s),
-      Match_actions = parse_json(input_match_actions_s),
-      Match_context = parse_json(input_match_context_s),
-      Match_event_process_signing = parse_json(input_match_event_process_signingInfo_s)
-  // ASIM - Common Fields
-  | extend EventVendor = 'Jamf'
-  | extend EventProduct = 'Jamf Protect - Alerts'
-  | project-rename
-      EventOriginalUid = input_match_uuid_g
-  | extend
-      // Jamf Protect - Common Fields
-      EventType = case(
-              input_eventType_s == "GPClickEvent",
-              "Click",
-              input_eventType_s == "GPDownloadEvent",
-              "Download",
-              input_eventType_s == "GPFSEvent",
-              "FileSystem",
-              input_eventType_s == "GPProcessEvent",
-              "Process",
-              input_eventType_s == "GPKeylogRegisterEvent",
-              "Keylog",
-              input_eventType_s == "GPGatekeeperEvent",
-              "Gatekeeper",
-              input_eventType_s == "GPMRTEvent",
-              "MRT",
-              input_eventType_s == "GPPreventedExecutionEvent",
-              "ProcessDenied",
-              input_eventType_s == "GPThreatMatchExecEvent",
-              "ProcessPrevented",
-              input_eventType_s == "GPUnifiedLogEvent",
-              "UnifiedLog",
-              input_eventType_s == "GPUSBEvent",
-              "USB",
-              input_eventType_s == "auth-mount",
-              "UsbBlock",
-              "Unknown"
-          ),
-      EventDescription = coalesce(Match_facts[1].human, Match_facts[0].human),
-      EventMessage = coalesce(Match_facts[1].name, Match_facts[0].name),
-      EventStartTime = unixtime_milliseconds_todatetime(tolong(timestamp_d)),
-      EventResult = case(Match_actions has "Prevented", "Prevented", "Allowed"),
-      EventProductVersion = column_ifexists("input_host_protectVersion_s", ""),
-      //
-      // Jamf Protect - Alert details
-      //
-      EventSeverity = case(input_match_severity_d == 0, "Informational", input_match_severity_d == 1, "Low", input_match_severity_d == 2, "Medium", input_match_severity_d == 3, "High", "Informational"),
-      EventMatch = column_ifexists("input_match_event_matchValue_s", ""),
-      EventMatchType = column_ifexists("input_match_event_matchType_s", ""),
-      EventReportUrl = strcat("https://", context_identity_claims_hd_s, ".jamfcloud.com/Alerts/", EventOriginalUid),
-      //
-      // Jamf Protect - Source User
-      SrcUsername = tostring(coalesce(Related_users[1].name, Related_users[0].name)),
-      //
-      // Jamf Protect - Source Device Hostnames
-      //
-      TargetHostname = column_ifexists("input_host_hostname_s", ""),
-      DvcHostname = column_ifexists("input_host_hostname_s", ""),
-      DvcIpAddr = column_ifexists("input_host_ips_s", ""),
-      DvcId = column_ifexists("input_host_provisioningUDID_g", ""),
-      DvcOs="macOS",
-      SrcDeviceType="Computer",
-      //
-      // Jamf Protect Alerts - Process
-      //
-      ProcessEventType = case(input_match_event_type_d == 0, "None", input_match_event_type_d == 1, "Create", input_match_event_type_d == 2, "Exit", ""),
-      ProcessEventSubType = case(input_match_event_subType_d == 7, "Exec", input_match_event_subType_d == 1, "Fork", input_match_event_subType_d == 23, "Execve", input_match_event_subType_d == 43190, "Posix Spawn", ""),
-      ActingProcessName = tostring(Related_processes[array_length(Related_processes) - 1].path),
-      ActingProcessCreationTime = format_datetime(unixtime_milliseconds_todatetime(tolong(Related_processes[array_length(Related_processes) - 1].startTimestamp)), 'HH:mm:ss'),
-      ActingProcessId = coalesce(input_match_event_process_ppid_d, toreal(Related_processes[0].responsiblePID)),
-      ActingProcessGuid = tostring(Related_processes[array_length(Related_processes) - 1].uuid),
-      ParentProcessName = iff(array_length(Related_processes) > 1, tostring(Related_processes[1].path), ""),
-      ParentProcessCreationTime = iff(array_length(Related_processes) > 1, format_datetime(unixtime_milliseconds_todatetime(tolong(Related_processes[1].startTimestamp)), 'HH:mm:ss'), ""),
-      ParentProcessId = iff(array_length(Related_processes) > 1, toreal(Related_processes[1].pid), double(null)),
-      ParentProcessGuid = iff(array_length(Related_processes) > 1, tostring(Related_processes[1].uuid), ""),
-      TargetProcessName = coalesce(input_match_event_process_name_s, Related_processes[0].name),
-      TargetProcessId = coalesce(toreal(input_match_event_process_pid_d), toreal(Related_processes[0].pid)),
-      TargetProcessGuid = tostring(Related_processes[0].uuid),
-      TargetProcessSHA1 = Related_binaries[0].sha1hex,
-      TargetProcessSHA256 = Related_binaries[0].sha256hex,
-      TargetProcessCreationTime = unixtime_milliseconds_todatetime(tolong(input_match_event_process_startTimestamp_d)),
-      TargetProcessCommandLine = column_ifexists("input_match_event_process_args_s", ""),
-      TargetProcessCurrentDirectory = column_ifexists("input_match_event_process_path_s", ""),
-      //TargetProcessStatusCode = column_ifexists(Related_processes[0].exitCode, ""),
-      TargetUserId = toreal(coalesce(Related_users[1].uid, Related_processes[0].uid)),
-      TargetUsername = tostring(coalesce(Related_users[1].name, Related_users[0].uid)),
-      //
-      // Jamf Protect Alerts - Files
-      //
-      TargetFilePath = tostring(coalesce(input_match_event_path_s, Related_files[0].path)),
-      TargetFileSHA1 = Related_files[0].sha1hex,
-      TargetFileSHA256 = Related_files[0].sha256hex,
-      TargetFileSize = Related_files[0].size,
-      TargetFileSigningInfoMessage = Related_files[0].signingInfo.statusMessage,
-      TargetFileSignerType = case(Related_files[0].signingInfo.signerType == 0, "Apple", Related_files[0].signingInfo.signerType == 1, "App Store", Related_files[0].signingInfo.signerType == 2, "Developer", Related_files[0].signingInfo.signerType == 3, "Ad Hoc", Related_files[0].signingInfo.signerType == 4, "Unsigned", ""),
-      TargetFileSigningTeamID = Related_files[0].signingInfo.teamid,
-      TargetFileIsDownload = case(Related_files[0].isDownload == "true", "true", Related_files[0].isDownload == "false", "false", ""),
-      TargetFileIsAppBundle = case(Related_files[0].isAppBundle == "true", "true", Related_files[0].isAppBundle == "false", "false", ""),
-      TargetFileIsDirectory = case(Related_files[0].isDirectory == "true", "true", Related_files[0].isDirectory == "false", "false", ""),
-      TargetFileIsScreenshot = case(Related_files[0].isScreenShot == "true", "true", Related_files[0].isScreenShot == "false", "false", ""),
-      //
-      // Jamf Protect Alerts - Binaries
-      TargetBinaryFilePath = Related_binaries[0].path,
-      TargetBinarySHA1 = tostring(Related_binaries[0].sha1hex),
-      TargetBinarySHA256 = tostring(Related_binaries[0].sha256hex),
-      TargetBinarySigningInfoMessage = Related_binaries[0].signingInfo.statusMessage,
-      TargetbinarySignerType = case(Related_binaries[0].signingInfo.signerType == 0, "Apple", Related_binaries[0].signingInfo.signerType == 1, "App Store", Related_binaries[0].signingInfo.signerType == 2, "Developer", Related_binaries[0].signingInfo.signerType == 3, "Ad Hoc", Related_binaries[0].signingInfo.signerType == 4, "Unsigned", ""),
-      TargetBinarySigningTeamID = tostring(Related_binaries[0].signingInfo.teamid),
-      TargetBinarySigningAppID = tostring(Related_binaries[0].signingInfo.appid)
-  | project-reorder
-      TimeGenerated,
-      EventStartTime,
-      EventVendor,
-      EventProduct,
-      EventType,
-      EventDescription,
-      EventMessage,
-      EventSeverity,
-      EventMatch,
-      EventMatchType,
-      EventResult,
-      EventProductVersion,
-      EventReportUrl,
-      TargetHostname,
-      DvcHostname,
-      DvcId,
-      DvcOs,
-      DvcIpAddr,
-      SrcDeviceType,
-      SrcUsername,
-      ProcessEventType,
-      ProcessEventSubType,
-      ActingProcessName,
-      ActingProcessCreationTime,
-      ActingProcessId,
-      ActingProcessGuid,
-      ParentProcessName,
-      ParentProcessCreationTime,
-      ParentProcessId,
-      ParentProcessGuid,
-      TargetProcessName,
-      TargetProcessId,
-      TargetProcessGuid,
-      TargetProcessSHA1,
-      TargetProcessSHA256,
-      TargetProcessCreationTime,
-      TargetProcessCommandLine,
-      TargetProcessCurrentDirectory,
-      //TargetProcessStatusCode,
-      TargetUsername,
-      TargetUserId,
-      TargetFilePath,
-      TargetFileSHA1,
-      TargetFileSHA256,
-      TargetFileSize,
-      TargetFileSigningInfoMessage,
-      TargetFileSignerType,
-      TargetFileSigningTeamID,
-      TargetFileIsAppBundle,
-      TargetFileIsDirectory,
-      TargetFileIsDownload,
-      TargetFileIsScreenshot,
-      TargetBinaryFilePath,
-      TargetBinarySHA1,
-      TargetBinarySHA256,
-      TargetBinarySigningInfoMessage,
-      TargetbinarySignerType,
-      TargetBinarySigningTeamID,
-      TargetBinarySigningAppID,
-      Related_users,
-      Related_files,
-      Related_binaries,
-      Related_groups,
-      Related_processes,
-      Match_event_process_signing,
-      Match_facts,
-      Match_actions,
-      Match_tags,
-      *input_match_event_*
-  | project-keep
-      TimeGenerated,
-      EventStartTime,
-      EventVendor,
-      EventProduct,
-      EventType,
-      EventDescription,
-      EventMessage,
-      EventProductVersion,
-      EventSeverity,
-      EventMatch,
-      EventMatchType,
-      EventResult,
-      EventReportUrl,
-      TargetHostname,
-      DvcHostname,
-      DvcId,
-      DvcOs,
-      DvcIpAddr,
-      SrcDeviceType,
-      SrcUsername,
-      ProcessEventType,
-      ProcessEventSubType,
-      ActingProcessName,
-      ActingProcessCreationTime,
-      ActingProcessId,
-      ActingProcessGuid,
-      ParentProcessName,
-      ParentProcessCreationTime,
-      ParentProcessId,
-      ParentProcessGuid,
-      TargetProcessName,
-      TargetProcessId,
-      TargetProcessGuid,
-      TargetProcessSHA1,
-      TargetProcessSHA256,
-      TargetProcessCreationTime,
-      TargetProcessCommandLine,
-      TargetProcessCurrentDirectory,
-      //TargetProcessStatusCode,
-      TargetUsername,
-      TargetUserId,
-      TargetFilePath,
-      TargetFileSHA1,
-      TargetFileSHA256,
-      TargetFileSize,
-      TargetFileSigningInfoMessage,
-      TargetFileSignerType,
-      TargetFileSigningTeamID,
-      TargetFileIsAppBundle,
-      TargetFileIsDirectory,
-      TargetFileIsDownload,
-      TargetFileIsScreenshot,
-      TargetBinaryFilePath,
-      TargetBinarySHA1,
-      TargetBinarySHA256,
-      TargetBinarySigningInfoMessage,
-      TargetbinarySignerType,
-      TargetBinarySigningTeamID,
-      TargetBinarySigningAppID,
-      Related_users,
-      Related_files,
-      Related_binaries,
-      Related_groups,
-      Related_processes,
-      Match_event_process_signing,
-      Match_facts,
-      Match_actions,
-      Match_tags,
-      *input_match_event_*
-  };
-  //
-  // Jamf Protect - Unified Logs
-  //
-  let JamfProtectUnifiedLog_view  = view () {
-      jamfprotect_CL
-      | where input_eventType_s == "GPUnifiedLogEvent"
-          and isnotempty(input_match_severity_d)
-      // JSON Parsing at earliest stage
-      | extend 
-          Related_users = parse_json(input_related_users_s),
-          Related_files = parse_json(input_related_files_s),
-          Related_binaries = parse_json(input_related_binaries_s),
-          Related_groups = parse_json(input_related_groups_s),
-          Related_processes = parse_json(input_related_processes_s),
-          Match_facts = parse_json(input_match_facts_s),
-          Match_tags = parse_json(input_match_tags_s),
-          Match_actions = parse_json(input_match_actions_s),
-          Match_context = parse_json(input_match_context_s),
-          Match_event_process_signing = parse_json(input_match_event_process_signingInfo_s)
-      // ASIM - Common Fields
-      | extend EventVendor = 'Jamf'
-      | extend EventProduct = 'Jamf Protect - Unified Log'
-      | project-rename
-          EventOriginalUid = input_match_uuid_g
-      | extend
-          // Jamf Protect - Common Fields
-          EventType = case(
-                  input_eventType_s == "GPClickEvent",
-                  "Click",
-                  input_eventType_s == "GPDownloadEvent",
-                  "Download",
-                  input_eventType_s == "GPFSEvent",
-                  "FileSystem",
-                  input_eventType_s == "GPProcessEvent",
-                  "Process",
-                  input_eventType_s == "GPKeylogRegisterEvent",
-                  "Keylog",
-                  input_eventType_s == "GPGatekeeperEvent",
-                  "Gatekeeper",
-                  input_eventType_s == "GPMRTEvent",
-                  "MRT",
-                  input_eventType_s == "GPPreventedExecutionEvent",
-                  "ProcessDenied",
-                  input_eventType_s == "GPThreatMatchExecEvent",
-                  "ProcessPrevented",
-                  input_eventType_s == "GPUnifiedLogEvent",
-                  "UnifiedLog",
-                  input_eventType_s == "GPUSBEvent",
-                  "USB",
-                  input_eventType_s == "Auth-mount",
-                  "UsbBlock",
-                  "Unknown"
-              ),
-          EventDescription = coalesce(Match_facts[1].human, Match_facts[0].human),
-          EventStartTime = unixtime_milliseconds_todatetime(tolong(timestamp_d)),
-          EventResult = case(Match_actions has "Prevented", "Prevented", "Allowed"),
-          //
-          // Jamf Protect - Unified Logs details
-          //
-          EventSeverity = case(input_match_severity_d == 0, "Informational", input_match_severity_d == 1, "Low", input_match_severity_d == 2, "Medium", input_match_severity_d == 3, "High", "Informational"),
-          EventMatch = column_ifexists("input_match_event_matchValue_s", ""),
-          EventMatchType = column_ifexists("input_match_event_matchType_s", ""),
-          EventReportUrl = strcat("https://", context_identity_claims_hd_s, ".jamfcloud.com/Alerts/", EventOriginalUid),
-          //
-          // Jamf Protect - Source User
-          SrcUsername = tostring(coalesce(Related_users[1].name, Related_users[0].name)),
-          //
-          // Jamf Protect - Source Device Hostnames
-          //
-          TargetHostname = column_ifexists("input_host_hostname_s", ""),
-          DvcHostname = column_ifexists("input_host_hostname_s", ""),
-          DvcIpAddr = column_ifexists("input_host_ips_s", ""),
-          DvcId = column_ifexists("input_host_provisioningUDID_g", ""),
-          DvcOs="macOS",
-          SrcDeviceType="Computer",
-          //
-          // Jamf Protect Unified Logs - Process
-          //
-          //ParentProcessName = coalesce(input_match_event_process_ppid_d, parse_json('input_related_processes_s')[0].ppid), //column_ifexists("exec_chain_child_parent_path_s", ""), coalesce('input.match.event.process.ppid', mvindex('input.related.processes{}.ppid', 0))
-          ProcessEventType = case(input_match_event_type_d == 0, "None", input_match_event_type_d == 1, "Create", input_match_event_type_d == 2, "Exit", ""),
-          ProcessEventSubType = case(input_match_event_subType_d == 7, "Exec", input_match_event_subType_d == 1, "Fork", input_match_event_subType_d == 23, "Execve", input_match_event_subType_d == 43190, "Posix Spawn", ""),
-          ParentProcessId = coalesce(input_match_event_process_ppid_d, toreal(Related_processes[0].ppid)),
-          ParentProcessGuid = tostring(coalesce(input_match_event_process_pgid_d, toreal(Related_processes[0].pgid))),
-          TargetProcessName = coalesce(input_match_event_process_name_s, Related_processes[0].name),
-          TargetProcessId = coalesce(toreal(input_match_event_process_pid_d), toreal(Related_processes[0].pid)),
-          TargetProcessGuid = tostring(Related_processes[0].uuid),
-          TargetProcessSHA1 = Related_binaries[0].sha1hex,
-          TargetProcessCreationTime = unixtime_milliseconds_todatetime(tolong(input_match_event_process_startTimestamp_d)),
-          TargetProcessCommandLine = column_ifexists("input_match_event_process_args_s", ""),
-          TargetProcessCurrentDirectory = column_ifexists("input_match_event_process_path_s", ""),
-          TargetUserId = toreal(coalesce(Related_users[1].uid, Related_users[0].uid)),
-          TargetUsername = tostring(coalesce(Related_users[1].name, Related_users[0].name)),
-          //
-          // Jamf Protect Unified Logs - Files
-          //
-          TargetFilePath = tostring(coalesce(input_match_event_path_s, Related_files[0].path)),
-          TargetFileSHA1 = Related_files[0].sha1hex,
-          TargetFileSHA256 = Related_files[0].sha256hex,
-          TargetFileSize = Related_files[0].size,
-          TargetFileSigningInfoMessage = Related_files[0].signingInfo.statusMessage,
-          TargetFileSignerType = case(Related_files[0].signingInfo.signerType == 0, "Apple", Related_files[0].signingInfo.signerType == 1, "App Store", Related_files[0].signingInfo.signerType == 2, "Developer", Related_files[0].signingInfo.signerType == 3, "Ad Hoc", Related_files[0].signingInfo.signerType == 4, "Unsigned", ""),
-          TargetFileSigningTeamID = Related_files[0].signingInfo.teamid,
-          TargetFileIsDownload = case(Related_files[0].isDownload == "true", "true", Related_files[0].isDownload == "false", "false", ""),
-          TargetFileIsAppBundle = case(Related_files[0].isAppBundle == "true", "true", Related_files[0].isAppBundle == "false", "false", ""),
-          TargetFileIsDirectory = case(Related_files[0].isDirectory == "true", "true", Related_files[0].isDirectory == "false", "false", ""),
-          TargetFileIsScreenshot = case(Related_files[0].isScreenShot == "true", "true", Related_files[0].isScreenShot == "false", "false", "")
-      | project-reorder
-          TimeGenerated,
-          EventStartTime,
-          EventVendor,
-          EventProduct,
-          EventType,
-          EventDescription,
-          EventSeverity,
-          EventMatch,
-          EventMatchType,
-          EventResult,
-          EventReportUrl,
-          TargetHostname,
-          DvcHostname,
-          DvcId,
-          DvcOs,
-          DvcIpAddr,
-          SrcDeviceType,
-          SrcUsername,
-          ProcessEventType,
-          ProcessEventSubType,
-          ParentProcessId,
-          ParentProcessGuid,
-          TargetProcessName,
-          TargetProcessId,
-          TargetProcessGuid,
-          TargetProcessSHA1,
-          TargetProcessCreationTime,
-          TargetProcessCommandLine,
-          TargetProcessCurrentDirectory,
-          TargetUsername,
-          TargetUserId,
-          TargetFilePath,
-          TargetFileSHA1,
-          TargetFileSHA256,
-          TargetFileSize,
-          TargetFileSigningInfoMessage,
-          TargetFileSignerType,
-          TargetFileSigningTeamID,
-          TargetFileIsAppBundle,
-          TargetFileIsDirectory,
-          TargetFileIsDownload,
-          TargetFileIsScreenshot,
-          Related_users,
-          Related_files,
-          Related_binaries,
-          Related_groups,
-          Related_processes,
-          Match_event_process_signing,
-          Match_facts,
-          Match_actions,
-          Match_tags
-      | project-keep
-          TimeGenerated,
-          EventStartTime,
-          EventVendor,
-          EventProduct,
-          EventType,
-          EventDescription,
-          EventSeverity,
-          EventMatch,
-          EventMatchType,
-          EventResult,
-          EventReportUrl,
-          TargetHostname,
-          DvcHostname,
-          DvcId,
-          DvcOs,
-          DvcIpAddr,
-          SrcDeviceType,
-          SrcUsername,
-          ProcessEventType,
-          ProcessEventSubType,
-          ParentProcessId,
-          ParentProcessGuid,
-          TargetProcessName,
-          TargetProcessId,
-          TargetProcessGuid,
-          TargetProcessSHA1,
-          TargetProcessCreationTime,
-          TargetProcessCommandLine,
-          TargetProcessCurrentDirectory,
-          TargetUsername,
-          TargetUserId,
-          TargetFilePath,
-          TargetFileSHA1,
-          TargetFileSHA256,
-          TargetFileSize,
-          TargetFileSigningInfoMessage,
-          TargetFileSignerType,
-          TargetFileSigningTeamID,
-          TargetFileIsAppBundle,
-          TargetFileIsDirectory,
-          TargetFileIsDownload,
-          TargetFileIsScreenshot,
-          Related_users,
-          Related_files,
-          Related_binaries,
-          Related_groups,
-          Related_processes,
-          Match_event_process_signing,
-          Match_facts,
-          Match_actions,
-          Match_tags,
-          *input_match_event*
-  };
-  //
-  // Jamf Protect - Network Traffic
-  //
-  let JamfProtectNetworkTraffic_view  = view () {
-      jamfprotect_CL
-      | where event_metadata_product_s == "Network Traffic Stream"
-      // ASIM - Common Fields
-      | extend EventVendor = 'Jamf'
-      | extend EventProduct = 'Jamf Protect - Network Traffic Stream'
-      | project-rename
-      | extend
-          // Jamf Protect - Common Fields
-          EventType = "query",
-          EventSubType = "request",
-          EventStartTime = unixtime_milliseconds_todatetime(tolong(event_receiptTime_d)),
-          EventResult = case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Prevented", ''),
-          // Jamf Protect - Source User
-          SrcUsermail=column_ifexists('event_user_email_s', ''),
-          SrcUsername =  column_ifexists('event_user_name_s', ''),
-          // Jamf Protect - Source Device Hostnames
-          DvcHostname = case(isnotempty(input_host_hostname_s), input_host_hostname_s, isnotempty(host_info_host_name_s), host_info_host_name_s, event_device_userDeviceName_s),
-          DvcIpAddr = column_ifexists("event_source_ip_s", ""),
-          DvcId = column_ifexists("event_device_externalId_g", ""),
-          DvcOs = case(event_device_osType_s == "MAC_OS", "macOS", event_device_osType_s == "IOS", "iOS", event_device_osType_s == "ANDROID", "Android", "Other"),
-          SrcDeviceType = case(event_device_osType_s == "MAC_OS", "Computer", event_device_osType_s == "IOS", "Mobile Device", event_device_osType_s == "ANDROID", "Mobile Device", "Other"),
-          // Jamf Protect - DNS Specific
-          DnsQuery = column_ifexists('event_hostName_s', ''),
-          DvcAction = case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Blocked", ''),
-          DnsQueryName = column_ifexists('event_domain_s', ''),
-          DstIpAddr = column_ifexists('event_destination_ips_s', ''),
-          ThreatCategory = column_ifexists('event_eventType_description_s', ''),
-          DnsQueryTypeName = column_ifexists('event_dns_recordType_s', ''),
-          DnsResponseName = column_ifexists('event_dns_responseStatus_s', ''),
-          ThreatOriginalRiskLevel = column_ifexists('event_threat_result_s', '')
-      | project-keep
-          TimeGenerated,
-          EventVendor,
-          EventProduct,
-          EventType,
-          EventSubType,
-          EventStartTime,
-          EventResult,
-          DvcHostname,
-          DvcIpAddr,
-          DvcId,
-          DvcOs,
-          SrcDeviceType,
-          SrcUsermail,
-          SrcUsername,
-          DnsQuery,
-          DnsQueryName,
-          DstIpAddr,
-          DnsQueryTypeName,
-          DvcAction,
-          DnsResponseName,
-          ThreatOriginalRiskLevel
-  };
-  //
-  // Jamf Protect - Endpoint Telemetry
-  //
-  let JamfProtectTelemetry_view  = view () {
-      jamfprotect_CL
-      | where header_event_name_s startswith "AUE_" 
-          or header_event_name_s == "PLAINTEXT_LOG_COLLECTION_EVENT"
-          or header_event_name_s == "SYSTEM_PERFORMANCE_METRICS"
-      // ASIM - Common Fields
-      | extend EventVendor = 'Jamf'
-      | extend EventProduct = 'Jamf Protect - Telemetry'
-      // Data Field Normalization
-      //| project-rename 
-      //    DvcIpAddr = input_host_ips_s,
-      //    DvcId = context_identity_claims_clientid_g
-      | extend
-          // Jamf Protect Alerts - Generic Information
-          EventSeverity = case(
-                      input_match_severity_d == 0,
-                      "Informational",
-                      input_match_severity_d == 1,
-                      "Low",
-                      input_match_severity_d == 2,
-                      "Medium",
-                      input_match_severity_d == 3,
-                      "High",
-                      "Informational"
-                  ),
-          EventStartTime = unixtime_milliseconds_todatetime(tolong(timestamp_d)),
-          EventResult = coalesce(return_description_s, texts_s),
-          // Jamf Protect Telemetry - Endpoint Information
-          TargetModel = column_ifexists("metrics_hw_model_s", ""),
-          DvcOsVersion = column_ifexists("host_info_osversion_s", ""),
-          TargetHostname = case(isnotempty(input_host_hostname_s), input_host_hostname_s, isnotempty(host_info_host_name_s), host_info_host_name_s, event_device_userDeviceName_s),
-          DvcHostname = case(isnotempty(input_host_hostname_s), input_host_hostname_s, isnotempty(host_info_host_name_s), host_info_host_name_s, event_device_userDeviceName_s),
-          DvcIpAddr = column_ifexists("input_host_ips_s", ""),
-          DvcId = column_ifexists("context_identity_claims_clientid_g", ""),
-          // Jamf Protect - Event Types
-          EventType = case(
-                  header_event_name_s == "AUE_add_to_group",
-                  "UserAddedToGroup",
-                  header_event_name_s == "AUE_AUDITCTL",
-                  "AuditEvent",
-                  header_event_name_s == "AUE_AUDITON_SPOLICY",
-                  "AuditEvent",
-                  header_event_name_s == "AUE_auth_user",
-                  "Elevate",
-                  header_event_name_s == "AUE_BIND",
-                  "EndpointNetworkSession",
-                  header_event_name_s == "AUE_BIOS_FIRMWARE_VERSIONS",
-                  "SystemInformation",
-                  header_event_name_s == "AUE_CHDIR",
-                  "FolderMoved",
-                  header_event_name_s == "AUE_CHROOT",
-                  "FolderModified",
-                  header_event_name_s == "AUE_CONNECT",
-                  "EndpointNetworkSession",
-                  header_event_name_s == "AUE_create_group",
-                  "GroupCreated",
-                  header_event_name_s == "AUE_create_user",
-                  "UserCreated",
-                  header_event_name_s == "AUE_delete_group",
-                  "GroupDeleted",
-                  header_event_name_s == "AUE_delete_user",
-                  "UserDeleted",
-                  header_event_name_s == "AUE_EXECVE",
-                  "ProcessCreated",
-                  header_event_name_s == "AUE_EXIT",
-                  "ProcessTerminated",
-                  header_event_name_s == "AUE_FORK",
-                  "ProcessCreated",
-                  header_event_name_s == "AUE_GETAUID",
-                  "",
-                  header_event_name_s == "AUE_KILL",
-                  "ProcessTerminated",
-                  header_event_name_s == "AUE_LISTEN",
-                  "EndpointNetworkSession",
-                  header_event_name_s == "AUE_logout",
-                  "Logoff",
-                  header_event_name_s == "AUE_lw_login",
-                  "Logon",
-                  header_event_name_s == "AUE_MAC_SET_PROC",
-                  "AuditEvent",
-                  header_event_name_s == "AUE_modify_group",
-                  "GroupModified",
-                  header_event_name_s == "AUE_modify_password",
-                  "PasswordChanged",
-                  header_event_name_s == "AUE_modify_user",
-                  "UserModified",
-                  header_event_name_s == "AUE_MOUNT",
-                  "VolumeMount",
-                  header_event_name_s == "AUE_openssh",
-                  "SshInitiated",
-                  header_event_name_s == "AUE_PIDFORTASK",
-                  "ProcessCreated",
-                  header_event_name_s == "AUE_POSIX_SPAWN",
-                  "ProcessCreated",
-                  header_event_name_s == "AUE_remove_from_group",
-                  "UserRemovedFromGroup",
-                  header_event_name_s == "AUE_SESSION_CLOSE",
-                  "Logoff",
-                  header_event_name_s == "AUE_SESSION_END",
-                  "Logoff",
-                  header_event_name_s == "AUE_SESSION_START",
-                  "Logon",
-                  header_event_name_s == "AUE_SESSION_UPDATE",
-                  "",
-                  header_event_name_s == "AUE_SETPRIORITY",
-                  "",
-                  header_event_name_s == "AUE_SETSOCKOPT",
-                  "",
-                  header_event_name_s == "AUE_SETTIMEOFDAY",
-                  "SystemChange",
-                  header_event_name_s == "AUE_shutdown",
-                  "ShutdownInitiated",
-                  header_event_name_s == "AUE_SOCKETPAIR",
-                  "",
-                  header_event_name_s == "AUE_ssauthint",
-                  "Elevate",
-                  header_event_name_s == "AUE_ssauthmech",
-                  "Elevate",
-                  header_event_name_s == "AUE_ssauthorize",
-                  "Elevate",
-                  header_event_name_s == "AUE_TASKFORPID",
-                  "",
-                  header_event_name_s == "AUE_TASKNAMEFORPID",
-                  "",
-                  header_event_name_s == "AUE_UNMOUNT",
-                  "VolumeUnmount",
-                  header_event_name_s == "AUE_WAIT4",
-                  "ProcessTerminated",
-                  header_event_name_s == "PLAINTEXT_LOG_COLLECTION_EVENT",
-                  "LogFileCollected",
-                  header_event_name_s == "SYSTEM_PERFORMANCE_METRICS",
-                  "SystemPerformanceMetrics",
-                  "Unknown"
-              ),
-          // Jamf Protect Telemetry - Process
-          ParentProcessName = column_ifexists("subject_responsible_process_name_s", ""),
-          ParentProcessId = column_ifexists("subject_responsible_process_id_d", ""),
-          ParentProcessGuid = column_ifexists("exec_chain_child_parent_uuid_g", ""),
-          TargetProcessName = column_ifexists("subject_process_name_s", ""),
-          TargetProcessId = column_ifexists("subject_process_id_d", ""),
-          TargetProcessGuid = column_ifexists("exec_chain_thread_uuid_g", ""),
-          TargetProcessSHA256 = todynamic(column_ifexists("subject_process_hash_s", "")),
-          TargetUserId = toreal(column_ifexists("subject_user_id_d", "")),
-          TargetUsername = tostring(column_ifexists("subject_user_name_s", "")),
-          TargetProcessCommandLine = column_ifexists("exec_args_args_compiled_s", ""),
-          ActorUsername = tostring(column_ifexists("subject_effective_user_name_s", "")),
-          ActorUserId = column_ifexists("subject_audit_user_name_s", ""),
-          //column_ifexists("application_name_s", ""),
-          //
-          // Jamf Protect Telemetry - Audit/Group
-          //
-          GroupName = todynamic(column_ifexists("subject_group_name_s", "")),
-          // Jamf Protect Telemetry - Network
-          DstIpAddr = column_ifexists("socket_inet_ip_address_s", ""),
-          DstPortNumber = column_ifexists("socket_inet_port_d", ""),
-          NetworkProtocolVersion = case(socket_inet_id_d == 128, "IPV4", socket_inet_id_d == 129, "IPV6", ""),
-          SrcIpAddr = column_ifexists("subject_terminal_id_ip_address_s", ""),
-          //
-          // Jamf Protect Telemetry - Binaries
-          //
-          // TargetBinaryFilePath = todynamic(Related_binaries[0].path),
-          TargetBinarySHA256 = tostring(identity_cd_hash_s),
-          // TargetBinarySigningInfoMessage = Related_binaries[0].signingInfo.statusMessage,
-          TargetbinarySignerType = case(identity_signer_type_d == 0, "Developer", identity_signer_type_d == 1, "Apple", ""),
-          TargetBinarySigningTeamID = tostring(identity_team_id_s),
-          TargetBinarySigningAppID = tostring(identity_signer_id_s),
-          //
-          // Jamf Protect Telemetry - Log File Collection
-          //
-          TargetFilePath = tostring(parse_json(path_s))
-      | project-reorder
-          EventStartTime,
-          EventVendor,
-          EventProduct,
-          EventType,
-          EventSeverity,
-          EventResult,
-          TargetHostname,
-          DvcHostname,
-          DvcId,
-          DvcOsVersion,
-          DvcIpAddr,
-          TargetModel,
-          TargetUserId,
-          TargetUsername,
-          ParentProcessName,
-          ParentProcessId,
-          ParentProcessGuid,
-          TargetProcessName,
-          TargetProcessId,
-          TargetProcessGuid,
-          TargetProcessSHA256,
-          TargetProcessCommandLine,
-          ActorUsername,
-          ActorUserId,
-          TargetBinarySHA256,
-          TargetbinarySignerType,
-          TargetBinarySigningTeamID,
-          TargetBinarySigningAppID,
-          GroupName,
-          SrcIpAddr,
-          DstIpAddr,
-          DstPortNumber,
-          NetworkProtocolVersion,
-          TargetFilePath
-      | project-away
-          arguments_sflags_d,
-          arguments_am_failure_d,
-          arguments_am_success_d
-  };
-  //
-  // Jamf Protect - Threat Events
-  //
-  let JamfProtectThreatEvents_view  = view () {
-      jamfprotect_CL
-      | where event_metadata_product_s == "Threat Events Stream"
-      // ASIM - Common Fields
-      | extend EventVendor = 'Jamf'
-      | extend EventProduct = 'Jamf Protect - Threat Events Stream'
-      | project-rename
-      | extend
-          // Jamf Protect - Common Fields
-          EventStartTime = column_ifexists("event_timestamp_t", ""),
-          EventResult=case(event_action_s == "Blocked", "Blocked", event_action_s == "Detected", "Detected", ''),
-          EventReportUrl = column_ifexists("event_eventUrl_s", ""),
-          // Jamf Protect - Alert Details
-          EventSeverity = case(event_severity_d == 2, "Informational", event_severity_d == 4, "Low", event_severity_d == 6, "Medium", event_severity_d == 8, "High", event_severity_d == 10, "High", "Informational"),
-          // Jamf Protect - Source User
-          SrcUsermail=column_ifexists('event_user_email_s', ''),
-          SrcUsername=column_ifexists('event_user_name_s', ''),
-          // Jamf Protect - Source Device Hostnames
-          DvcHostname = column_ifexists("event_device_userDeviceName_s", ""),
-          DvcIpAddr = column_ifexists("event_source_ip_s", ""),
-          DvcId = column_ifexists("event_device_externalId_g", ""),
-          DvcOs=case(event_device_os_s has "MAC_OS", "macOS", event_device_os_s has "IOS", "iOS", event_device_os_s has "ANDROID", "Android", "Other"),
-          SrcDeviceType=case(event_device_os_s has "MAC_OS", "Computer", event_device_os_s has "IOS", "Mobile Device", event_device_os_s has "ANDROID", "Mobile Device", "Other"),
-          // Jamf Protect - DNS Specific
-          DnsQuery=column_ifexists('event_hostName_s', ''),
-          DvcAction=case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Blocked", ''),
-          DnsQueryName=column_ifexists('event_destination_name_s', ''),
-          DstIpAddr=column_ifexists('event_destination_ip_s', ''),
-          ThreatCategory=column_ifexists('event_eventType_description_s', ''),
-          ThreatOriginalRiskLevel=column_ifexists('event_threat_result_s', ''),
-          // Jamf Protect - App Specific
-          TargetFileName = column_ifexists("event_app_name_s", ""),
-          TargetFileSHA1 = column_ifexists("event_app_sha1_s", ""),
-          TargetFileSHA256 = column_ifexists("event_app_sha256_s", "")
-      | project-keep
-          TimeGenerated,
-          EventVendor,
-          EventProduct,
-          EventStartTime,
-          EventResult,
-          EventReportUrl,
-          EventSeverity,
-          DvcHostname,
-          DvcIpAddr,
-          DvcId,
-          SrcDeviceType,
-          SrcUsermail,
-          SrcUsername,
-          DnsQuery,
-          DnsQueryName,
-          DstIpAddr,
-          ThreatCategory,
-          DvcAction,
-          ThreatOriginalRiskLevel,
-          TargetFileName,
-          TargetFileSHA1,
-          TargetFileSHA256
-  };
-  union isfuzzy=true JamfProtectAlerts_view, JamfProtectUnifiedLog_view, JamfProtectNetworkTraffic_view, JamfProtectTelemetry_view, JamfProtectThreatEvents_view
+    let JamfProtectAlerts_view  = view () {
+    jamfprotectalerts_CL
+    | extend
+        ActingProcessCreationTime = unixtime_seconds_todatetime(tolong(input.related.processes[array_length(input.related.processes) - 1].startTimestamp)),
+        ParentProcessCreationTime = iff(
+                                    array_length(input.related.processes) > 1, 
+                                    unixtime_seconds_todatetime(tolong(input.related.processes[0].startTimestamp)), 
+                                    datetime(null)
+                                ),
+        TargetProcessCreationTime = unixtime_seconds_todatetime(todouble(input.related.processes[0].startTimestamp)),
+        TargetUserId = coalesce(input.related.users[1].uid, input.related.users[0].uid),
+        TargetUsername = coalesce(input.related.users[1].name, input.related.users[0].name)
+        };
+    let JamfProtectUnifiedLog_view  = view () {
+    jamfprotectunifiedlogs_CL
+    | extend EventStartTime = unixtime_seconds_todatetime(tolong(input.match.event.timestamp))
+    };
+    //
+    // Jamf Protect - Endpoint Telemetry
+    //
+    let JamfProtectTelemetryv1_view  = view () {
+    jamfprotecttelemetryv1_CL
+    | extend
+        EventStartTime = unixtime_seconds_todatetime(todouble(header.time_seconds_epoch)),
+        EventResult = coalesce(return.description, texts)
+    };
+    let JamfProtectTelemetryv2_view  = view () {
+    jamfprotecttelemetryv2_CL
+    // Generic Fields
+    | extend
+        EventExpanded = tostring(parse_json(event)[strcat_array(bag_keys(event), '.')]),
+        eventTypeHuman = tostring(bag_keys(event)[0])
+    | extend EventResult = iif((event[eventTypeHuman]['success'] == true), "Success", dynamic(null))
+    | extend
+        EventMessage = case(
+                    eventTypeHuman == "authentication",
+                    "A user authentication happened",
+                    eventTypeHuman == "authorization_judgement",
+                    "A process has its rights petition judged",
+                    eventTypeHuman == "authorization_petition",
+                    "A process has its rights petition judged",
+                    eventTypeHuman == "bios_uefi",
+                    "Collection of bios and firmware data",
+                    eventTypeHuman == "btm_launch_item_add",
+                    "Apple's Background Task Manager notified that an item has been added",
+                    eventTypeHuman == "btm_launch_item_remove",
+                    "Apple's Background Task Manager notified that an existing item has been removed",
+                    eventTypeHuman == "chroot",
+                    "Software has changed its apparent root directory in which it's actively operating out of",
+                    eventTypeHuman == "cs_invalidated",
+                    "The system detected that a process has had its code signature marked as invalid",
+                    eventTypeHuman == "exec",
+                    "A new process has been executed",
+                    eventTypeHuman == "kextload",
+                    "A kernel extension (kext) was loaded",
+                    eventTypeHuman == "kextunload",
+                    "A kernel extension (kext) was unloaded",
+                    eventTypeHuman == "login_login",
+                    "A user attempted to log in using /usr/bin/login",
+                    eventTypeHuman == "login_logout",
+                    "A user logged out from /usr/bin/login",
+                    eventTypeHuman == "lw_session_lock",
+                    "A user has locked the screen",
+                    eventTypeHuman == "lw_session_login",
+                    "A user has logged in via the Login Window",
+                    eventTypeHuman == "lw_session_logout",
+                    "A user has logged out of an active graphical session",
+                    eventTypeHuman == "lw_session_unlock",
+                    "A user has unlocked the screen from the Login Window",
+                    eventTypeHuman == "mount",
+                    "A file system has been mounted",
+                    eventTypeHuman == "od_attribute_set",
+                    "Attribute set on user or group using Open Directory",
+                    eventTypeHuman == "od_attribute_value_add",
+                    "Attribute added to a user or group using Open Directory",
+                    eventTypeHuman == "od_attribute_value_remove",
+                    "Attribute removed from a user or group using Open Directory",
+                    eventTypeHuman == "od_create_group",
+                    "A group has been created using Open Directory",
+                    eventTypeHuman == "od_create_user",
+                    "A user has been created using Open Directory",
+                    eventTypeHuman == "od_delete_group",
+                    "A group has been deleted using Open Directory",
+                    eventTypeHuman == "od_delete_user",
+                    "A user has been deleted using Open Directory",
+                    eventTypeHuman == "od_disable_user",
+                    "A user has been disabled using Open Directory",
+                    eventTypeHuman == "od_enable_user",
+                    "A user has been enabled using Open Directory",
+                    eventTypeHuman == "od_group_add",
+                    "A member has been added to a group using Open Directory",
+                    eventTypeHuman == "od_group_remove",
+                    "A member has been removed from a group using Open Directory",
+                    eventTypeHuman == "od_group_set",
+                    "A group has a member initialised or replaced using Open Directory",
+                    eventTypeHuman == "od_modify_password",
+                    "A user password is modified via Open Directory",
+                    eventTypeHuman == "openssh_login",
+                    "A user has logged into the system via OpenSSH",
+                    eventTypeHuman == "openssh_logout",
+                    "A user has logged out of an OpenSSH session",
+                    eventTypeHuman == "performance",
+                    "Collection of system performance data",
+                    eventTypeHuman == "profile_add",
+                    "A configuration profile is installed on the system",
+                    eventTypeHuman == "profile_remove",
+                    "A configuration profile is removed from the system",
+                    eventTypeHuman == "remount",
+                    "A file system has been mounted",
+                    eventTypeHuman == "screenscharing_attach",
+                    "A screensharing session has attached to a graphical session",
+                    eventTypeHuman == "screenscharing_detach",
+                    "A screensharing session has detached from a graphical session",
+                    eventTypeHuman == "settime",
+                    "The system time was attempted to be set",
+                    eventTypeHuman == "su",
+                    "A user attempts to start a new shell using a substitute user identity",
+                    eventTypeHuman == "sudo",
+                    "A sudo attempt occured",
+                    eventTypeHuman == "unmount",
+                    "A file system has been mounted",
+                    eventTypeHuman == "xp_malware_detected",
+                    "Apple's XProtect detected malware on the system",
+                    eventTypeHuman == "xp_malware_remediated",
+                    "Apple's XProtect remediated malware on the system",
+                    eventTypeHuman == "file_collection",
+                    "A crash or diagnostic file has been collected",
+                    eventTypeHuman == "log_collection",
+                    "Entries from a log file have been collected",
+                    "No reason yet defined for this event"
+                ),
+        EventType = case(
+                    eventTypeHuman == "authentication",
+                    "Logon",
+                    eventTypeHuman == "authorization_judgement",
+                    "ProcessCreated",
+                    eventTypeHuman == "authorization_petition",
+                    "ProcessCreated",
+                    eventTypeHuman == "bios_uefi",
+                    "Hardware",
+                    eventTypeHuman == "btm_launch_item_add",
+                    "Create",
+                    eventTypeHuman == "btm_launch_item_remove",
+                    "Delete",
+                    eventTypeHuman == "chroot",
+                    "Set",
+                    eventTypeHuman == "cs_invalidated",
+                    "Other",
+                    eventTypeHuman == "exec",
+                    "ProcessCreated",
+                    eventTypeHuman == "kextload",
+                    "Create",
+                    eventTypeHuman == "kextunload",
+                    "Delete",
+                    eventTypeHuman == "login_login",
+                    "Logon",
+                    eventTypeHuman == "login_logout",
+                    "Logoff",
+                    eventTypeHuman == "lw_session_lock",
+                    "Logoff",
+                    eventTypeHuman == "lw_session_login",
+                    "Logon",
+                    eventTypeHuman == "lw_session_logout",
+                    "Logoff",
+                    eventTypeHuman == "lw_session_unlock",
+                    "Logon",
+                    eventTypeHuman == "mount",
+                    "FileSystemMounted",
+                    eventTypeHuman == "od_attribute_set",
+                    "Set",
+                    eventTypeHuman == "od_attribute_value_add",
+                    "Create",
+                    eventTypeHuman == "od_attribute_value_remove",
+                    "Delete",
+                    eventTypeHuman == "od_create_group",
+                    "GroupCreated",
+                    eventTypeHuman == "od_create_user",
+                    "UserCreated",
+                    eventTypeHuman == "od_delete_group",
+                    "GroupDeleted",
+                    eventTypeHuman == "od_delete_user",
+                    "UserDeleted",
+                    eventTypeHuman == "od_disable_user",
+                    "UserDisabled",
+                    eventTypeHuman == "od_enable_user",
+                    "UserEnabled",
+                    eventTypeHuman == "od_group_add",
+                    "UserAddedToGroup",
+                    eventTypeHuman == "od_group_remove",
+                    "UserRemovedFromGroup",
+                    eventTypeHuman == "od_group_set",
+                    "GroupModified",
+                    eventTypeHuman == "od_modify_password",
+                    "PasswordChanged",
+                    eventTypeHuman == "openssh_login",
+                    "Logon",
+                    eventTypeHuman == "openssh_logout",
+                    "Logoff",
+                    eventTypeHuman == "performance",
+                    "PerformanceData",
+                    eventTypeHuman == "profile_add",
+                    "Create",
+                    eventTypeHuman == "profile_remove",
+                    "Delete",
+                    eventTypeHuman == "remount",
+                    "FileSystemRemounted",
+                    eventTypeHuman == "screenscharing_attach",
+                    "Logon",
+                    eventTypeHuman == "screenscharing_detach",
+                    "Logoff",
+                    eventTypeHuman == "settime",
+                    "Set",
+                    eventTypeHuman == "su",
+                    "Elevate",
+                    eventTypeHuman == "sudo",
+                    "Elevate",
+                    eventTypeHuman == "unmount",
+                    "FileSystemUnmounted",
+                    eventTypeHuman == "xp_malware_detected",
+                    "MalwareDetected",
+                    eventTypeHuman == "xp_malware_remediated",
+                    "MalwareRemediated",
+                    ""
+                ),
+        EventSubType = case(
+                    eventTypeHuman == "authentication",
+                    "Interactive",
+                    eventTypeHuman == "btm_launch_item_add",
+                    "btm",
+                    eventTypeHuman == "btm_launch_item_remove",
+                    "btm",
+                    eventTypeHuman == "chroot",
+                    "Directory",
+                    eventTypeHuman == "cs_invalidated",
+                    "Other",
+                    eventTypeHuman == "kextload",
+                    "System Settings",
+                    eventTypeHuman == "kextunload",
+                    "System Settings",
+                    eventTypeHuman == "login_login",
+                    "Interactive",
+                    eventTypeHuman == "login_logout",
+                    "Interactive",
+                    eventTypeHuman == "lw_session_lock",
+                    "Interactive",
+                    eventTypeHuman == "lw_session_login",
+                    "Interactive",
+                    eventTypeHuman == "lw_session_logout",
+                    "Interactive",
+                    eventTypeHuman == "lw_session_unlock",
+                    "Interactive",
+                    eventTypeHuman == "od_attribute_set",
+                    "Attribute",
+                    eventTypeHuman == "od_attribute_value_add",
+                    "Attribute",
+                    eventTypeHuman == "od_attribute_value_remove",
+                    "Attribute",
+                    eventTypeHuman == "openssh_login",
+                    "Interactive",
+                    eventTypeHuman == "openssh_logout",
+                    "Interactive",
+                    eventTypeHuman == "profile_add",
+                    "Configuration Profile",
+                    eventTypeHuman == "profile_remove",
+                    "Configuration Profile",
+                    eventTypeHuman == "screenscharing_attach",
+                    "RemoteInteractive",
+                    eventTypeHuman == "screenscharing_detach",
+                    "RemoteInteractive",
+                    eventTypeHuman == "settime",
+                    "System Settings",
+                    eventTypeHuman == "su",
+                    "Interactive",
+                    eventTypeHuman == "sudo",
+                    "Interactive",
+                    ""
+                )
+    // Jamf Protect Telemetry - Event Process
+    | extend eventContext = 
+        iif(
+        isnotempty(event[eventTypeHuman]['app']['audit_token']),
+        event[eventTypeHuman]['app'],
+        iif(
+        isnotempty(event[eventTypeHuman]['target']['audit_token']),
+        event[eventTypeHuman]['target'],
+        iif(
+        isnotempty(event[eventTypeHuman]['data']['od']['audit_token']),
+        event[eventTypeHuman]['data']['od'],
+        iif(
+        isnotempty(event[eventTypeHuman]['data']['token']['audit_token']),
+        event[eventTypeHuman]['data']['token'],
+        iif(
+        isnotempty(event[eventTypeHuman]['data']['touchid']['audit_token']),
+        event[eventTypeHuman]['data']['touchid'],
+        iif(
+        isnotempty(event[eventTypeHuman]['instigator']['audit_token']),
+        event[eventTypeHuman]['instigator'],
+        ['process']
+    )
+    )
+    )
+    )
+    )
+    )
+    | extend
+        TargetProcessName = tostring(eventContext.executable.path),
+        TargetProcessId = tostring(eventContext.audit_token.pid),
+        TargetProcessGuid = tostring(eventContext.audit_token.uuid),
+        TargetProcessCreationTime = tostring(eventContext.start_time),
+        TargetProcessSHA1 = tostring(eventContext.executable.sha1),
+        TargetProcessSHA256 = tostring(eventContext.executable.sha256),
+        TargetProcessCommandLine = event[eventTypeHuman]['args'],
+        TargetProcessTTY = tostring(eventContext.tty.path),
+        TargetBinarySigningAppID = tostring(eventContext.signing_id),
+        TargetBinarySigningTeamID = tostring(eventContext.team_id),
+        TargetBinaryCDHash = tostring(eventContext.cdhash),
+        TargetBinaryIsESClient = tobool(eventContext.is_es_client),
+        TargetBinaryIsPlatformBinary = tobool(eventContext.is_platform_binary),
+        TargetUserId = tostring(eventContext.audit_token.euid),
+        ActingProcessId = tostring(eventContext.parent_audit_token.pid),
+        ActingProcessGuid = tostring(eventContext.parent_audit_token.uuid),
+        ActorUserId = tostring(eventContext.parent_audit_token.euid),
+        ParentProcessId = tostring(eventContext.responsible_audit_token.pid),
+        ParentProcessGuid = tostring(eventContext.responsible_audit_token.uuid)
+    // Jamf Protect Telemetry - Revealing Code Signing flags
+    | extend TargetProcessCodesignFlags = 
+                                                iif(isnotempty(eventContext.codesigning_flags),
+                                            bag_pack(
+                                            "CS_VALID",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000001) > 0, true, false),
+                                            "CS_ADHOC",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000002) > 0, true, false),
+                                            "CS_GET_TASK_ALLOW",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000004) > 0, true, false),
+                                            "CS_INSTALLER",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000008) > 0, true, false),
+                                            "CS_FORCED_LV",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000010) > 0, true, false),
+                                            "CS_INVALID_ALLOWED",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000020) > 0, true, false),
+                                            "CS_HARD",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000100) > 0, true, false),
+                                            "CS_KILL",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000200) > 0, true, false),
+                                            "CS_CHECK_EXPIRATION",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000400) > 0, true, false),
+                                            "CS_RESTRICT",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00000800) > 0, true, false),
+                                            "CS_ENFORCEMENT",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00001000) > 0, true, false),
+                                            "CS_REQUIRE_LV",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00002000) > 0, true, false),
+                                            "CS_ENTITLEMENTS_VALIDATED",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00004000) > 0, true, false),
+                                            "CS_NVRAM_UNRESTRICTED",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00008000) > 0, true, false),
+                                            "CS_RUNTIME",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00010000) > 0, true, false),
+                                            "CS_LINKER_SIGNED",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x20000) > 0, true, false),
+                                            "CS_EXEC_SET_HARD",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00100000) > 0, true, false),
+                                            "CS_EXEC_SET_KILL",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00200000) > 0, true, false),
+                                            "CS_EXEC_SET_ENFORCEMENT",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00400000) > 0, true, false),
+                                            "CS_EXEC_INHERIT_SIP",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x00800000) > 0, true, false),
+                                            "CS_KILLED",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x01000000) > 0, true, false),
+                                            "CS_DYLD_PLATFORM",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x02000000) > 0, true, false),
+                                            "CS_PLATFORM_BINARY",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x04000000) > 0, true, false),
+                                            "CS_PLATFORM_PATH",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x08000000) > 0, true, false),
+                                            "CS_DEBUGGED",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x10000000) > 0, true, false),
+                                            "CS_SIGNED",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x20000000) > 0, true, false),
+                                            "CS_DEV_CODE",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x40000000) > 0, true, false),
+                                            "CS_DATAVAULT_CONTROLLER",
+                                            iff(binary_and(toint(eventContext.codesigning_flags), 0x80000000) > 0, true, false)
+                                        ), "")
+    // Event Specific - authentication
+    | extend TargetUsername =
+        iif(
+        isnotempty(event[eventTypeHuman]['username']),
+        event[eventTypeHuman]['username'],
+        iif(
+        isnotempty(event[eventTypeHuman]['to_username']),
+        event[eventTypeHuman]['to_username'],
+        iif(
+        isnotempty(event[eventTypeHuman]['account_name']),
+        event[eventTypeHuman]['account_name'],
+        iif(
+        isnotempty(event[eventTypeHuman]['user_name']),
+        event[eventTypeHuman]['user_name'],
+        iif(
+        isnotempty(event[eventTypeHuman]['authentication_username']),
+        event[eventTypeHuman]['authentication_username'],
+        ""
+    )
+    )
+    )
+    )
+    )
+    // Event Specific - authentication
+    | extend ActorUsername = 
+        iif(
+        isnotempty(event[eventTypeHuman]['from_username']),
+        event[eventTypeHuman]['from_username'],
+        iif(
+        isnotempty(event[eventTypeHuman]['session_username']),
+        event[eventTypeHuman]['session_username'],
+        ""
+    )
+    )
+    | extend Authentication = iif(
+                                eventTypeHuman == "authentication",
+                                bag_pack(
+        "authentication_method",
+        iff(isnotempty(event[eventTypeHuman].data), tostring(bag_keys(event[eventTypeHuman].data)[0]), "")
+    ),
+                                dynamic(null)
+                            )
+    // Event Specific - bios_uefi
+    | extend HardwareInformation = iif(
+                                eventTypeHuman == "bios_uefi",
+                                bag_pack(
+        "host_architecture",
+        iff(isnotempty(event[eventTypeHuman].architecture), event[eventTypeHuman].architecture, ""),
+        "firmware_version",
+        iff(isnotempty(event[eventTypeHuman].bios.['firmware-version']), event[eventTypeHuman].bios.['firmware-version'], ""),
+        "system_firmware_version",
+        iff(isnotempty(event[eventTypeHuman].bios.['system-firmware-version']), event[eventTypeHuman].bios.['system-firmware-version'], "")
+    ),
+                                dynamic(null)
+                            )
+    // Event Specific - btm_launch_item_add & btm_launch_item_remove
+    | extend BtmItem = iif(
+                        eventTypeHuman in ("btm_launch_item_add", "btm_launch_item_remove", "remount"),
+                        bag_pack(
+        "btm_executable_path",
+        iff(isnotempty(event[eventTypeHuman].executable_path), event[eventTypeHuman].executable_path, ""),
+        "btm_item_app_url",
+        iff(isnotempty(event[eventTypeHuman].item.app_url), event[eventTypeHuman].item.app_url, ""),
+        "btm_item_url",
+        iff(isnotempty(event[eventTypeHuman].item.item_url), event[eventTypeHuman].item.item_url, ""),
+        "btm_item_managed",
+        iff(isnotempty(event[eventTypeHuman].item.managed), event[eventTypeHuman].item.managed, ""),
+        "btm_item_legacy",
+        iff(isnotempty(event[eventTypeHuman].item.legacy), event[eventTypeHuman].item.legacy, ""),
+        "btm_item_uid",
+        iff(isnotempty(event[eventTypeHuman].item.uid), event[eventTypeHuman].item.uid, ""),
+        "btm_item_type",
+        iff(
+        isnotempty(event[eventTypeHuman].item.item_type),
+        case(
+        event[eventTypeHuman].item.item_type == 0,
+        "UserItem",
+        event[eventTypeHuman].item.item_type == 1,
+        "App",
+        event[eventTypeHuman].item.item_type == 2,
+        "LoginItem",
+        event[eventTypeHuman].item.item_type == 3,
+        "LaunchAgent",
+        event[eventTypeHuman].item.item_type == 4,
+        "LaunchDaemon",
+        "Unknown"
+    ),
+        ""
+    )
+    ),
+                        dynamic(null)
+                    )
+    // Event Specific - chroot
+    | extend Chroot = iif(
+                        eventTypeHuman == "chroot",
+                        bag_pack(
+        "apparent_root_directory",
+        iff(isnotempty(event[eventTypeHuman].target), event[eventTypeHuman].target.path, ""),
+        "stats",
+        iff(isnotempty(event[eventTypeHuman].target.stat), event[eventTypeHuman].target.stat, "")
+    ),
+                        dynamic(null)
+                    )
+    // Event Specific - cs_invalidated
+    // Event Specific - exec
+    // Event Specific - kextload & kextunload
+    | extend KernelExtension = iif(
+                                eventTypeHuman in ("kextload", "kextunload"),
+                                bag_pack(
+        "kext_identifier",
+        iff(isnotempty(event[eventTypeHuman].identifier), event[eventTypeHuman].identifier, "")
+    ),
+                                dynamic(null)
+                            )
+    // Event Specific - lw_session_lock & lw_session_unlock & lw_session_login & lw_session_logout
+    | extend LoginWindowSession = iif(
+                                    eventTypeHuman in ("lw_session_lock", "lw_session_unlock", "lw_session_login", "lw_session_logout"),
+                                    bag_pack(
+        "graphical_session_id",
+        iff(isnotempty(event[eventTypeHuman].graphical_session_id), event[eventTypeHuman].graphical_session_id, "")
+    ),
+                                    dynamic(null)
+                                )
+    // Event Specific - mount & remount & unmount
+    | extend FileSystem = iif(
+                            eventTypeHuman in ("mount", "unmount", "remount"),
+                            bag_pack(
+        "volume_device_name",
+        iff(isnotempty(event[eventTypeHuman].statfs.f_mntfromname), event[eventTypeHuman].statfs.f_mntfromname, ""),
+        "volume_mount_name",
+        iff(isnotempty(event[eventTypeHuman].statfs.f_mntonname), event[eventTypeHuman].statfs.f_mntonname, ""),
+        "volume_file_system_type",
+        iff(isnotempty(event[eventTypeHuman].statfs.f_fstypename), event[eventTypeHuman].statfs.f_fstypename, ""),
+        "volume_size",
+        iff(isnotempty(event[eventTypeHuman].statfs.f_bsize), event[eventTypeHuman].statfs.f_bsize, "")
+    ),
+                            dynamic(null)
+                        )
+    // Event Specific - od_attribute_set & od_attribute_value_add & od_attribute_value_remove & od_create_group & od_create_user & od_delete_group & od_delete_user & od_disable_user & od_enable_user
+    | extend OpenDirectory = iif(
+                                eventTypeHuman in ("od_attribute_set", "od_attribute_value_add", "od_attribute_value_remove", "od_create_group", "od_create_user", "od_delete_group", "od_delete_user", "od_disable_user", "od_enable_user"),
+                                bag_pack(
+        "group_name",
+        iff(isnotempty(event[eventTypeHuman].group_name), event[eventTypeHuman].group_name, ""),
+        "member_array",
+        iff(isnotempty(event[eventTypeHuman].members.member_array), event[eventTypeHuman].members.member_array, ""),
+        "member_value",
+        iff(isnotempty(event[eventTypeHuman].member.member_value), event[eventTypeHuman].member.member_value, ""),
+        "user_name",
+        iff(isnotempty(event[eventTypeHuman].user_name), event[eventTypeHuman].user_name, ""),
+        "account_name",
+        iff(isnotempty(event[eventTypeHuman].account_name), event[eventTypeHuman].account_name, ""),
+        "db_path",
+        iff(isnotempty(event[eventTypeHuman].db_path), event[eventTypeHuman].db_path, ""),
+        "record_name",
+        iff(isnotempty(event[eventTypeHuman].record_name), event[eventTypeHuman].record_name, ""),
+        "attribute_name",
+        iff(isnotempty(event[eventTypeHuman].attribute_name), event[eventTypeHuman].attribute_name, ""),
+        "attribute_value",
+        iff(isnotempty(event[eventTypeHuman].attribute_value), event[eventTypeHuman].attribute_value, ""),
+        "node_name",
+        iff(isnotempty(event[eventTypeHuman].node_name), event[eventTypeHuman].node_name, "")
+    ),
+                                dynamic(null)
+                            )
+    // Event Specific - openssh_login & openssh_logout
+    | extend SSHContext = iif(
+                            eventTypeHuman in ("openssh_login", "openssh_logout"),
+                            bag_pack(
+        "source_address_type", 
+        iff(
+        isnotempty(event[eventTypeHuman].source_address_type),
+        case(
+        event[eventTypeHuman].source_address_type == 0,
+        "Unknown",
+        event[eventTypeHuman].source_address_type == 1,
+        "IPv4",
+        event[eventTypeHuman].source_address_type == 2,
+        "IPv6",
+        event[eventTypeHuman].source_address_type == 3,
+        "UNIX Socket",
+        "Unknown"
+    ),
+        "" 
+    ),
+        "result_type", 
+        iff(
+        isnotempty(event[eventTypeHuman].result_type),
+        case(
+        event[eventTypeHuman].result_type == 0,
+        "Exceeded maximum attempts",
+        event[eventTypeHuman].result_type == 1,
+        "Denied by root",
+        event[eventTypeHuman].result_type == 2,
+        "Success",
+        event[eventTypeHuman].result_type == 3,
+        "No reason",
+        event[eventTypeHuman].result_type == 4,
+        "Password",
+        event[eventTypeHuman].result_type == 5,
+        "kbdint",
+        event[eventTypeHuman].result_type == 6,
+        "Public key",
+        event[eventTypeHuman].result_type == 7,
+        "Host based",
+        event[eventTypeHuman].result_type == 8,
+        "GSS API",
+        event[eventTypeHuman].result_type == 9,
+        "Invalid user",
+        "Unknown"
+    ),
+        "" 
+    )
+    ),
+                            dynamic(null)  
+                        )
+    // Event Specific - performance
+    // Event Specific - profile_add & profile_remove
+    | extend Profile = iif(
+                        eventTypeHuman in ("profile_add", "profile_remove"),
+                        bag_pack(
+        "profile_scope",
+        iff(isnotempty(event[eventTypeHuman].profile.scope), event[eventTypeHuman].profile.scope, ""),
+        "profile_identifier",
+        iff(isnotempty(event[eventTypeHuman].profile.identifier), event[eventTypeHuman].profile.identifiery, ""),
+        "profile_uuid",
+        iff(isnotempty(event[eventTypeHuman].profile.uuid), event[eventTypeHuman].profile.uuid, ""),
+        "profile_display_name",
+        iff(isnotempty(event[eventTypeHuman].profile.display_name), event[eventTypeHuman].profile.display_name, ""),
+        "profile_organization",
+        iff(isnotempty(event[eventTypeHuman].profile.organization), event[eventTypeHuman].profile.organization, ""),
+        "profile_is_updated",
+        iff(isnotempty(event[eventTypeHuman].is_update), event[eventTypeHuman].is_update, ""),
+        "profile_install_source", 
+        iff(
+        isnotempty(event[eventTypeHuman].profile.install_source),
+        case(
+        event[eventTypeHuman].profile.install_source == 0,
+        "mdm",
+        event[eventTypeHuman].profile.install_source == 1,
+        "manual",
+        "Unknown"
+    ),
+        "" 
+    )
+    ),
+                        dynamic(null)
+                    )
+    // Event Specific - screenscharing_attach & screensharing_detach
+    | extend Screensharing = iif(
+                                eventTypeHuman in ("screensharing_attach", "screensharing_detach"),
+                                bag_pack(
+        "existing_session",
+        iff(isnotempty(event[eventTypeHuman].existing_session), event[eventTypeHuman].existing_session, ""),
+        "graphical_session_id",
+        iff(isnotempty(event[eventTypeHuman].graphical_authentication_username), event[eventTypeHuman].graphical_authentication_username, ""),
+        "session_username",
+        iff(isnotempty(event[eventTypeHuman].session_username), event[eventTypeHuman].session_username, ""),
+        "viewer_appleid",
+        iff(isnotempty(event[eventTypeHuman].viewer_appleid), event[eventTypeHuman].viewer_appleid, ""),
+        "authentication_type",
+        iff(isnotempty(event[eventTypeHuman].authentication_type), event[eventTypeHuman].authentication_type, ""),
+        "source_address",
+        iff(isnotempty(event[eventTypeHuman].source_address), event[eventTypeHuman].source_address, ""),
+        "source_address_type", 
+        iff(
+        isnotempty(event[eventTypeHuman].source_address_type),
+        case(
+        event[eventTypeHuman].source_address_type == 0,
+        "Unknown",
+        event[eventTypeHuman].source_address_type == 1,
+        "IPv4",
+        event[eventTypeHuman].source_address_type == 2,
+        "IPv6",
+        event[eventTypeHuman].source_address_type == 3,
+        "UNIX Socket",
+        "Unknown"
+    ),
+        "" 
+    )
+    ),
+                                dynamic(null)
+                            )
+    // Event Specific - su
+    | extend Su = iif(
+                    eventTypeHuman == "su",
+                    bag_pack(
+        "username",
+        iff(isnotempty(event[eventTypeHuman].username), event[eventTypeHuman].username, ""),
+        "uid",
+        iff(isnotempty(event[eventTypeHuman].uid), event[eventTypeHuman].uid, ""),
+        "args",
+        iff(isnotempty(event[eventTypeHuman].argv), event[eventTypeHuman].argv, ""),
+        "env_vars",
+        iff(isnotempty(event[eventTypeHuman].env), event[eventTypeHuman].env, ""),
+        "env_count",
+        iff(isnotempty(event[eventTypeHuman].env_count), event[eventTypeHuman].env_count, ""),
+        "from_username",
+        iff(isnotempty(event[eventTypeHuman].from_username), event[eventTypeHuman].from_username, ""),
+        "to_username",
+        iff(isnotempty(event[eventTypeHuman].to_username), event[eventTypeHuman].to_username, ""),
+        "failure_message",
+        iff(isnotempty(event[eventTypeHuman].failure_reason), event[eventTypeHuman].failure_reason, "")
+    ),
+                    dynamic(null)
+                )
+    // Event Specific - sudo
+    | extend Sudo = iif(
+                        eventTypeHuman == "sudo",
+                        bag_pack(
+        "TargetProcessCommandLine",
+        iff(isnotempty(event[eventTypeHuman].command), event[eventTypeHuman].command, ""),
+        "attribute_name",
+        iff(isnotempty(event[eventTypeHuman].attribute_name), event[eventTypeHuman].attribute_name, ""),
+        "attribute_value",
+        iff(isnotempty(event[eventTypeHuman].attribute_value), event[eventTypeHuman].attribute_value, "")
+    ),
+                        dynamic(null)
+                    )
+    // Event Specific - xp_malware_detected & xp_malware_remediated
+    | extend Xprotect = iif(
+                            eventTypeHuman in ("xp_malware_detected", "xp_malware_remediated"),
+                            bag_pack(
+        "detected_path",
+        iff(isnotempty(event[eventTypeHuman].detected_path), event[eventTypeHuman].detected_path, ""),
+        "remediated_path",
+        iff(isnotempty(event[eventTypeHuman].remediated_path), event[eventTypeHuman].remediated_path, ""),
+        "malware_identifier",
+        iff(isnotempty(event[eventTypeHuman].malware_identifier), event[eventTypeHuman].malware_identifier, ""),
+        "signature_version",
+        iff(isnotempty(event[eventTypeHuman].signature_version), event[eventTypeHuman].signature_version, "")
+    ),
+                            dynamic(null)
+                        )
+    | project-away
+    action,
+    event,
+    process
+    };
+    //
+    // Jamf Protect - Network Traffic
+    //
+    let JamfProtectNetworkTraffic_view  = view () {
+        jamfprotect_CL
+        | where event_metadata_product_s == "Network Traffic Stream"
+        // ASIM - Common Fields
+        | extend EventVendor = 'Jamf'
+        | extend EventProduct = 'Jamf Protect - Network Traffic Stream'
+        | project-rename
+        | extend
+            // Jamf Protect - Common Fields
+            EventType = "query",
+            EventSubType = "request",
+            EventStartTime = unixtime_milliseconds_todatetime(tolong(event_receiptTime_d)),
+            EventResult = case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Prevented", ''),
+            // Jamf Protect - Source User
+            SrcUsermail=column_ifexists('event_user_email_s', ''),
+            SrcUsername =  column_ifexists('event_user_name_s', ''),
+            // Jamf Protect - Source Device Hostnames
+            DvcHostname = case(isnotempty(input_host_hostname_s), input_host_hostname_s, isnotempty(host_info_host_name_s), host_info_host_name_s, event_device_userDeviceName_s),
+            DvcIpAddr = column_ifexists("event_source_ip_s", ""),
+            DvcId = column_ifexists("event_device_externalId_g", ""),
+            DvcOs = case(event_device_osType_s == "MAC_OS", "macOS", event_device_osType_s == "IOS", "iOS", event_device_osType_s == "ANDROID", "Android", "Other"),
+            SrcDeviceType = case(event_device_osType_s == "MAC_OS", "Computer", event_device_osType_s == "IOS", "Mobile Device", event_device_osType_s == "ANDROID", "Mobile Device", "Other"),
+            // Jamf Protect - DNS Specific
+            DnsQuery = column_ifexists('event_hostName_s', ''),
+            DvcAction = case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Blocked", ''),
+            DnsQueryName = column_ifexists('event_domain_s', ''),
+            DstIpAddr = column_ifexists('event_destination_ips_s', ''),
+            ThreatCategory = column_ifexists('event_eventType_description_s', ''),
+            DnsQueryTypeName = column_ifexists('event_dns_recordType_s', ''),
+            DnsResponseName = column_ifexists('event_dns_responseStatus_s', ''),
+            ThreatOriginalRiskLevel = column_ifexists('event_threat_result_s', '')
+        | project-keep
+            TimeGenerated,
+            EventVendor,
+            EventProduct,
+            EventType,
+            EventSubType,
+            EventStartTime,
+            EventResult,
+            DvcHostname,
+            DvcIpAddr,
+            DvcId,
+            DvcOs,
+            SrcDeviceType,
+            SrcUsermail,
+            SrcUsername,
+            DnsQuery,
+            DnsQueryName,
+            DstIpAddr,
+            DnsQueryTypeName,
+            DvcAction,
+            DnsResponseName,
+            ThreatOriginalRiskLevel
+    };
+    // //
+    // // Jamf Protect - Threat Events
+    // //
+    let JamfProtectThreatEvents_view  = view () {
+        jamfprotect_CL
+        | where event_metadata_product_s == "Threat Events Stream"
+        // ASIM - Common Fields
+        | extend EventVendor = 'Jamf'
+        | extend EventProduct = 'Jamf Protect - Threat Events Stream'
+        | project-rename
+        | extend
+            // Jamf Protect - Common Fields
+            EventStartTime = column_ifexists("event_timestamp_t", ""),
+            EventResult=case(event_action_s == "Blocked", "Blocked", event_action_s == "Detected", "Detected", ''),
+            EventReportUrl = column_ifexists("event_eventUrl_s", ""),
+            // Jamf Protect - Alert Details
+            EventSeverity = case(event_severity_d == 2, "Informational", event_severity_d == 4, "Low", event_severity_d == 6, "Medium", event_severity_d == 8, "High", event_severity_d == 10, "High", "Informational"),
+            // Jamf Protect - Source User
+            SrcUsermail=column_ifexists('event_user_email_s', ''),
+            SrcUsername=column_ifexists('event_user_name_s', ''),
+            // Jamf Protect - Source Device Hostnames
+            DvcHostname = column_ifexists("event_device_userDeviceName_s", ""),
+            DvcIpAddr = column_ifexists("event_source_ip_s", ""),
+            DvcId = column_ifexists("event_device_externalId_g", ""),
+            DvcOs=case(event_device_os_s has "MAC_OS", "macOS", event_device_os_s has "IOS", "iOS", event_device_os_s has "ANDROID", "Android", "Other"),
+            SrcDeviceType=case(event_device_os_s has "MAC_OS", "Computer", event_device_os_s has "IOS", "Mobile Device", event_device_os_s has "ANDROID", "Mobile Device", "Other"),
+            // Jamf Protect - DNS Specific
+            DnsQuery=column_ifexists('event_hostName_s', ''),
+            DvcAction=case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Blocked", ''),
+            DnsQueryName=column_ifexists('event_destination_name_s', ''),
+            DstIpAddr=column_ifexists('event_destination_ip_s', ''),
+            ThreatCategory=column_ifexists('event_eventType_description_s', ''),
+            ThreatOriginalRiskLevel=column_ifexists('event_threat_result_s', ''),
+            // Jamf Protect - App Specific
+            TargetFileName = column_ifexists("event_app_name_s", ""),
+            TargetFileSHA1 = column_ifexists("event_app_sha1_s", ""),
+            TargetFileSHA256 = column_ifexists("event_app_sha256_s", "")
+        | project-keep
+            TimeGenerated,
+            EventVendor,
+            EventProduct,
+            EventStartTime,
+            EventResult,
+            EventReportUrl,
+            EventSeverity,
+            DvcHostname,
+            DvcIpAddr,
+            DvcId,
+            SrcDeviceType,
+            SrcUsermail,
+            SrcUsername,
+            DnsQuery,
+            DnsQueryName,
+            DstIpAddr,
+            ThreatCategory,
+            DvcAction,
+            ThreatOriginalRiskLevel,
+            TargetFileName,
+            TargetFileSHA1,
+            TargetFileSHA256
+    };
+    union isfuzzy=true JamfProtectAlerts_view, JamfProtectUnifiedLog_view, JamfProtectTelemetryv1_view, JamfProtectTelemetryv2_view, JamfProtectNetworkTraffic_view, JamfProtectThreatEvents_view
