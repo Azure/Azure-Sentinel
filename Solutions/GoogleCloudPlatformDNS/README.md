@@ -28,27 +28,17 @@ The Google Cloud Platform DNS Codeless Connector for Microsoft Sentinel enables 
 
 - `Project ID` and `Project Number` : You can find these details in the home page of the project.
 
-- `GCP subscription name` : If the subscription already exists, search for **Pub/Sub** section in the search bar and navigate to the subscription tab. You can find the details about subscrition name and subscription state.
-- If the subscription does not exist, go to the **Topics** section and create a new topic with the desired topic ID.
-- After the topic is created, proceed to the **Subscriptions** section and create a new subscription  with the desired subscription ID by selecting the specific topic ID.
-- Provide the appropriate details for the below mentioned fields based on your requirement:
-  - Delivery Type
-  - Message retention duration
-  - Expiration period
-  - Acknowledgement deadline
-  - Subscription filter
-  - Exactly once delivery
-  - Message ordering
-  - Dead lettering
-  - Retry policy
+- `GCP subscription name` : To fetch this name, you must run the terraform script for DNS Log setup in cloud shell of Google Cloud Platform. After executing the terraform script, navigate to **Pub/Sub** section from the search bar, and navigate to Subscriptions from the left panel to fetch Subscription name.   
+  
+- `Workload identity pool ID` and `Workload identity provider ID` : To get this ID, you must run the terraform script for DNS authentication setup in cloud shell of Google Cloud Platform. After executing the terraform script, navigate to **Workload Identity Federation** section from the search bar where you can find these details.
 
-
-- `Workload identity pool ID` and `Workload identity provider ID` : To get this ID, you must run the terraform script for DNS in cloud shell of Google Cloud Platform. You can find the script files in the home page of the connector or find them in the steps provided below.
+You can find the script files in the home page of the connector or find them in the steps provided below.
 
 <a name="terraform">
 
 ### Steps to execute Terrraform scripts
 [Click here](https://github.com/v-pmalreddy/GCPDNS_CCP/tree/main/GCPDNSLogsSetup) to access the terraform scripts.
+- Execute the below mentioned commands for both Log Setup file and Authentication Setup file.
 - Launch the cloud shell and create a directory using **mkdir <dir_name>** and navigate to the directory using **cd<dir_name>**.
 - Copy the raw link of the Terraform script and get the content of the file into a shell using the following command:
    ```
@@ -68,7 +58,8 @@ The Google Cloud Platform DNS Codeless Connector for Microsoft Sentinel enables 
    ```
    terraform apply
    ```
-- After successfully executing the above mentioned commands, the workload Identity Pool ID and Provider ID is created.
+- After successfully executing the Log Setup file, Subscription name is created in the Google Cloud Platform.
+- After successfully executing the Authentication setup file, the workload Identity Pool ID and Provider ID is created.
 - Search for **Workload Identity Federation** in the search bar and find the Workload Identity pool ID and Provider ID.
 - `Service account email` : Navigate to **Service accounts** section from the search bar and use the appropriate service account for authentication.
 
