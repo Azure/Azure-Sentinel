@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.5       | 10-02-2025                     | Repackaged to fix ccp grid showing only 1 record and rename of file   |
 | 3.0.4       | 13-12-2024                     | Updated title of **Analytic Rule** - AWS_LogTampering.yaml   |
 | 3.0.3       | 27-05-2024                     | Updated **Hunting Query** AWS_FailedBruteForceS3Bucket.yaml and **Analytic Rules** for missing TTP   |
 | 3.0.2       | 05-04-2024                     | Updated awsS3 **Data connector**, added new Data Type CloudWatch     |

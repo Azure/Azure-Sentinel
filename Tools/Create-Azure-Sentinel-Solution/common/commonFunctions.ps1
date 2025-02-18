@@ -2195,7 +2195,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
                         $connectDataSourcesLink = [PSCustomObject] @{
-                            name    = "dataconnectors-link2";
+                            name    = "dataconnectors-link$($global:connectorCounter)";
                             type    = "Microsoft.Common.TextBlock";
                             options = [PSCustomObject] @{
                                 link = [PSCustomObject] @{
@@ -2718,6 +2718,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 {
                                     $alertRule.entityMappings = @($alertRule.entityMappings);
                                 }
+                                elseif($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2)
+                                {
+                                    $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
+                                }
                             }
                         }
                         # Create Alert Rule Resource Object
@@ -3112,6 +3116,9 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             if ($null -ne $global:baseCreateUiDefinition.parameters.steps -and 
             $($global:baseCreateUiDefinition.parameters.steps).GetType() -ne [System.Object[]]) {
                 $global:baseCreateUiDefinition.parameters.steps = @($global:baseCreateUiDefinition.parameters.steps)
+            } elseif ($null -eq $global:baseCreateUiDefinition.parameters.steps) {
+                # when there is no content then create ui fails as step is null
+                $global:baseCreateUiDefinition.parameters.steps = @(@{}) # [{}]
             }
             $global:baseCreateUiDefinition | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $createUiDefinitionOutputPath -Encoding utf8
         }
