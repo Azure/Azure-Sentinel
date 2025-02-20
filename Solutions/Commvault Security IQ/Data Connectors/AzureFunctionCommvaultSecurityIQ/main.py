@@ -170,7 +170,8 @@ def main(mytimer: func.TimerRequest) -> None:
             if data:
                 for event in data:
                     temp = get_incident_details(event["description"])
-                    post_data.append(temp)
+                    if temp:
+                        post_data.append(temp)
                 logging.info("Trying Post Data")
                 gen_chunks(post_data)
                 logging.info("Job Succeeded")
@@ -410,8 +411,8 @@ def get_user_details(client_name):
 
     f_url = f"{url}/Client/byName(clientName='{client_name}')"
     response = requests.get(f_url, headers=headers).json()
-    user_id = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userId']
-    user_name = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userName']
+    user_id = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userId')
+    user_name = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userName')
     return user_id, user_name
 
 
@@ -425,108 +426,112 @@ def get_incident_details(message: str) -> dict | None:
     Returns:
         dict | None: Incident details or None if not found
     """
-    anomaly_sub_type = extract_from_regex(
-        message,
-        "0",
-        rf"{Constants.anomaly_sub_type}:\[(.*?)\]",
-    )
-    if anomaly_sub_type is None or anomaly_sub_type == "0":
-        return None
-    anomaly_sub_type = get_backup_anomaly(int(anomaly_sub_type))
-    job_id = extract_from_regex(
-        message,
-        "0",
-        rf"{Constants.job_id}:\[(.*?)\]",
-    )
+    try:
+        anomaly_sub_type = extract_from_regex(
+            message,
+            "0",
+            rf"{Constants.anomaly_sub_type}:\[(.*?)\]",
+        )
+        if anomaly_sub_type is None or anomaly_sub_type == "0":
+            return None
+        anomaly_sub_type = get_backup_anomaly(int(anomaly_sub_type))
+        job_id = extract_from_regex(
+            message,
+            "0",
+            rf"{Constants.job_id}:\[(.*?)\]",
+        )
 
-    description = format_alert_description(message)
+        description = format_alert_description(message)
 
-    job_details = get_job_details(job_id,url,headers)
-    if job_details is None:
-        print(f"Invalid job [{job_id}]")
+        job_details = get_job_details(job_id,url,headers)
+        if job_details is None:
+            print(f"Invalid job [{job_id}]")
+            return None
+        job_start_time = int(
+            job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobStartTime")
+        )
+        job_end_time = int(
+            job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobEndTime")
+        )
+        subclient_id = (
+            job_details.get("jobs", [{}])[0]
+            .get("jobSummary", {})
+            .get("subclient", {})
+            .get("subclientId")
+        )
+        files_list, scanned_folder_list = fetch_file_details(job_id, subclient_id)
+        originating_client = extract_from_regex(message, "", r"{}:\[(.*?)\]".format(Constants.originating_client))
+        user_id, username = get_user_details(originating_client)
+        details = {
+            "subclient_id": subclient_id,
+            "files_list": files_list,
+            "scanned_folder_list": scanned_folder_list,
+            "anomaly_sub_type": anomaly_sub_type,
+            "severity": define_severity(anomaly_sub_type),
+            "originating_client": originating_client,
+            "user_id": user_id,
+            "username": username,
+            "affected_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.affected_files_count
+                    ),
+                )
+            ),
+            "modified_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.modified_files_count
+                    ),
+                )
+            ),
+            "deleted_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.deleted_files_count
+                    ),
+                )
+            ),
+            "renamed_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.renamed_files_count
+                    ),
+                )
+            ),
+            "created_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.created_files_count
+                    ),
+                )
+            ),
+            "job_start_time": datetime.utcfromtimestamp(job_start_time).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
+            "job_end_time": datetime.utcfromtimestamp(job_end_time).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
+            "job_id": job_id,
+            "external_link": extract_from_regex(
+                message, "", "href='(.*?)'", 'href="(.*?)"'
+            ),
+            "description": description,
+        }
+        return details
+    except:
+        logging.error(f"An error occurred")
         return None
-    job_start_time = int(
-        job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobStartTime")
-    )
-    job_end_time = int(
-        job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobEndTime")
-    )
-    subclient_id = (
-        job_details.get("jobs", [{}])[0]
-        .get("jobSummary", {})
-        .get("subclient", {})
-        .get("subclientId")
-    )
-    files_list, scanned_folder_list = fetch_file_details(job_id, subclient_id)
-    originating_client = extract_from_regex(message, "", r"{}:\[(.*?)\]".format(Constants.originating_client))
-    user_id, username = get_user_details(originating_client)
-    details = {
-        "subclient_id": subclient_id,
-        "files_list": files_list,
-        "scanned_folder_list": scanned_folder_list,
-        "anomaly_sub_type": anomaly_sub_type,
-        "severity": define_severity(anomaly_sub_type),
-        "originating_client": originating_client,
-        "user_id": user_id,
-        "username": username,
-        "affected_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.affected_files_count
-                ),
-            )
-        ),
-        "modified_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.modified_files_count
-                ),
-            )
-        ),
-        "deleted_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.deleted_files_count
-                ),
-            )
-        ),
-        "renamed_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.renamed_files_count
-                ),
-            )
-        ),
-        "created_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.created_files_count
-                ),
-            )
-        ),
-        "job_start_time": datetime.utcfromtimestamp(job_start_time).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "job_end_time": datetime.utcfromtimestamp(job_end_time).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "job_id": job_id,
-        "external_link": extract_from_regex(
-            message, "", "href='(.*?)'", 'href="(.*?)"'
-        ),
-        "description": description,
-    }
-    return details
 
 
 def build_signature(date, content_length, method, content_type, resource):
