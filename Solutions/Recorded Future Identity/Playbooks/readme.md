@@ -153,7 +153,8 @@ Depending on your use case, deploy **one** of the following playbooks:
 | **Resource group**             | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**                     | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
 | **Playbook Name**              | Playbook name to use for this playbook (ex. `RFI-Playbook-Alert-Importer`).                                                                                            |
-| **Entra_id_security_group_id** | ID of the the group in which to place risky users.                                                                                                                     |
+| **Entra_id_security_group_id** | (Optional) ID of the the group in which to place risky users. If left empty, a user will **not** be placed in a Entra ID security group.                                                                                                                    |
+|**Confirm_user_as_risky_requires_p1_or_p2_license**| Boolean parameter to determine if a user should be confirmed as risky. Requires Microsoft Entra ID P1 or P2 license.  |
 | **Entra_id_domain**            | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
 | **RFI Custom Connector**       | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`                                   |
 </details>
@@ -175,7 +176,8 @@ Depending on your use case, deploy **one** of the following playbooks:
 | **Region**                                       | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
 | **Playbook Name**                                | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW").                                                                                        |
 | **Save_to_log_analytics_workspace**              | Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW).                                   |
-| **Entra_id_security_group_id**                   | ID of the the group in which to place risky users                                                                                                                      |
+| **Entra_id_security_group_id** | (Optional) ID of the the group in which to place risky users. If left empty, a user will **not** be placed in a Entra ID security group.                                                                                                                   |
+|**Confirm_user_as_risky_requires_p1_or_p2_license**| Boolean parameter to determine if a user should be confirmed as risky. Requires Microsoft Entra ID P1 or P2 license.  |
 | **Entra_id_domain**                              | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
 | **Playbook_alert_log_analytics_custom_log_name** | Name of the custom log in Log Analytics Workspace, defaults to `RecordedFutureIdentity_PlaybookAlertResults_CL`.                                                       |
 | **RFI Custom Connector**                         | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`                                   |
@@ -198,7 +200,8 @@ Depending on your use case, deploy **one** of the following playbooks:
 | **Region**                                       | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
 | **Playbook Name**                                | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW-Sentinel"). |
 | **Save_to_log_analytics_workspace**              |Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
-| **Entra_id_security_group_id**                   | ID of the the group in which to place risky users|
+| **Entra_id_security_group_id** | (Optional) ID of the the group in which to place risky users. If left empty, a user will **not** be placed in a Entra ID security group.                                                                                                                  |
+|**Confirm_user_as_risky_requires_p1_or_p2_license**| Boolean parameter to determine if a user should be confirmed as risky. Requires Microsoft Entra ID P1 or P2 license.  |
 | **Create_incident**                              |Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
 | **Sentinel_workspace_name**                      |Workspace name in which to create Microsoft Sentinel incidents|
 | **Entra_id_domain**                              | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
@@ -337,7 +340,7 @@ The playbook parameters can be found and set in the Logic App designer:
 
 <img src="./images/playbookparameters2.png" alt="Logic Apps Parameters #1" width="80%"/>
 
-(Example above shows all parameters, number of parameters depends on playbook used)
+(Example above shows some parameters, number of parameters depends on playbook used)
 
 ### Playbook parameters
 
@@ -345,7 +348,8 @@ The playbook parameters can be found and set in the Logic App designer:
 
 | Parameter | Description |
 |-|-|
-| **entra_id_security_group_id** | Object ID of Microsoft EntraID Group for users at risk. You need to pre-create it by hand: search for "Groups" in Service search at the top of the page. For more information, see [Microsoft EntraID Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation. |
+| **entra_id_security_group_id** | Object ID of Microsoft EntraID Group for users at risk. You need to pre-create it by hand: search for "Groups" in Service search at the top of the page. For more information, see [Microsoft EntraID Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation. If left empty, a user will **not** be placed in a Entra ID security group.  |
+|**Confirm_user_as_risky_requires_p1_or_p2_license**| Boolean parameter to determine if a user should be confirmed as risky. **Requires** Microsoft Entra ID P1 or P2 license to function properly. For more information about the Azure AD Identity Protector, click <a href="https://learn.microsoft.com/en-us/connectors/azureadip/" target="_blank">here</a> |
 | **entra_id_domain** | (Optional, can be left empty) - in case your Microsoft EntraID domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Microsoft EntraID (ex. Compromised email: leaked@mycompany.com), your Microsoft EntraID domain: `@mycompany.onmicrosoft.com`, so you set parameter `entra_id_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the entra_id_domain parameter, before searching for the corresponding user in your Microsoft EntraID: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 | **save_to_log_analytics_workspace** |(Optional, requires Log Analytics Workspace) - Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
 | **create_incident** | (Optional, requires Microsoft Sentinel) - Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
