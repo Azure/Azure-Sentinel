@@ -1,228 +1,212 @@
-function Get-CloudTrailKmsPolicy
-{
+function Get-CloudTrailKmsPolicy {
 	<#
 	.SYNOPSIS
 		Returns a customized Kms policy for CloudTrail using the supplied Role Arn principal
 	#>
 
-	$kmsPolicy = "{
-		'Statement': [
-		{
-			  'Sid': 'Allow CloudTrail to encrypt logs',
-			  'Effect': 'Allow',
-			  'Principal': {
-				'Service': 'cloudtrail.amazonaws.com'
-			  },
-			  'Action': 'kms:GenerateDataKey*',
-			  'Resource': '*'
-		},
-        {
-            'Sid': 'Allow use of the key',
-            'Effect': 'Allow',
-            'Principal': {
-                'AWS': ['${roleArn}']
-            },
-            'Action': [
-                'kms:Decrypt'
-            ],
-            'Resource': '*'
-        }
-    ]}"
+	$kmsPolicy = @{
+		'Statement' = @(
+			@{
+				'Sid'       = 'Allow CloudTrail to encrypt logs';
+				'Effect'    = 'Allow';
+				'Principal' = @{
+					'Service' = 'cloudtrail.amazonaws.com';
+				};
+				'Action'    = 'kms=GenerateDataKey*';
+				'Resource'  = '*';
+			},
+			@{
+				'Sid'       = 'Allow use of the key';
+				'Effect'    = 'Allow';
+				'Principal' = @{
+					'AWS' = @("${roleArn}");
+				};
+				'Action'    = @(
+					'kms=Decrypt'
+				);
+				'Resource'  = '*';
+			}
+		);
+	}
 	
-	return $kmsPolicy.Replace("'",'"')
+	return $($kmsPolicy | ConvertTo-Json -Depth 99 -Compress)
 }
 
-function Get-OrganizationCloudTrailS3Policy
-{	
+function Get-OrganizationCloudTrailS3Policy {	
 	<#
 	.SYNOPSIS
 		Returns a customized S3 Policy for specified organization and S3 bucket
 	#>
-	$s3PolicyForRoleOrganizationCloudTrail = "{
-        'Sid': 'AWSCloudTrailWrite20150319',
-        'Effect': 'Allow',
-        'Principal': {
-            'Service': [
-                    'cloudtrail.amazonaws.com'
-                ]
-            },
-        'Action': 's3:PutObject',
-        'Resource': '$($AwsCloudResource):s3:::${bucketName}/AWSLogs/${organizationId}/*',
-        'Condition': {
-            'StringEquals': {
-                's3:x-amz-acl': 'bucket-owner-full-control'
-            }
-        }
-    }"
+	$s3PolicyForRoleOrganizationCloudTrail = @{
+		'Sid'       = 'AWSCloudTrailWrite20150319';
+		'Effect'    = 'Allow';
+		'Principal' = @{
+			'Service' = @(
+				'cloudtrail.amazonaws.com'
+			);
+		};
+		'Action'    = 's3:PutObject';
+		'Resource'  = "$($AwsCloudResource):s3:::${bucketName}/AWSLogs/${organizationId}/*";
+		'Condition' = @{
+			'StringEquals' = @{
+				's3:x-amz-acl' = 'bucket-owner-full-control';
+			};
+		};
+	}
 
-	return $s3PolicyForRoleOrganizationCloudTrail.Replace("'",'"')
+	return $($s3PolicyForRoleOrganizationCloudTrail | ConvertTo-Json -Depth 99 -Compress)
 }
 
-function Get-KmsS3Policy
-{	
+function Get-KmsS3Policy {	
 	<#
 	.SYNOPSIS
 		Returns customized S3 policy for Kms Arn to access S3 bucket	
 	#>
-	$s3PolicyForKms = "
-	[	
-		{
-            'Sid': 'Deny unencrypted object uploads. This is optional',
-            'Effect': 'Deny',
-            'Principal': {
-                'Service': 'cloudtrail.amazonaws.com'
-            },
-            'Action': 's3:PutObject',
-            'Resource': '$($AwsCloudResource):s3:::${bucketName}/*',
-            'Condition': {
-                'StringNotEquals': {
-                    's3:x-amz-server-side-encryption': 'aws:kms'
-                }
-            }
-        },
-        {
-            'Sid': 'Deny incorrect encryption header. This is optional',
-            'Effect': 'Deny',
-            'Principal': {
-                'Service': 'cloudtrail.amazonaws.com'
-            },
-            'Action': 's3:PutObject',
-            'Resource': '$($AwsCloudResource):s3:::${bucketName}/*',
-            'Condition': {
-                'StringNotEquals': {
-                    's3:x-amz-server-side-encryption-aws-kms-key-id': '${kmsArn}'
-                }
-            }
+	$s3PolicyForKms = @(	
+		@{
+			'Sid'       = 'Deny unencrypted object uploads. This is optional';
+			'Effect'    = 'Deny';
+			'Principal' = @{
+				'Service' = 'cloudtrail.amazonaws.com';
+			};
+			'Action'    = 's3:PutObject';
+			'Resource'  = "$($AwsCloudResource):s3:::${bucketName}/*";
+			'Condition' = @{
+				'StringNotEquals' = @{
+					's3:x-amz-server-side-encryption' = 'aws:kms';
+				};
+			};
+		},
+		@{
+			'Sid'       = 'Deny incorrect encryption header. This is optional';
+			'Effect'    = 'Deny';
+			'Principal' = @{
+				'Service' = 'cloudtrail.amazonaws.com';
+			};
+			'Action'    = 's3:PutObject';
+			'Resource'  = "$($AwsCloudResource):s3:::${bucketName}/*";
+			'Condition' = @{
+				'StringNotEquals' = @{
+					's3:x-amz-server-side-encryption-aws-kms-key-id' = "${kmsArn}";
+				};
+			};
 		}
-    ]"
+	)
 
-	return $s3PolicyForKms.Replace("'",'"')
+	return $($s3PolicyForKms | ConvertTo-Json -Depth 99 -Compress)
 }
 
-function Get-RoleAndCloudTrailS3Policy
-{
+function Get-RoleAndCloudTrailS3Policy {
 	<#
 	.SYNOPSIS
 		Returns customized S3 Policy to allown specified Role Arn to write CloudTrail logs to specified S3 bucket
 	#>
-	 $s3PolicyForRoleAndCloudTrail = "{
-	 'Statement': [
-		{
-            'Sid': 'Allow Arn read access S3 bucket',
-            'Effect': 'Allow',
-            'Principal': {
-                'AWS': '${roleArn}'
-            },
-            'Action': ['s3:GetObject'],
-            'Resource': '$($AwsCloudResource):s3:::${bucketName}/*'
-        },
-		{
-            'Sid': 'AWSCloudTrailAclCheck20150319',
-            'Effect': 'Allow',
-            'Principal': {
-                'Service': 'cloudtrail.amazonaws.com'
-            },
-            'Action': 's3:GetBucketAcl',
-            'Resource': '$($AwsCloudResource):s3:::${bucketName}'
-        },
-        {
-            'Sid': 'AWSCloudTrailWrite20150319',
-            'Effect': 'Allow',
-            'Principal': {
-                'Service': 'cloudtrail.amazonaws.com'
-            },
-            'Action': 's3:PutObject',
-            'Resource': '$($AwsCloudResource):s3:::${bucketName}/AWSLogs/${callerAccount}/*',
-            'Condition': {
-                'StringEquals': {
-                    's3:x-amz-acl': 'bucket-owner-full-control'
-                }
-            }
-        }]}"	
-	return $s3PolicyForRoleAndCloudTrail.Replace("'",'"')
+	$s3PolicyForRoleAndCloudTrail = @{
+	 'Statement' = @(
+			@{
+				'Sid'       = 'Allow Arn read access S3 bucket';
+				'Effect'    = 'Allow';
+				'Principal' = @{
+					'AWS' = "${roleArn}";
+				};
+				'Action'    = @('s3:GetObject');
+				'Resource'  = "$($AwsCloudResource):s3:::${bucketName}/*";
+			},
+			@{
+				'Sid'       = 'AWSCloudTrailAclCheck20150319';
+				'Effect'    = 'Allow';
+				'Principal' = @{
+					'Service' = 'cloudtrail.amazonaws.com';
+				};
+				'Action'    = 's3:GetBucketAcl';
+				'Resource'  = "$($AwsCloudResource):s3:::${bucketName}";
+			},
+			@{
+				'Sid'       = 'AWSCloudTrailWrite20150319';
+				'Effect'    = 'Allow';
+				'Principal' = @{
+					'Service' = 'cloudtrail.amazonaws.com';
+				};
+				'Action'    = 's3:PutObject';
+				'Resource'  = "$($AwsCloudResource):s3:::${bucketName}/AWSLogs/${callerAccount}/*";
+				'Condition' = @{
+					'StringEquals' = @{
+						's3:x-amz-acl' = 'bucket-owner-full-control';
+					};
+				};
+			}
+		);
+	}
+	return $($s3PolicyForRoleAndCloudTrail | ConvertTo-Json -Depth 99 -Compress)
 }
 
-function New-CloudTrailS3Policy
-{
+function New-CloudTrailS3Policy {
 	<#
 	.SYNOPSIS
 		Returns customized S3 Policy for CloudTrail logs
 	#>
 	$s3RequiredPolicy = Get-RoleAndCloudTrailS3Policy
 	$s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json 
-	if ($organizationCloudTrailConfirmation -ne 'n')
-	{
+	if ($organizationCloudTrailConfirmation -ne 'n') {
 		$s3RequiredPolicyObject.Statement += (Get-OrganizationCloudTrailS3Policy | ConvertFrom-Json)
 	}
-	if ($kmsConfirmation -eq 'y')
-	{
+	if ($kmsConfirmation -eq 'y') {
 		$s3RequiredPolicyObject.Statement += (Get-KmsS3Policy | ConvertFrom-Json)
 	}
 
-	return $s3RequiredPolicyObject | ConvertTo-Json -Depth 5
+	return $s3RequiredPolicyObject | ConvertTo-Json -Depth 99 -Compress
 }
 
-function Get-EventNotificationPrefix
-{
+function Get-EventNotificationPrefix {
 	<#
 	.SYNOPSIS
 		Returns the default event notification prefix
 	#>
-		if ($organizationCloudTrailConfirmation -ne 'n')
-	{
+	if ($organizationCloudTrailConfirmation -ne 'n') {
 		return "AWSLogs/${organizationId}/"
 	}
-	else
-	{
+	else {
 		return  "AWSLogs/${callerAccount}/CloudTrail/"
 	}	
 }
 
-function Set-CloudTrailDataEventConfig
-{
+function Set-CloudTrailDataEventConfig {
 	<#
 	.SYNOPSIS
 		Sets the CloudTrail event configuration
 	#>
 	$DataEventsConfirmation = Read-ValidatedHost `n'Do you want to enable the CloudTrail data events? [y/n]' -ValidationType Confirm
-	if ($DataEventsConfirmation -eq 'y')
-	{
-		Write-Log -Message "Executing: aws cloudtrail put-event-selectors --trail-name $cloudTrailName --event-selectors '[{'DataResources': [{'Type':'AWS::S3::Object', 'Values': ['$($AwsCloudResource):s3:::']}]}]' | Out-Null" -LogFileName $LogFileName -Severity Verbose
-		aws cloudtrail put-event-selectors --trail-name $cloudTrailName --event-selectors '[{\"DataResources\": [{\"Type\":\"AWS::S3::Object\", \"Values\": [\"'$($AwsCloudResource)':s3:::\"]}]}]' | Out-Null
+	if ($DataEventsConfirmation -eq 'y') {
+		Write-Log -Message "Executing: aws cloudtrail put-event-selectors --trail-name $cloudTrailName --event-selectors $(@(@{'DataResources' = @(@{Type='AWS::S3::Object';Values=@("$($AwsCloudResource):s3:::")})}) | ConvertTo-Json -Depth 99 -Compress) | Out-Null" -LogFileName $LogFileName -Severity Verbose
+		aws cloudtrail put-event-selectors --trail-name $cloudTrailName --event-selectors $(@(@{'DataResources' = @(@{Type='AWS::S3::Object';Values=@("$($AwsCloudResource):s3:::")})}) | ConvertTo-Json -Depth 99 -Compress) | Out-Null
 	}
 }
-function Set-MultiRegionTrailConfig
-{
+function Set-MultiRegionTrailConfig {
 	<#
 	.SYNOPSIS
 		Configures multi-region trail capability
 	#>	
 	$regionConfirmation = Read-ValidatedHost 'Do you want the Trail to be multi-region? [y/n]' -ValidationType Confirm
-	if ($regionConfirmation -eq 'y')
-	{
+	if ($regionConfirmation -eq 'y') {
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --is-multi-region-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
 		aws cloudtrail update-trail --name $cloudTrailName --is-multi-region-trail | Out-Null 
 	}
-	else
-	{
+	else {
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --no-is-multi-region-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
 		aws cloudtrail update-trail --name $cloudTrailName --no-is-multi-region-trail | Out-Null 
 	}
 }
 
-function Set-OrganizationTrailConfig
-{
+function Set-OrganizationTrailConfig {
 	<#
 	.SYNOPSIS
 		Configures trail logging for the entire organization
 	#>	
-	if ($organizationCloudTrailConfirmation -ne 'n')
-	{	
+	if ($organizationCloudTrailConfirmation -ne 'n') {	
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --is-organization-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
 		aws cloudtrail update-trail --name $cloudTrailName --is-organization-trail | Out-Null
 	}
-	else
-	{
+	else {
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --no-is-organization-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
 		aws cloudtrail update-trail --name $cloudTrailName --no-is-organization-trail | Out-Null
 	}
@@ -258,30 +242,27 @@ Write-Log -Message "Executing: ((aws sqs get-queue-url --queue-name $sqsName) | 
 $sqsUrl = ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl
 Write-Log -Message $sqsUrl -LogFileName $LogFileName -Severity Verbose
 Write-Log -Message "Executing: (aws sts get-caller-identity | ConvertFrom-Json).Account" -LogFileName $LogFileName -Severity Verbose
-$sqsArn =  ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn
+$sqsArn = ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn ) | ConvertFrom-Json).Attributes.QueueArn
 Write-Log -Message $sqsArn -LogFileName $LogFileName -Severity Verbose
 
 $kmsConfirmation = Read-ValidatedHost -Prompt 'Do you want to enable KMS for CloudTrail? [y/n]' -ValidationType Confirm
-if ($kmsConfirmation -eq 'y')
-{
+if ($kmsConfirmation -eq 'y') {
 	New-KMS
 	$kmsArn = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.Arn 
 	$kmsKeyId = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
 	
 	$customMessage = "Changes CloudTrail: Kms GenerateDataKey to CloudTrail"
-    $kmsRequiredPolicies = Get-CloudTrailKmsPolicy
-    Update-KmsPolicy -RequiredPolicy $kmsRequiredPolicies -CustomMessage $customMessage
+	$kmsRequiredPolicies = Get-CloudTrailKmsPolicy
+	Update-KmsPolicy -RequiredPolicy $kmsRequiredPolicies -CustomMessage $customMessage
 }
 
 Update-SQSPolicy
 
 $organizationCloudTrailConfirmation = Read-ValidatedHost -Prompt 'Do you want to enable the Trail and CloudTrail S3 Policy for ALL accounts in your organization? [y/n]' -ValidationType Confirm
-if ($organizationCloudTrailConfirmation -eq "y")
-{
+if ($organizationCloudTrailConfirmation -eq "y") {
 	# Retreive the organization information
 	Write-Log -Message "Executing: ((aws organizations describe-account --account-id $callerAccount ) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]" -LogFileName $LogFileName -Severity Verbose
-	try
-	{
+	try {
 		$organizationId = ((aws organizations describe-account --account-id $callerAccount) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]
 	}
 	catch {
@@ -302,54 +283,45 @@ Write-Log -Message 'CloudTrail definition' -LogFileName $LogFileName -LinePaddin
 
 Set-RetryAction({
 	 
-	$script:cloudTrailName = Read-ValidatedHost 'Please enter CloudTrail name'
-	Write-Log -Message "Using CloudTrail name: $cloudTrailName" -LogFileName $LogFileName -Indent 2
+		$script:cloudTrailName = Read-ValidatedHost 'Please enter CloudTrail name'
+		Write-Log -Message "Using CloudTrail name: $cloudTrailName" -LogFileName $LogFileName -Indent 2
 
-	Write-Log -Message "Executing: aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
-	aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null
+		Write-Log -Message "Executing: aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
+		aws cloudtrail get-trail --name $cloudTrailName 2>&1 | Out-Null
 	
-	$isCloudTrailNotExist = $lastexitcode -ne 0
-	if ($isCloudTrailNotExist)
-	{
-		if ($kmsConfirmation -eq 'y')
-		{
-			Write-Log -Message "Executing: aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --kms-key-id $kmsKeyId --tags-list [$(Get-SentinelTagInJsonFormat)] 2>&1" -LogFileName $LogFileName -Severity Verbose
-			$tempForOutput = aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --kms-key-id $kmsKeyId --tags-list [$(Get-SentinelTagInJsonFormat)] 2>&1
-			Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+		$isCloudTrailNotExist = $lastexitcode -ne 0
+		if ($isCloudTrailNotExist) {
+			if ($kmsConfirmation -eq 'y') {
+				Write-Log -Message "Executing: aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --kms-key-id $kmsKeyId --tags-list $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1" -LogFileName $LogFileName -Severity Verbose
+				$tempForOutput = aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --kms-key-id $kmsKeyId --tags-list $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1
+				Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+			}
+			else {
+				Write-Log -Message "Executing: aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --tags-list $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1" -LogFileName $LogFileName -Severity Verbose
+				$tempForOutput = aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --tags-list $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1
+				Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+			}
+			if ($lastexitcode -eq 0) {
+				Write-Log -Message "${cloudTrailName} trail created successfully" -LogFileName $LogFileName -Indent 2
+			}
 		}
-		else
-		{
-			Write-Log -Message "Executing: aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --tags-list [$(Get-SentinelTagInJsonFormat)] 2>&1" -LogFileName $LogFileName -Severity Verbose
-			$tempForOutput = aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --tags-list [$(Get-SentinelTagInJsonFormat)] 2>&1
-			Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
-		}
-		if($lastexitcode -eq 0)
-		{
-			Write-Log -Message "${cloudTrailName} trail created successfully" -LogFileName $LogFileName -Indent 2
-		}
-	}
-	else
-	{
-		$cloudTrailBucketConfirmation = Read-ValidatedHost "Trail '${cloudTrailName}' is already configured. Do you want to override the bucket destination? [y/n]"
+		else {
+			$cloudTrailBucketConfirmation = Read-ValidatedHost "Trail '${cloudTrailName}' is already configured. Do you want to override the bucket destination? [y/n]"
 		
-		if ($cloudTrailBucketConfirmation -eq 'y')
-		{
-			if ($kmsConfirmation -eq 'y')
-			{
-				Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --s3-bucket-name $bucketName -kms-key-id $kmsKeyId | Out-Null" -LogFileName $LogFileName -Severity Verbose
-				aws cloudtrail update-trail --name $cloudTrailName --s3-bucket-name $bucketName -kms-key-id $kmsKeyId | Out-Null
+			if ($cloudTrailBucketConfirmation -eq 'y') {
+				if ($kmsConfirmation -eq 'y') {
+					Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --s3-bucket-name $bucketName -kms-key-id $kmsKeyId | Out-Null" -LogFileName $LogFileName -Severity Verbose
+					aws cloudtrail update-trail --name $cloudTrailName --s3-bucket-name $bucketName -kms-key-id $kmsKeyId | Out-Null
+				}
+				else {
+					Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --s3-bucket-name $bucketName | Out-Null" -LogFileName $LogFileName -Severity Verbose
+					aws cloudtrail update-trail --name $cloudTrailName --s3-bucket-name $bucketName | Out-Null
+				}
 			}
-			else
-			{
-				Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --s3-bucket-name $bucketName | Out-Null" -LogFileName $LogFileName -Severity Verbose
-				aws cloudtrail update-trail --name $cloudTrailName --s3-bucket-name $bucketName | Out-Null
+			else {
+				Write-Log -Message "CloudTrail setup was not completed. You must manually updated the CloudTrail destination bucket" -LogFileName $LogFileName -LinePadding 1
 			}
 		}
-		else
-		{
-			Write-Log -Message "CloudTrail setup was not completed. You must manually updated the CloudTrail destination bucket" -LogFileName $LogFileName -LinePadding 1
-		}
-	}
  })
 
 Set-CloudTrailDataEventConfig

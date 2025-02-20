@@ -1,6 +1,5 @@
-function Get-RoleAndCloudWatchS3Policy
-{
-	<#
+function Get-RoleAndCloudWatchS3Policy {
+    <#
     .SYNOPSIS 
         Creates a S3 Policy for GuardDuty based on specified bucket name, role ARN, and Kms ARN
 
@@ -14,56 +13,58 @@ function Get-RoleAndCloudWatchS3Policy
     [OutputType([string])]
     [CmdletBinding()]
     param (
-        [Parameter(position=0)]
+        [Parameter(position = 0)]
         [ValidateNotNullOrEmpty()][string]
         $RoleArn,
-        [Parameter(position=1)]
+        [Parameter(position = 1)]
         [ValidateNotNullOrEmpty()][string]
         $BucketName
     )
     $regionConfiguration = aws configure get region  
-    $s3PolicyForRoleAndCloudWatch = "{
-	 'Statement': [
-		{
-            'Sid': 'Allow Arn read access S3 bucket',
-            'Effect': 'Allow',
-            'Principal': {
-                'AWS': '$RoleArn'
+    $s3PolicyForRoleAndCloudWatch = @{
+        'Statement' = @(
+            @{
+                'Sid'       = 'Allow Arn read access S3 bucket';
+                'Effect'    = 'Allow';
+                'Principal' = @{
+                    'AWS' = "$RoleArn";
+                };
+                'Action'    = @('s3:GetObject');
+                'Resource'  = "$($AwsCloudResource):s3:::$BucketName/*";
             },
-            'Action': ['s3:GetObject'],
-            'Resource': '$($AwsCloudResource):s3:::$BucketName/*'
-        },
-        {
-            'Sid': 'Allow CloudWatch to upload objects to the bucket',
-            'Effect': 'Allow',
-            'Principal': { 
-                'Service': 'logs.$regionConfiguration.amazonaws.com'
+            @{
+                'Sid'       = 'Allow CloudWatch to upload objects to the bucket';
+                'Effect'    = 'Allow';
+                'Principal' = @{ 
+                    'Service' = "logs.$regionConfiguration.amazonaws.com";
+                };
+                'Action'    = 's3:PutObject';
+                'Resource'  = "$($AwsCloudResource):s3:::$BucketName/*";
             },
-            'Action': 's3:PutObject',
-            'Resource': '$($AwsCloudResource):s3:::$BucketName/*'
-        },
-		{
-            'Sid': 'AWSCloudWatchAclCheck',
-            'Effect': 'Allow',
-            'Principal': {
-                'Service': 'logs.$regionConfiguration.amazonaws.com'
+            @{
+                'Sid'       = 'AWSCloudWatchAclCheck';
+                'Effect'    = 'Allow';
+                'Principal' = @{
+                    'Service' = "logs.$regionConfiguration.amazonaws.com";
+                };
+                'Action'    = 's3:GetBucketAcl';
+                'Resource'  = "$($AwsCloudResource):s3:::${bucketName}";
             },
-            'Action': 's3:GetBucketAcl',
-            'Resource': '$($AwsCloudResource):s3:::${bucketName}'
-        },
-        {
-            'Sid': 'Deny non-HTTPS access',
-            'Effect': 'Deny',
-            'Principal': '*',
-            'Action': 's3:*',
-            'Resource': '$($AwsCloudResource):s3:::$BucketName/*',
-            'Condition': {
-                'Bool': {
-                    'aws:SecureTransport': 'false'
-                }
+            @{
+                'Sid'       = 'Deny non-HTTPS access';
+                'Effect'    = 'Deny';
+                'Principal' = '*';
+                'Action'    = 's3:*';
+                'Resource'  = "$($AwsCloudResource):s3:::$BucketName/*";
+                'Condition' = @{
+                    'Bool' = @{
+                        'aws:SecureTransport' = 'false';
+                    };
+                };
             }
-	    }]}"
-	return $s3PolicyForRoleAndCloudWatch.Replace("'",'"')
+        )
+    }
+    return $($s3PolicyForRoleAndCloudWatch | ConvertTo-Json -Depth 99 -Compress)
 }
 
 # ***********       Main Flow       ***********
@@ -90,7 +91,7 @@ New-SQSQueue
 Write-Log -Message "Executing: ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl" -LogFileName $LogFileName -Severity Verbose
 $sqsUrl = ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl
 Write-Log -Message "Executing: ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn" -LogFileName $LogFileName -Severity Verbose
-$sqsArn =  ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn
+$sqsArn = ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn ) | ConvertFrom-Json).Attributes.QueueArn
 Write-Log -Message "sqsUrl: $sqsUrl sqsArn: $sqsArn" -LogFileName $LogFileName -Severity Verbose
 
 Update-SQSPolicy

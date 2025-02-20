@@ -12,5 +12,6 @@ function Get-SentinelTagInJsonFormat
 {
     $key = Get-SentinelTagKey
     $value = Get-SentinelTagValue
-    return  "{\""Key\"": \""$key\"", \""Value\"": \""$value\""}"
+    $sentinelTag = ConvertTo-Json -InputObject @{Key=$key;Value=$value} -Depth 99 -Compress
+    return $sentinelTag
 }
