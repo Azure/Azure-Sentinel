@@ -40,6 +40,7 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
               return ExitCode.ERROR;
           }
       }
+
       const options = [pr.base.ref, pr.head.ref, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
       const diffSummary = await git.diff(options);
       const diffLinesArray: string[] = diffSummary.split('\n').map((l: string) => l.trim());
@@ -63,6 +64,7 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
       });
     }
   }
+  return ExitCode.SUCCESS;
 }
 
 
