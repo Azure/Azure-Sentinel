@@ -1,11 +1,11 @@
-# GCP VPC flow logs Data Connector Configuration Guide
+# GCP VPC Flow Logs Data Connector Configuration Guide
 
 For ingesting data into Microsoft Sentinel , We need few of the resources created/ready on google console , Which will be done with the help of terraform script.
 
 ### List of Resources required 
 
 * Topic
-* Subscription for the topic,
+* Subscription for the topic
 * Workload identity pool
 * Workload identity provider
 * Service account with permissions to get and consume from subscription.
