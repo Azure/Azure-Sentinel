@@ -84,8 +84,8 @@ resource "google_project_iam_binding" "log-writer-organization" {
   ]
 }
 
-output "An_output_message"{
-  value = "Please copy the following values to Sentinel"
+output "Next_step"{
+  value = "Please copy the following values to Sentinel while adding new collector"
 }
 
 output "GCP_project_id" {
