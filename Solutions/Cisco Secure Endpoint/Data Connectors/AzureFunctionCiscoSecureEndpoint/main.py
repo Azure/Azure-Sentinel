@@ -54,6 +54,7 @@ def main(mytimer: func.TimerRequest):
         sentinel.flush()
         audit_logs_last_ts = get_last_event_ts(events=events, last_ts=audit_logs_last_ts, field_name='created_at')
         if isinstance(audit_logs_last_ts, datetime.datetime):
+            logging.info(f"Updating audit_logs_last_ts: {audit_logs_last_ts.isoformat()}")
             audit_logs_state_manager.post(audit_logs_last_ts.isoformat())
 
     events_last_ts = events_state_manager.get()
@@ -66,6 +67,7 @@ def main(mytimer: func.TimerRequest):
         sentinel.flush()
         events_last_ts = get_last_event_ts(events=events, last_ts=events_last_ts, field_name='date')
         if isinstance(events_last_ts, datetime.datetime):
+            logging.info(f"Updating events_last_ts: {events_last_ts.isoformat()}")
             events_state_manager.post(events_last_ts.isoformat())
 
     logging.info(f'Script finished. Total sent records: {sentinel.successfull_sent_events_number}')
@@ -151,13 +153,16 @@ def get_last_event_ts(events: List[dict], last_ts: datetime.datetime, field_name
         try:
             event_ts = parse_datetime(event_ts)
         except:
+            logging.warning(f"Failed to parse event timestamp: {event_ts}") 
             pass
+        logging.info(f"Event timestamp: {event_ts}, Last saved timestamp: {last_ts}")
         if isinstance(event_ts, datetime.datetime):
             if isinstance(last_ts, datetime.datetime) and event_ts > last_ts:
                 last_ts = event_ts
     if check_on_future_event_time(last_ts):
         current_timestap_utc = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
         last_ts = current_timestap_utc.isoformat()
+    logging.info(f"Updated last_ts: {last_ts}")
     return last_ts
 
 
