@@ -6,7 +6,7 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "The baseVISION Threat Intel Feeds offering provides tactical threat intelligence to detect and protect against known threats within an organization's environment before they can cause harm. The service leverages multiple sources integrated into its platform, curated and maintained by specialists to ensure quality, including Indicators of Compromise (IOCs), confidence levels, and expiration. The sources include data gathered from customers during incident analysis and response, as well as paid feeds from highly rated threat intelligence providers.\n\n**Important:** This Sentinel Solution provides additional components to our Threat Intel Feeds which can be bought via Microsoft Azure Marketplace. \n\n**Important:** _This Azure Sentinel Solution is currently in public preview. This feature is provided without a service level agreement, and it's not recommended for production workloads. Certain features might not be supported or might have constrained capabilities. For more information, see [Supplemental Terms of Use for Microsoft Azure Previews](https://azure.microsoft.com/support/legal/preview-supplemental-terms/)._\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\n[Link to product website](https://www.basevision.ch/product/extended-threat-intelligence-hunting-service/) Provide Solution description and details. \n\nAzure Sentinel Solutions provide a consolidated way to acquire Azure Sentinel content like workbooks, analytics, and automations in your workspace with a single deployment step.\n\n**Analytic Rules:** 0, **Workbooks:** 1, **Playbooks:** 2, **Data Connectors:** 0\n\n[Learn more about Azure Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "description": "The baseVISION Threat Intel Feeds offering provides tactical threat intelligence to detect and protect against known threats within an organization's environment before they can cause harm. The service leverages multiple sources integrated into its platform, curated and maintained by specialists to ensure quality, including Indicators of Compromise (IOCs), confidence levels, and expiration. The sources include data gathered from customers during incident analysis and response, as well as paid feeds from highly rated threat intelligence providers.\n\n**Important:** _This Sentinel Solution provides additional components to our Threat Intel Feeds which can be bought via Microsoft Azure Marketplace._ \n\n**Important:** _This Azure Sentinel Solution is currently in public preview. This feature is provided without a service level agreement, and it's not recommended for production workloads. Certain features might not be supported or might have constrained capabilities. For more information, see [Supplemental Terms of Use for Microsoft Azure Previews](https://azure.microsoft.com/support/legal/preview-supplemental-terms/)._\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\n[product website](https://www.basevision.ch/product/extended-threat-intelligence-hunting-service/) \n\nAzure Sentinel Solutions provide a consolidated way to acquire Azure Sentinel content like workbooks, analytics, and automations in your workspace with a single deployment step.\n\n**Analytic Rules:** 0, **Workbooks:** 1, **Playbooks:** 2, **Data Connectors:** 0\n\n[Learn more about Azure Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
         "subscription": {
           "constraints": {
             "validations": [
@@ -59,6 +59,16 @@
           }
         },
         "visible": true
+      },
+      {
+        "name": "taxii-name",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Name of the configured TAXII Feed",
+        "defaultValue": "baseVISION-SOC-TI-Feed",
+        "toolTip": "Name of the Taxii Feed which was configured in the TAXII connector",
+        "constraints": {
+          "required": true
+        }
       }
     ],
     "steps": [
@@ -165,7 +175,7 @@
                 "name": "plabybook2-text",
                 "type": "Microsoft.Common.TextBlock",
                 "options": {
-                  "text": "This playbook is triggered every 15 minutes and sends Filter based defined IOCs to Microsoft Defender XDR."
+                  "text": "This playbook is triggered every 15 minutes and sends IOCs to Microsoft Defender XDR. The IOCs are filtered based on the confidence level and are not part of the Microsoft Feeds to stay withtin the 15000 limit of Microsoft Defender XDR. After the deployment you need to grant the managed identity access to the Microsoft Defender XDR API. Copy the following script which can be executed in the Cloud Shell or in a local PowerShell session. # Replace with your managed identity object ID\n\n$miName = \"la-basevisionti-defenderxdr-uami\"\n\n# The app ID of the Defender API where the permissions are required\n\n$appId = \"fc780465-2017-40d4-a0c5-307022471b92\"\n\n# Replace with the API permissions required by your app\n\n$permissionsToAdd = @(\"Ti.ReadWrite.All\")\n\nConnect-AzureAD\n\n$miObjectID = (Get-AzADServicePrincipal -DisplayName $miName).Id\n\n$app = Get-AzureADServicePrincipal -Filter \"AppId eq '$appId'\"\n\nforeach ($permission in $permissionsToAdd)\n\n{\n\n   $role = $app.AppRoles | where Value -Like $permission | Select-Object -First 1\n\n   New-AzureADServiceAppRoleAssignment -Id $role.Id -ObjectId $miObjectID -PrincipalId $miObjectID -ResourceId $app.ObjectId\n\n}"
                 }
               },
               {
@@ -179,6 +189,35 @@
                   "regex": "[a-z0-9A-Z]{1,256}$",
                   "validationMessage": "Please enter a playbook resource name"
                 }
+              },
+              {
+                "name": "playbook2-action",
+                "type": "Microsoft.Common.DropDown",
+                "label": "Action",
+                "defaultValue": "Audit",
+                "multiselect": false,
+                "toolTip": "Select the action to be taken by the playbook.",
+                "constraints": {
+                  "required": true,
+                  "allowedValues": [
+                    {
+                      "label": "Warn",
+                      "value": "Warn"
+                    },
+                    {
+                      "label": "Block",
+                      "value": "Block"
+                    },
+                    {
+                      "label": "Audit",
+                      "value": "Audit"
+                    },
+                    {
+                      "label": "Block and Remediate",
+                      "value": "BlockAndRemediate"
+                    }
+                    ]
+                }
               }
             ]
           }
@@ -189,9 +228,12 @@
       "workspace-location": "[basics('workspace').location]",
       "location": "[location()]",
       "workspace": "[basics('workspace').name]",
+      "TaxiiFeedName": "[basics('taxii-name')]",
       "workbookTiDashboard_name": "[steps('workbooks').workbook1.workbook1-name]",
-      "la_basevisionti_defenderxdr_name": "[steps('playbooks').playbook1.playbook1-name]",
-      "la_basevisionti_telemetry_name": "[steps('playbooks').playbook2.playbook2-name]"
+      "la_basevisionti_telemetry_name": "[steps('playbooks').playbook1.playbook1-name]",
+      "la_basevisionti_defenderxdr_name": "[steps('playbooks').playbook2.playbook2-name]",
+      "la_basevisionti_defenderxdr_action": "[steps('playbooks').playbook2.playbook2-name]"
+
     }
   }
 }
