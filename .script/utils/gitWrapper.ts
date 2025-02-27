@@ -1,5 +1,5 @@
 import { cli, devOps } from "@azure/avocado";
-import * as logger from "./logger";
+import * as logger from "./logger.js";
 import "./stringExtenssions";
 import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
 

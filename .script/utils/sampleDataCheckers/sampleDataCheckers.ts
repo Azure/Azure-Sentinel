@@ -1,4 +1,4 @@
-import { SampleDataValidationError } from "../validationError";
+import { SampleDataValidationError } from "../validationError.js";
 const regEmail = 'sanitized@sanitized.com';
 export function isValidSampleData(sampleDataContent: string) {
    console.log(sampleDataContent.length);
