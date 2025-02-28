@@ -1,8 +1,8 @@
 id: d941b837-88fa-4c77-a4d8-76af0044cac0
 Function:
   Title: Parser for JamfProtect
-  Version: '3.2.0'
-  LastUpdated: '2025-01-06'
+  Version: '3.2.2'
+  LastUpdated: '2025-02-24'
 Category: Microsoft Sentinel Parser
 FunctionName: JamfProtect
 FunctionAlias: JamfProtect
@@ -136,6 +136,8 @@ FunctionQuery: |
                     "A crash or diagnostic file has been collected",
                     eventTypeHuman == "log_collection",
                     "Entries from a log file have been collected",
+                    eventTypeHuman == "gatekeeper_user_override",
+                    "Gatekeeper controls were overridden",
                     "No reason yet defined for this event"
                 ),
         EventType = case(
@@ -229,6 +231,8 @@ FunctionQuery: |
                     "MalwareDetected",
                     eventTypeHuman == "xp_malware_remediated",
                     "MalwareRemediated",
+                    eventTypeHuman == "xp_malware_remediated",
+                    "GatekeeperOverride",
                     ""
                 ),
         EventSubType = case(
@@ -723,6 +727,37 @@ FunctionQuery: |
         iff(isnotempty(event[eventTypeHuman].malware_identifier), event[eventTypeHuman].malware_identifier, ""),
         "signature_version",
         iff(isnotempty(event[eventTypeHuman].signature_version), event[eventTypeHuman].signature_version, "")
+    ),
+                            dynamic(null)
+                        )
+    // Event Specific - gatekeeper_user_override
+    | extend GatekeeperOverride = iif(
+                            eventTypeHuman == "gatekeeper_user_override",
+                            bag_pack(
+        "TargetFilePath",
+        iff(isnotempty(event[eventTypeHuman].file.path), event[eventTypeHuman].file.path, ""),
+        "TargetFileSize",
+        iff(isnotempty(event[eventTypeHuman].file.stat.st_size), event[eventTypeHuman].file.stat.st_size, ""),
+        "TargetFileCreationTime",
+        iff(isnotempty(event[eventTypeHuman].file.stat.st_birthtimespec), event[eventTypeHuman].file.stat.st_birthtimespec, ""),
+        "TargetFileAccessedTime",
+        iff(isnotempty(event[eventTypeHuman].file.stat.st_atimespec), event[eventTypeHuman].file.stat.st_atimespec, "")
+        "ActorUserId",
+        iff(isnotempty(event[eventTypeHuman].file.stat.st_uid), event[eventTypeHuman].file.stat.st_uid, "")
+        "GroupId",
+        iff(isnotempty(event[eventTypeHuman].file.stat.st_gid), event[eventTypeHuman].file.stat.st_gid, "")
+        "TargetFileSHA256",
+        iff(isnotempty(event[eventTypeHuman].sha256), event[eventTypeHuman].sha256, "")
+        "TargetFileCdHash",
+        iff(isnotempty(event[eventTypeHuman].signing_info.cdhash), event[eventTypeHuman].signing_info.cdhash, "")
+        "TargetBinarySigningTeamID",
+        iff(isnotempty(event[eventTypeHuman].signing_info.team_id), event[eventTypeHuman].signing_info.team_id, "")
+        "TargetBinarySigningAppID",
+        iff(isnotempty(event[eventTypeHuman].signing_info.signing_id), event[eventTypeHuman].signing_info.signing_id, "")
+        "ThreatFilePath",
+        iff(isnotempty(event[eventTypeHuman].file.path), event[eventTypeHuman].file.path, "")
+        ThreatCategory == "Malware",
+        ThreatName == "User did override Gatekeeper"
     ),
                             dynamic(null)
                         )
