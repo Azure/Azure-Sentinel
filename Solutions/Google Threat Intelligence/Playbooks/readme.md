@@ -18,6 +18,10 @@ Google Threat Intelligence solution provides the following playbooks.
   
 * **Incident trigger - GoogleThreatIntelligence-IOCEnrichmentIncident**: Iterate over all entities associated with the incident, adding enrichment comments to the incident.
 
+### Google Threat Intelligence Threat Intelligence Ingestion
+
+* **Recurrence trigger**: Add Google Threat Intelligence in a specific category to the Threat Intelligence dashboard/tables every x minutes.
+
 ## Deployment
 
 ### Custom Connector
