@@ -30,7 +30,7 @@ To generate the above resources, you must execute the following terraform script
 <a name="log">
 
 ## Steps to execute Terraform scripts for Log Setup
-To access the terraform script for Log Setup [Click here](https://github.com/v-hkopparala/v-hkopparala/blob/main/CCPIAMLOGS%201.tf)
+To access the terraform script for Log Setup [Click here](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPIAMCCPLogsSetup)
 - After accessing the log setup file, edit the project id as per your project.
 - Launch the cloud shell in Google Cloud Console.
 - Execute the below mentioned commands.
