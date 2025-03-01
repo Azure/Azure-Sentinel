@@ -1,0 +1,873 @@
+metadata author = 'baseVISION - support@basevision.ch'
+metadata comments = 'Solution template for baseVISION Threat Intelligence'
+
+@description('Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace')
+@minLength(1)
+param location string = resourceGroup().location
+
+@description('Region to deploy solution resources -- separate from location selection')
+param workspace_location string = ''
+
+@description('Workspace name for Log Analytics where Microsoft Sentinel is setup')
+param workspace string = ''
+
+@description('Name for the workbook')
+@minLength(1)
+param workbook1_name string = 'baseVISION Threat Intel Dashboard'
+
+@description('Name of the Taxii Feed which was configured in the TAXII connector')
+@minLength(1)
+param TaxiiFeedName string = 'baseVISION-SOC-TI-Feed'
+
+@description('Name of the defender integration playbook (Logic Apps resource) which will be created')
+@minLength(1)
+param la_basevisionti_defenderxdr_name string = 'la-basevisionti-defenderxdr'
+
+@description('Action (Warn, Block, Audit or BlockAndRemediate) to take by the defender integration playbook (Logic Apps resource) which will be created')
+@minLength(1)
+param la_basevisionti_defenderxdr_action string = 'Audit'
+
+@description('Name of the telemetry improvement playbook (Logic Apps resource) which will be created')
+@minLength(1)
+param la_basevisionti_telemetry_name string = 'la-basevisionti-telemetry'
+
+var email = 'support@basevision.ch'
+var _email = email
+var _solutionName = 'baseVISION Threat Intelligence'
+var _solutionVersion = '3.0.0'
+var solutionId = 'basevision.basevision'
+var _solutionId = solutionId
+var workbookVersion1 = ''
+var workbookContentId1 = ''
+var workbookId1 = resourceId('Microsoft.Insights/workbooks', workbookContentId1)
+var workbookTemplateSpecName1 = '${workspace}/Microsoft.SecurityInsights/${workspace}-wb-${uniqueString(_workbookContentId1)}'
+var _workbookContentId1 = workbookContentId1
+var workspaceResourceId = resourceId('microsoft.OperationalInsights/Workspaces', workspace)
+var _workbookcontentProductId1 = '${take(_solutionId,50)}-wb-${uniqueString('${_solutionId}-Workbook-${_workbookContentId1}-${workbookVersion1}')}'
+var _la_basevisionti_telemetry = la_basevisionti_telemetry_name
+var playbookVersion1 = '1.0'
+var playbookContentId1 = 'la-basevisionti-telemetry'
+var _playbookContentId1 = playbookContentId1
+var playbookId1 = resourceId('Microsoft.Logic/workflows', playbookContentId1)
+var playbookTemplateSpecName1 = '${workspace}/Microsoft.SecurityInsights/${workspace}-pl-${uniqueString(_playbookContentId1)}'
+var _playbookcontentProductId1 = '${take(_solutionId,50)}-pl-${uniqueString('${_solutionId}-Playbook-${_playbookContentId1}-${playbookVersion1}')}'
+var blanks = replace('b', 'b', '')
+var _la_basevisionti_defenderxdr = la_basevisionti_defenderxdr_name
+var TemplateEmptyArray = json('[]')
+var playbookVersion2 = '1.0'
+var playbookContentId2 = 'la-basevisionti-defenderxdr'
+var _playbookContentId2 = playbookContentId2
+var playbookId2 = resourceId('Microsoft.Logic/workflows', playbookContentId2)
+var playbookTemplateSpecName2 = '${workspace}/Microsoft.SecurityInsights/${workspace}-pl-${uniqueString(_playbookContentId2)}'
+var _playbookcontentProductId2 = '${take(_solutionId,50)}-pl-${uniqueString('${_solutionId}-Playbook-${_playbookContentId2}-${playbookVersion2}')}'
+var _solutioncontentProductId = '${take(_solutionId,50)}-sl-${uniqueString('${_solutionId}-Solution-${_solutionId}-${_solutionVersion}')}'
+
+resource workbookTemplateSpec1 'Microsoft.OperationalInsights/workspaces/providers/contentTemplates@2023-04-01-preview' = {
+  name: workbookTemplateSpecName1
+  location: workspace_location
+  properties: {
+    description: 'baseVISION-TIFeedDashboard Workbook with template version 3.0.0'
+    mainTemplate: {
+      '$schema': 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#'
+      contentVersion: workbookVersion1
+      parameters: {}
+      variables: {}
+      resources: [
+        {
+          type: 'Microsoft.Insights/workbooks'
+          name: workbookContentId1
+          location: workspace_location
+          kind: 'shared'
+          apiVersion: '2021-08-01'
+          metadata: {
+            description: ''
+          }
+          properties: {
+            displayName: workbook1_name
+            serializedData: '{"version":"Notebook/1.0","items":[{"type":9,"content":{"version":"KqlParameterItem/1.0","crossComponentResources":["{SentinelWorkspace}"],"parameters":[{"id":"91f52358-d124-4e1f-903e-519801764521","version":"KqlParameterItem/1.0","name":"Timerange","type":4,"isRequired":true,"typeSettings":{"selectableValues":[{"durationMs":86400000},{"durationMs":172800000},{"durationMs":259200000},{"durationMs":604800000},{"durationMs":1209600000},{"durationMs":2419200000},{"durationMs":2592000000},{"durationMs":5184000000},{"durationMs":7776000000}]},"timeContext":{"durationMs":86400000},"value":{"durationMs":604800000}},{"id":"72128dde-c135-4fea-a974-5d4a3b4e833d","version":"KqlParameterItem/1.0","name":"SentinelWorkspace","label":"Sentinel Workspace","type":5,"isRequired":true,"query":"resources\\r\\n| where type =~ \'microsoft.operationalinsights/workspaces\'\\r\\n| project value =id, label = name","typeSettings":{"showDefault":false},"queryType":1,"resourceType":"microsoft.operationalinsights/workspaces","value":""},{"id":"3a197370-bae7-4f13-b3ba-9639531ada8f","version":"KqlParameterItem/1.0","name":"ThreatIntelFeed","label":"Threat Intel Feed to analyze","type":2,"isRequired":true,"query":"ThreatIntelligenceIndicator\\r\\n| distinct SourceSystem","typeSettings":{"defaultItemsText":"baseVISION-SOC-TI-Feed"},"timeContext":{"durationMs":0},"timeContextFromParameter":"Timerange","queryType":0,"resourceType":"microsoft.operationalinsights/workspaces","value":"baseVISION-SOC-TI-Feed"}],"style":"pills","queryType":0,"resourceType":"microsoft.operationalinsights/workspaces"},"name":"parameters - 3"},{"type":1,"content":{"json":"## baseVISION Threat Intel Dashboard\\n---"},"name":"text - 2"},{"type":12,"content":{"version":"NotebookGroup/1.0","groupType":"editable","items":[{"type":1,"content":{"json":"Our Threat Intel Feeds offer a unique and comprehensive solution, integrating Threat Intelligence Feeds, Proactive Threat Hunting, and Cyber Threat Intelligence. With high-quality detections and substantial ingest volume, our feeds provide actionable insights and preemptive threat mitigation, ensuring robust security for your organization. This dashboard provides insights about the feed."},"customWidth":"70","name":"description"},{"type":1,"content":{"json":"<svg id=\\"Ebene_2\\" xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 388.44 59.12\\"><defs><style>.cls-1,.cls-2,.cls-3{stroke-width:0px;}</style></defs><g id=\\"Ebene_1-2\\"><path class=\\"cls-1\\" style=\\"fill:#f48e00;\\" d=\\"M39.65,37.61c0,2.87-.53,5.55-1.58,8.03-1.05,2.49-2.48,4.66-4.27,6.53-1.8,1.87-3.9,3.34-6.31,4.42-2.41,1.07-4.98,1.61-7.7,1.61-3.7,0-7.03-.96-10.01-2.89-2.98-1.92-5.29-4.45-6.93-7.58v9.55H0V0h2.85v27.25c1.64-3.16,3.95-5.71,6.93-7.64,2.98-1.94,6.31-2.91,10.01-2.91,2.72,0,5.29.55,7.7,1.65,2.41,1.1,4.52,2.6,6.31,4.5,1.8,1.9,3.22,4.11,4.27,6.65,1.05,2.54,1.58,5.24,1.58,8.11ZM36.8,37.57c0-2.46-.44-4.8-1.31-7.01-.87-2.21-2.08-4.12-3.63-5.74-1.54-1.62-3.34-2.9-5.4-3.85-2.06-.95-4.27-1.42-6.64-1.42s-4.5.48-6.56,1.42c-2.06.95-3.86,2.23-5.4,3.85-1.54,1.62-2.77,3.53-3.67,5.74-.9,2.21-1.35,4.54-1.35,7.01s.45,4.77,1.35,6.93c.9,2.16,2.12,4.04,3.67,5.66,1.54,1.62,3.34,2.89,5.4,3.81s4.24,1.39,6.56,1.39,4.58-.46,6.64-1.39,3.86-2.19,5.4-3.81c1.54-1.62,2.75-3.5,3.63-5.66s1.31-4.47,1.31-6.93Z\\"/><path class=\\"cls-1\\" style=\\"fill:#f48e00;\\" d=\\"M76.6,57.28c-.36-.72-.63-1.55-.81-2.5-.18-.95-.27-2.04-.27-3.27v-.77c-1.59,2.26-3.85,4.03-6.78,5.31-2.93,1.28-6.36,1.92-10.32,1.92-1.75,0-3.48-.22-5.2-.65-1.72-.44-3.26-1.12-4.62-2.04-1.36-.92-2.46-2.08-3.31-3.46-.85-1.39-1.27-3.03-1.27-4.93,0-2.26.47-4.11,1.42-5.54.95-1.44,2.22-2.59,3.81-3.46,1.59-.87,3.4-1.51,5.43-1.92,2.03-.41,4.09-.72,6.2-.92,2.21-.2,4.21-.44,6-.69,1.8-.26,3.34-.63,4.62-1.12,1.28-.49,2.27-1.1,2.96-1.85.69-.74,1.04-1.73,1.04-2.96,0-1.85-.4-3.35-1.19-4.5-.8-1.15-1.81-2.07-3.04-2.73-1.23-.67-2.61-1.13-4.12-1.39-1.51-.26-2.99-.38-4.43-.38-3.65,0-6.62.72-8.93,2.16-2.31,1.44-3.9,3.52-4.77,6.24h-2.93c.87-3.54,2.73-6.3,5.58-8.28,2.85-1.98,6.53-2.96,11.05-2.96,4.98,0,8.83,1.03,11.55,3.09,2.72,2.06,4.08,4.96,4.08,8.72v22.45c0,1.03.12,2.17.35,3.43.23,1.26.5,2.28.81,3.05h-2.93ZM75.53,33.8c-.77.72-1.69,1.3-2.77,1.73-1.08.44-2.25.8-3.5,1.08-1.26.28-2.57.5-3.93.65-1.36.15-2.73.28-4.12.39-5.08.51-8.7,1.49-10.86,2.93-2.16,1.44-3.23,3.52-3.23,6.24,0,1.64.41,3,1.23,4.08.82,1.08,1.81,1.92,2.96,2.54s2.39,1.05,3.7,1.31c1.31.26,2.45.38,3.43.38,2.16,0,4.25-.24,6.27-.73,2.03-.49,3.85-1.23,5.47-2.23,1.62-1,2.91-2.27,3.89-3.81.97-1.54,1.46-3.36,1.46-5.47v-9.08Z\\"/><path class=\\"cls-1\\" style=\\"fill:#f48e00;\\" d=\\"M120.56,46.04c.05,1.39-.15,2.73-.6,4.04-.45,1.31-1.15,2.48-2.1,3.5-1.44,1.49-3.29,2.63-5.54,3.43-2.26.8-4.77,1.19-7.54,1.19-5.03,0-9.19-1.06-12.47-3.2-3.29-2.13-5.26-5.22-5.93-9.28h2.85c.72,3.23,2.43,5.67,5.12,7.31,2.69,1.64,6.15,2.46,10.35,2.46,2.41,0,4.57-.36,6.47-1.08,1.9-.72,3.44-1.67,4.62-2.85,1.44-1.54,2.08-3.36,1.92-5.47-.1-2.41-1.22-4.29-3.36-5.62-2.14-1.33-5.62-2.36-10.46-3.08-1.7-.26-3.46-.55-5.29-.89-1.83-.33-3.49-.85-4.98-1.54s-2.73-1.64-3.71-2.85c-.98-1.21-1.49-2.78-1.54-4.73,0-1.33.31-2.66.94-3.97.62-1.31,1.56-2.46,2.81-3.46,1.25-1,2.81-1.81,4.68-2.43,1.87-.62,4.04-.92,6.51-.92,4.41,0,8.01.95,10.78,2.85,2.77,1.9,4.59,4.65,5.47,8.24h-2.93c-.82-2.67-2.35-4.73-4.58-6.2-2.23-1.46-5.12-2.19-8.66-2.19-1.8,0-3.44.21-4.93.62-1.49.41-2.77.98-3.85,1.69-1.08.72-1.91,1.58-2.5,2.58-.59,1-.89,2.07-.89,3.2.05,2.26,1.13,3.88,3.24,4.85,2.11.98,5.38,1.77,9.8,2.39,2.06.31,4.05.71,5.98,1.19,1.93.49,3.64,1.16,5.13,2,1.49.85,2.7,1.92,3.63,3.23.93,1.31,1.44,2.96,1.54,4.97Z\\"/><path class=\\"cls-1\\" style=\\"fill:#f48e00;\\" d=\\"M128.11,37.42c0,2.57.46,4.95,1.39,7.16.92,2.21,2.17,4.11,3.73,5.7,1.56,1.59,3.4,2.84,5.5,3.73,2.1.9,4.36,1.35,6.77,1.35s4.32-.29,6.04-.89c1.72-.59,3.19-1.37,4.43-2.35,1.23-.97,2.26-2.08,3.08-3.31.82-1.23,1.46-2.51,1.92-3.85h3c-1.39,4.31-3.65,7.6-6.77,9.85-3.13,2.26-7.03,3.39-11.7,3.39-2.82,0-5.47-.54-7.93-1.61-2.46-1.08-4.61-2.54-6.43-4.38-1.82-1.84-3.26-4.02-4.31-6.53-1.05-2.51-1.58-5.2-1.58-8.07s.51-5.57,1.54-8.11c1.03-2.54,2.44-4.75,4.23-6.65,1.8-1.9,3.9-3.39,6.31-4.5,2.41-1.1,4.98-1.65,7.7-1.65,2.98,0,5.68.61,8.12,1.84,2.44,1.23,4.53,2.83,6.27,4.79,1.74,1.97,3.09,4.18,4.04,6.63.95,2.46,1.4,4.94,1.35,7.44h-36.72ZM161.75,34.57c-.36-2.16-1.04-4.14-2.04-5.97-1-1.82-2.25-3.4-3.73-4.74-1.49-1.33-3.17-2.39-5.04-3.16-1.87-.77-3.84-1.15-5.89-1.15s-4.09.39-5.97,1.15c-1.87.77-3.54,1.82-5,3.16-1.46,1.34-2.69,2.91-3.7,4.74-1,1.82-1.66,3.81-1.96,5.97h33.34Z\\"/><path class=\\"cls-2\\"  style=\\"fill:#12120d;\\" d=\\"M191.61,58.12h-6.39l-17.97-48.71h6.46l14.67,41.34,14.74-41.34h6.39l-17.9,48.71Z\\"/><path class=\\"cls-2\\" style=\\"fill:#12120d;\\" d=\\"M223.06,58.12h-5.97V9.41h5.97v48.71Z\\"/><path class=\\"cls-2\\" style=\\"fill:#12120d;\\" d=\\"M269.74,44.29c0,2.39-.45,4.49-1.33,6.32-.89,1.83-2.14,3.36-3.75,4.6-1.61,1.24-3.56,2.18-5.83,2.81-2.27.63-4.77.95-7.49.95s-5.37-.39-7.67-1.17c-2.3-.78-4.26-1.89-5.87-3.33-1.62-1.44-2.87-3.17-3.76-5.18-.89-2.01-1.34-4.24-1.34-6.67h6.18c0,3.28,1.15,5.86,3.44,7.76,2.29,1.89,5.29,2.84,8.98,2.84,4.21,0,7.33-.81,9.37-2.42,2.04-1.61,3.05-3.8,3.05-6.56,0-1.03-.15-1.98-.46-2.84-.3-.87-.9-1.65-1.79-2.35s-2.17-1.34-3.83-1.93c-1.66-.58-3.83-1.11-6.49-1.58-2.71-.47-5.12-1.05-7.23-1.75-2.11-.7-3.88-1.58-5.33-2.63-1.45-1.05-2.55-2.33-3.3-3.83-.75-1.5-1.12-3.3-1.12-5.41s.4-4,1.19-5.69c.79-1.68,1.93-3.12,3.4-4.32,1.47-1.19,3.26-2.12,5.37-2.77,2.11-.65,4.45-.98,7.02-.98s5.07.36,7.2,1.07c2.13.71,3.94,1.73,5.44,3.05,1.5,1.33,2.64,2.92,3.44,4.79.8,1.87,1.19,3.98,1.19,6.32h-5.97c0-2.85-.95-5.15-2.85-6.88-1.9-1.73-4.68-2.6-8.34-2.6s-6.59.74-8.37,2.21c-1.78,1.47-2.67,3.36-2.67,5.65,0,1.08.16,2.01.49,2.81.33.8.95,1.51,1.87,2.14.91.63,2.17,1.21,3.76,1.72s3.63,1.01,6.12,1.47c2.67.52,5.08,1.11,7.21,1.79,2.13.68,3.95,1.57,5.45,2.67,1.5,1.1,2.64,2.45,3.44,4.04.79,1.59,1.19,3.56,1.19,5.9Z\\"/><path class=\\"cls-2\\" style=\\"fill:#12120d;\\" d=\\"M284.2,58.12h-5.97V9.41h5.97v48.71Z\\"/><path class=\\"cls-2\\" style=\\"fill:#12120d;\\" d=\\"M388.44,58.12h-6.6l-26.18-39.66v39.66h-5.97V9.41h6.65l26.13,39.59V9.41h5.97v48.71Z\\"/><path class=\\"cls-2\\" style=\\"fill:#12120d;\\" d=\\"M317.09,8.07c-14.1,0-25.52,11.43-25.52,25.52s11.43,25.52,25.52,25.52,25.52-11.43,25.52-25.52-11.43-25.52-25.52-25.52ZM317.09,53.12c-10.78,0-19.52-8.74-19.52-19.52s8.74-19.52,19.52-19.52,19.52,8.74,19.52,19.52-8.74,19.52-19.52,19.52Z\\"/><path class=\\"cls-3\\" style=\\"fill:#f48e00;\\" d=\\"M317.09,20.24c-.64,0-1.26.06-1.88.15,1.76,1.17,2.91,3.16,2.91,5.43,0,3.6-2.92,6.51-6.51,6.51-3.07,0-5.63-2.12-6.32-4.97-.99,1.86-1.55,3.98-1.55,6.24,0,7.37,5.98,13.35,13.35,13.35s13.35-5.98,13.35-13.35-5.98-13.35-13.35-13.35Z\\"/></g></svg>"},"customWidth":"30","name":"logo","styleSettings":{"padding":"20px"}}]},"name":"group - 4"},{"type":3,"content":{"version":"KqlItem/1.0","query":"ThreatIntelligenceIndicator\\r\\n| where SourceSystem == \'{ThreatIntelFeed:value}\'\\r\\n| where TimeGenerated {Timerange:query}\\r\\n| extend IndicatorType = iif(\\r\\n                             isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkIP) or isnotempty(NetworkSourceIP) or isnotempty(NetworkCidrBlock),\\r\\n                             \\"IP\\",\\r\\n                             iff(\\r\\n    isnotempty(Url),\\r\\n    \\"URL\\",\\r\\n    iff(\\r\\n    isnotempty(EmailRecipient) or isnotempty(EmailSenderAddress),\\r\\n    \\"Email\\",\\r\\n    iff(\\r\\n    isnotempty(FileHashValue),\\r\\n    \\"File\\",\\r\\n    iff(\\r\\n    isnotempty(DomainName) or isnotempty(EmailSourceDomain),\\r\\n    \\"Domain\\",\\r\\n    \\"Other\\"\\r\\n)\\r\\n)\\r\\n)\\r\\n)\\r\\n                         )\\r\\n// Summarize and order the data, then render the chart\\r\\n| summarize CountOfIndicators = count() by IndicatorType, bin(TimeGenerated, 1d)\\r\\n| order by CountOfIndicators desc \\r\\n| render barchart kind=stacked ","size":1,"title":"Indicators Imported into Sentinel by Indicator Type and Date","queryType":0,"resourceType":"microsoft.operationalinsights/workspaces","crossComponentResources":["{SentinelWorkspace}"]},"customWidth":"100","name":"ti-types"},{"type":3,"content":{"version":"KqlItem/1.0","query":"ThreatIntelligenceIndicator\\r\\n| extend Indicator=strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, EmailSourceIpAddress, EmailSenderAddress, DomainName)\\r\\n| project-keep TimeGenerated,SourceSystem,Indicator\\r\\n| summarize arg_min(TimeGenerated,*) by Indicator,SourceSystem\\r\\n| summarize Count=count(), bV=minif(TimeGenerated,SourceSystem == \'{ThreatIntelFeed:value}\'), Other=minif(TimeGenerated,SourceSystem != \'{ThreatIntelFeed:value}\') by Indicator\\r\\n| where Count > 1\\r\\n| extend IngestionDifference = Other-bV\\r\\n| project-keep Indicator,IngestionDifference\\r\\n| summarize IngestionDifferenceAvg=avg(IngestionDifference),IngestionDifferenceMin=min(IngestionDifference),IngestionDifferenceMax=max(IngestionDifference)\\r\\n| extend Type=dynamic([\\"Avg\\",\\"Min\\",\\"Max\\"])\\r\\n| mv-expand Type\\r\\n| extend Result = iff(Type==\'Avg\',IngestionDifferenceAvg,iff(Type==\'Min\',IngestionDifferenceMin,iff(Type==\'Max\',IngestionDifferenceMax, totimespan(0))))\\r\\n| project-keep Type,Result\\r\\n\\r\\n","size":3,"title":"Reaction Time (Faster than other feeds)","timeContextFromParameter":"Timerange","queryType":0,"resourceType":"microsoft.operationalinsights/workspaces","crossComponentResources":["{SentinelWorkspace}"],"visualization":"tiles","tileSettings":{"titleContent":{"columnMatch":"Type"},"leftContent":{"columnMatch":"Result","formatter":1,"numberFormat":{"unit":0,"options":{"style":"decimal","useGrouping":false},"emptyValCustomText":"-"}},"showBorder":false}},"name":"ti-time"},{"type":3,"content":{"version":"KqlItem/1.0","query":"let ti = ThreatIntelligenceIndicator \\n    | where TimeGenerated {Timerange:query}\\n    | extend ioc=strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, EmailSourceIpAddress, EmailSenderAddress, DomainName)\\n    | project-keep IndicatorId,ioc,SourceSystem\\n    | distinct IndicatorId,ioc,SourceSystem;\\nti \\n    | where SourceSystem == \\"{ThreatIntelFeed:value}\\" \\n    | join kind=fullouter (ti | where SourceSystem != \\"{ThreatIntelFeed:value}\\") on $left.ioc == $right.ioc\\n    | extend Source = iif(isempty(ioc) and isnotempty(ioc1) ,\'Only on other feeds\', iif(isempty(ioc1) and isnotempty(ioc),\'{ThreatIntelFeed:value}\',iif(isnotempty(ioc1) and isnotempty(ioc),\'Both\', \'Unknown\') ))\\n    | summarize Count = count() by Source\\n    | render piechart \\n\\n","size":2,"title":"TI Feed Uniqueness","noDataMessage":"No indicators ingested. Check your connector configuration.","queryType":0,"resourceType":"microsoft.operationalinsights/workspaces","crossComponentResources":["{SentinelWorkspace}"]},"customWidth":"33","name":"ti-uniqueness"},{"type":3,"content":{"version":"KqlItem/1.0","query":"let tiObservables = ThreatIntelligenceIndicator\\r\\n    | where TimeGenerated < now()\\r\\n    | where SourceSystem == \'{ThreatIntelFeed:value}\'\\r\\n    | project\\r\\n        IndicatorId,\\r\\n        ThreatType,\\r\\n        Description,\\r\\n        Active,\\r\\n        IndicatorTime = TimeGenerated,\\r\\n        Indicator = strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, EmailSourceIpAddress, EmailSenderAddress, DomainName),\\r\\n        SourceSystem;\\r\\nlet alertEntity = SecurityAlert \\r\\n    | where TimeGenerated {Timerange:query}\\r\\n    | project parse_json(Entities), SystemAlertId, AlertTime = TimeGenerated\\r\\n    | mvexpand(Entities)\\r\\n    | extend entity = iif(\\r\\n                          isnotempty(Entities.Address),\\r\\n                          Entities.Address,\\r\\n                          iif(\\r\\n    isnotempty(Entities.HostName),\\r\\n    strcat(Entities.HostName, \\".\\", Entities.DnsDomain),\\r\\n    iif(\\r\\n    isnotempty(Entities.Url),\\r\\n    Entities.Url,\\r\\n    iif(\\r\\n    isnotempty(Entities.Value),\\r\\n    Entities.Value,\\r\\n    iif(Entities.Type == \\"account\\", strcat(Entities.Name, \\"@\\", Entities.UPNSuffix), \\"\\")\\r\\n)\\r\\n)\\r\\n)\\r\\n                      )\\r\\n    | where isnotempty(entity) \\r\\n    | project entity, SystemAlertId, AlertTime;\\r\\nlet IncidentAlerts = SecurityIncident\\r\\n    | project IncidentTime = TimeGenerated, IncidentNumber, Title, parse_json(AlertIds), Classification = iif(isempty(Classification),\'Unclassified\',Classification)\\r\\n    | mv-expand AlertIds\\r\\n    | project IncidentTime, IncidentNumber, Title, tostring(AlertIds),Classification;\\r\\nlet AlertsWithTiObservables = alertEntity\\r\\n    | join kind=inner tiObservables on $left.entity == $right.Indicator;\\r\\nlet IncidentsWithAlertsWithTiObservables = AlertsWithTiObservables\\r\\n    | join kind=inner IncidentAlerts on $left.SystemAlertId == $right.AlertIds;\\r\\nIncidentsWithAlertsWithTiObservables\\r\\n| where Indicator contains \'\' or Indicator == \\"*\\"\\r\\n| summarize Incidents=dcount(IncidentNumber), Alerts=dcount(SystemAlertId) by Indicator, ThreatType, Source = SourceSystem, Description, Classification\\r\\n| sort by Incidents, Alerts desc\\r\\n| summarize Count = count() by Classification\\r\\n| render piechart \\r\\n","size":2,"title":"TI Feed Quality","queryType":0,"resourceType":"microsoft.operationalinsights/workspaces","crossComponentResources":["{SentinelWorkspace}"]},"customWidth":"33","name":"ti-quality"},{"type":3,"content":{"version":"KqlItem/1.0","query":"ThreatIntelligenceIndicator\\r\\n| where SourceSystem == \'{ThreatIntelFeed:value}\'\\r\\n// Select all indicators from the table\\r\\n| where TimeGenerated < now()\\r\\n// Select only indicators that have not expired\\r\\n    and ExpirationDateTime > now()\\r\\n// Select only indicators that are marked active\\r\\n    and Active == true\\r\\n// Select only the most recently ingested copy of an indicator\\r\\n| summarize arg_max(TimeGenerated, *) by IndicatorId\\r\\n// Summarize and order the data, then render the chart\\r\\n| summarize CountOfIndicators = count() by tostring(ConfidenceScore)\\r\\n| order by CountOfIndicators desc \\r\\n| render piechart","size":2,"title":"Confidence Scores","timeContextFromParameter":"Timerange","queryType":0,"resourceType":"microsoft.operationalinsights/workspaces","crossComponentResources":["{SentinelWorkspace}"]},"customWidth":"33","name":"ti-confidence"}],"fromTemplateId":"sentinel-baseVISIONTiFeedDashboard","$schema":"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"}\r\n'
+            version: '1.0'
+            sourceId: workspaceResourceId
+            category: 'sentinel'
+          }
+        }
+        {
+          type: 'Microsoft.OperationalInsights/workspaces/providers/metadata'
+          apiVersion: '2022-01-01-preview'
+          name: '${workspace}/Microsoft.SecurityInsights/Workbook-${last(split(workbookId1,'/'))}'
+          properties: {
+            description: '.description'
+            parentId: workbookId1
+            contentId: _workbookContentId1
+            kind: 'Workbook'
+            version: workbookVersion1
+            source: {
+              kind: 'Solution'
+              name: 'baseVISION Threat Intelligence'
+              sourceId: _solutionId
+            }
+            author: {
+              name: 'baseVISION'
+              email: _email
+            }
+            support: {
+              tier: 'Community'
+              name: 'baseVISION AG'
+              email: 'support@basevision.ch'
+              link: 'https://www.basevision.ch/'
+            }
+          }
+        }
+      ]
+    }
+    packageKind: 'Solution'
+    packageVersion: _solutionVersion
+    packageName: _solutionName
+    packageId: _solutionId
+    contentSchemaVersion: '3.0.0'
+    contentId: _workbookContentId1
+    contentKind: 'Workbook'
+    displayName: workbook1_name
+    contentProductId: _workbookcontentProductId1
+    id: _workbookcontentProductId1
+    version: workbookVersion1
+  }
+  dependsOn: [
+    workspace_Microsoft_SecurityInsights_solutionId
+  ]
+}
+
+resource playbookTemplateSpec1 'Microsoft.OperationalInsights/workspaces/providers/contentTemplates@2023-04-01-preview' = {
+  name: playbookTemplateSpecName1
+  location: workspace_location
+  properties: {
+    description: 'la-basevisionti-telemetry Playbook with template version 3.0.0'
+    mainTemplate: {
+      '$schema': 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#'
+      contentVersion: playbookVersion1
+      parameters: {
+        PlaybookName: {
+          type: 'string'
+          defaultValue: _la_basevisionti_telemetry
+          metadata: {
+            description: 'Name of the playbook (Logic Apps resource) which will be created'
+          }
+        }
+        location: {
+          type: 'string'
+          defaultValue: workspace_location
+        }
+        TaxiiFeedName: {
+          type: 'string'
+          defaultValue: TaxiiFeedName
+          minLength: 1
+          metadata: {
+            description: 'Name of the Taxii Feed which was configured in the TAXII connector'
+          }
+        }
+        workspace: {
+          type: 'string'
+          defaultValue: workspace
+          minLength: 1
+          metadata: {
+            description: 'Workspace name for Azure Log Analytics where Azure Sentinel is setup'
+          }
+        }
+      }
+      variables: {
+        laName: '[parameters(\'PlaybookName\')]'
+        azureSentinelConnectionName: '[format(\'{0}-azmon-connection\', parameters(\'PlaybookName\'))]'
+        uamiName: '[format(\'{0}-uami\', parameters(\'PlaybookName\'))]'
+        roleDefinitionSentinelReaderId: '8d289c81-5878-46d4-8554-54e1e3d8b5cb'
+        'connection-2': '[format(\'/subscriptions/{0}/providers/Microsoft.Web/locations/{1}/managedApis/azuremonitorlogs\', subscription().subscriptionId, parameters(\'location\'))]'
+        '_connection-2': '[variables(\'connection-2\')]'
+        'workspace-location-inline': '[resourceGroup().location]'
+        'workspace-name': workspace
+        workspaceResourceId: '[resourceId(\'microsoft.OperationalInsights/Workspaces\', variables(\'workspace-name\'))]'
+      }
+      resources: [
+        {
+          type: 'Microsoft.ManagedIdentity/userAssignedIdentities'
+          apiVersion: '2024-11-30'
+          name: '[variables(\'uamiName\')]'
+          location: '[parameters(\'location\')]'
+        }
+        {
+          type: 'Microsoft.Web/connections'
+          apiVersion: '2016-06-01'
+          name: '[variables(\'azureSentinelConnectionName\')]'
+          location: '[parameters(\'location\')]'
+          properties: {
+            displayName: '[variables(\'azureSentinelConnectionName\')]'
+            api: {
+              id: '[variables(\'_connection-2\')]'
+            }
+            parameterValueSet: {
+              name: 'managedIdentityAuth'
+            }
+          }
+        }
+        {
+          type: 'Microsoft.Logic/workflows'
+          apiVersion: '2019-05-01'
+          name: '[variables(\'laName\')]'
+          location: '[parameters(\'location\')]'
+          identity: {
+            type: 'UserAssigned'
+          }
+          properties: {
+            state: 'Enabled'
+            definition: {
+              '$schema': 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#'
+              contentVersion: '1.0.0.0'
+              parameters: {
+                TaxiiFeedName: {
+                  defaultValue: '[parameters(\'TaxiiFeedName\')]'
+                  type: 'String'
+                }
+                SubscriptionId: {
+                  defaultValue: '[subscription().subscriptionId]'
+                  type: 'String'
+                }
+                ResourceGroupName: {
+                  defaultValue: '[resourceGroup().name]'
+                  type: 'String'
+                }
+                SentinelName: {
+                  defaultValue: '[parameters(\'workspace\')]'
+                  type: 'String'
+                }
+                '$connections': {
+                  type: 'Object'
+                }
+              }
+              triggers: {
+                Sliding_Window: {
+                  recurrence: {
+                    interval: 4
+                    frequency: 'Hour'
+                  }
+                  evaluatedRecurrence: {
+                    interval: 4
+                    frequency: 'Hour'
+                  }
+                  type: 'SlidingWindow'
+                }
+              }
+              actions: {
+                Get_Telemetry_Data: {
+                  type: 'ApiConnection'
+                  inputs: {
+                    host: {
+                      connection: {
+                        name: '@parameters(\'$connections\')[\'azuremonitorlogs\'][\'connectionId\']'
+                      }
+                    }
+                    method: 'post'
+                    body: {
+                      query: 'let tiObservables = ThreatIntelligenceIndicator\n    | where TimeGenerated < now()\n    | where SourceSystem == "@{parameters(\'TaxiiFeedName\')}"\n    | project\n        IndicatorId,\n        ThreatType,\n        Description,\n        Active,\n        IndicatorTime = TimeGenerated,\n        Indicator = strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, EmailSourceIpAddress, EmailSenderAddress, DomainName),\n        SourceSystem;\nlet alertEntity = SecurityAlert\n    | where TimeGenerated > ago(1d)\n    | project parse_json(Entities), SystemAlertId, AlertTime = TimeGenerated\n    | mvexpand(Entities)\n    | extend entity = iif(isnotempty(Entities.Address), Entities.Address, iif(isnotempty(Entities.HostName), strcat(Entities.HostName, " .", Entities.DnsDomain), iif(isnotempty(Entities.Url), Entities.Url, iif(isnotempty(Entities.Value), Entities.Value, iif(Entities.Type == " account", strcat(Entities.Name, " @", Entities.UPNSuffix), " ")))))\n    | where isnotempty(entity)\n    | project entity, SystemAlertId, AlertTime;\nlet IncidentAlerts = SecurityIncident\n    | project\n        IncidentTime = TimeGenerated,\n        IncidentNumber,\n        Title,\n        parse_json(AlertIds),\n        Classification = iif(isempty(Classification), "Unclassified", Classification)\n    | mv-expand AlertIds\n    | project IncidentTime, IncidentNumber, Title, tostring(AlertIds), Classification;\nlet AlertsWithTiObservables = alertEntity\n    | join kind=inner tiObservables on $left.entity == $right.Indicator;\nlet IncidentsWithAlertsWithTiObservables = AlertsWithTiObservables\n    | join kind=inner IncidentAlerts on $left.SystemAlertId == $right.AlertIds;\nIncidentsWithAlertsWithTiObservables\n| where Indicator contains \'\' or Indicator == " *"\n| summarize Incidents=dcount(IncidentNumber), Alerts=dcount(SystemAlertId) by Indicator, ThreatType, Source = SourceSystem, Description, Classification,Version=1\n'
+                      timerangetype: 'Exact'
+                      timerange: {
+                        exactTimeRangeFrom: '@triggerOutputs()[\'windowStartTime\']'
+                        exactTimeRangeTo: '@triggerOutputs()[\'windowEndTime\']'
+                      }
+                    }
+                    path: '/queryDataV2'
+                    queries: {
+                      subscriptions: '@parameters(\'SubscriptionId\')'
+                      resourcegroups: '@parameters(\'ResourceGroupName\')'
+                      resourcetype: 'Log Analytics Workspace'
+                      resourcename: '@parameters(\'SentinelName\')'
+                    }
+                  }
+                }
+                Send_Telemetry_to_baseVISION: {
+                  runAfter: {
+                    Get_Telemetry_Data: [
+                      'Succeeded'
+                    ]
+                  }
+                  type: 'Http'
+                  inputs: {
+                    uri: 'https://prod-26.switzerlandnorth.logic.azure.com:443/workflows/f335ee7c6e9144709ca9805787a1dc82/triggers/Telemetry_Received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FTelemetry_Received%2Frun&sv=1.0&sig=zRUQT9XGkm7MXAounTQxvbVa6WGdQGJI8YkvjEkv2mQ'
+                    method: 'POST'
+                    body: '@body(\'Get_Telemetry_Data\')?[\'value\']'
+                  }
+                  runtimeConfiguration: {
+                    contentTransfer: {
+                      transferMode: 'Chunked'
+                    }
+                  }
+                }
+              }
+            }
+            parameters: {
+              '$connections': {
+                value: {
+                  azuremonitorlogs: {
+                    id: '[format(\'/subscriptions/{0}/providers/Microsoft.Web/locations/{1}/managedApis/azuremonitorlogs\', subscription().subscriptionId, parameters(\'location\'))]'
+                    connectionId: '[resourceId(\'Microsoft.Web/connections\', variables(\'azureSentinelConnectionName\'))]'
+                    connectionName: 'azuremonitorlogs'
+                    connectionProperties: {
+                      authentication: {
+                        type: 'ManagedServiceIdentity'
+                        identity: '[resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\'))]'
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          dependsOn: [
+            '[resourceId(\'Microsoft.Web/connections\', variables(\'azureSentinelConnectionName\'))]'
+            '[resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\'))]'
+          ]
+          tags: {
+            'hidden-SentinelWorkspaceId': '[variables(\'workspaceResourceId\')]'
+          }
+        }
+        {
+          type: 'Microsoft.Authorization/roleAssignments'
+          apiVersion: '2022-04-01'
+          name: '[guid(resourceId(\'Microsoft.Logic/workflows\', variables(\'laName\')), resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\')), subscriptionResourceId(\'Microsoft.Authorization/roleDefinitions\', variables(\'roleDefinitionSentinelReaderId\')))]'
+          properties: {
+            roleDefinitionId: '[subscriptionResourceId(\'Microsoft.Authorization/roleDefinitions\', variables(\'roleDefinitionSentinelReaderId\'))]'
+            principalId: '[reference(resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\')), \'2024-11-30\').principalId]'
+            principalType: 'ServicePrincipal'
+          }
+          dependsOn: [
+            '[resourceId(\'Microsoft.Logic/workflows\', variables(\'laName\'))]'
+            '[resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\'))]'
+          ]
+        }
+        {
+          type: 'Microsoft.OperationalInsights/workspaces/providers/metadata'
+          apiVersion: '2022-01-01-preview'
+          name: '${workspace}/Microsoft.SecurityInsights/Playbook-${last(split(playbookId1,'/'))}'
+          properties: {
+            parentId: playbookId1
+            contentId: _playbookContentId1
+            kind: 'Playbook'
+            version: playbookVersion1
+            source: {
+              kind: 'Solution'
+              name: 'baseVISION Threat Intelligence'
+              sourceId: _solutionId
+            }
+            author: {
+              name: 'baseVISION'
+              email: _email
+            }
+            support: {
+              tier: 'Community'
+              name: 'baseVISION AG'
+              email: 'support@basevision.ch'
+              link: 'https://www.basevision.ch/'
+            }
+          }
+        }
+      ]
+      metadata: {
+        _generator: {
+          name: 'bicep'
+          version: '0.30.23.60470'
+          templateHash: '14242225795612779748'
+        }
+        title: 'baseVISION Threat Intel - Telemetry'
+        description: 'This playbook is triggered every four hours and sends basic telemetry to baseVISION to improve the feeds. The telemetry data only contains IOC\'s provided by baseVISION together with the analysts classification of incidents associated with it.'
+        mainSteps: [
+          '1. Collect Telemetry'
+          '2. Send data to baseVISION'
+        ]
+        prerequisites: [
+          'baseVISION TI Feed in TAXII connector configured'
+        ]
+        lastUpdateTime: '2025-02-17T00:00:00Z'
+        releaseNotes: {
+          version: '1.0'
+          title: blanks
+          notes: [
+            'Initial version'
+          ]
+        }
+      }
+    }
+    packageKind: 'Solution'
+    packageVersion: _solutionVersion
+    packageName: _solutionName
+    packageId: _solutionId
+    contentSchemaVersion: '3.0.0'
+    contentId: _playbookContentId1
+    contentKind: 'Playbook'
+    displayName: 'la-basevisionti-telemetry'
+    contentProductId: _playbookcontentProductId1
+    id: _playbookcontentProductId1
+    version: playbookVersion1
+  }
+  dependsOn: [
+    workspace_Microsoft_SecurityInsights_solutionId
+  ]
+}
+
+resource playbookTemplateSpec2 'Microsoft.OperationalInsights/workspaces/providers/contentTemplates@2023-04-01-preview' = {
+  name: playbookTemplateSpecName2
+  location: workspace_location
+  properties: {
+    description: 'la-basevisionti-defenderxdr Playbook with template version 3.0.0'
+    mainTemplate: {
+      '$schema': 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#'
+      contentVersion: playbookVersion2
+      parameters: {
+        PlaybookName: {
+          type: 'string'
+          defaultValue: _la_basevisionti_defenderxdr
+          metadata: {
+            description: 'Name of the playbook (Logic Apps resource) which will be created'
+          }
+        }
+        location: {
+          type: 'string'
+          defaultValue: workspace_location
+        }
+        Action: {
+          type: 'string'
+          defaultValue: la_basevisionti_defenderxdr_action
+          minLength: 1
+          metadata: {
+            description: 'Action (Warn, Block, Audit or BlockAndRemediate) to take by the defender integration playbook (Logic Apps resource) which will be created'
+          }
+        }
+        TaxiiFeedName: {
+          type: 'string'
+          defaultValue: TaxiiFeedName
+          minLength: 1
+          metadata: {
+            description: 'Name of the Taxii Feed which was configured in the TAXII connector'
+          }
+        }
+        workspace: {
+          type: 'string'
+          defaultValue: workspace
+          minLength: 1
+          metadata: {
+            description: 'Workspace name for Azure Log Analytics where Azure Sentinel is setup'
+          }
+        }
+      }
+      variables: {
+        laName: '[parameters(\'PlaybookName\')]'
+        azureSentinelConnectionName: '[format(\'{0}-azmon-connection\', parameters(\'PlaybookName\'))]'
+        uamiName: '[format(\'{0}-uami\', parameters(\'PlaybookName\'))]'
+        roleDefinitionSentinelReaderId: '8d289c81-5878-46d4-8554-54e1e3d8b5cb'
+        'connection-2': '[format(\'/subscriptions/{0}/providers/Microsoft.Web/locations/{1}/managedApis/azuremonitorlogs\', subscription().subscriptionId, parameters(\'location\'))]'
+        '_connection-2': '[variables(\'connection-2\')]'
+        'workspace-location-inline': '[resourceGroup().location]'
+        'workspace-name': workspace
+        workspaceResourceId: '[resourceId(\'microsoft.OperationalInsights/Workspaces\', variables(\'workspace-name\'))]'
+      }
+      resources: [
+        {
+          type: 'Microsoft.ManagedIdentity/userAssignedIdentities'
+          apiVersion: '2024-11-30'
+          name: '[variables(\'uamiName\')]'
+          location: '[parameters(\'location\')]'
+        }
+        {
+          type: 'Microsoft.Web/connections'
+          apiVersion: '2016-06-01'
+          name: '[variables(\'azureSentinelConnectionName\')]'
+          location: '[parameters(\'location\')]'
+          properties: {
+            displayName: '[variables(\'azureSentinelConnectionName\')]'
+            api: {
+              id: '[variables(\'_connection-2\')]'
+            }
+            parameterValueSet: {
+              name: 'managedIdentityAuth'
+            }
+          }
+        }
+        {
+          type: 'Microsoft.Logic/workflows'
+          apiVersion: '2019-05-01'
+          name: '[variables(\'laName\')]'
+          location: '[parameters(\'location\')]'
+          identity: {
+            type: 'UserAssigned'
+          }
+          properties: {
+            state: 'Enabled'
+            definition: {
+              '$schema': 'https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#'
+              contentVersion: '1.0.0.0'
+              parameters: {
+                TaxiiFeedName: {
+                  defaultValue: '[parameters(\'TaxiiFeedName\')]'
+                  type: 'String'
+                }
+                SubscriptionId: {
+                  defaultValue: '[subscription().subscriptionId]'
+                  type: 'String'
+                }
+                ResourceGroupName: {
+                  defaultValue: '[resourceGroup().name]'
+                  type: 'String'
+                }
+                SentinelName: {
+                  defaultValue: '[parameters(\'workspace\')]'
+                  type: 'String'
+                }
+                Action: {
+                  defaultValue: '[parameters(\'Action\')]'
+                  type: 'String'
+                }
+                '$connections': {
+                  type: 'Object'
+                }
+              }
+              triggers: {
+                Sliding_Window: {
+                  recurrence: {
+                    interval: 15
+                    frequency: 'Minute'
+                  }
+                  evaluatedRecurrence: {
+                    interval: 15
+                    frequency: 'Minute'
+                  }
+                  type: 'SlidingWindow'
+                  conditions: TemplateEmptyArray
+                }
+              }
+              actions: {
+                Get_IOCs_not_on_Microsoft_feed_with_confidence_of_100: {
+                  runAfter: {
+                    Initialize_variable_Batch: [
+                      'Succeeded'
+                    ]
+                  }
+                  type: 'ApiConnection'
+                  inputs: {
+                    host: {
+                      connection: {
+                        name: '@parameters(\'$connections\')[\'azuremonitorlogs\'][\'connectionId\']'
+                      }
+                    }
+                    method: 'post'
+                    body: {
+                      query: 'let onlyMsTI = ThreatIntelligenceIndicator\n| where Active == true and SourceSystem == "Microsoft Defender Threat Intelligence" and FileHashType !contains "MD5" and FileHashType !contains "SHA1" and TimeGenerated > todatetime("@{triggerOutputs()[\'windowStartTime\']}")\n| project Ioc=strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, DomainName,EmailSenderName), SourceSystem, ConfidenceScore,ExpirationDateTime\n| distinct Ioc;\nThreatIntelligenceIndicator\n| where ConfidenceScore > 99 and Active == true and SourceSystem == "@{parameters(\'TaxiiFeedName\')}" and FileHashType !contains "MD5" and FileHashType !contains "SHA1" and TimeGenerated > ago(7d)\n| project Ioc=strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, DomainName,EmailSenderName), Description, IocType = case(\n    isnotempty(NetworkSourceIP) or isnotempty(NetworkIP) or isnotempty(NetworkDestinationIP), "IpAddress",\n    isnotempty(Url), "Url",\n    isnotempty(FileHashValue), "FileSha256",  // Assuming FileHashValue represents FileSha256\n    isnotempty(DomainName), "DomainName",\n    ""\n), SourceSystem, ConfidenceScore,ExpirationDateTime,TrafficLightProtocolLevel\n| join kind=leftanti onlyMsTI on Ioc\n| summarize MinConfidenceScore=min(ConfidenceScore),MinExpirationDateTime=min(ExpirationDateTime), Descriptions=make_list(Description) by Ioc, IocType\n| project Ioc, IocType, Description=Descriptions[0], MinConfidenceScore,MinExpirationDateTime\n| limit 20'
+                      timerangetype: '3'
+                    }
+                    path: '/queryDataV2'
+                    queries: {
+                      subscriptions: '@parameters(\'SubscriptionId\')'
+                      resourcegroups: '@parameters(\'ResourceGroupName\')'
+                      resourcetype: 'Log Analytics Workspace'
+                      resourcename: '@parameters(\'SentinelName\')'
+                    }
+                  }
+                }
+                For_each: {
+                  foreach: '@body(\'Get_IOCs_not_on_Microsoft_feed_with_confidence_of_100\')?[\'value\']'
+                  actions: {
+                    Append_to_array_variable: {
+                      type: 'AppendToArrayVariable'
+                      inputs: {
+                        name: 'Batch'
+                        value: {
+                          indicatorValue: '@{item()?[\'Ioc\']}'
+                          indicatorType: '@{item()?[\'IocType\']}'
+                          title: '@{item()?[\'Ioc\']}'
+                          application: '@{parameters(\'TaxiiFeedName\')}'
+                          expirationTime: '@{formatDateTime(item()?[\'MinExpirationDateTime\'],\'s\')}Z'
+                          action: '@{parameters(\'Action\')}'
+                          severity: 'Low'
+                          description: '@{item()?[\'Description\']}'
+                          recommendedActions: 'nothing'
+                          rbacGroupNames: TemplateEmptyArray
+                          generateAlert: 'True'
+                        }
+                      }
+                    }
+                    Condition: {
+                      runAfter: {
+                        Append_to_array_variable: [
+                          'Succeeded'
+                        ]
+                      }
+                      else: {
+                        actions: {
+                          Reset_Batch: {
+                            runAfter: {
+                              Add_Indicator_to_Defender_XDR: [
+                                'Succeeded'
+                              ]
+                            }
+                            type: 'SetVariable'
+                            inputs: {
+                              name: 'Batch'
+                              value: '@null'
+                            }
+                          }
+                          Add_Indicator_to_Defender_XDR: {
+                            type: 'Http'
+                            inputs: {
+                              uri: 'https://api.securitycenter.microsoft.com/api/indicators/import'
+                              method: 'POST'
+                              headers: {
+                                'Content-Type': 'application/json'
+                              }
+                              body: {
+                                Indicators: '@variables(\'Batch\')'
+                              }
+                              authentication: {
+                                type: 'ManagedServiceIdentity'
+                                identity: '[resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\'))]'
+                                audience: 'https://api.securitycenter.microsoft.com/'
+                              }
+                              retryPolicy: {
+                                type: 'none'
+                              }
+                            }
+                            runtimeConfiguration: {
+                              contentTransfer: {
+                                transferMode: 'Chunked'
+                              }
+                            }
+                          }
+                        }
+                      }
+                      expression: {
+                        and: [
+                          {
+                            less: [
+                              '@length(variables(\'Batch\'))'
+                              495
+                            ]
+                          }
+                        ]
+                      }
+                      type: 'If'
+                    }
+                  }
+                  runAfter: {
+                    Get_IOCs_not_on_Microsoft_feed_with_confidence_of_100: [
+                      'Succeeded'
+                    ]
+                  }
+                  type: 'Foreach'
+                }
+                Initialize_variable_Batch: {
+                  type: 'InitializeVariable'
+                  inputs: {
+                    variables: [
+                      {
+                        name: 'Batch'
+                        type: 'array'
+                      }
+                    ]
+                  }
+                }
+                Add_Indicator_to_Defender_XDR_Final: {
+                  runAfter: {
+                    For_each: [
+                      'Succeeded'
+                    ]
+                  }
+                  type: 'Http'
+                  inputs: {
+                    uri: 'https://api.securitycenter.microsoft.com/api/indicators/import'
+                    method: 'POST'
+                    headers: {
+                      'Content-Type': 'application/json'
+                    }
+                    body: {
+                      Indicators: '@variables(\'Batch\')'
+                    }
+                    authentication: {
+                      type: 'ManagedServiceIdentity'
+                      identity: '[resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\'))]'
+                      audience: 'https://api.securitycenter.microsoft.com/'
+                    }
+                    retryPolicy: {
+                      type: 'none'
+                    }
+                  }
+                  runtimeConfiguration: {
+                    contentTransfer: {
+                      transferMode: 'Chunked'
+                    }
+                  }
+                }
+              }
+            }
+            parameters: {
+              '$connections': {
+                value: {
+                  azuremonitorlogs: {
+                    id: '[format(\'/subscriptions/{0}/providers/Microsoft.Web/locations/{1}/managedApis/azuremonitorlogs\', subscription().subscriptionId, parameters(\'location\'))]'
+                    connectionId: '[resourceId(\'Microsoft.Web/connections\', variables(\'azureSentinelConnectionName\'))]'
+                    connectionName: 'azuremonitorlogs'
+                    connectionProperties: {
+                      authentication: {
+                        type: 'ManagedServiceIdentity'
+                        identity: '[resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\'))]'
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          dependsOn: [
+            '[resourceId(\'Microsoft.Web/connections\', variables(\'azureSentinelConnectionName\'))]'
+            '[resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\'))]'
+          ]
+          tags: {
+            'hidden-SentinelWorkspaceId': '[variables(\'workspaceResourceId\')]'
+          }
+        }
+        {
+          type: 'Microsoft.Authorization/roleAssignments'
+          apiVersion: '2022-04-01'
+          name: '[guid(resourceId(\'Microsoft.Logic/workflows\', variables(\'laName\')), resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\')), subscriptionResourceId(\'Microsoft.Authorization/roleDefinitions\', variables(\'roleDefinitionSentinelReaderId\')))]'
+          properties: {
+            roleDefinitionId: '[subscriptionResourceId(\'Microsoft.Authorization/roleDefinitions\', variables(\'roleDefinitionSentinelReaderId\'))]'
+            principalId: '[reference(resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\')), \'2024-11-30\').principalId]'
+            principalType: 'ServicePrincipal'
+          }
+          dependsOn: [
+            '[resourceId(\'Microsoft.Logic/workflows\', variables(\'laName\'))]'
+            '[resourceId(\'Microsoft.ManagedIdentity/userAssignedIdentities\', variables(\'uamiName\'))]'
+          ]
+        }
+        {
+          type: 'Microsoft.OperationalInsights/workspaces/providers/metadata'
+          apiVersion: '2022-01-01-preview'
+          name: '${workspace}/Microsoft.SecurityInsights/Playbook-${last(split(playbookId2,'/'))}'
+          properties: {
+            parentId: playbookId2
+            contentId: _playbookContentId2
+            kind: 'Playbook'
+            version: playbookVersion2
+            source: {
+              kind: 'Solution'
+              name: 'baseVISION Threat Intelligence'
+              sourceId: _solutionId
+            }
+            author: {
+              name: 'baseVISION'
+              email: _email
+            }
+            support: {
+              tier: 'Community'
+              name: 'baseVISION AG'
+              email: 'support@basevision.ch'
+              link: 'https://www.basevision.ch/'
+            }
+          }
+        }
+      ]
+      metadata: {
+        _generator: {
+          name: 'bicep'
+          version: '0.30.23.60470'
+          templateHash: '5536892284840173131'
+        }
+        title: 'baseVISION Threat Intel - Defender Integration'
+        description: 'This playbook is triggered every 15 minutes and sends Filter based defined IOCs to Microsoft Defender XDR.'
+        mainSteps: [
+          '1. Get IOCs not part of Microsoft Feeds'
+          '2. Send data to Microsoft Defender XDR'
+        ]
+        prerequisites: [
+          'baseVISION TI Feed in TAXII connector configured.'
+        ]
+        lastUpdateTime: '2025-02-17T00:00:00Z'
+        releaseNotes: {
+          version: '1.0'
+          title: blanks
+          notes: [
+            'Initial version'
+          ]
+        }
+      }
+    }
+    packageKind: 'Solution'
+    packageVersion: _solutionVersion
+    packageName: _solutionName
+    packageId: _solutionId
+    contentSchemaVersion: '3.0.0'
+    contentId: _playbookContentId2
+    contentKind: 'Playbook'
+    displayName: 'la-basevisionti-defenderxdr'
+    contentProductId: _playbookcontentProductId2
+    id: _playbookcontentProductId2
+    version: playbookVersion2
+  }
+  dependsOn: [
+    workspace_Microsoft_SecurityInsights_solutionId
+  ]
+}
+
+resource workspace_Microsoft_SecurityInsights_solutionId 'Microsoft.OperationalInsights/workspaces/providers/contentPackages@2023-04-01-preview' = {
+  location: workspace_location
+  properties: {
+    version: '3.0.0'
+    kind: 'Solution'
+    contentSchemaVersion: '3.0.0'
+    displayName: 'baseVISION Threat Intelligence'
+    publisherDisplayName: 'baseVISION AG'
+    descriptionHtml: '<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href="https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/baseVISION%20Threat%20Intelligence/ReleaseNotes.md">Release Notes</a></p>\n<p>• There may be <a href="https://aka.ms/sentinelsolutionsknownissues">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The baseVISION Threat Intel Feeds offering provides tactical threat intelligence to detect and protect against known threats within an organization\'s environment before they can cause harm. The service leverages multiple sources integrated into its platform, curated and maintained by specialists to ensure quality, including Indicators of Compromise (IOCs), confidence levels, and expiration. The sources include data gathered from customers during incident analysis and response, as well as paid feeds from highly rated threat intelligence providers.</p>\n<p><strong>Important:</strong> <em>This Sentinel Solution provides additional components to our Threat Intel Feeds which can be bought via Microsoft Azure Marketplace.</em></p>\n<p><strong>Workbooks:</strong> 1, <strong>Playbooks:</strong> 2</p>\n<p><a href="https://aka.ms/azuresentinel">Learn more about Microsoft Sentinel</a> | <a href="https://aka.ms/azuresentinelsolutionsdoc">Learn more about Solutions</a></p>\n'
+    contentKind: 'Solution'
+    contentProductId: _solutioncontentProductId
+    id: _solutioncontentProductId
+    icon: '<img src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/baseVISION%20Threat%20Intel/Workbooks/Images/baseVISION.svg" width="75px" height="75px">'
+    contentId: _solutionId
+    parentId: _solutionId
+    source: {
+      kind: 'Solution'
+      name: 'baseVISION Threat Intelligence'
+      sourceId: _solutionId
+    }
+    author: {
+      name: 'baseVISION'
+      email: _email
+    }
+    support: {
+      name: 'baseVISION AG'
+      email: 'support@basevision.ch'
+      tier: 'Community'
+      link: 'https://www.basevision.ch/'
+    }
+    dependencies: {
+      operator: 'AND'
+      criteria: [
+        {
+          kind: 'Workbook'
+          contentId: _workbookContentId1
+          version: workbookVersion1
+        }
+        {
+          kind: 'Playbook'
+          contentId: _la_basevisionti_telemetry
+          version: playbookVersion1
+        }
+        {
+          kind: 'Playbook'
+          contentId: _la_basevisionti_defenderxdr
+          version: playbookVersion2
+        }
+      ]
+    }
+    providers: [
+      'baseVISION AG'
+    ]
+    categories: {
+      domains: [
+        'Security - Threat Intelligence'
+      ]
+    }
+  }
+  name: '${workspace}/Microsoft.SecurityInsights/${_solutionId}'
+}
