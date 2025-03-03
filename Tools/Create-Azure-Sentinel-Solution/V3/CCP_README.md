@@ -14,11 +14,11 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
 ## How to Use ?
 1. In Data input file under Azure-Sentinel/Solutions, open the solution you want to add a CCP connector.
 2. In data input file, under "Data Connectors" array object add a path to new Data Connector Definition file. Data Connector Definition file is the starting point for any CCP connector and this file path should only be specified in data folder input file under "Data Connectors" array. There is no need to specify other file paths for poller, dcr or tables in data input file. 
-3. Data Connector Definition file will have a "id" property field, use this field value as the file name for your data connector definition with .json as extension.
-4. Navigate to your Solutions, Data Connectors folder and create a new folder for ccp suffix at the end e.g: DataConnectorDefinitionName_ccp".
-5. Once a folder for CCP is created then add/create 4 files dataConnectorDefinition.json, dataPoller.json, DCR.json and table.json. Here table.json file is optional. Also, you can specific a different naming to the files but having a suffix of "Definition", "Poller", "DCR", "Table" in the file name at the end will be easy to correlate. Make sure to follow point number 3 for the data connector file naming convention. Below is an example folder file structure for CCP.
+3. Navigate to your Solutions, Data Connectors folder and create a new folder for ccp suffix at the end e.g: DataConnectorDefinitionName_ccp".
+4. Once a folder for CCP is created then add/create 4 files Connector Definition, Poller config, DCR and table files. Here table file is optional. This files should follow below naming conventions.
+  - **Folder & File Naming Convention**: The folder name format should be "**_{CompanyName}{ProductName}{LogType}Logs_ccp_**". For example, if the solution name is "Palo Alto Prisma Cloud CWPP," then "PaloAlto" is the CompanyName and "PrismaCloudCWPP" is the ProductName. Determine the type of logs you are pulling, such as SysLogs, CustomLogs, or others, and use the appropriate log type or simply use "Logs". Therefore, the final folder name would be "PaloAltoPrismaCloudCWPPLogs_ccp". The files inside this folder will follow the naming conventions shown in the screenshot below, with suffixes like _connectorDefinition, _PollerConfig, _DCR, or _Table. Below is an example of the folder and file structure for CCP.
 
-    ![Alt text](./ccpimages/ccp-folder-structure.png)
+    ![Alt text](./ccpimages/ccp-folder-structure-new.png)
 
 6. There can be only 1 data definition file per CCP connector. If you have multiple CCP connectors then create multiple data connector definition files and specify the file paths in the data folder input file under "Data Connectors" array. 
 
