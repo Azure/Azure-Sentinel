@@ -98,16 +98,21 @@ class CiscoAMPClient:
             start_time = start_time.isoformat()
             params['start_time'] = start_time
         res = requests.get(url, params=params, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
+        logging.info(f"API Response (Audit Logs): {res.text}")
         if not res.ok:
             raise Exception(f'Error while calling Cisco API. Response code: {res.status_code}')
         jsonData = json.loads(res.text)
+        logging.info(f"API Response (Audit Logs) jsondata: {jsonData}")
         yield jsonData['data']
         next_link = jsonData['metadata']['links'].get('next')
         while next_link:
             res = requests.get(next_link, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
+            logging.info(f"API Response Audit Logs (Next Page): {res.text}")
             if not res.ok:
                 raise Exception(f'Error while calling Cisco API. Response code: {res.status_code}')
             jsonData = json.loads(res.text)
+            logging.info(
+                f"API Response (Audit Logs) jsondata(Next Page): {jsonData}")
             yield jsonData['data']
             next_link = jsonData['metadata']['links'].get('next')
         
@@ -121,16 +126,21 @@ class CiscoAMPClient:
             start_time = start_time.isoformat()
             params['start_date'] = start_time
         res = requests.get(url, params=params, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
+        logging.info(f"API Response (Events): {res.text}")
         if not res.ok:
             raise Exception(f'Error while calling Cisco API. Response code: {res.status_code}')
         jsonData = json.loads(res.text)
+        logging.info(f"API Response (Events) jsondata: {jsonData}")
         yield jsonData['data']
         next_link = jsonData['metadata']['links'].get('next')
         while next_link:
             res = requests.get(next_link, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
+            logging.info(f"API Response Events (Next Page): {res.text}")
             if not res.ok:
                 raise Exception(f'Error while calling Cisco API. Response code: {res.status_code}')
             jsonData = json.loads(res.text)
+            logging.info(
+                f"API Response (Events) jsondata(Next Page): {jsonData}")
             yield jsonData['data']
             next_link = jsonData['metadata']['links'].get('next')
 
