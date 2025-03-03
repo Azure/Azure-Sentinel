@@ -78,10 +78,10 @@ List of workbook based on this connectors :
 
 ### Documentations
 
-In order to deploy the solution, you can find documentation in the folder : [Documentations](/Documentations/)
+In order to deploy the solution, you can find documentation in the folder : [Documentations](./Documentations/)
 
-* [Deployment Microsoft Exchange Security for Exchange On-Premises](/Documentations/Deployment-MES-OnPremises.md)
-* [Exchange Security Insights On-Premise/Online Collector](/Documentations/ESICollector.md)
+* [Deployment Microsoft Exchange Security for Exchange On-Premises](./Documentations/Deployment-MES-OnPremises.md)
+* [Exchange Security Insights On-Premise/Online Collector](./Documentations/ESICollector.md)
 
 ## Microsoft Exchange Security for Exchange Online
 
@@ -115,7 +115,7 @@ List of workbook based on this connector :
 
 ### Documentations
 
-In order to deploy the solution, you can find documentation in the folder : [Documentations](/Documentations/)
+In order to deploy the solution, you can find documentation in the folder : [Documentations](./Documentations/)
 
-* [Deployment Microsoft Exchange Security for Exchange Online](/Documentations/Deployment-MES-Online.md)
-* [Exchange Security Insights On-Premise/Online Collector](/Documentations/ESICollector.md)
+* [Deployment Microsoft Exchange Security for Exchange Online](./Documentations/Deployment-MES-Online.md)
+* [Exchange Security Insights On-Premise/Online Collector](./Documentations/ESICollector.md)
