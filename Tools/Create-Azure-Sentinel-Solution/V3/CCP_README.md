@@ -131,13 +131,11 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
   - To configure "authentication" object properties refer [Authentication configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#authentication-configuration) link
   - To configure "response" object properties refer [Response configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#response-configuration) link.
   - To configure "paging" object properties refer [Paging configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#paging-configuration) link.
-  - Keep rest all properties of the file as is.
-  - Below is a sample data poller file and is used to pole details from the API.
-  - For more details on Data Connector poller fields for kind "**AmazonWebServicesS3**", please [refer](https://learn.microsoft.com/en-us/rest/api/securityinsights/data-connectors/create-or-update?view=rest-securityinsights-2024-01-01-preview&tabs=HTTP#awscloudtraildataconnector).
-  - Example for AmazonWebServicesS3 kind, [Amazon Web Services](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%20Web%20Services/Data%20Connectors/AWS_WAF_CCP/AwsS3_WAF_PollingConfig.json).
-  - For more details on Data Connector poller fields for kind "**GCP**", please [refer](https://learn.microsoft.com/en-us/rest/api/securityinsights/data-connectors/create-or-update?view=rest-securityinsights-2024-01-01-preview&tabs=HTTP#gcpdataconnector).
+  - For kind "**AmazonWebServicesS3**", please refer [Link](https://learn.microsoft.com/en-us/rest/api/securityinsights/data-connectors/create-or-update?view=rest-securityinsights-2024-01-01-preview&tabs=HTTP#awscloudtraildataconnector).
+  - Example for AmazonWebServicesS3 kind, [Amazon Web Services](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%20Web%20Services/Data%20Connectors/AWS_WAF_CCP/AwsS3_WAF_PollingConfig.json), [VMware Carbon Black Cloud](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlackCloud_ccp/CarbonBlack_PollingConfig.json).
+  - For kind "**GCP**", please refer [Link](https://learn.microsoft.com/en-us/rest/api/securityinsights/data-connectors/create-or-update?view=rest-securityinsights-2024-01-01-preview&tabs=HTTP#gcpdataconnector).
   - Example for GCP kind, [Google Cloud Platform Audit Logs](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Audit%20Logs/Data%20Connectors/GCPAuditLogs_ccp/data_connector_poller.json).
-  - Below is an example for "**RestApiPoller**" kind of CCP collector:
+  - Below is an example for "**RestApiPoller**" kind of CCP collector that is used to pole details from the API:
 
 ```json
 [{
@@ -202,7 +200,7 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
 
   - Once deployment is done it is recommended to verify if DCR is created in Azure portal, global search by searching for "Data Collection Rules" and then in "Data Collection Rules" search with the name that you specified in the source file on DCR "name" property. If search result shows a record in deployed resource group. If you don't see a result for the "name" property value specified in DCR file then its possibly a problem in DCR source file which failed in DCR creation. The first possible thing to verify if the length of DCR name exceed 65 characters.
   - In DCR file, "dataFlows" property has "streams" array property. Currently streams doesn't support multiple streams in an array. If you are using custom stream then name it like "Custom-<yourStreamName>". This name should match with that of your poller file "streamName" field value.
-  - In case of Standard table, DCR file "streams" should be from the given list in the file [StandardLogStreams](https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Tools/Create-Azure-Sentinel-Solution/common/standardLogStreams.ps1). Here "Key" is the "streamName" for poller file while "Value" is your DCR "streams" value. If you are using standard table and mappings from this file doesn't match then it will fail while packaging with an error like there is a mismatch in DCR and poller files streams.
+  - In case of Standard table, DCR file "streams" should be from the given list in the file [StandardLogStreams](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/common/standardLogStreams.ps1). Here "Key" is the "streamName" for poller file while "Value" is your DCR "streams" value. If you are using standard table and mappings from this file doesn't match then it will fail while packaging with an error like there is a mismatch in DCR and poller files streams.
   - In "dataFlows" array, if you have a custom table as a file then specify the "outputSteam" property. If you are using standard table then there is no need to specify the "outputSteam" property in DCR file i.e. "outputSteam" property is optional here and should be used if you have custom table and a table file for it. If "Microsoft-ASimAuditEventLogs" is a standard table and is suffixed with "Microsoft-" you can skip adding "outputStream" property for such standard tables.
   - To verify length of DCR name, when we open data connector and click on "Connect" button, make sure to open browser "Developer tools" or right click on browser and do "Ctrl+F12" which will open up "Developer tools" and navigate to "Network" tab as shown below:
   - Property "workspaceResourceId" is optional and is not required to be specified. If not specified then it replaces this property with value "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]" in mainTemplate as a variables.
@@ -260,7 +258,7 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
 ```
   **d. Tables:**
   - Skip this step if your data is only ingested to standard Log Analytics tables. Examples of standard tables include CommonSecurityLog and ASimDnsActivityLogs.
-  - For list of all standard tables refer to [StandardLogStreams](https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Tools/Create-Azure-Sentinel-Solution/common/standardLogStreams.ps1) where "Value" attribute is the standard table name. 
+  - For list of all standard tables refer to [StandardLogStreams](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/common/standardLogStreams.ps1) where "Value" attribute is the standard table name. 
   - If your data source doesn't conform to the schema of a standard table, you have two options:<br/>
         a) Create a custom table for all the data <br/>
         b) Create a custom table for some data and split conforming data out to a standard table<br/>
