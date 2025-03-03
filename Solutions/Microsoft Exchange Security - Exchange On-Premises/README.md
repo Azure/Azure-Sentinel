@@ -4,4 +4,4 @@
 
 We have published Public Contents for the Microsoft Exchange Security Sentinel Solution. The contents can be found here:
 
-* [General Documentation & Artifacts](/#-GeneralContent/README.md)
+* [General Documentation & Artifacts](./#%20-%20General%20Content/README.md)

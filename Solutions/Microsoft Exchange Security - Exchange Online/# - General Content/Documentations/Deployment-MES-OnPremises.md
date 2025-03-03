@@ -58,10 +58,10 @@
 3. In the search zone, type Microsoft exchange Security
 4. Select Microsoft Exchange Security for Exchange On-Premises
 5. Click Install
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image01.png "Install Solution")
+![alt text](./Images/Image01.png "Install Solution")
 6. Wait for the end of the installation
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image02.png "Wait")
+![alt text](./Images/Image02.png "Wait")
 
 **The solution will deploy :**
 
@@ -99,7 +99,7 @@ Each options are independant for one from the other.
 
 For more information, for other options please refer to the blog or to the readme located here :
 <https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/help-protect-your-exchange-environment-with-microsoft-sentinel/ba-p/3872527>
-<https://github.com/nlepagnez/ESI-PublicContent/tree/main>
+[Readme](./../README.md)
 
 ## Configuration of the Mandatory data Connector : Exchange Security Insights On-Premise Collector
 
@@ -121,7 +121,7 @@ If you choose to use the information provide in the Connector page :
 2. Select Exchange Security Insights On-Premise Collector
 3. Click on Open connector page
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image15.png "Connector Deployment")
+![alt text](./Images/Image15.png "Connector Deployment")
 
 ### Prerequisites
 
@@ -147,10 +147,10 @@ To integrate with Exchange Security Insights On-Premise Collector make sure you 
 > * ExchangeEnvironmentList
 > * MESCheckVIP
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image16.png)
+![alt text](./Images/Image16.png)
 
 > More detailed information on Parsers can be found in the following documentation
-[Parser information](https://github.com/nlepagnez/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Parsers/README.md)
+[Parser information](./../../Parsers/README.md)
 
 #### Script Deployment
 
@@ -184,9 +184,9 @@ The script Setup.ps1 will automatically deploy all the required configurations.
       2. Select **Agents** in the **Settings** section
       3. Extend the **Log Analytics Agent Instructions**
       4. Retrieve the **Workspace ID and Primary Key**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image07.png)
+![alt text](./Images/Image07.png)
    4. Fill all the required information required by the script
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image08.png)
+![alt text](./Images/Image08.png)
    5. Enter the **Name** of your environement the Environment name. This name will be displayed in your workbook. You should choose the name of your Exchange organization
       1. **This STEP is Critical**
       2. The name can be String or a combination of String and Number Example :
@@ -200,7 +200,7 @@ The script Setup.ps1 will automatically deploy all the required configurations.
    10. Specify the **account** and its password that will be used to run the script in the Scheduled Task (**Remember this account needs to be part of the Organization Management group**)
 
 **Here the scheduled task, after the script completion**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image09.png)
+![alt text](./Images/Image09.png)
 
 **Schedule the ESI Collector Script**
 You need to follow this section only if the script failed due to lack of permission
@@ -209,15 +209,15 @@ Steps :
 1. Create a Scheluled task
 2. Specify the account
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image17.png)
+![alt text](./Images/Image17.png)
 
 3. Set the schedule
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image18.png)
+![alt text](./Images/Image18.png)
 
 4. Set the script
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image19.png)
+![alt text](./Images/Image19.png)
 
 The account used to launch the Script needs to be member of the group **Organization Management**
 
@@ -254,7 +254,7 @@ If you choose to use the information provide in the Connector page :
 2. Select **Exchange Security Insights On-Premise Collector**
 3. Click on **Open connector page**
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image15.png "Connector Deployment")
+![alt text](./Images/Image15.png "Connector Deployment")
 
 ## Prerequisites
 
@@ -275,10 +275,10 @@ List of Parsers that will be automatically deployed :
 > * ExchangeEnvironmentList
 > * MESCheckVIP
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image16.png)
+![alt text](./Images/Image16.png)
 
 > More detailed information on Parsers can be found in the following documentation
-[Parser information](https://github.com/nlepagnez/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Parsers/README.md)
+[Parser information](./../../Parsers/README.md)
 
 ## Deployment considerations
 
@@ -312,14 +312,14 @@ To install the Azure Arc-enabled servers :
     * [Preferred Method](https://learn.microsoft.com/en-us/azure/azure-arc/servers/onboard-portal)
 
 After the Deployment, the servers can be found in **Azure Arc/Azure Arc resources/Machines**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image28.png)
+![alt text](./Images/Image28.png)
 These steps needs to be done on all servers.
 
 ####  Deployment Azure Monitor Agent
 The agent will be deployment by the first DCR
 
 After the Deployment, the extension can be view **Azure Arc/Azure Arc resources/Machines**, click on the **Machine Name** and go to **Settings/Extension**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image29.png)
+![alt text](./Images/Image29.png)
 
 
 ### Option 1  -  MSExchange Management Log collection
@@ -340,23 +340,23 @@ There are 2 methods to deploy the DCR :
    4. Select the preferred **Subscription**, **Resource Group**, **Region**
    5. Enter **Workspace Name**
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image30.png)
+![alt text](./Images/Image30.png)
    6. Click **Next** and **Create**
 
 2. Method 2 - Manual Deployment of Azure DCR
 
    1. From the **Azure Portal**, navigate to **Azure Data collection rules**
    2. Click **+ Create** at the top
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image31.png)
+![alt text](./Images/Image31.png)
    3. In the Basics tab, fill the required fields, Select Windows as platform type and give a name to the DCR
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image32.png)
+![alt text](./Images/Image32.png)
    4. In the **Resources** tab, click **+ Add Resources** and select  your **Exchange Servers**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image33.png)
+![alt text](./Images/Image33.png)
    5. In **'Collect and deliver'**, add a Data Source type 'Windows Event logs' and select 'Custom' option, enter '**MSExchange Management**' as expression and Add it
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image34.png)
+![alt text](./Images/Image34.png)
    6. Click **Add data source** and click **Next Destination**
    7. In destination Type select **Azure Monitor Logs** and in **Desitnation Details** select the appropriate **Sentinel workspace**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image35.png)
+![alt text](./Images/Image35.png)
    8. and Click **Review + Create**
    9. Click **Create**
 
@@ -375,9 +375,9 @@ There are 2 methods to deploy the DCR :
 3. Click **Create Data collection Rule**
 4. In **Basic** tabs, enter a **Name** for the DCR
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image36.png)
+![alt text](./Images/Image36.png)
 5. Click **Resources** tab, click **+Add ressource(s)**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image36.png)
+![alt text](./Images/Image36.png)
 6. Add the Exchange Servers
 7. Click **Next : Collect**
 8. In **Collect** tab, **Common** level is the minimum required. Please select **Common** or **All Security Events**
@@ -396,24 +396,24 @@ There are 2 methods to deploy the DCR :
    4. Select the preferred **Subscription**, **Resource Group**, **Region**
    5. Enter **Workspace Name**
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image30.png)
+![alt text](./Images/Image30.png)
    6. Click **Next** and **Create**
 
 2. Method 2 - Manual Deployment of Azure DCR
 
    1. From the **Azure Portal**, navigate to **Azure Data collection rules**
    2. Click **+ Create** at the top
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image31.png)
+![alt text](./Images/Image31.png)
    3. In the Basics tab, fill the required fields, Select Windows as platform type and give a name to the DCR
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image32.png)
+![alt text](./Images/Image32.png)
    4. In the **Resources** tab, click **+ Add Resources** and select  your **Exchange Servers**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image33.png)
+![alt text](./Images/Image33.png)
    5. In **'Collect and deliver'**, add a Data Source type '**Windows Event logs**' and select **Basic** option
    6. For **Application**, select **Critical**, **Error** and **Warning**. For **System**, select **Critical/Error/Warning/Information**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image40.png)
+![alt text](./Images/Image40.png)
    1. Click **Add data source** and click **Next Destination**
    2. In destination Type select **Azure Monitor Logs** and in **Desitnation Details** select the appropriate **Sentinel workspace**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image35.png)
+![alt text](./Images/Image35.png)
    1. and Click **Review + Create**
    2. Click **Create**
 
@@ -430,9 +430,9 @@ There are 2 methods to deploy the DCR :
 3. Click **Create Data collection Rule**
 4. In **Basic** tabs, enter a **Name** for the DCR
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image36.png)
+![alt text](./Images/Image36.png)
 5. Click **Resources** tab, click **+Add ressource(s)**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image36.png)
+![alt text](./Images/Image36.png)
 1. Depending on the Options:
    1. Option 3 : Add only Domain Controllers for Exchange AD Sites
    2. Option 4 : Add ALL Domain Controllers 
@@ -453,7 +453,7 @@ There are 2 methods to deploy the DCE :
    3. Click on **Deploy to Azure**
    4. Select the preferred **Subscription**, **Resource Group**, **Region**
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image31.png)
+![alt text](./Images/Image31.png)
    1. Click **Next** and **Create**
 
 1. Method 2 - Manual Deployment of Azure DCR
@@ -461,7 +461,7 @@ There are 2 methods to deploy the DCE :
    1. From the **Azure Portal**, navigate to **Azure Data collection Endpoint**
    2. Click **+ Create** at the top
    3. In the Basics tab, fill the required fields, Select Windows as platform type and give a name to the DCR
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image42.png)
+![alt text](./Images/Image42.png)
    1. and Click **Review + Create**
    2. Click **Create**
 
@@ -478,17 +478,17 @@ There are 2 methods to deploy the DCE :
 
    1. From the **Azure Portal**, navigate to **Azure Data collection rules**
    2. Click **+ Create** at the top
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image43.png)
+![alt text](./Images/Image43.png)
    1. In the Basics tab, fill the required fields, Select Windows as platform type and give a name to the DCR
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image32.png)
+![alt text](./Images/Image32.png)
    1. In the **Resources** tab, click **+ Add Resources** and select  your **Exchange Servers**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image33.png)
+![alt text](./Images/Image33.png)
    1. In **'Collect and deliver'**, add a Data Source select IIS logs
    2. If IIS logs are not located in their default location, change the path
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image44.png)
+![alt text](./Images/Image44.png)
    1. Click **Add data source** and click **Next Destination**
    2. In destination Type select **Azure Monitor Logs** and in **Desitnation Details** select the appropriate **Sentinel workspace**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image35.png)
+![alt text](./Images/Image35.png)
    1. and Click **Review + Create**
    2. Click **Create**
 
@@ -514,7 +514,7 @@ There are 2 methods to deploy the DCE :
    3. Click on **Deploy to Azure**
    4. Select the preferred **Subscription**, **Resource Group**, **Region**
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image31.png)
+![alt text](./Images/Image31.png)
    1. Click **Next** and **Create**
 
 1. Method 2 - Manual Deployment of Azure DCE
@@ -522,7 +522,7 @@ There are 2 methods to deploy the DCE :
    1. From the **Azure Portal**, navigate to **Azure Data collection Endpoint**
    2. Click **+ Create** at the top
    3. In the Basics tab, fill the required fields, Select Windows as platform type and give a name to the DCR
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image42.png)
+![alt text](./Images/Image42.png)
    1. and Click **Review + Create**
    2. Click **Create**
 
@@ -751,7 +751,7 @@ There are 2 methods to deploy the DCE :
    3. Click on **Deploy to Azure**
    4. Select the preferred **Subscription**, **Resource Group**, **Region**
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image31.png)
+![alt text](./Images/Image31.png)
 
    1. Click **Next** and **Create**
 
@@ -1161,7 +1161,7 @@ This section needs to be be executed only once per server.
    2. Select **Agents** in the **Settings** section
    3. Extend the **Log Analytics Agent Instructions**
    4. Click on **Download Windows Agent (64 bit)**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image11.png)
+   ![alt text](./Images/Image11.png)
 
 ### Option 1  -  MSExchange Management Log collection
 
@@ -1179,7 +1179,7 @@ Configure the logs to be collected - Configure the Events you want to collect an
 5. Enter **MSExchange Management** as log name
 6. Collect **Error**, **Warning** and **Information** types
 7. Click **Apply**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image14.png)
+   ![alt text](./Images/Image14.png)
 
 All the Exchange Servers with the Agent installed will upload the MSExchange Management log
 
@@ -1220,29 +1220,29 @@ Only avaialble with the Azure Monitor Agent
 
 1. Go the **Log Analytics workspace for your Sentinel**
 2. Select **Tables**, click **+ Create** and click on **New custom log (MMA-Based)**
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image21.png)
+  ![alt text](./Images/Image21.png)
 
 3. Go to the folder enter the path **C:\Program Files\Microsoft\Exchange Server\V15\TransportRoles\Logs\MessageTracking**. Select **any Message Tracking log file**, click **Open** and click **Next**
   
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image22.png)
+  ![alt text](./Images/Image22.png)
 4. In **Record Delimeter**, ensure that **New line** is selected and click **Next**
 5. Select type **Windows** and enter the path **C:\Program Files\Microsoft\Exchange Server\V15\TransportRoles\Logs\MessageTracking\*.log**. Click **Next**
  
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image23.png)
+  ![alt text](./Images/Image23.png)
 1. Enter **MessageTrackingLog** In **Custom log name** and click **Next**.
 
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image23.png)
+  ![alt text](./Images/Image23.png)
 1. Click **Create**
 
 ### Option 7 - HTTPProxy logs for Exchange servers
 
 1. Go the **Log Analytics workspace for your Sentinel**
 2. Select **Tables**, click **+ Create** and click on **New custom log (MMA-Based)**
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image21.png)
+  ![alt text](./Images/Image21.png)
 
 3. To provide a sample, go to the folder enter the path **C:\Program Files\Microsoft\Exchange Server\V15\Logging\HttpProxy\Mapi**. Select **any log file**, click **Open** and click **Next**
   
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image25.png)
+  ![alt text](./Images/Image25.png)
 4. In **Record Delimeter**, ensure that **New line** is selected and click **Next**
 5. Select type **Windows** and enter the following path and Click **Next**
 
@@ -1257,10 +1257,10 @@ Only avaialble with the Azure Monitor Agent
    9. C:\Program Files\Microsoft\Exchange Server\V15\Logging\HttpProxy\PowerShell*.log
    10. C:\Program Files\Microsoft\Exchange Server\V15\Logging\HttpProxy\RpcHttp*.log
  
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image26.png)
+  ![alt text](./Images/Image26.png)
   
 6. Enter **ExchangeHttpProxy** In **Custom log name** and click **Next**.
 
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image27.png)
+  ![alt text](./Images/Image27.png)
   
 7. Click **Create**

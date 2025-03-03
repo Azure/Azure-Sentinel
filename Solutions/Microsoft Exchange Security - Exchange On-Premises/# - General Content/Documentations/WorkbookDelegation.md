@@ -25,16 +25,16 @@ It is recommended to do the delegation on a group rather than a user.
 1. In Azure Portal, go to the **Subscription**
 2. Select Access Control (IAM)
 3. Click Add and Choose Add custom Role
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image64.png)
+   ![alt text](./Images/Image64.png)
 4. Name your role and click **Next**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image65.png)
+   ![alt text](./Images/Image65.png)
 6. Click **Next** twice until you are on the JSON Tab
 7. Click **Edit**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image67.png)
+   ![alt text](./Images/Image67.png)
 8. Between the **"actions": []**, paste the following lines
       "Microsoft.OperationalInsights/workspaces/read",
       "Microsoft.OperationalInsights/workspaces/query/read"
-         ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image66.png)
+         ![alt text](./Images/Image66.png)
 9. Click **Next** and click **Create**
 
 ## Create a dédicated workspace for the workbook
@@ -42,7 +42,7 @@ By using this procedure, the Workbook won't be upadted when the solution is upda
 A manual update by copyingg the Workbook code will be necessary.
 1. In Azure Portal, go to Resource
 2. Click **Create**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image68.png)
+   ![alt text](./Images/Image68.png)
 3. Fill the require fields : Resource Group name, Region, Tags...
 
 ## Set Permissions on the Resource Group
@@ -50,16 +50,16 @@ A manual update by copyingg the Workbook code will be necessary.
 2. Select the Resource Group dedicated to the Workbook
 3. Click **Access Control(IAM)**
 4. Click **Add** and select **Add Role Assignment**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image69.png)
+   ![alt text](./Images/Image69.png)
 5. In the **Search** Field, type Reader and Select the **Reader** Role
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image70.png)
+   ![alt text](./Images/Image70.png)
 6. Select the Role **Reader**
 7. Click **Next**
 8. On the **Member** tab
 9. Click **Select Members**
 10. On the **Search** field, enter the beginning of your group name
 11. Select your group and click **Select** and click **Review + assign**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image71.png)
+   ![alt text](./Images/Image71.png)
 12. click **Review + assign** 
 
 ## Set Permissions in Log Analytics
@@ -74,18 +74,18 @@ A manual update by copyingg the Workbook code will be necessary.
 6. In the **Search** field enter the beginning of the table name
 7. Click on **Three dot**
 8. Select **Access control (IAM)**
-    ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image72.png)
+    ![alt text](./Images/Image72.png)
 10. 3. Click **Access Control(IAM)**
 4. Click **Add** and select **Add Role Assignment**
 5. 5. In the **Search** Field, type Reader and Select the **Reader** Role
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image73.png)
+   ![alt text](./Images/Image73.png)
 6. Select the Role **Reader**
 7. Click **Next**
 8. On the **Member** tab
 9. Click **Select Members**
 10. On the **Search** field, enter the beginning of your group name
 11. Select your group and click **Select** and click **Review + assign**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image71.png)
+   ![alt text](./Images/Image71.png)
 12. click **Review + assign** 
 
 ## Save the Workbook in the dedicated Resource Group
@@ -106,13 +106,13 @@ A manual update by copyingg the Workbook code will be necessary.
      * Microsoft Exchange Search AdminAuditLog - Online
      * Microsoft Exchange Security Review - Online
 7. Click on View Saved Workbook
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image74.png)
+   ![alt text](./Images/Image74.png)
 8. Click **Edit**
-9.  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image75.png)
+9.  ![alt text](./Images/Image75.png)
 10. Click on the double Floppy
-    ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image76.png)
+    ![alt text](./Images/Image76.png)
 11. Select your dedicated Resource Group
-12. ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image77.png)
+12. ![alt text](./Images/Image77.png)
 13. Click Apply
     1.  If necessary change the name of the workbook
 14. Close Workbook
@@ -122,5 +122,5 @@ A manual update by copyingg the Workbook code will be necessary.
 2. Select the Resource Group dedicated to the Workbook
 3. All the workbook are available in the Overview section
 4. Copy paste the Url of the Overview section
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image78.png)
+   ![alt text](./Images/Image78.png)
 

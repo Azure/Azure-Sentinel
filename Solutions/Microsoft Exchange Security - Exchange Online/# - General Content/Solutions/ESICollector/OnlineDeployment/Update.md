@@ -32,7 +32,7 @@ If you are using Azure Automation to run the ESI Collector, you can update the s
 
 After updating the script, you may need to update the configuration settings if needed to add new features or fix issues. The configuration can be found in the GlobalConfiguration variable of your Automation Account.
 
-The new version of the ESI Collector may introduce new configuration settings or change the existing ones. You can find the new configuration settings in GitHub repository or in the release notes : [GitHub repository](https://github.com/nlepagnez/ESI-PublicContent/tree/main/Solutions/ESICollector).
+The new version of the ESI Collector may introduce new configuration settings or change the existing ones. You can find the new configuration settings in GitHub repository or in the release notes : [GitHub repository](./../../ESICollector/README.md).
 
 To update the configuration settings:
 
@@ -48,7 +48,7 @@ To update the configuration settings:
 
 If you are running the ESI Collector as a scheduled script on a VM or server, you can update the script by following these steps:
 
-1. Download the latest version of the ESI Collector script (CollectExchSecIns.zip) from the [GitHub repository](https://github.com/nlepagnez/ESI-PublicContent/tree/main/Solutions/ESICollector).
+1. Download the latest version of the ESI Collector script (CollectExchSecIns.zip) from the [GitHub repository](./../../ESICollector).
 2. Replace the existing PS1 scripts with the new version of the ESI Collector found in the downloaded ZIP (CollectExchSecIns.ps1, setup.ps1, Updater.ps1).
 3. Test the updated script to ensure that it is working correctly.
 
@@ -56,7 +56,7 @@ If you are running the ESI Collector as a scheduled script on a VM or server, yo
 
 After updating the script, you may need to update the configuration settings if needed to add new features or fix issues. The configuration can be found in the Config\CollectExchSecConfiguration.json file.
 
-The new version of the ESI Collector may introduce new configuration settings or change the existing ones. You can find the new configuration settings in GitHub repository or in the release notes : [GitHub repository](https://github.com/nlepagnez/ESI-PublicContent/tree/main/Solutions/ESICollector).
+The new version of the ESI Collector may introduce new configuration settings or change the existing ones. You can find the new configuration settings in GitHub repository or in the release notes : [GitHub repository](./../../ESICollector).
 
 To update the configuration settings:
 

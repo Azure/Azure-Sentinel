@@ -4,7 +4,7 @@
 
 The Exchange Security Insight Collector is a PowerShell script that collects data from Exchange Servers and Exchange Online. The script is designed to be run on a Windows machine and can be scheduled to run at regular intervals. The script collects data from Exchange Servers and Exchange Online and sends it to the Microsoft Exchange Security Insight solution for Microsoft Sentinel.
 
-You can refer to the Exchange Securitty Insight Collector [here](https://github.com/nlepagnez/ESI-PublicContent/blob/main/ESICollector.md)
+You can refer to the Exchange Securitty Insight Collector [here](./../../Documentations/ESICollector.md)
 
 Parameters are described in the Configuration file. Explanation of the parameters is available in the [the Parameters description document](./Parameters.md)
 

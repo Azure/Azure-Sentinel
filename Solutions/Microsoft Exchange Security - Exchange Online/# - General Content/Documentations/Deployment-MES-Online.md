@@ -27,10 +27,10 @@ This solution needs also the the Microsoft 365 solution to ingest OfficeActivity
 3. In the search zone, type Microsoft e365
 4. Select Microsoft Exchange Security for Exchange Online
 5. Click Install
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image49.png)
+![alt text](./Images/Image49.png)
 1. Wait for the end of the installation
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image02.png)
+![alt text](./Images/Image02.png)
 
 ### Solution configuration
 1. Go to the Connector page
@@ -38,7 +38,7 @@ This solution needs also the the Microsoft 365 solution to ingest OfficeActivity
 3. Click **Open Connector Page**
 4. Select **Exchange**
 5. Click **Apply Change**
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image51.png)
+![alt text](./Images/Image51.png)
 
 ## Microsoft Exchange Security for Exchange Online Solution
 
@@ -47,10 +47,10 @@ This solution needs also the the Microsoft 365 solution to ingest OfficeActivity
 3. In the search zone, type Microsoft exchange Security
 4. Select Microsoft Exchange Security for Exchange Online
 5. Click Install
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image48.png "Install Solution")
+![alt text](./Images/Image48.png "Install Solution")
 1. Wait for the end of the installation
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image02.png "Wait")
+![alt text](./Images/Image02.png "Wait")
 
 **The solution will deploy :**
 
@@ -78,9 +78,9 @@ To integrate with Exchange Security Insights Online Collector (using Azure Funct
 * Keys: read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://learn.microsoft.com/en-us/azure/azure-monitor/agents/agent-windows?tabs=setup-wizard#obtain-workspace-id-and-key)
 * Microsoft.Web/sites permissions: Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/)
 * Microsoft.automation/automationaccounts permissions: Read and write permissions to create an Azure Automation with a Runbook is required. [See the documentation to learn more about Automation Account](https://learn.microsoft.com/en-us/azure/automation/overview)
-* Microsoft.Graph permissions: Groups.Read, Users.Read and Auditing.Read permissions are required to retrieve user/group information linked to Exchange Online assignments. [See the documentation to learn more](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/ESICollector.md#online-collector)
-* Exchange Online permissions: Exchange.ManageAsApp permission and Global Reader or Security Reader Role are needed to retrieve the Exchange Online Security Configuration.[See the documentation to learn more](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/ESICollector.md#online-collector)
-* (Optional) Log Storage permissions: Storage Blob Data Contributor to a storage account linked to the Automation Account Managed identity or an Application ID is mandatory to store logs.[See the documentation to learn more](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/ESICollector.md#online-collector)
+* Microsoft.Graph permissions: Groups.Read, Users.Read and Auditing.Read permissions are required to retrieve user/group information linked to Exchange Online assignments. [See the documentation to learn more](./ESICollector.md#online-collector)
+* Exchange Online permissions: Exchange.ManageAsApp permission and Global Reader or Security Reader Role are needed to retrieve the Exchange Online Security Configuration.[See the documentation to learn more](./ESICollector.md#online-collector)
+* (Optional) Log Storage permissions: Storage Blob Data Contributor to a storage account linked to the Automation Account Managed identity or an Application ID is mandatory to store logs.[See the documentation to learn more](./ESICollector.md#online-collector)
 
 ## Configuration
 
@@ -102,10 +102,10 @@ To integrate with Exchange Security Insights Online Collector (using Azure Funct
 * MESOfficeActivityLogs
 
 
-![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image50.png)
+![alt text](./Images/Image50.png)
 
 > More detailed information on Parsers can be found in the following documentation
-[Parser information](https://github.com/nlepagnez/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Parsers/README.md)
+[Parser information](./../../Parsers/README.md)
 
 ### Connector and Azure Automation deployment
 
@@ -118,7 +118,7 @@ Two methods to find the Workspace ID and the Key:
    2. Select **Agents** in the **Settings** section
    3. Extend the **Log Analytics Agent Instructions**
    4. Retrieve the **Workspace ID and Primary Key**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image07.png)
+   ![alt text](./Images/Image07.png)
 
 Choose ONE from the following two deployment options to deploy the connector and the associated Azure Automation
 
@@ -132,7 +132,7 @@ Choose ONE from the following two deployment options to deploy the connector and
    7. Enter **Workspace Name**
    8. Click **Next** and **Create**
    
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image80.png)
+   ![alt text](./Images/Image80.png)
 
 
 #### Method 2 - Manual Deployment of Azure Automation
@@ -146,26 +146,26 @@ Choose ONE from the following two deployment options to deploy the connector and
 3. Depending of you GUI Experience, it can be at two different places
    1. Method 1:  On the **Automation Account** page, select **Modules**
 
-  ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image57.png)
+  ![alt text](./Images/Image57.png)
       1. Click on **Browse** gallery and search the **ExchangeOnlineManagement** module
       2. Select it and click on **Select**
       3. Choose **Version 5.1** on Runtime version field and click on **Import** button
       4. Repeat the step for the following modules : **Microsoft.Graph.Authentication, Microsoft.Graph.Users and Microsoft.Graph.Groups**
    1. Method 2 : Go to in **Runbook Environments(Preview)**
       1. Click on **Create**
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image54.png)
+   ![alt text](./Images/Image54.png)
 
       2. Give a **name** for the Runtime environment
       3. **Language**, select **Powershell**
       4.  **Version**, select **5.1**
 
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image55.png)
+   ![alt text](./Images/Image55.png)
    
       5. Click **Next**
       6. Clcik **+ Add from Gallery**
       7. Add the following module : **Exchange Online Management Module**, **Microsoft Graph (Authentication, User and Group)**
 
-   ![alt text](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Documentations/Images/Image56.png)
+   ![alt text](./Images/Image56.png)
        
        8. Click **Create**
 
@@ -212,7 +212,7 @@ Choose ONE from the following two deployment options to deploy the connector and
 
 To be able to collect Exchange Online information and to be able to retrieve User information and memberlist of admin groups, the automation account need multiple permission.
 1. Download Permission Script
-   1. [Permission Update script](https://github.com/nlepagnez/ESI-PublicContent/blob/main/Solutions/ESICollector/OnlineDeployment/ExchangeOnlinePermSetup.ps1)
+   1. [Permission Update script](./../Solutions/ESICollector/OnlineDeployment/ExchangeOnlinePermSetup.ps1)
 2. Retrieve the Azure Automation Managed Identity GUID and insert it in the downloaded script
    1. Go to your **Automation Account**
    2. In the **Account Settings / Identity** Section. You can find the **Guid** of your Managed Identity
