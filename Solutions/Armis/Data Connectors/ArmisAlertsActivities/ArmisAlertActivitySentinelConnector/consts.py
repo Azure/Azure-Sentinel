@@ -7,18 +7,7 @@ API_KEY = os.environ.get("ArmisSecretKey", "")
 URL = os.environ.get("ArmisURL", "")
 ACCESS_TOKEN_SUFFIX = "/access_token/"
 SEARCH_SUFFIX = "/search/"
-ACTIVITY_FIELDS = ["title", "type", "time", "site", "sensor", "protocol", "content", "activityUUID"]
-ALERT_FIELDS = [
-    "alertId",
-    "type",
-    "title",
-    "description",
-    "severity",
-    "time",
-    "status",
-    "deviceIds",
-    "activityUUIDs",
-]
+
 RETRY_COUNT_401 = 3
 
 # Sentinel constants
@@ -34,3 +23,5 @@ CHECKPOINT_FILE_OFFSET = "armisalertoffset"
 LOG_FORMAT = "Armis Alerts Activities Connector: (method = {}) : {}"
 REQUEST_TIMEOUT = 300
 CHECKPOINT_TABLE_NAME = "ArmisAlertActivityCheckpoint"
+
+TIME_DELAY = 1
