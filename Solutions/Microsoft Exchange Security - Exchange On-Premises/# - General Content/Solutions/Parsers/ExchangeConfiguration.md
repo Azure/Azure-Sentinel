@@ -1,3 +1,6 @@
+# Exchange Configuration Parser
+
+```Kusto
 // Title:           ESI - Exchange Configuration Parser
 // Author:          Microsoft
 // Version:         1.6
@@ -78,3 +81,4 @@ let ParseExchangeConfig = () { baseRequest
  | project-away TenantId,SourceSystem,Type,EntryDate
 };
 ParseExchangeConfig
+```

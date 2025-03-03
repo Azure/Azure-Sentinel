@@ -1,3 +1,6 @@
+# MESCheckVIP
+
+```Kusto
 // Title:           ESI - Check VIP Parser
 // Author:          Microsoft
 // Version:         1.0.0
@@ -45,3 +48,4 @@ let SearchUser = Watchlist | where _UserToCheck =~ canonicalName
     or _UserToCheck == "All"
     | extend ValueChecked = iif(_UserToCheck=="All",strcat("#",displayName,"#",userPrincipalName,"#",sAMAccountName,"#",objectGUID,"#",objectSID,"#",distinguishedName,"#"),_UserToCheck);
 SearchUser
+```

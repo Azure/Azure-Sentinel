@@ -1,3 +1,6 @@
+# Exchange Environment List
+
+```Kusto
 // Title:           ESI - Exchange Configuration Environment List Generator
 // Author:          Microsoft
 // Version:         1.2
@@ -36,3 +39,4 @@ let ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,
     | where _target == 'All' or Source == _target;
 // Base Request
 ScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s
+```

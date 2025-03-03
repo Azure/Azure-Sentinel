@@ -1,3 +1,6 @@
+# Exchange Admin Audit Logs Parser
+
+```Kusto
 // Title:           ESI - Exchange Admin Audit Logs Parser
 // Author:          Microsoft
 // Version:         1.3.0
@@ -86,3 +89,4 @@ let MSExchange_Management = (){
     | project TimeGenerated,Computer,Status,Caller,TargetObject,IsVIP,canonicalName,displayName,distinguishedName,objectGUID,objectSID,sAMAccountName,userPrincipalName,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters,IsSensitive,UserOriented, ESIEnvironment
 };
 MSExchange_Management
+```
