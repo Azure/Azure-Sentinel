@@ -37,7 +37,7 @@
             "metadata": {
                 "description": "PlayBook Name"
             }
-        },
+        },      
         "FunctionAppName": {
             "defaultValue": "illumiopbfuncapp",
             "type": "String",
@@ -47,13 +47,45 @@
         }
     },
     "variables": {
-        "functionAppName": "[parameters('FunctionAppName')]"
+        "functionAppName": "[parameters('FunctionAppName')]",
+        "o365ConnectionName": "[concat('o365-', parameters('PlaybookName'))]",
+        "sentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('o365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('o365ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('sentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('sentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },        
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
+            "dependsOn": [            
+                "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]"
+            ],
             "location": "[resourceGroup().location]",
             "properties": {
                 "state": "Enabled",
@@ -108,7 +140,18 @@
                 },
                 "parameters": {
                     "$connections": {
-                        "value": {}
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+                                "connectionName": "[variables('sentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                "connectionName": "[variables('o365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
                     }
                 }
             }
