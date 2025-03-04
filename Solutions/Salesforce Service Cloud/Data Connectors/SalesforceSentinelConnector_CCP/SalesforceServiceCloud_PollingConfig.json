@@ -17,7 +17,7 @@
         "type": "OAuth2",
         "ClientSecret": "{{clientSecret}}",
         "ClientId": "{{clientId}}",
-        "TokenEndpoint": "https://java-flow-1927.my.salesforce.com/services/oauth2/token",
+        "TokenEndpoint": "{{salesforceDomainName}}/services/oauth2/token",
         "tokenEndpointHeaders": {
           "Accept": "application/json",
           "Content-Type": "application/x-www-form-urlencoded"
@@ -26,8 +26,9 @@
         "grantType": "client_credentials"
       },
       "request": {
-        "apiEndpoint": "https://java-flow-1927.my.salesforce.com/services/data/v44.0/sobjects/EventLogFile/0ATHr000003IlaFOAS/LogFile",
+        "apiEndpoint": "{{salesforceDomainName}}/services/data/v44.0/query/?q=SELECT+Id,EventType,LogDate,LogFile,LogFileLength+FROM+EventLogFile",
         "httpMethod": "GET",
+        "rateLimitQPS": 10,
         "retryCount": 3,
         "timeoutInSeconds": 60,
         "headers": {
@@ -36,9 +37,38 @@
         }
       },
       "response": {
-        "format": "csv",
-        "eventsJsonPaths": [ "$" ],
-        "HasCsvHeader": true
+        "eventsJsonPaths": ["$.records"],
+        "format": "json",
+        "SuccessStatusJsonPath": "$.done",
+        "SuccessStatusValue": "true"
+      },
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetchLogFileData",
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project logFileUrl = res.LogFile"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetchLogFileData": {
+          "shouldJoinNestedData": true,
+          "joinedDataStepName": "LogData",
+          "request": {
+            "httpMethod": "GET",
+            "apiEndpoint": "{{salesforceDomainName}}$logFileUrl$",
+            "headers": {
+              "Accept": "application/json",
+              "User-Agent": "Scuba"
+            }
+          },
+          "response": {
+            "format": "csv",
+            "eventsJsonPaths": ["$"],
+            "HasCsvHeader": true
+          }
+        }
       }
     }
   }
