@@ -1,7 +1,16 @@
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 import requests
 import yaml
 import re
-import os
 import subprocess
 import csv
 import json
@@ -9,7 +18,6 @@ from azure.monitor.ingestion import LogsIngestionClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import HttpResponseError
 import time
-import sys
 
 def get_modified_files(current_directory):
     # Add upstream remote if not already present
