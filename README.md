@@ -103,7 +103,7 @@ In order to run the KQL validation before submitting Pull Request in you local m
 Example of output (in Ubuntu):
 ```
 Welcome to .NET Core 3.1!
----------------------
+----------------------
 SDK Version: 3.1.403
 
 Telemetry
