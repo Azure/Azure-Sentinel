@@ -40,17 +40,23 @@ class ArmisAlertsActivities(Utils):
                 retry_401=consts.RETRY_COUNT_401,
             )
             if ("data" in results) and ("count" in results["data"]) and (results["data"].get("count") == 0):
+                logging.warning(consts.LOG_FORMAT.format(__method_name, "Alert Data not found."))
                 raise ArmisDataNotFoundException(consts.LOG_FORMAT.format(__method_name, "Alert Data not found."))
 
-            if (("results" in results["data"]) and ("total" in results["data"]) and ("next" in results["data"])):
+            if ("results" in results["data"]) and ("total" in results["data"]) and ("next" in results["data"]):
                 count_per_frame_data = results["data"]["count"]
+                logging.info(
+                    consts.LOG_FORMAT.format(
+                        __method_name,
+                        "Using 'from' {} as the offset, total alerts found: {} via API".format(
+                            self.data_alert_from, count_per_frame_data
+                        ),
+                    )
+                )
                 data = results["data"]["results"]
                 for i in data:
                     i["armis_alert_time"] = i["time"]
 
-                logging.info(
-                    consts.LOG_FORMAT.format(__method_name, "Alerts From {} length 1000".format(self.data_alert_from))
-                )
                 self.data_alert_from = results["data"]["next"]
                 alert_time = self.get_formatted_time(data[-1]["time"][:19])
 
@@ -89,7 +95,6 @@ class ArmisAlertsActivities(Utils):
                 "orderBy": "time",
                 "from": 0,
                 "length": consts.CHUNK_SIZE,
-                "fields": ",".join(consts.ACTIVITY_FIELDS),
             }
             aql_formatted_ids = ",".join(str(activity_uuid) for activity_uuid in activity_uuids)
             parameters_activity["aql"] = "in:activity UUID:{}".format(aql_formatted_ids)
@@ -257,16 +262,32 @@ class ArmisAlertsActivities(Utils):
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
+            current_utc = datetime.datetime.utcnow()
+            one_hour_ago = current_utc - datetime.timedelta(hours=consts.TIME_DELAY)
+            formatted_time = one_hour_ago.strftime("%Y-%m-%dT%H:%M:%S")
             if is_checkpoint_not_exist:
-                aql_data = "in:alerts"
+                aql_data = "in:alerts before:{}".format(formatted_time)
             else:
-                aql_data = """{} after:{}""".format("in:alerts", last_time)
+                aql_data = """{} after:{} before:{}""".format("in:alerts", last_time, formatted_time)
             alert_parameter["aql"] = aql_data
             alert_parameter["length"] = 1000
+            logging.info(
+                consts.LOG_FORMAT.format(
+                    __method_name,
+                    "Current utc time is : {}, Alerts will be fetched till timestamp: {}".format(
+                        current_utc.strftime("%Y-%m-%dT%H:%M:%S"), formatted_time
+                    ),
+                )
+            )
             while self.data_alert_from is not None:
                 alert_parameter.update({"from": self.data_alert_from})
                 offset_to_post = self.data_alert_from
-                logging.info(consts.LOG_FORMAT.format(__method_name, "Fetching alerts data with parameters = {}.".format(alert_parameter)))
+                logging.info(
+                    consts.LOG_FORMAT.format(
+                        __method_name,
+                        "Fetching alerts data with parameters = {}.".format(alert_parameter),
+                    )
+                )
                 (
                     data,
                     alert_time,
@@ -280,14 +301,18 @@ class ArmisAlertsActivities(Utils):
                     )
                 )
             alert_time = datetime.datetime.strptime(alert_time, "%Y-%m-%dT%H:%M:%S")
-            alert_time += datetime.timedelta(seconds=1)
             alert_time = alert_time.strftime("%Y-%m-%dT%H:%M:%S")
             logging.info(consts.LOG_FORMAT.format(__method_name, "Saving offset '0' in checkpoint"))
             logging.info(
-                consts.LOG_FORMAT.format(__method_name, "Adding last timestamp in checkpoint: {}".format(alert_time))
+                consts.LOG_FORMAT.format(
+                    __method_name,
+                    "Adding timestamp of last record in checkpoint: {}".format(alert_time),
+                )
             )
             checkpoint_table_object.merge(
-                "armisalertactivity", "alertactivitycheckpoint", {"time": alert_time, "offset": 0}
+                "armisalertactivity",
+                "alertactivitycheckpoint",
+                {"time": alert_time, "offset": 0},
             )
         except ArmisException:
             raise ArmisException()
@@ -305,7 +330,6 @@ class ArmisAlertsActivities(Utils):
         try:
             parameter_alert = {
                 "orderBy": "time",
-                "fields": ",".join(consts.ALERT_FIELDS),
             }
             last_time_alerts = self.state_manager_obj.get()
             checkpoint_table = ExportsTableStore(
@@ -338,13 +362,13 @@ class ArmisAlertsActivities(Utils):
                 checkpoint_table.post("armisalertactivity", "alertactivitycheckpoint", {"offset": 0})
                 fetch_data_from_scratch = True
             else:
-                logging.info(consts.LOG_FORMAT.format(__method_name, "Fetching Entity from checkpoint table"))
+                logging.info(consts.LOG_FORMAT.format(__method_name, "Fetching record from checkpoint table"))
                 last_time_alerts = record.get("time")
                 self.data_alert_from = record.get("offset") if record.get("offset") else 0
                 logging.info(
                     consts.LOG_FORMAT.format(
                         __method_name,
-                        "Checkpoint table: Last timestamp: {}, Offset: {}".format(
+                        "Checkpoint table record - Timestamp: {}, Offset: {}".format(
                             last_time_alerts, self.data_alert_from
                         ),
                     )
@@ -352,7 +376,7 @@ class ArmisAlertsActivities(Utils):
                 if last_time_alerts is None:
                     logging.info(
                         consts.LOG_FORMAT.format(
-                            __method_name, "time value not available in checkpoint table. Setting time as None."
+                            __method_name, "Time value not available in checkpoint table. Setting time as None."
                         )
                     )
                     fetch_data_from_scratch = True
