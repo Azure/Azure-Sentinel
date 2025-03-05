@@ -1,3 +1,6 @@
+## 1.1.4
+-  Limit `excon` library version to lower than 1.0.0 to make sure port is always used when using a proxy.
+  
 ## 1.1.3
 -  Replaces the `rest-client` library used for connecting to Azure with the `excon` library.
  

@@ -97,7 +97,7 @@ If recurrence is changed from default (24h), also change `valid_until_delta_hour
 <br/>
 <br/>
 <details>
-<summary>Expand Advance parameters</summary>
+<summary>Expand Advanced parameters</summary>
 It's possible to restrict indicators downloaded by actor or malware. If several downloads are running use the `Threat Hunt description` field to keep them apart. 
 
 ![alt text](Images/advanceindicatorconfig.png)
@@ -106,3 +106,10 @@ Find individual Ids the treat map workbook once it setup by open `Open Generic D
 
 ![alt text](Images/GenericDetails.png)
 </details>
+
+## Threat hunting for multi-orgs
+
+If your Recorded Future Enterprise is using [multi-org](https://support.recordedfuture.com/hc/articles/4402787600787-Multi-Org-for-Modules), then which threat map you see depends on which API key is used.
+
+- If the API key is tied to one specific organisation, then you will see that organisation's threat map.
+- If the API key is tied to multiple organisations (not recommended), then you will see the first threat map available, which could belong to any of your organisations.

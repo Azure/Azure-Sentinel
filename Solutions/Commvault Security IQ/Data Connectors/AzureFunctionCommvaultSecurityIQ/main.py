@@ -19,7 +19,7 @@ app = func.FunctionApp()
 container_name = "sentinelcontainer"
 blob_name = "timestamp"
 
-cs = os.environ.get('ConnectionString')
+cs = os.environ.get('AzureWebJobsStorage')
 
 customer_id = os.environ.get('AzureSentinelWorkspaceId','')
 shared_key = os.environ.get('AzureSentinelSharedKey')

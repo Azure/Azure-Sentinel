@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                    |
 |-------------|--------------------------------|-----------------------------------------------------------------------|
+| 3.0.5       | 12-12-2024                     | Added IllumioSaaS solution in a domain solution list			       |
 | 3.0.4       | 03-06-2024                     | Added missing AMA **Data Connector** reference in **Analytical rule** and **Hunting Query**             |
 | 3.0.3       | 12-03-2024                     | Added 3 new **Hunting Queries** and 2 new **Analytic Rules**          |
 | 3.0.2       | 07-02-2024                     | Updated **Analytic Rule** (DetectPortMisuseByAnomalyBasedDetection) <br/> Updated  solution description |
