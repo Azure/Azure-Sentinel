@@ -1,0 +1,92 @@
+[
+	{
+		"name": "AWSNetworkFirewall_DCR",
+		"apiVersion": "2021-09-01-preview",
+		"type": "Microsoft.Insights/dataCollectionRules",
+		"location": "{{location}}",
+		"kind": null,
+		"properties": {
+			"dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
+			"streamDeclarations": {
+				"Custom-AWSNetworkFirewall-FlowLog": {
+					"columns": [
+						{
+							"name": "TimeGenerated",
+							"type": "datetime"
+						},
+						{
+							"name": "firewall_name",
+							"type": "string"
+						},
+						{
+							"name": "availability_zone",
+							"type": "string"
+						},
+						{
+							"name": "event_timestamp",
+							"type": "real"
+						},
+						{
+							"name": "event",
+							"type": "string"
+						}
+					]
+				},
+				"Custom-AWSNetworkFirewall-AlertLog": {
+					"columns": [
+						{
+							"name": "TimeGenerated",
+							"type": "datetime"
+						},
+						{
+							"name": "firewall_name",
+							"type": "string"
+						},
+						{
+							"name": "availability_zone",
+							"type": "string"
+						},
+						{
+							"name": "event_timestamp",
+							"type": "real"
+						},
+						{
+							"name": "event",
+							"type": "string"
+						}
+					]
+				}
+			},
+			"destinations": {
+				"logAnalytics": [
+					{
+						"workspaceResourceId": "{{workspaceResourceId}}",
+						"name": "clv2ws1"
+					}
+				]
+			},
+			"dataFlows": [
+				{
+					"streams": [
+						"Custom-AWSNetworkFirewall-FlowLog"
+					],
+					"destinations": [
+						"clv2ws1"
+					],
+					"transformKql": "source | extend TimeGenerated = now() | extend Event = parse_json(event) | extend FirewallName = firewall_name, EventTimestamp = event_timestamp, AvailabilityZone = availability_zone, TCPFlags = tostring(event.tcp.tcp_flags), Syn = tobool(event.tcp.syn), AppProto = tostring(event.app_proto), SrcIP = tostring(event.src_ip), SrcPort = tostring(event.src_port), NetFlowPkts = tostring(event.netflow.pkts), NetFlowBytes = tostring(event.netflow.bytes), NetFlowStart = tostring(event.netflow.start), NetFlowEnd = tostring(event.netflow.end), NetFlowAge = tostring(event.netflow.age), NetFlowMinttl = tostring(event.netflow.min_ttl), NetFlowMaxttl = tostring(event.netflow.max_ttl), EventType = tostring(event.event_type), FlowId = tostring(event.flow_id), DestIp = tostring(event.dest_ip), DestPort = tostring(event.dest_port), Proto = tostring(event.proto) | project-away Event, availability_zone, firewall_name,event",
+					"outputStream": "AWSNetworkFirewall_FlowLogV2_CL"
+				},
+				{
+					"streams": [
+						"Custom-AWSNetworkFirewall-AlertLog"
+					],
+					"destinations": [
+						"clv2ws1"
+					],
+					"transformKql": "source | extend TimeGenerated = now(), | extend Event = parse_json(event), FirewallName = firewall_name, AvailabilityZone = availability_zone, EventTimestamp = event_timestamp, TxId = toint(Event.tx_id), AppProto = tostring(Event.app_proto), SrcIP = tostring(Event.src_ip), SrcPort = toint(Event.src_port), EventType = tostring(Event.event_type), Severity = toint(Event.alert.severity), SignatureId = toint(Event.alert.signature_id), Rev = toint(Event.alert.rev), Signature = tostring(Event.alert.signature), AlertAction = tostring(Event.alert.action), Category = tostring(Event.alert.category), FlowId = tolong(Event.flow_id), DestIP = tostring(Event.dest_ip), DestPort = toint(Event.dest_port), Proto = tostring(Event.proto), VerdictAction = tostring(Event.verdict.action), Sni = tostring(Event.tls.sni), Version = tostring(Event.tls.version), PktSrc = tostring(Event.pkt_src), Direction = tostring(Event.direction) | project-away Event",
+					"outputStream": "AWSNetworkFirewall_AlertLogV2_CL"
+				}
+			]
+		}
+	}
+]
