@@ -19,12 +19,12 @@ This playbook will create a unidirectional integration with Microsoft Sentinel. 
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* **CrowdStrike Domain** - the domain of the base URL indicated on the CrowdStrike OAuth client page. [Documentation link](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client)
-* **CrowdStrike Client ID** - the Client ID the CrowdStrike OAuth client. [Documentation link](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client)
-* **CrowdStrike API token** - the value of the API token generated for the CrowdStrike OAuth client. [Documentation link](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client)
-* **Azure Key Vault Secret** - this will store the CrowdStrike API token. [Documentation link](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#create-an-azure-key-vault-secret).
-* **Sentinel Resource Name** - the name of the Log Analytics Workspace that the CrowdStrike logs will be sent to. [Documentation link](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Log-Analytics-Workspace).
-* **Sentinel Logs Workspace ID & Key** - the workspace ID and primary key of the Log Analytics Workspace that the CrowdStrike logs will be sent to. [Documentation link](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Log-Analytics-Workspace).
+* **CrowdStrike Domain** - the domain of the base URL indicated on the CrowdStrike OAuth client page. [Documentation link](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client)
+* **CrowdStrike Client ID** - the Client ID the CrowdStrike OAuth client. [Documentation link](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client)
+* **CrowdStrike API token** - the value of the API token generated for the CrowdStrike OAuth client. [Documentation link](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client)
+* **Azure Key Vault Secret** - this will store the CrowdStrike API token. [Documentation link](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#create-an-azure-key-vault-secret).
+* **Sentinel Resource Name** - the name of the Log Analytics Workspace that the CrowdStrike logs will be sent to. [Documentation link](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Log-Analytics-Workspace).
+* **Sentinel Logs Workspace ID & Key** - the workspace ID and primary key of the Log Analytics Workspace that the CrowdStrike logs will be sent to. [Documentation link](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Log-Analytics-Workspace).
 
 > [!IMPORTANT]  
 > Preexisting and recent alerts will need to be present in CrowdStrike in order to properly initialize the integration to Microsoft Sentinel
@@ -65,11 +65,11 @@ Navigate to an existing Key Vault or create a new one. From the Key Vault overvi
 
 ![CrowdStrike_Integration_Key_Vault_1](Images/CrowdStrike_Integration_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**AS-CrowdStrike-Alerts-Integration-API-Token**", and enter the CrowdStrike API token copied previously in the [previous section](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client). All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**AS-CrowdStrike-Alerts-Integration-API-Token**", and enter the CrowdStrike API token copied previously in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client). All other settings can be left as is. Click "**Create**". 
 
 ![CrowdStrike_Integration_Key_Vault_2](Images/CrowdStrike_Integration_Key_Vault_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#granting-access-to-azure-key-vault).
 
 ![CrowdStrike_Integration_Key_Vault_3](Images/CrowdStrike_Integration_Key_Vault_3.png)
 
@@ -94,8 +94,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-CrowdStrike-Alerts-Integration%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-CrowdStrike-Alerts-Integration%2Fmaster%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-CrowdStrike-Alerts-Integration%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-CrowdStrike-Alerts-Integration%2Fazuredeploy.json)
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
@@ -106,15 +106,15 @@ In the **Instance details** section:
                                                   
 * **Playbook Name**: This can be left as "**AS-CrowdStrike-Alerts-Integration**" or you may change it.
 
-* **Client ID**: Enter the Client/ Token ID of your CrowdStrike API token referenced in [Create a CrowdStrike OAuth Client](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client).
+* **Client ID**: Enter the Client/ Token ID of your CrowdStrike API token referenced in [Create a CrowdStrike OAuth Client](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client).
 
-* **Key Vault Name**: Enter the name of the key vault referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the key vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#create-an-azure-key-vault-secret).
 
-* **Secret Name**: Enter the name of the key vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#create-an-azure-key-vault-secret).
+* **Secret Name**: Enter the name of the key vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#create-an-azure-key-vault-secret).
 
-* **Sentinel Resource Name**: Enter the name of the Microsoft Sentinel Resource you will be sending the logs to referenced in [Log Analytics Workspace](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Log-Analytics-Workspace).
+* **Sentinel Resource Name**: Enter the name of the Microsoft Sentinel Resource you will be sending the logs to referenced in [Log Analytics Workspace](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Log-Analytics-Workspace).
 
-* **CrowdStrike Domain**: Enter the domain of the CrowdStrike base URL, following the format of 'api.CrowdStrike.com' referenced in [Create a CrowdStrike OAuth Client](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client).
+* **CrowdStrike Domain**: Enter the domain of the CrowdStrike base URL, following the format of 'api.CrowdStrike.com' referenced in [Create a CrowdStrike OAuth Client](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#Create-a-CrowdStrike-OAuth-Client).
 
 Towards the bottom, click on "**Review + create**". 
 
@@ -212,7 +212,7 @@ Click **Save**.
 
 ![CrowdStrike_Integration_Initial_Run_8](Images/CrowdStrike_Integration_Initial_Run_8.png)
 
-The [last section](https://github.com/Accelerynt-Security/AS-CrowdStrike-Alerts-Integration#viewing-custom-logs) outlines how to view the custom logs to ensure they have been properly populated. After confirming the table has been created, go ahead and enable the Logic App.
+The [last section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-CrowdStrike-Alerts-Integration#viewing-custom-logs) outlines how to view the custom logs to ensure they have been properly populated. After confirming the table has been created, go ahead and enable the Logic App.
 
 ![CrowdStrike_Integration_Initial_Run_9](Images/CrowdStrike_Integration_Initial_Run_9.png)
 
