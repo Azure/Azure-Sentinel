@@ -1,0 +1,59 @@
+id: 7a830484-e349-4527-85f6-7850c468c238
+kind: Scheduled
+name: SAP ETD - Synch alerts
+description: Synch alerts coming in from SAP Enterprise Threat Detection into Microsoft Sentinel (one way)
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPETDAlerts
+    dataTypes:
+      - SAPETDAlerts_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: []
+query: |
+  let minThreshold= 1;
+  let minScore= 50;
+  let lookBack= 70d;
+  SAPETDAlerts_CL
+  | mv-expand TriggeringEvents
+  | extend sapOriginalEvent = tostring(TriggeringEvents.OriginalEvent)
+  | where PatternName <> "Logon from external with SAP standard users"
+  | summarize arg_max(TimeGenerated, *) by AlertId
+  | where Threshold >= minThreshold and Score >= minScore
+  | extend NewEvent= split(sapOriginalEvent, "\n")
+  | mv-expand NewEvent to typeof(string)
+  | parse NewEvent with Key: string ":" Value: string
+  | extend Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value), Key= iff(isempty(Key) and isnotempty(NewEvent), TriggeringEvents.EventLogType, Key)
+  | extend KV= bag_pack(Key, Value)
+  | summarize KeyValues= make_bag(KV), take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, TriggeringEvents.EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, TriggeringEvents.OriginalEvent) by AlertId
+  | extend SystemId= KeyValues.sid, ClienId= KeyValues.client, Host= KeyValues.instance_host, Instance= KeyValues.instance_name, User= KeyValues.user_name, IP= KeyValues.user_ip
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SystemId
+      - identifier: AppId
+        columnName: ClienId
+      - identifier: InstanceName
+        columnName: Instance
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IP
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP ETD - {{PatternName}} '
+  alertDescriptionFormat: 'Alert synched from SAP Enterprise Threat Detection, cloud edition into Microsoft Sentinel (one way). {{PatternDescription}}'
+customDetails:
+  SAP_User: User
+  ETD_AlertID: AlertId
+version: 1.0.0
