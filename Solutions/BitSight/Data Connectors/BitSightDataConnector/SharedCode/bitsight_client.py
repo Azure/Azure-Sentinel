@@ -8,7 +8,7 @@ import requests
 from ..SharedCode.azure_sentinel import MicrosoftSentinel
 from .bitsight_exception import BitSightException
 from .utils import CheckpointManager
-from .consts import API_TOKEN, BASE_URL, LOGS_STARTS_WITH
+from .consts import API_TOKEN, BASE_URL, LOGS_STARTS_WITH, COMPANY_FETCH_QUERY
 from .logger import applogger
 
 
@@ -36,7 +36,6 @@ class BitSight:
         Returns:
             bool: True if all environment variables are set, False otherwise.
         """
-        __method_name = inspect.currentframe().f_code.co_name
         try:
             applogger.debug(
                 "BitSight: check_environment_var_exist: started checking existence of all custom environment variable"
@@ -73,8 +72,8 @@ class BitSight:
             user_and_pass = base64.b64encode(api.encode()).decode("ascii")
             headers = {
                 "Accept": "application/json",
-                "X-BITSIGHT-CONNECTOR-NAME-VERSION": "BitSight Security Performance Management for Microsoft Sentinel Data Connector 1.0.0",
                 "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+                "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
             }
             headers["Authorization"] = "Basic %s" % user_and_pass
             self.headers = headers
@@ -86,7 +85,7 @@ class BitSight:
             raise BitSightException()
 
     def get_last_data_index(
-        self, company_names, checkpoint_obj: CheckpointManager, company_state
+        self, company_names, checkpoint_obj: CheckpointManager, company_state, table_name
     ):
         """Get the index for fetching last data.
 
@@ -94,12 +93,13 @@ class BitSight:
             company_names (list): List of company names.
             checkpoint_obj (CheckpointManager): CheckpointManager object.
             company_state (str): State of the company.
+            table_name (str): Table name from which data should be fetched in case of checkpoint file corrupted.
 
         Returns:
             int: Index for fetching last data.
         """
         last_company_name = checkpoint_obj.get_last_data(
-            company_state, company_name_flag=True
+            company_state, company_name_flag=True, table_name=table_name, checkpoint_query=COMPANY_FETCH_QUERY
         )
         fetching_index = -1
         if last_company_name is not None:

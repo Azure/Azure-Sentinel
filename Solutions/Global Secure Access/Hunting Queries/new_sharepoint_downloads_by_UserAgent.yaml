@@ -1,5 +1,5 @@
 id: f2367171-1514-4c67-88ef-27434b6a1093
-name: SharePointFileOperation via devices with previously unseen user agents
+name: GSA Enriched Office 365 -SharePointFileOperation via devices with previously unseen user agents
 description: |
   'Tracking via user agent is one way to differentiate between types of connecting device.
   In homogeneous enterprise environments the user agent associated with an attacker device may stand out as unusual.'
@@ -15,33 +15,47 @@ tactics:
 relevantTechniques:
   - T1030
 query: |
-  let starttime = todatetime('{{StartTimeISO}}');
-  let endtime = todatetime('{{EndTimeISO}}');
-  let lookback = starttime - 14d;
-  let MINIMUM_BLOCKS = 10;
-  let SUCCESS_THRESHOLD = 0.2;
-  let HistoricalActivity = 
-    SigninLogs
-    | where TimeGenerated > lookback
-    | where isnotempty(ClientAppUsed)
-    | summarize SuccessfulSignins = countif(ResultType == "0"), BlockedSignins = countif(ResultType == "50053") by ClientAppUsed
-    | extend SuccessBlockRatio = 1.00 * SuccessfulSignins / BlockedSignins
-    | where SuccessBlockRatio < SUCCESS_THRESHOLD
-    | where BlockedSignins > MINIMUM_BLOCKS;
-  EnrichedMicrosoft365AuditLogs
-  | where TimeGenerated between (starttime .. endtime)
-  | where RecordType == "SharePointFileOperation"
-  | where Operation in ("FileDownloaded", "FileUploaded")
-  | extend ClientAppUsed = tostring(parse_json(AdditionalProperties).UserAgent)
-  | extend SiteUrl = tostring(parse_json(AdditionalProperties).SiteUrl)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities = count() by ClientAppUsed, UserId, ClientIp, SiteUrl
-  | join kind=innerunique (HistoricalActivity) on ClientAppUsed
-  | project-away ClientAppUsed1
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
-  | extend IP_0_Address = ClientIp
-  | extend Account_0_Name = AccountName
-  | extend Account_0_UPNSuffix = AccountUPNSuffix
-  | extend URL_0_Url = SiteUrl
+    let starttime = todatetime('{{StartTimeISO}}');
+    let endtime = todatetime('{{EndTimeISO}}');
+    let lookback = starttime - 14d;
+    let MINIMUM_BLOCKS = 10;
+    let SUCCESS_THRESHOLD = 0.2;
+    // Identify user agents or client apps with a low success-to-block ratio in Sign-in Logs
+    let HistoricalActivity = SigninLogs
+        | where TimeGenerated > lookback
+        | where isnotempty(UserAgent)
+        | summarize SuccessfulSignins = countif(ResultType == "0"), BlockedSignins = countif(ResultType == "50053") by UserAgent
+        | extend SuccessBlockRatio = 1.00 * SuccessfulSignins / BlockedSignins
+        | where SuccessBlockRatio < SUCCESS_THRESHOLD
+        | where BlockedSignins > MINIMUM_BLOCKS;
+    // OfficeActivity Query: File operations by matching user agents
+    let OfficeEvents = OfficeActivity
+        | where TimeGenerated between (starttime .. endtime)
+        | where RecordType == "SharePointFileOperation"
+        | where Operation in ("FileDownloaded", "FileUploaded")
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities = count() by UserAgent, UserId, ClientIP, Site_Url
+        | join kind=innerunique (HistoricalActivity) on UserAgent
+        | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+        | extend IP_0_Address = ClientIP, Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix, URL_0_Url = Site_Url;
+    // EnrichedMicrosoft365AuditLogs Query: File operations by matching client apps (UserAgent)
+    let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+        | where TimeGenerated between (starttime .. endtime)
+        | where RecordType == "SharePointFileOperation"
+        | where Operation in ("FileDownloaded", "FileUploaded")
+        | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)  // Ensure matching with UserAgent column
+        | extend SiteUrl = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities = count() by UserAgent, UserId, ClientIp, SiteUrl
+        | join kind=innerunique (HistoricalActivity) on UserAgent
+        | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+        | extend IP_0_Address = ClientIp, Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix, URL_0_Url = SiteUrl;
+    // Combine Office and Enriched Logs
+    let CombinedEvents = OfficeEvents
+        | union EnrichedEvents
+        | summarize arg_min(StartTime, *) by UserId, ClientIP;
+    // Final Output
+    CombinedEvents
+        | project StartTime, EndTime, RecentFileActivities, IP_0_Address, Account_0_Name, Account_0_UPNSuffix, URL_0_Url
+        | order by StartTime desc;
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -57,5 +71,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URL_0_Url
-version: 2.0.1
+version: 2.0.2
 kind: Scheduled

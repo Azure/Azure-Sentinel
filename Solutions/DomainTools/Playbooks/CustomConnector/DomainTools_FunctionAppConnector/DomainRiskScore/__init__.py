@@ -1,7 +1,7 @@
 import json
 import logging
+import hashlib
 from datetime import datetime
-from hashlib import sha256
 from hmac import new
 from os import environ
 from urllib.parse import urlencode, urlunparse
@@ -56,7 +56,7 @@ class DTSigner:
         """
         params = "".join([self.api_username, timestamp, uri])
         return new(
-            self.api_key.encode("utf-8"), params.encode("utf-8"), digestmod=sha256
+            self.api_key.encode("utf-8"), params.encode("utf-8"), digestmod=hashlib.sha256
         ).hexdigest()
 
 

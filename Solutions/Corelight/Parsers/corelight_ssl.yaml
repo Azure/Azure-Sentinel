@@ -1,42 +1,128 @@
-id: b7ce3da1-d617-5bf7-ba51-b7e966bcde11
+id: 974718ae-c0a5-4d4a-bb42-63a0f394d66f
 Function:
-  Title: corelight_ssl parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight SSL Events
+  Version: '1.1.0'
+  LastUpdated: '2024-08-09'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_ssl
 FunctionAlias: corelight_ssl
-FunctionQuery: |+
-  let corelight_ssl = view () {
-      Corelight_v2_ssl_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          uid=uid_s,
-          id_orig_h=id_orig_h_s,
-          id_orig_p=id_orig_p_d,
-          id_resp_h=id_resp_h_s,
-          id_resp_p=id_resp_p_d,
-          version=version_s,
-          cipher=cipher_s,
-          curve=curve_s,
-          server_name=server_name_s,
-          resumed=resumed_b,
-          last_alert=last_alert_s,
-          next_protocol=next_protocol_s,
-          established=established_b,
-          ssl_history=ssl_history_s,
-          cert_chain_fps=cert_chain_fps_s,
-          client_cert_chain_fps=client_cert_chain_fps_s,
-          sni_matches_cert=sni_matches_cert_b,
-          validation_status=validation_status_s
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="ssl",
-          ts=TimeGenerated
-  };
-  corelight_ssl
-
-...
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let corelight_ssl = view () {
+        union isfuzzy=true Corelight_v2_ssl_CL,
+        Corelight_v2_ssl_red_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+        | join kind=leftouter 
+        (corelight_conn
+        | project uid, local_orig, local_resp    
+        ) on $left.uid_s == $right.uid
+        | project-away uid
+        | extend 
+            path=column_ifexists("_path_s", ""),
+            system_name=column_ifexists("_system_name_s", ""),
+            write_ts=column_ifexists("_write_ts_t", ""),
+            cert_chain_fps=column_ifexists("cert_chain_fps_s", ""),
+            cipher=column_ifexists("cipher_s", ""),
+            client_cert_chain_fps=column_ifexists("client_cert_chain_fps_s", ""),
+            curve=column_ifexists("curve_s", ""),
+            established=column_ifexists("established_b", ""),
+            id_orig_h=column_ifexists("id_orig_h_s", ""),
+            id_orig_p=column_ifexists("id_orig_p_d", real(null)),
+            id_resp_h=column_ifexists("id_resp_h_s", ""),
+            id_resp_p=column_ifexists("id_resp_p_d", real(null)),
+            id_vlan=column_ifexists("id_vlan_d", real(null)),
+            ja3=column_ifexists("ja3_s", ""),
+            ja3s=column_ifexists("ja3s_s", ""),
+            resumed=column_ifexists("resumed_b", ""),
+            server_name=column_ifexists("server_name_s", ""),
+            sni_matches_cert=column_ifexists("sni_matches_cert_b", ""),
+            ssl_history=column_ifexists("ssl_history_s", ""),
+            uid=column_ifexists("uid_s", ""),
+            validation_status=column_ifexists("validation_status_s", ""),
+            version=column_ifexists("version_s", ""),
+            last_alert=column_ifexists("last_alert_s", ""),
+            next_protocol=column_ifexists("next_protocol_s", ""),
+            issuer=column_ifexists("issuer_s", ""),
+            subject=column_ifexists("subject_s", "")
+        | extend
+            EventVendor="Corelight",
+            EventProduct="CorelightSensor",
+            EventType="ssl",
+            ts = TimeGenerated,
+            src=id_orig_h,
+            src_ip=id_orig_h,
+            src_port=id_orig_p,
+            dest=id_resp_h,
+            dest_ip=id_resp_h,
+            dest_port=id_resp_p,
+            ssl_cipher=cipher,
+            ssl_curve=curve,
+            ssl_subject_common_name=server_name,
+            fingerprint=cert_chain_fps,
+            is_self_signed = iff(validation_status=="self signed certificate", "yes", "no"),
+            action = iff(established=="true","success","failure"),
+            sensor_name = coalesce(system_name, "unknown"),
+            signature=validation_status,
+            ssl_version = version,
+            ssl_issuer=issuer,
+            ssl_subject=subject
+        | extend 
+            is_broadcast = iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            ssl_issuer_common_name = extract('CN=(?<ssl_issuer_common_name>[^,"]+)', 1, issuer), 
+            ssl_issuer_email_domain = extract('emailAddress=[0-9A-Za-z_]+@(?<ssl_issuer_email_domain>[0-9A-Za-z_]+.[0-9A-Za-z_]+)', 1, issuer), 
+            ssl_subject_email_domain = extract('emailAddress=[0-9A-Za-z_]+@(?<ssl_subject_email_domain>[0-9A-Za-z_]+.[0-9A-Za-z_]+)', 1, subject) 
+        | project 
+            TimeGenerated,
+            path,
+            system_name,
+            write_ts,
+            uid,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            version,
+            cipher,
+            curve,
+            server_name,
+            resumed,
+            last_alert,
+            next_protocol,
+            established,
+            ssl_history,
+            cert_chain_fps,
+            client_cert_chain_fps,
+            sni_matches_cert,
+            validation_status,
+            ja3,
+            ja3s,
+            id_vlan,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            ssl_cipher,
+            ssl_curve,
+            ssl_subject_common_name,
+            fingerprint,
+            is_self_signed,
+            action,
+            sensor_name,
+            signature,
+            ssl_version,
+            is_broadcast,
+            is_src_internal_ip,
+            is_dest_internal_ip,
+            ssl_issuer_common_name,
+            ssl_issuer_email_domain,
+            ssl_subject_email_domain
+    };
+    corelight_ssl

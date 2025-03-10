@@ -1,6 +1,6 @@
-import { ExitCode } from "./exitCode";
-import { GetDiffFiles } from "./gitWrapper";
-import * as logger from "./logger";
+import { ExitCode } from "./exitCode.js";
+import { GetDiffFiles } from "./gitHubWrapper.js";
+import * as logger from "./logger.js";
 
 export type CheckOptions = {
   onExecError(result: any, filePath: string): Promise<unknown>;

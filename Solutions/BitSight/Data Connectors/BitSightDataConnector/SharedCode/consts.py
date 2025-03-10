@@ -52,3 +52,20 @@ FINDINGS_SUMMARY_FUNC_NAME = "Findings Summary:"
 FINDINGS_FUNC_NAME = "Findings:"
 COMPANY_DETAILS_FUNC_NAME = "Company Details:"
 ALERT_GRAPH_STATISTICS_FUNC_NAME = "Alerts-Graph-statistics Details:"
+PORTFOLIO_COMPANY_QUERY = """{}_CL
+    | summarize arg_max(TimeGenerated, *) by guid_g
+    | sort by name_s asc
+    | project name_s, guid_g""".format(
+        COMPANIES_TABLE_NAME
+    )
+FINDING_DETAILS_QUERY = """{}_CL
+    | summarize arg_max(TimeGenerated, *) by Key_s
+    | sort by Key_s asc
+    | project Key_s, Value_s"""
+CHECKPOINT_DATA_QUERY = """{}_CL
+    | summarize arg_max(TimeGenerated, *) by Key_g
+    | sort by Key_g asc
+    | project Key_g, Value_s"""
+COMPANY_FETCH_QUERY = """{}_CL
+    | summarize arg_max(TimeGenerated, *) by Key_s
+    | project Key_s, Value_s"""

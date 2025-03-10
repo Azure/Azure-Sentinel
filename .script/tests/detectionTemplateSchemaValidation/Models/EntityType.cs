@@ -20,6 +20,7 @@
         Mailbox,
         MailCluster,
         MailMessage,
-        SubmissionMail
+        SubmissionMail,
+        SentinelEntities
     }
 }
