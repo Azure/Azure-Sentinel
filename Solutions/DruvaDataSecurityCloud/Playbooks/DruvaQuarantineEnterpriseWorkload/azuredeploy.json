@@ -1,0 +1,766 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Druva Quarantine Playbook for Enterprise Workload",
+        "description": "This playbook uses Druva-Ransomware-Response capabilities to stop the spread of ransomware and avoid reinfection or contamination spread in your enterprise workload",
+        "prerequisites": [
+            "1. Verify ARR (Accelerated Ransomware Recovery) should be enabled for the respective Device using Resource ID on the Druva Security Cloud Platform.",
+            "2. Generate Druva API Client Credentials",
+                "a. Use the following link to navigate to Druva's documentation page and refer the steps to generate API Client Credentials.",
+                "b. Druva's Documentation Page : https://help.druva.com/en/articles/8580838-create-and-manage-api-credentials",
+                "c. Copy/Paste or Store the creds for future use.",
+            "3. Store Service account credentials in Key Vault Secrets and obtain keyvault name.",
+                "a. Create a Key Vault with name as Druva-ClientCredential",
+                "b. Go to KeyVault -> secrets -> Generate/import and create 'Druva-ClientID' & 'Druva-ClientSecret' for storing client_id and client_secret respectively",
+                "c. Store the secrets obtained for your organization and user from Druva Console UI in the previous step."
+        ],
+        "executionSteps": [
+            "1. Deploy the ARM template:",
+                "a. Open the Azure Portal.",
+                "b. Navigate to 'Deploy a custom template'.",
+                "c. Upload this ARM template file or paste its content.",
+                "d. Provide the necessary parameter values (e.g., KeyVault name, connection name, etc.).",
+                "e. Review and start the deployment.",
+            "2. Validate the deployment:",
+                "a. Check if the resources (e.g., Key Vault, API connections, Logic Apps) are created successfully.",
+                "b. Verify the deployment logs for any errors.",
+            "3. Authorize connections:",
+                "a. Follow the steps in the 'postDeployment' section to authorize connections.",
+            "4. Test the playbook:",
+                "a. Trigger the playbook manually by using the dropdown option as 'run_with_payload'",
+                "b. On triggering a side screen will appear in which there will be a section named as 'Body'.",
+                "c. Inside body paste the json obtained from the README.md file with respective edited values according to your resources.",
+                "d. Hit the 'run' button at the bottom.",
+                "e. Navigate to the playbook home page and check the run history if the run was successful or not."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+                "Once deployment is complete, authorize each connection.",
+                "1. Login to the Microsoft Azure portal and in the search box type API Connections.",
+                "2. Find API connection option.",
+                "3. Check for your created API connection exists. eg. Druva-KeyVault-Connection",
+                "4. Check Status should be ready for the same API Connection.",
+            "**b. Grant permissions**",
+                "Make sure that this playbook and your user has the IAM role permission granted as 'Key Vault Secrets User'."
+        ],
+        "lastUpdateTime": "2025-01-13T00:00:00.000Z",
+        "author": {
+            "name": "Druva"
+        },
+        "version": "1.0",
+        "category": "Druva-Realize-UDA-Quarantine_snapshots",
+        "tags": [ "Ransomware Recovery", "Druva Security", "Unusual Data Activity", "Quarantine Snapshots" ],
+        "support":  {
+            "tier":  "Druva Community"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Druva_Quarantine_Enterprise_Workloads",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Playbook."
+            }
+        },
+        "keyvaultName": {
+            "type": "String",
+            "defaultValue": "Druva-ClientCredential",
+            "metadata": {
+                "description": "Name of the Vault created to store Druva Client Credentials."
+            }
+        }
+    },
+    "variables": {
+        "keyvaultConnectionName": "[concat('KeyVault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "DruvaQuarantineEnterpriseWorkloadsResource",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "api_host": {
+                            "defaultValue": "https://apis.druva.com",
+                            "type": "String"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_HTTP_request_is_received": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "enterprise_resource_name": {
+                                            "type": "string"
+                                        },
+                                        "fromDate": {
+                                            "type": "string"
+                                        },
+                                        "toDate": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Generate_Bearer_Token": {
+                            "runAfter": {
+                                "Get_secret_ClientSecret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "@{parameters('api_host')}/token",
+                                "method": "POST",
+                                "headers": {
+                                    "Authorization": "Basic @{base64(concat(body('Get_secret_ClientId')?['value'], ':', body('Get_secret_ClientSecret')?['value']))}",
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "body": "scope=read&grant_type=client_credentials"
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Parse_Bearer_Token": {
+                            "runAfter": {
+                                "Generate_Bearer_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Generate_Bearer_Token')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Find_Device": {
+                            "runAfter": {
+                                "Initialize_Combined_Resources_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "@{parameters('api_host')}/realize/ransomwarerecovery/v1/search/backupset",
+                                "method": "GET",
+                                "headers": {
+                                    "Authorization": "Bearer @{body('Parse_Bearer_Token')?['access_token']}"
+                                },
+                                "queries": {
+                                    "hostname": "@{triggerBody()?['enterprise_resource_name']}"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Find_VM_Device": {
+                            "runAfter": {
+                                "Initialize_Combined_Resources_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "@{parameters('api_host')}/realize/ransomwarerecovery/v1/search/backupset",
+                                "method": "GET",
+                                "headers": {
+                                    "Authorization": "Bearer @{body('Parse_Bearer_Token')?['access_token']}"
+                                },
+                                "queries": {
+                                    "hostname": "@{triggerBody()?['enterprise_resource_name']}",
+                                    "serverTypes[]": "3"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Parse_Resource_Details": {
+                            "runAfter": {
+                                "Find_Device": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Find_Device')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "resources": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "resourceID": {
+                                                        "type": "integer"
+                                                    },
+                                                    "resourceName": {
+                                                        "type": "string"
+                                                    },
+                                                    "resourceType": {
+                                                        "type": "string"
+                                                    },
+                                                    "resourceStatus": {
+                                                        "type": "string"
+                                                    },
+                                                    "resourceParentName": {
+                                                        "type": "string"
+                                                    },
+                                                    "orgID": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "resourceID",
+                                                    "resourceName",
+                                                    "resourceType",
+                                                    "resourceStatus",
+                                                    "resourceParentName",
+                                                    "orgID"
+                                                ]
+                                            }
+                                        },
+                                        "nextPageToken": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Parse_VM_Resource_Details": {
+                            "runAfter": {
+                                "Find_VM_Device": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Find_VM_Device')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "resources": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "resourceID": {
+                                                        "type": "integer"
+                                                    },
+                                                    "resourceName": {
+                                                        "type": "string"
+                                                    },
+                                                    "resourceType": {
+                                                        "type": "string"
+                                                    },
+                                                    "resourceStatus": {
+                                                        "type": "string"
+                                                    },
+                                                    "resourceParentName": {
+                                                        "type": "string"
+                                                    },
+                                                    "orgID": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "resourceID",
+                                                    "resourceName",
+                                                    "resourceType",
+                                                    "resourceStatus",
+                                                    "resourceParentName",
+                                                    "orgID"
+                                                ]
+                                            }
+                                        },
+                                        "nextPageToken": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "CombineResponses": {
+                            "runAfter": {
+                                "Parse_Resource_Details": [
+                                    "Succeeded"
+                                ],
+                                "Parse_VM_Resource_Details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": [
+                                {
+                                    "resources": "@body('Parse_Resource_Details')?['resources']"
+                                },
+                                {
+                                    "resources": "@body('Parse_VM_Resource_Details')?['resources']"
+                                }
+                            ]
+                        },
+                        "Initialize_Combined_Resources_variable": {
+                            "runAfter": {
+                                "Parse_Bearer_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "CombinedResources",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "For_Each_Response": {
+                            "foreach": "@outputs('CombineResponses')",
+                            "actions": {
+                                "Nested_For_each_": {
+                                    "foreach": "@item()?['resources']",
+                                    "actions": {
+                                        "Append_to_array_variable": {
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "CombinedResources",
+                                                "value": "@item()"
+                                            }
+                                        }
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_CombineResponses_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Compose_Resources": {
+                            "runAfter": {
+                                "For_Each_Responses": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": {
+                                "resources": "@variables('CombinedResources')"
+                            }
+                        },
+                        "If_Resource_Exists": {
+                            "actions": {
+                                "Resource_JSON": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@outputs('Compose_Resources')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "resources": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "resourceID": {
+                                                                "type": "integer"
+                                                            },
+                                                            "resourceName": {
+                                                                "type": "string"
+                                                            },
+                                                            "resourceType": {
+                                                                "type": "string"
+                                                            },
+                                                            "resourceStatus": {
+                                                                "type": "string"
+                                                            },
+                                                            "resourceParentName": {
+                                                                "type": "string"
+                                                            },
+                                                            "orgID": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "resourceID",
+                                                            "resourceName",
+                                                            "resourceType",
+                                                            "resourceStatus",
+                                                            "resourceParentName",
+                                                            "orgID"
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Compose_Resources": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Failed",
+                                            "runError": {
+                                                "code": "500",
+                                                "message": "Resource Not Found"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "or": [
+                                    {
+                                        "equals": [
+                                            "@variables('ResourceMatch')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_each_Resource": {
+                            "foreach": "@body('Resource_JSON')?['resources']",
+                            "actions": {
+                                "Quarantine_VM_API": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@{parameters('api_host')}/realize/ransomwarerecovery/v1/quarantineranges/resource/@{item()?['resourceID']}",
+                                        "method": "POST",
+                                        "headers": {
+                                            "accept": "application/json",
+                                            "Authorization": "Bearer @{body('Parse_Bearer_Token')?['access_token']}",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "body": {
+                                            "resourceType": "@item()?['resourceType']",
+                                            "orgID": "@item()?['orgID']",
+                                            "fromDate": "@triggerBody()?['fromDate']",
+                                            "toDate": "@triggerBody()?['toDate']"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Parse_VM_Range_ID_": {
+                                    "runAfter": {
+                                        "Quarantine_VM_API": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Quarantine_VM_API')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "rangeID": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "If_Resource_Exists": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret_ClientId": {
+                            "runAfter": {
+                                "Initialize_variable_Match_Resource": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Druva-ClientID')}/value"
+                            }
+                        },
+                        "Get_secret_ClientSecret": {
+                            "runAfter": {
+                                "Get_secret_ClientId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Druva-ClientSecret')}/value"
+                            }
+                        },
+                        "check_resourcename": {
+                            "actions": {
+                                "Compose_Message": {
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "message": "username is not empty"
+                                    }
+                                }
+                            },
+                            "runAfter": {},
+                            "else": {
+                                "actions": {
+                                    "Terminate_Execution": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Failed",
+                                            "runError": {
+                                                "code": "500",
+                                                "message": "\"Username is empty\""
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "or": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['enterprise_resource_name']",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_variable_Match_Resource": {
+                            "runAfter": {
+                                "check_resourcename": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ResourceMatch",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_CombineResponses_JSON": {
+                            "runAfter": {
+                                "CombineResponses": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@outputs('CombineResponses')",
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "resources": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "resourceID": {
+                                                            "type": "integer"
+                                                        },
+                                                        "resourceName": {
+                                                            "type": "string"
+                                                        },
+                                                        "resourceType": {
+                                                            "type": "string"
+                                                        },
+                                                        "resourceStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "resourceParentName": {
+                                                            "type": "string"
+                                                        },
+                                                        "orgID": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "resourceID",
+                                                        "resourceName",
+                                                        "resourceType",
+                                                        "resourceStatus",
+                                                        "resourceParentName",
+                                                        "orgID"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "required": [
+                                            "resources"
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        "For_Each_Responses": {
+                            "foreach": "@outputs('Parse_CombineResponses_JSON')['body']",
+                            "actions": {
+                                "Nested_For_each": {
+                                    "foreach": "@item()['resources']",
+                                    "actions": {
+                                        "Check_If_Resource_exists": {
+                                            "actions": {
+                                                "Set_Match_Resource_True": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "ResourceMatch",
+                                                        "value": true
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {}
+                                            },
+                                            "expression": {
+                                                "or": [
+                                                    {
+                                                        "equals": [
+                                                            "@item()['resourceParentName']",
+                                                            "@triggerBody()?['enterprise_resource_name']"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_CombineResponses_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                                "connectionName": "[variables('keyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('keyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('keyvaultConnectionName')]",
+                "connectionState": "Enabled",
+                "parameterValueSet": {
+                    "name": "oauthMI",
+                    "values": {
+                        "vaultName": {
+                            "value": "[parameters('keyvaultName')]"
+                        }
+                    }
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        }
+    ]
+}

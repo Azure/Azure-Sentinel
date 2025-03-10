@@ -1,4 +1,35 @@
 id: 6a570927-8638-4a6f-ac09-72a7d51ffa3c
 name: Display Name - Spoof and Impersonation
 description: |
-  'As part of content migration, this file is moved to new location. you can find here: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20Queries/Spoof%20and%20Impersonation/Display%20Name%20-%20Spoof%20and%20Impersonation.yaml'
+  This query helps reviewing incoming email messages where the Display Name of the sender contains own or other partner company/brand name
+description-detailed: |
+  This query helps reviewing incoming email messages where the Display Name of the sender contains own or other partner company/brand name using Defender for Office 365 Data
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let emailDelivered = EmailEvents
+  | where Timestamp < ago(24hrs)
+  and DeliveryAction == "Delivered"
+  and SenderDisplayName contains "Microsoft"
+  | summarize count() by SenderFromAddress
+  | where count_ > 3 // ensuring that some level of communications has occurred.
+  | project SenderFromAddress;
+  EmailEvents
+  | where Timestamp > ago(24hrs)
+  | where DeliveryAction == "Delivered"
+  and EmailDirection == "Inbound"
+  and OrgLevelAction != "Block"
+  and UserLevelAction != "Block"
+  and SenderDisplayName contains "Microsoft"
+  | extend NewMsg = case(Subject contains "RE:", false, Subject contains "FW:", false, true )
+  | project SenderDisplayName, SenderFromAddress, NetworkMessageId, SenderMailFromAddress, RecipientEmailAddress, DeliveryAction, DeliveryLocation, ThreatTypes, DetectionMethods, NewMsg, Subject
+  | join kind=leftanti  ( emailDelivered ) on SenderFromAddress
+  | order by SenderMailFromAddress
+  | summarize count() by SenderDisplayName, SenderFromAddress, NetworkMessageId, SenderMailFromAddress, RecipientEmailAddress, DeliveryAction, DeliveryLocation, ThreatTypes, DetectionMethods, NewMsg, Subject
+version: 1.0.0 

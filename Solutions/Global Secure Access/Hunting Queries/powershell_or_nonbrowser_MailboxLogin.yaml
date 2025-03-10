@@ -1,5 +1,5 @@
 id: 49a4f65a-fe18-408e-afec-042fde93d3ce
-name: PowerShell or non-browser mailbox login activity
+name: GSA Enriched Office 365 - PowerShell or non-browser mailbox login activity
 description: |
   'Detects mailbox login from Exchange PowerShell. All accounts can use it by default, but admins can change it. Whitelist benign activities.'
 description-detailed: |
@@ -21,18 +21,41 @@ relevantTechniques:
   - T1098
   - T1114
 query: |
-  EnrichedMicrosoft365AuditLogs
-  | where Workload == "Exchange" and Operation == "MailboxLogin"
-  | extend ClientApplication = tostring(parse_json(AdditionalProperties).ClientInfoString)
-  | where ClientApplication == "Client=Microsoft.Exchange.Powershell; Microsoft WinRM Client"
-  | extend TenantName = tostring(parse_json(AdditionalProperties).TenantName)
-  | extend MailboxOwner = tostring(parse_json(AdditionalProperties).MailboxOwnerUPN)
-  | extend LogonType = tostring(parse_json(AdditionalProperties).LogonType)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Operation, TenantName, UserType, UserId, MailboxOwner, LogonType, ClientApplication
-  | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
-  | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
-  | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
-  | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '')
+    let starttime = todatetime('{{StartTimeISO}}');
+        let endtime = todatetime('{{EndTimeISO}}');
+        // EnrichedMicrosoft365AuditLogs query
+        let EnrichedMailboxLogin = EnrichedMicrosoft365AuditLogs
+            | where TimeGenerated between (starttime .. endtime)
+            | where Workload == "Exchange" and Operation == "MailboxLogin"
+            | extend ClientApplication = tostring(parse_json(AdditionalProperties).ClientInfoString)
+            | where ClientApplication == "Client=Microsoft.Exchange.Powershell; Microsoft WinRM Client"
+            | extend TenantName = tostring(parse_json(AdditionalProperties).TenantName)
+            | extend MailboxOwner = tostring(parse_json(AdditionalProperties).MailboxOwnerUPN)
+            | extend LogonType = tostring(parse_json(AdditionalProperties).LogonType)
+            | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Count = count() by Operation, TenantName, UserType, UserId, MailboxOwner, LogonType, ClientApplication
+            | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
+            | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+            | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
+            | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '');
+        // OfficeActivity query
+        let OfficeMailboxLogin = OfficeActivity
+            | where TimeGenerated between (starttime .. endtime)
+            | where OfficeWorkload == "Exchange" and Operation == "MailboxLogin"
+            | where ClientInfoString == "Client=Microsoft.Exchange.Powershell; Microsoft WinRM Client"
+            | extend LogonType = "Unknown"  // If LogonType does not exist, create a placeholder
+            | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Count = count() by Operation, OrganizationName, UserType, UserId, MailboxOwnerUPN, LogonType, ClientInfoString
+            | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
+            | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+            | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
+            | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '');
+        // Combine Enriched and Office queries
+        let CombinedMailboxLogin = EnrichedMailboxLogin
+            | union OfficeMailboxLogin
+            | summarize arg_min(StartTime, *) by UserId, Operation
+            | project StartTime, EndTime, Operation, TenantName, OrganizationName, UserType, UserId, MailboxOwner, LogonType, ClientApplication, ClientInfoString, Count, AccountName, AccountUPNSuffix, AccountNTDomain;
+        // Final output
+        CombinedMailboxLogin
+            | order by StartTime desc;
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -42,5 +65,5 @@ entityMappings:
         columnName: AccountUPNSuffix
       - identifier: NTDomain
         columnName: AccountNTDomain
-version: 2.0.1
+version: 2.0.2
 kind: Scheduled

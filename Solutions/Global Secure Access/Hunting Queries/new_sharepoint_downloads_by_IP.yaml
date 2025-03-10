@@ -1,5 +1,5 @@
 id: e3d24cfd-b2a1-4ba7-8f80-0360892f9d57
-name: SharePointFileOperation via previously unseen IPs
+name: GSA Enriched Office 365 - SharePointFileOperation via previously unseen IPs
 description: |
   'Shows SharePoint upload/download volume by IPs with high-risk ASNs. New IPs with volume spikes may be unauthorized and exfiltrating documents.'
 description-detailed: |
@@ -22,29 +22,46 @@ query: |
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 14d;
   let BLOCK_THRESHOLD = 1.0;
-  let HighBlockRateASNs =
-    SigninLogs
-    | where TimeGenerated > lookback
-    | where isnotempty(AutonomousSystemNumber)
-    | summarize make_set(IPAddress), TotalIps = dcount(IPAddress), BlockedSignins = countif(ResultType == "50053"), TotalSignins = count() by AutonomousSystemNumber
-    | extend BlockRatio = 1.00 * BlockedSignins / TotalSignins
-    | where BlockRatio >= BLOCK_THRESHOLD
-    | distinct AutonomousSystemNumber;
-  let ASNIPs =
-    SigninLogs
-    | where TimeGenerated > lookback
-    | where AutonomousSystemNumber in (HighBlockRateASNs)
-    | distinct IPAddress, AutonomousSystemNumber;
-  EnrichedMicrosoft365AuditLogs
-  | where TimeGenerated between (starttime .. endtime)
-  | where RecordType == "SharePointFileOperation"
-  | where Operation in ("FileDownloaded", "FileUploaded")
-  | where ClientIp in (ASNIPs)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities = count() by ClientIp
-  | extend IP_0_Address = ClientIp
+  // Identify Autonomous System Numbers (ASNs) with a high block rate in Sign-in Logs
+  let HighBlockRateASNs = SigninLogs
+      | where TimeGenerated > lookback
+      | where isnotempty(AutonomousSystemNumber)
+      | summarize make_set(IPAddress), TotalIps = dcount(IPAddress), BlockedSignins = countif(ResultType == "50053"), TotalSignins = count() by AutonomousSystemNumber
+      | extend BlockRatio = 1.00 * BlockedSignins / TotalSignins
+      | where BlockRatio >= BLOCK_THRESHOLD
+      | distinct AutonomousSystemNumber;
+  // Retrieve IP addresses from these high block rate ASNs
+  let ASNIPs = SigninLogs
+      | where TimeGenerated > lookback
+      | where AutonomousSystemNumber in (HighBlockRateASNs)
+      | distinct IPAddress, AutonomousSystemNumber;
+  // OfficeActivity Query: File activities from identified ASN IPs
+  let OfficeEvents = OfficeActivity
+      | where TimeGenerated between(starttime .. endtime)
+      | where RecordType == "SharePointFileOperation"
+      | where Operation in ("FileDownloaded", "FileUploaded")
+      | where ClientIP in (ASNIPs)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities = count() by ClientIP
+      | extend IP_0_Address = ClientIP;
+  // EnrichedMicrosoft365AuditLogs Query: File activities from identified ASN IPs
+  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where RecordType == "SharePointFileOperation"
+      | where Operation in ("FileDownloaded", "FileUploaded")
+      | where ClientIp in (ASNIPs)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities = count() by ClientIp
+      | extend IP_0_Address = ClientIp;
+  // Combine Office and Enriched Logs
+  let CombinedEvents = OfficeEvents
+      | union EnrichedEvents
+      | summarize arg_min(StartTime, *) by ClientIP;
+  // Final Output
+  CombinedEvents
+      | project StartTime, EndTime, RecentFileActivities, IP_0_Address
+      | order by StartTime desc
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IP_0_Address
-version: 2.0.1
+version: 2.0.2

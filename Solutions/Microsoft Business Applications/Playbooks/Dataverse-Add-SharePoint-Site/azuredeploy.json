@@ -1,0 +1,296 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Dataverse: Add SharePoint sites to watchlist",
+        "description": "This playbook is used to add new or updated SharePoint document management sites into the configuration watchlist. When combined with a scheduled analytics rule monitoring the Dataverse activity log, this Playbook will trigger when a new SharePoint document management site mapping is added. The site will be added to a watchlist to extend monitoring coverage.",
+        "prerequisites": [
+            "1. Collect the subscription ID, resource group name and workspace ID of the Sentinel workspace."
+        ],
+        "postDeployment": [
+            "1. Create a Sentinel automation rule to trigger this Playbook for the the Analytics Rule **Dataverse - SharePoint document management site added or updated**.",
+            "2. Configure Event Grouping settings for the Analytics rule to **Trigger an alert for each event**."
+        ],
+        "tags": [
+            "Remediation"
+        ],
+        "lastUpdateTime": "2022-10-11T00:00:00.000Z",
+        "support": {
+            "tier": "Microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Dataverse-Add-SharePoint-Site",
+            "type": "string"
+        },
+        "resourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for resourceGroupName"
+            }
+        },
+        "subscriptionId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for subscriptionId"
+            }
+        },
+        "watchlistAlias": {
+            "type": "string",
+            "defaultValue": "MSBizApps-Configuration",
+            "metadata": {
+                "description": "Enter value for watchlistAlias"
+            }
+        },
+        "workspaceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for workspaceId"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "resourceGroupName": {
+                            "type": "string",
+                            "defaultValue": "[parameters('resourceGroupName')]"
+                        },
+                        "subscriptionId": {
+                            "type": "string",
+                            "defaultValue": "[parameters('subscriptionId')]"
+                        },
+                        "watchlistAlias": {
+                            "type": "string",
+                            "defaultValue": "[parameters('watchlistAlias')]"
+                        },
+                        "workspaceId": {
+                            "type": "string",
+                            "defaultValue": "[parameters('workspaceId')]"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Compose_Data": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": {
+                                "InstanceUrl": "@variables('InstanceUrl')",
+                                "SharePointUrl": "@variables('SharePointSiteUrl')"
+                            }
+                        },
+                        "Condition": {
+                            "actions": {
+                                "Terminate": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "code": "TooManyEntities",
+                                            "message": "Found more than 2 entities in a single alert. Please ensure the Analytics Rule Event Grouping is set to: Trigger an alert for each event"
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_InstanceUrl": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(triggerBody()?['Entities'])",
+                                            2
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_each": {
+                            "foreach": "@triggerBody()?['Entities']",
+                            "actions": {
+                                "Switch": {
+                                    "runAfter": {},
+                                    "cases": {
+                                        "Case_Dataverse": {
+                                            "case": 32780,
+                                            "actions": {
+                                                "Set_SharePointSiteUrl": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "InstanceUrl",
+                                                        "value": "@{items('For_each')?['InstanceName']}"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_SharePoint": {
+                                            "case": 20892,
+                                            "actions": {
+                                                "Set_InstanceUrl": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "SharePointSiteUrl",
+                                                        "value": "@{items('For_each')?['InstanceName']}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@items('For_each')['AppId']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_InstanceUrl": {
+                            "runAfter": {
+                                "Initialize_SharePointSiteUrl": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "InstanceUrl",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SharePointSiteUrl": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SharePointSiteUrl",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Watchlists_-_Add_a_new_Watchlist_Item": {
+                            "runAfter": {
+                                "Compose_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Category": "SharePoint",
+                                    "Data": "@string(outputs('Compose_Data'))"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('subscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceId'))}/watchlists/@{encodeURIComponent(parameters('watchlistAlias'))}/watchlistItem"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "MS-BizApps-Add-SharePoint-Site",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

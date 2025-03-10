@@ -13,6 +13,7 @@ from ..SharedCode.consts import (
     FINDINGS_TABLE_NAME,
     COMPANIES,
     ENDPOINTS,
+    FINDING_DETAILS_QUERY
 )
 
 
@@ -40,7 +41,7 @@ class BitSightFindings(BitSight):
     def get_all_copmanies_findings_details(self, logs_data, company_names):
         count_companies = 0
         fetching_index = self.get_last_data_index(
-            company_names, self.checkpoint_obj, self.company_state
+            company_names, self.checkpoint_obj, self.company_state, table_name=FINDINGS_TABLE_NAME
         )
         for company_index in range(fetching_index + 1, len(logs_data)):
             company_name = logs_data[company_index].get("name_s")
@@ -63,6 +64,7 @@ class BitSightFindings(BitSight):
                 self.company_state,
                 company_name,
                 "findings_company",
+                "{}_{}".format(FINDINGS_TABLE_NAME, "Company_Checkpoint"),
                 company_name_flag=True,
             )
 
@@ -125,7 +127,7 @@ class BitSightFindings(BitSight):
                 {"risk_category": "Compromised Systems"},
                 {"risk_category": "User Behavior"},
             ]
-            last_data = self.checkpoint_obj.get_last_data(self.findings_state)
+            last_data = self.checkpoint_obj.get_last_data(self.findings_state, table_name=FINDINGS_TABLE_NAME, checkpoint_query=FINDING_DETAILS_QUERY)
             findings_url = self.base_url + self.findings_endpoint_path.format(
                 company_guid
             )
@@ -173,6 +175,7 @@ class BitSightFindings(BitSight):
                     self.findings_state,
                     last_data,
                     "findings_details",
+                    "{}_{}".format(FINDINGS_TABLE_NAME, "Checkpoint"),
                     checkpoint_key,
                     str(data_to_post.date()),
                 )
@@ -196,6 +199,13 @@ class BitSightFindings(BitSight):
                     c_data["next1"] = self.get_bitsight_data(findings_url, params)
                     next_link = c_data["next1"].get("links").get("next")
                     length_results = len(c_data.get("next1").get("results"))
+                    if length_results == 0:
+                        applogger.info(
+                            'BitSight: No new findings found for {} on page {} ({})'.format(
+                                company_name, page, risk
+                            )
+                        )
+                        break
                     applogger.info(
                         "BitSight: Got {} findings for {} on page {}".format(
                             length_results, company_name, page
@@ -222,6 +232,7 @@ class BitSightFindings(BitSight):
                         self.findings_state,
                         last_data,
                         "findings_details",
+                        "{}_{}".format(FINDINGS_TABLE_NAME, "Checkpoint"),
                         checkpoint_key,
                         str(data_to_post.date()),
                     )

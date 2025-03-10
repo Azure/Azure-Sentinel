@@ -1,0 +1,101 @@
+id: d875af10-6bb9-4d6a-a6e4-78439a98bf4b
+kind: Scheduled
+name: Dataverse - Suspicious use of TDS endpoint
+description: Identifies Dataverse TDS (Tabular Data Stream) protocol based queries
+  where the source user or IP address has recent security alerts and the TDS protocol
+  has not been used previously in the target environment.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - InitialAccess
+relevantTechniques:
+  - T1048
+  - T1190
+query: |
+  let query_frequency = 1h;
+  let query_lookback = 14d;
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message == 'ExecutePowerBISql'
+  | summarize FirstEvent = min(TimeGenerated) by UserId, ClientIp, InstanceUrl
+  | join kind=inner(
+      DataverseActivity
+      | where TimeGenerated >= ago(query_lookback)
+      | where Message == 'ExecutePowerBISql'
+      | summarize UniqueUsers = dcount(UserId, 4) by InstanceUrl)
+      on InstanceUrl
+  | where UniqueUsers == 1
+  | join kind=inner (
+      SecurityAlert
+      | where Entities has ('"Type":"ip"')
+      | project AlertName, SystemAlertId, Entities
+      | mv-expand todynamic(Entities)
+      | where Entities.Type == "ip"
+      | extend IPAddress = tostring(Entities.Address)
+      | summarize SystemAlerts = make_set(SystemAlertId, 100), Alerts = make_set(AlertName, 100) by IPAddress)
+      on $left.ClientIp == $right.IPAddress
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | join kind = inner (
+      SecurityAlert
+      | where Entities has ('Type":"account"')
+      | project AlertName, SystemAlertId, Entities
+      | mv-expand todynamic(Entities)
+      | where Entities.Type == "account"
+      | extend
+          UPNSuffix = tostring(Entities.UPNSuffix),
+          AccountName = tostring(Entities.Name)
+      | summarize SystemAlerts = make_set(SystemAlertId, 100), Alerts = make_set(AlertName, 100) by AccountName, UPNSuffix
+      | where isnotempty(AccountName) and isnotempty(UPNSuffix))
+      on AccountName, UPNSuffix
+  | summarize SystemAlerts = make_set(SystemAlerts, 100), Alerts = make_set(Alerts, 100) by FirstEvent, UserId, ClientIp, InstanceUrl, AccountName, UPNSuffix
+  | extend CloudAppId = int(32780)
+  | project
+      FirstEvent,
+      UserId,
+      ClientIp,
+      InstanceUrl,
+      Alerts,
+      SystemAlerts,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Suspicious use of TDS endpoint in {{InstanceUrl}} '
+  alertDescriptionFormat: 'The TDS endpoint was used to query Dataverse instance {{InstanceUrl}}
+    . The use of this protocol was not seen previously and the following alerts were
+    associated with the caller: {{Alerts}}'
+version: 3.2.0

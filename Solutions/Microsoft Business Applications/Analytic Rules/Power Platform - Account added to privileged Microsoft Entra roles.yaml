@@ -1,0 +1,79 @@
+id: 71d829d6-eb50-4a17-8a64-655fae8d71e1
+kind: Scheduled
+name: Power Platform - Account added to privileged Microsoft Entra roles
+description: |
+  Identifies changes to privileged directory roles impacting Power Platform:
+  - Dynamics 365 Admins
+  - Power Platform Admins
+  - Fabric Admins
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+  - T1068
+  - T1548
+query: |
+  // 44367163-eba1-44c3-98af-f5787879f96a = Dynamics 365 Administrator
+  // 11648597-926c-4cf3-9c36-bcebb0ba8dcc = Power Platform Administrator
+  // a9ea8996-122f-4c74-9520-8edcd192826c = Fabric Administrator
+  let query_frequency = 1h;
+  let role_template_ids = dynamic(["44367163-eba1-44c3-98af-f5787879f96a", "11648597-926c-4cf3-9c36-bcebb0ba8dcc", "a9ea8996-122f-4c74-9520-8edcd192826c"]);
+  let monitored_activities = dynamic(["Assign", "AssignGrantedRole", "AssignPermanentGrantedRole", "AssignPermanentEligibleRole", "RoleElevatedOutsidePimAlert"]);
+  AuditLogs
+  | where TimeGenerated >= ago(query_frequency)
+  | where Category == "RoleManagement"
+      and TargetResources has_any (role_template_ids)
+      and AADOperationType in (monitored_activities)
+      and Identity != "MS-PIM"
+  | extend
+      UserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName),
+      AadUserId = tostring(parse_json(tostring(InitiatedBy.user)).id),
+      IPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+      RoleName = tostring(TargetResources[0].displayName),
+      UserAdded = tostring(TargetResources[2].userPrincipalName)
+  | extend
+      RoleName = iif(isempty(RoleName), tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[1].newValue), RoleName),
+      UserAdded = iif(isempty(UserAdded), tostring(parse_json(tostring(TargetResources[0].userPrincipalName))), UserAdded),
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserPrincipalName, '@')[0]),
+      UPNSuffix = tostring(split(UserPrincipalName, '@')[1])
+  | project
+      TimeGenerated,
+      Identity,
+      UserPrincipalName,
+      AadUserId,
+      RoleName,
+      OperationName,
+      UserAdded,
+      TargetResources,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+alertDetailsOverride:
+  alertDisplayNameFormat: Power Platform - Account added to privileged role {{RoleName}}
+  alertDescriptionFormat: 'A user {{UserAdded}} was added to one of the Power Platform
+    administrative roles: {{{RoleName}}'
+version: 3.2.0

@@ -1,0 +1,87 @@
+id: dccbdb5b-2ce7-4931-bfbe-f1ad6523ee64
+kind: Scheduled
+name: F&O - Bank account change following network alias reassignment
+description: Identifies changes to user accounts where the network alias was modified
+  to a new value. Shortly afterwards, the updated alias is used to update a bank account
+  number.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Dynamics365Finance
+    dataTypes:
+      - FinanceOperationsActivity_CL
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - LateralMovement
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1556
+  - T0859
+  - T1078
+query: |
+  let query_frequency = 15m;
+  FinanceOperationsActivity_CL
+  | where LogType == "Update" and TableName == "UserInfo"
+  | extend UserId = tostring(parse_json(tostring(FormattedData.["03::id"])).NewData)
+  | extend NetworkAlias = parse_json(tostring(FormattedData.networkAlias))
+  | extend
+      CurrentAlias = tostring(NetworkAlias.NewData),
+      PreviousAlias = tostring(NetworkAlias.OldData)
+  | where CurrentAlias != PreviousAlias
+  | extend
+      AliasUpdated = LogCreatedDateTime,
+      AliasChangedBy = Username
+  | join kind=inner(FinanceOperationsActivity_CL
+      | where TimeGenerated >= ago (query_frequency)
+      | where LogType == "Update" and TableName == "BankAccountTable"
+      | extend AccountId = tostring(parse_json(tostring(FormattedData.AccountID)).NewData)
+      | extend AccountNum = parse_json(tostring(FormattedData.AccountNum))
+      | extend
+          CurrentAccountNum = tostring(AccountNum.NewData),
+          OldAccountNum = tostring(AccountNum.OldData)
+      | where CurrentAccountNum != OldAccountNum
+      | extend BankUpdated = LogCreatedDateTime)
+      on $left.UserId == $right.Username
+  | where BankUpdated > AliasUpdated
+  | extend
+      FinOpsAppId = 32780,
+      AccountName = tostring(split(CurrentAlias, "@")[0]),
+      UPNSuffix = tostring(split(CurrentAlias, "@")[1])
+  | project
+      AliasUpdated,
+      AliasChangedBy,
+      Username,
+      AccountId,
+      CurrentAccountNum,
+      OldAccountNum,
+      CurrentAlias,
+      PreviousAlias,
+      FinOpsAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AliasChangedBy
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Username
+alertDetailsOverride:
+  alertDisplayNameFormat: F&O - Suspicious bank account changes
+  alertDescriptionFormat: A user account alias was reassigned for {{Username}} by
+    {{AliasChangedBy}} and shortly afterwards, bank account {{AccountId}} was modified.
+version: 3.2.0
