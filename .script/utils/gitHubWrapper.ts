@@ -20,14 +20,14 @@ let octokit: Octokit;
 if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
   console.log("Running in a forked repository. Creating unauthenticated Octokit client.");
   octokit = new Octokit(); // Unauthenticated client
-} else if (process.env.GITHUB_APP_ID && process.env.GITHUB_PRIVATE_KEY && process.env.GITHUB_INSTALLATION_ID) {
+} else if (process.env.GITHUBAPPID && process.env.GITHUBAPPPRIVATEKEY && process.env.GITHUBAPPINSTALLATIONID) {
   console.log("Running in a non-forked repository. Creating authenticated Octokit client.");
   octokit = new Octokit({
     authStrategy: createAppAuth,
     auth: {
-      appId: process.env.GITHUB_APP_ID,
-      privateKey: process.env.GITHUB_PRIVATE_KEY,
-      installationId: process.env.GITHUB_INSTALLATION_ID,
+      appId: process.env.GITHUBAPPID,
+      privateKey: process.env.GITHUBAPPPRIVATEKEY,
+      installationId: process.env.GITHUBAPPINSTALLATIONID,
     },
   });
 } else {
@@ -72,7 +72,7 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
   console.log(`${changedFiles.length} files changed in current PR`);
 
   const filterChangedFiles = changedFiles
-    .filter(change => fileKinds.includes(change.status))
+    .filter(change => fileKinds.map(kind => kind.toLowerCase()).includes(change.status.toLowerCase()))
     .map(change => change.filename)
     .filter(filePath => typeof fileTypeSuffixes === "undefined" || filePath.endsWithAny(fileTypeSuffixes))
     .filter(filePath => typeof filePathFolderPreffixes === "undefined" || filePath.startsWithAny(filePathFolderPreffixes))

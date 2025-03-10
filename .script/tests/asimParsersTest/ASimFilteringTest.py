@@ -1,8 +1,16 @@
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules. 
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 __unittest = True #prevents stacktrace during most assertions
 
 import unittest
-import os
-import sys
 import yaml
 import re
 import subprocess

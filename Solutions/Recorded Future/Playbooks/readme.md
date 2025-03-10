@@ -285,12 +285,6 @@ When reporting issues or errors to Recorded Future on logic apps. Please include
 ![alt text](Images/LogicAppVersion.png)
 
 # Known Issues 
-## Threat hunting for multi-orgs
-If your Recorded Future Enterprise is configured as [multi-org](https://support.recordedfuture.com/hc/articles/4402787600787-Multi-Org-for-Modules), **it is not currently possible** to do threat hunting for any organisations except your primary organisation. If you try to use an API key connected to a sub-org that is not your primary organisation for threat hunting, you will receive the following error:
-
-```
-{"message":"User doesn't have access to the given organization","status_code":403}
-```
 
 ## Version 3.0
 Microsoft Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
