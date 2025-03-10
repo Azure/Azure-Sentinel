@@ -1,0 +1,54 @@
+id: 'b0f36d45-4e08-4764-9200-4c5f7d706bb2'
+Function:
+  Title: Parser for ESET Protect Platform
+  Version: '1.0.0'
+  LastUpdated: '2024-11-08'
+Category: Microsoft Sentinel Parser
+Description: ""
+FunctionName: ESETProtectPlatform
+FunctionAlias: ESETProtectPlatform
+FunctionQuery: |
+    IntegrationTable_CL
+        | extend 
+            EventResult = "NA",
+            EventProduct = "ESET Connect",
+            EventVendor = "ESET",
+            DvcIdType = "Computer",
+            EventEndTime = column_ifexists('TimeGenerated', ''),
+            SrcIpAddr = tostring(networkCommunication['localIpAddress']),
+            DstIpAddr = networkCommunication['remoteIpAddress'],
+            SrcPortNumber = toint(networkCommunication['localPort']),
+            DstPortNumber = networkCommunication['remotePort'],
+            NetworkDirection = case(
+                networkCommunication['direction'] == "NETWORK_COMMUNICATION_DIRECTION_UNSPECIFIED", "NA",
+                networkCommunication['direction'] == "NETWORK_COMMUNICATION_DIRECTION_INBOUND", "Inbound",
+                "Outbound"
+            ),
+            NetworkProtocol = networkCommunication['protocolName'],
+            EventStartTime = todatetime(occurTime), 
+            EventSeverity = case(
+                severityLevel == "SEVERITY_LEVEL_UNSPECIFIED", "Informational",
+                severityLevel == "SEVERITY_LEVEL_LOW", "Low",
+                severityLevel == "SEVERITY_LEVEL_MEDIUM", "Medium",
+                severityLevel == "SEVERITY_LEVEL_HIGH", "High",
+                "Unknown"
+            )
+        | project-rename
+            EventMessage = displayName,
+            EventOriginalUid = detectionUuid,
+            EventCount= groupSize, 
+            EventOriginalSeverity = severityScore,
+            EventOriginalType = category, 
+            EventType = typeName, 
+            DvcDescription = deviceDisplayName, 
+            DvcId = deviceUuid, 
+            ActorUsername = userNameBase, 
+            TargetProcessCurrentDirectory = processPath, 
+            TargetProcessGuid = processUuid,
+            TargetProcessCommandLine = processCommandline,
+            TargetProcessFileSize = objectSizeBytes
+        | extend 
+            Dvc = DvcId,
+            User = ActorUsername
+        | project-away
+            severityLevel, networkCommunication, occurTime

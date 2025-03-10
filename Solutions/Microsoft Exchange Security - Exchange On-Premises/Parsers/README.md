@@ -28,6 +28,10 @@ Parsers are created [using functions in Azure monitor log queries](https://docs.
     - [Parser Description](#parser-description-3)
     - [Parser dependency](#parser-dependency-1)
     - [Parser Setup](#parser-setup-3)
+  - [Microsoft Exchange Compare Data MRA Parser for On-Premises](#microsoft-exchange-compare-data-mra-parser-for-on-premises)
+    - [Parser Definition](#parser-definition-4)
+    - [Parser Description](#parser-description-4)
+    - [Parser Setup](#parser-setup-4)
 
 ## ExchangeConfiguration Parser
 
@@ -184,3 +188,39 @@ This parser is linked to "ExchangeVIP" whatchlist
 >1 parameter to add during creation : UserToCheck, type string, No default value
  
  1. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+
+## Microsoft Exchange Compare Data MRA Parser for On-Premises
+
+### Parser Definition
+
+- Title:           Microsoft Exchange Compare Data MRA Parser for On-Premises
+- Version:         1.0.0
+- Last Updated:    30/08/2024
+- Description:     This parser compare data from MRA and ESI Exchange Collector to find differences
+
+|**Version**  |**Details**  |
+|---------|-----------------------------------------------------------------------------------------------------------------------|
+|v1.0     | <ul><li>Function initilisation for Sentinel Solution</li></ul> |
+
+### Parser Description
+
+This parser compare data from MRA and ESI Exchange Collector to find differences
+
+### Parser Setup
+
+ 1. Open Log Analytics/Microsoft Sentinel Logs blade. Copy the query below and paste into the Logs query window.
+ 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name "MESCompareDataMRA".
+ 3. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+ 4. This parser is linked to "MRA" and "ESI Exchange Collector" tables
+
+>#### **Parameters:**
+
+>7 parameter to add during creation :
+>
+>  1. SectionCompare, type string, default value ""
+>  2. DateCompare, type string, default value "lastdate"
+>  3. CurrentDate, type string, default value "lastdate"
+>  4. EnvList, type string, default value "All"
+>  5. TypeEnv, type string, default value "Online"
+>  6. CurrentRole, type string, default value ""
+>  7. ExclusionsAcct, type dynamic, default value dynamic("")

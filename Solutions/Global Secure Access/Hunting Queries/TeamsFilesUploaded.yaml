@@ -1,5 +1,5 @@
 id: 90e198a9-efb6-4719-ad89-81b8e93633a7
-name: Files uploaded to teams and access summary
+name: GSA Enriched Office 365 - Files uploaded to teams and access summary
 description: |
   'This hunting query identifies files uploaded to SharePoint via a Teams chat and
   summarizes users and IP addresses that have accessed these files. This allows for 
@@ -16,27 +16,52 @@ relevantTechniques:
   - T1102
   - T1078
 query: |
-  EnrichedMicrosoft365AuditLogs
-  | where RecordType == "SharePointFileOperation"
-  | where Operation == "FileUploaded"
-  | where UserId != "app@sharepoint"
-  | where ObjectId has "Microsoft Teams Chat Files"
-  | extend SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
-  | join kind=leftouter (
-      EnrichedMicrosoft365AuditLogs
-      | where RecordType == "SharePointFileOperation"
-      | where Operation == "FileDownloaded" or Operation == "FileAccessed"
-      | where UserId != "app@sharepoint"
-      | where ObjectId has "Microsoft Teams Chat Files"
-      | extend UserId1 = UserId, ClientIp1 = ClientIp
-  ) on ObjectId
-  | extend userBag = bag_pack("UserId1", UserId1, "ClientIp1", ClientIp1)
-  | summarize AccessedBy = make_bag(userBag), make_set(UserId1, 10000) by bin(TimeGenerated, 1h), UserId, ObjectId, SourceFileName
-  | extend NumberOfUsersAccessed = array_length(bag_keys(AccessedBy))
-  | project timestamp = TimeGenerated, UserId, FileLocation = ObjectId, FileName = SourceFileName, AccessedBy, NumberOfUsersAccessed
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
-  | extend Account_0_Name = AccountName
-  | extend Account_0_UPNSuffix = AccountUPNSuffix
+  // Define the query for EnrichedMicrosoft365AuditLogs
+  let enrichedLogs = EnrichedMicrosoft365AuditLogs
+    | where RecordType == "SharePointFileOperation"
+    | where Operation == "FileUploaded"
+    | where UserId != "app@sharepoint"
+    | where ObjectId has "Microsoft Teams Chat Files"
+    | extend SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
+    | join kind=leftouter (
+        EnrichedMicrosoft365AuditLogs
+        | where RecordType == "SharePointFileOperation"
+        | where Operation in ("FileDownloaded", "FileAccessed")
+        | where UserId != "app@sharepoint"
+        | where ObjectId has "Microsoft Teams Chat Files"
+        | extend UserId1 = UserId, ClientIp1 = ClientIp
+    ) on ObjectId
+    | extend userBag = bag_pack("UserId1", UserId1, "ClientIp1", ClientIp1)
+    | summarize AccessedBy = make_bag(userBag), make_set(UserId1, 10000) by bin(TimeGenerated, 1h), UserId, ObjectId, SourceFileName
+    | extend NumberOfUsersAccessed = array_length(bag_keys(AccessedBy))
+    | project timestamp = TimeGenerated, UserId, FileLocation = ObjectId, FileName = SourceFileName, AccessedBy, NumberOfUsersAccessed
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    | extend Account_0_Name = AccountName
+    | extend Account_0_UPNSuffix = AccountUPNSuffix;
+  // Define the query for OfficeActivity
+  let officeLogs = OfficeActivity
+    | where RecordType == "SharePointFileOperation"
+    | where Operation == "FileUploaded"
+    | where UserId != "app@sharepoint"
+    | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+    | join kind=leftouter (
+        OfficeActivity
+        | where RecordType == "SharePointFileOperation"
+        | where Operation in ("FileDownloaded", "FileAccessed")
+        | where UserId != "app@sharepoint"
+        | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+    ) on OfficeObjectId
+    | extend userBag = bag_pack(UserId1, ClientIP1)
+    | summarize AccessedBy = make_bag(userBag, 10000), make_set(UserId1, 10000) by TimeGenerated, UserId, OfficeObjectId, SourceFileName
+    | extend NumberUsers = array_length(bag_keys(AccessedBy))
+    | project timestamp = TimeGenerated, UserId, FileLocation = OfficeObjectId, FileName = SourceFileName, AccessedBy, NumberOfUsersAccessed = NumberUsers
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    | extend Account_0_Name = AccountName
+    | extend Account_0_UPNSuffix = AccountUPNSuffix;
+  // Union both results
+  enrichedLogs
+  | union officeLogs
+  | order by timestamp desc;
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -44,4 +69,4 @@ entityMappings:
         columnName: AccountName
       - identifier: UPNSuffix
         columnName: AccountUPNSuffix
-version: 2.0.1
+version: 2.0.2

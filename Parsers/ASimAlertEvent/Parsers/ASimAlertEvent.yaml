@@ -1,0 +1,36 @@
+Parser:
+  Title: Alert Event ASIM parser
+  Version: '0.1.0'
+  LastUpdated: Oct 18, 2024
+Product:
+  Name: Source agnostic
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Alert logs from all supported sources to the ASIM Alert normalized schema.
+ParserName: ASimAlertEvent
+EquivalentBuiltInParser: _ASim_AlertEvent
+Parsers:
+  - _Im_AlertEvent_Empty
+  - _ASim_AlertEvent_MicrosoftDefenderXDR
+  - _ASim_AlertEvent_SentinelOneSingularity
+ParserParams:
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'ExcludeASimAlertEvent') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser| where isnotempty(SourceSpecificParser));
+  let ASimBuiltInDisabled=toscalar('ExcludeASimAlertEvent' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
+  let parser=(pack:bool=false){
+  union isfuzzy=true
+    vimAlertEventEmpty,
+    ASimAlertEventMicrosoftDefenderXDR (disabled=(ASimBuiltInDisabled or ('ExcludeASimAlertEventMicrosoftDefenderXDR' in (DisabledParsers)))),
+    ASimAlertEventSentinelOneSingularity (disabled=(ASimBuiltInDisabled or ('ExcludeASimAlertEventSentinelOneSingularity' in (DisabledParsers))))
+  }; 
+  parser (pack=pack)
