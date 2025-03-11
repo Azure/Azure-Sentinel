@@ -111,7 +111,7 @@ class TestGetHeaders(unittest.TestCase):
             "X-Abnormal-Trace-Id": str(self.trace_id),
             "Authorization": f"Bearer {self.api_token}",
             "Soar-Integration-Origin": "AZURE SENTINEL",
-            "Azure-Sentinel-Version": "2024-11-29 V2",
+            "Azure-Sentinel-Version": "2024-12-24 V2",
         }
         self.maxDiff = None
         self.assertEqual(headers, expected_headers)

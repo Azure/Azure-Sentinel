@@ -1,5 +1,5 @@
-import { MainTemplateSupportObjectValidationError } from "./../utils/validationError";
-import { ExitCode } from "../utils/exitCode";
+import { MainTemplateSupportObjectValidationError } from "./../utils/validationError.js";
+import { ExitCode } from "../utils/exitCode.js";
 import fs from "fs";
 
 // function to check if the solution has a valid support object

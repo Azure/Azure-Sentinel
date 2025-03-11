@@ -23,7 +23,7 @@ rsyslog_old_config_udp_content = "# provides UDP syslog reception\n$ModLoad imud
 rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtcp\n$InputTCPServerRun " + daemon_default_incoming_port + "\n"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
-temp_file_path = "/tmp/rsyslog_temp_config.txt"
+temp_file_path = "/tmp/syslog_temp_config.txt"
 
 
 def print_error(input_str):
@@ -266,7 +266,7 @@ def set_syslog_ng_configuration():
                     comment_line = False
                 # write line correctly
                 fout.write(line if not comment_line else ("#" + line))
-    command_tokens = ["sudo", "cp", temp_file_path, rsyslog_conf_path]
+    command_tokens = ["sudo", "cp", temp_file_path, syslog_ng_conf_path]
     write_new_content = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     time.sleep(3)
     o, e = write_new_content.communicate()

@@ -1,0 +1,364 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Druva Quarantine Using Resource id",
+        "description": "This playbook uses Druva-Ransomware-Response capabilities to stop the spread of ransomware and avoid reinfection or contamination spread to your environment.",
+        "prerequisites": [
+            "1. Verify ARR (Accelerated Ransomware Recovery) should be enabled for the respective Device using Resource ID on the Druva Security Cloud Platform.",
+            "2. Generate Druva API Client Credentials",
+                "a. Use the following link to navigate to Druva's documentation page and refer the steps to generate API Client Credentials.",
+                "b. Druva's Documentation Page : https://help.druva.com/en/articles/8580838-create-and-manage-api-credentials",
+                "c. Copy/Paste or Store the creds for future use.",
+            "3. Store Service account credentials in Key Vault Secrets and obtain keyvault name.",
+                "a. Create a Key Vault with name as Druva-ClientCredential",
+                "b. Go to KeyVault -> secrets -> Generate/import and create 'Druva-ClientID' & 'Druva-ClientSecret' for storing client_id and client_secret respectively",
+                "c. Store the secrets obtained for your organization and user from Druva Console UI in the previous step."
+        ],
+        "executionSteps": [
+            "1. Deploy the ARM template:",
+                "a. Open the Azure Portal.",
+                "b. Navigate to 'Deploy a custom template'.",
+                "c. Upload this ARM template file or paste its content.",
+                "d. Provide the necessary parameter values (e.g., KeyVault name, connection name, etc.).",
+                "e. Review and start the deployment.",
+            "2. Validate the deployment:",
+                "a. Check if the resources (e.g., Key Vault, API connections, Logic Apps) are created successfully.",
+                "b. Verify the deployment logs for any errors.",
+            "3. Authorize connections:",
+                "a. Follow the steps in the 'postDeployment' section to authorize connections.",
+            "4. Test the playbook:",
+                "a. Trigger the playbook manually by using the dropdown option as 'run_with_payload'",
+                "b. On triggering a side screen will appear in which there will be a section named as 'Body'.",
+                "c. Inside body paste the json obtained from the README.md file with respective edited values according to your resources.",
+                "d. Hit the 'run' button at the bottom.",
+                "e. Navigate to the playbook home page and check the run history if the run was successful or not."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+                "Once deployment is complete, authorize each connection.",
+                "1. Login to the Microsoft Azure portal and in the search box type API Connections.",
+                "2. Find API connection option.",
+                "3. Check for your created API connection exists. eg. Druva-KeyVault-Connection",
+                "4. Check Status should be ready for the same API Connection.",
+            "**b. Grant permissions**",
+                "Make sure that this playbook and your user has the IAM role permission granted as 'Key Vault Secrets User'."
+        ],
+        "lastUpdateTime": "2025-01-13T00:00:00.000Z",
+        "author": {
+            "name": "Druva"
+        },
+        "version": "1.0",
+        "category": "Druva-Realize-UDA-Quarantine_snapshots",
+        "tags": [ "Ransomware Recovery", "Druva Security", "Unusual Data Activity", "Quarantine Snapshots" ],
+        "support":  {
+            "tier":  "Druva Community"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Druva_Quarantine_With_Resource_ID_Workloads",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Playbook."
+            }
+        },
+        "keyvaultName": {
+            "type": "String",
+            "defaultValue": "Druva-ClientCredential",
+            "metadata": {
+                "description": "Name of the Vault created to store Druva Client Credentials."
+            }
+        }
+    },
+    "variables": {
+        "keyvaultConnectionName": "[concat('KeyVault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "DruvaQuarantineResourceUsingResourceID",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "api_host": {
+                            "defaultValue": "https://apis.druva.com",
+                            "type": "String"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_HTTP_request_is_received": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "resourceID": {
+                                            "type": "integer"
+                                        },
+                                        "resourceType": {
+                                            "type": "string"
+                                        },
+                                        "orgID": {
+                                            "type": "integer"
+                                        },
+                                        "fromDate": {
+                                            "type": "string"
+                                        },
+                                        "toDate": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "check_resourceID": {
+                            "actions": {
+                                "Compose_Message": {
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "message": "Resource ID is not empty"
+                                    }
+                                }
+                            },
+                            "runAfter": {},
+                            "else": {
+                                "actions": {
+                                    "Terminate_Execution": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Failed",
+                                            "runError": {
+                                                "code": "500",
+                                                "message": "\"Resource ID, Resource Type or ORG ID is empty\""
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['resourceID']",
+                                                "@null"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['resourceType']",
+                                                "@null"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['orgID']",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Quarantine_Resource_API": {
+                            "runAfter": {
+                                "Parse_Bearer_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "@{parameters('api_host')}/realize/ransomwarerecovery/v1/quarantineranges/resource/@{triggerBody()?['resourceID']}",
+                                "method": "POST",
+                                "headers": {
+                                    "accept": "application/json",
+                                    "Authorization": "Bearer @{body('Parse_Bearer_Token')?['access_token']}",
+                                    "Content-Type": "application/json"
+                                },
+                                "body": {
+                                    "resourceType": "@triggerBody()?['resourceType']",
+                                    "orgID": "@triggerBody()?['orgID']",
+                                    "fromDate": "@triggerBody()?['fromDate']",
+                                    "toDate": "@triggerBody()?['toDate']"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Get_secret_ClientId": {
+                            "runAfter": {
+                                "check_resourceID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Druva-ClientID')}/value"
+                            }
+                        },
+                        "Get_secret_ClientSecret": {
+                            "runAfter": {
+                                "Get_secret_ClientId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Druva-ClientSecret')}/value"
+                            }
+                        },
+                        "Generate_Bearer_Token": {
+                            "runAfter": {
+                                "Get_secret_ClientSecret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "@{parameters('api_host')}/token",
+                                "method": "POST",
+                                "headers": {
+                                    "Authorization": "Basic @{base64(concat(body('Get_secret_ClientId')?['value'], ':', body('Get_secret_ClientSecret')?['value']))}",
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "body": "scope=read&grant_type=client_credentials"
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Parse_Bearer_Token": {
+                            "runAfter": {
+                                "Generate_Bearer_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Generate_Bearer_Token')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Quarantine_Resource_API": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Quarantine_Resource_API')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "rangeID": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                                "connectionName": "[variables('keyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('keyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('keyvaultConnectionName')]",
+                "connectionState": "Enabled",
+                "parameterValueSet": {
+                    "name": "oauthMI",
+                    "values": {
+                        "vaultName": {
+                            "value": "[parameters('keyvaultName')]"
+                        }
+                    }
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        }
+    ]
+}
