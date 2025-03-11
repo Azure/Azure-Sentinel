@@ -13,18 +13,26 @@ relevantTechniques:
   - T1176
   - T1119
 query: |
-
   // Adjust these thresholds to suit your environment.
   let threshold = 2;
   let time_threshold = timespan(5m);
   OfficeActivity
     | where OfficeWorkload =~ "MicrosoftTeams"
     | where Operation =~ "BotAddedToTeam"
-    | summarize Start=max(TimeGenerated), End=min(TimeGenerated), Teams = makeset(TeamName)
+    | summarize Start=max(TimeGenerated), End=min(TimeGenerated), Teams = make_set(TeamName, 10000) by UserId
     | extend CountOfTeams = array_length(Teams)
     | extend TimeDelta = End - Start 
     | where CountOfTeams > threshold
     | where TimeDelta >= time_threshold
-    | project Start, End, Teams, CountOfTeams
-    | extend timestamp = Start
-version: 2.0.0
+    | project Start, End, Teams, CountOfTeams, UserId
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    | extend Account_0_Name = AccountName
+    | extend Account_0_UPNSuffix = AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.1

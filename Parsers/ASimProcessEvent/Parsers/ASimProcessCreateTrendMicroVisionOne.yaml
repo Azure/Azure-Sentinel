@@ -1,0 +1,152 @@
+Parser:
+  Title: Process Create ASIM parser
+  Version: '0.1.0'
+  LastUpdated: Oct 10, 2023
+Product:
+  Name: Trend Micro Vision One
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Trend Micro Vision One documentation
+  Link:
+    https://docs.trendmicro.com/en-us/enterprise/trend-vision-one/xdr-part/search-app/data-mapping-intro/data-mapping-detecti.aspx
+    https://docs.trendmicro.com/en-us/enterprise/trend-vision-one/xdr-part/search-app/data-mapping-intro/data-mapping-endpoin.aspx
+    https://automation.trendmicro.com/xdr/api-v3#tag/Observed-Attack-Techniques-Pipeline/paths/~1v3.0~1oat~1dataPipelines~1%7Bid%7D~1packages~1%7BpackageId%7D/get
+    https://automation.trendmicro.com/xdr/api-v3#tag/Observed-Attack-Techniques/paths/~1v3.0~1oat~1detections/get
+Description: |
+  This ASIM parser supports normalizing Trend Micro Vision One logs to the ASIM Process Create normalized schema. Trend Micro Vision One events are captured through Trend Vision One data connector which ingests XDR logs into Microsoft Sentinel through the Trend Vision One API.
+ParserName: ASimProcessCreateTrendMicroVisionOne
+EquivalentBuiltInParser: _ASim_ProcessEvent_CreateTrendMicroVisionOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let GetFilenamePart = (path: string) { tostring(split(path, @'\')[-1]) };
+  let EventSeverityLookup = datatable(detail_filterRiskLevel_s: string, EventSeverity: string)[
+      "low", "Low",
+      "medium", "Medium",
+      "high", "High",
+      "info", "Informational",
+      "critical", "High"
+  ];
+  let IntegrityLevelLookup = datatable(IntegrityLevel: real, IntegrityType: string)
+      [
+      0, "Untrusted",
+      4096, "Low",
+      8192, "Medium",
+      12288, "High",
+      16384, "System"
+  ];
+  let parser = (disabled: bool=false) {
+      TrendMicro_XDR_OAT_CL
+      | where not(disabled)
+      | where detail_eventId_s == "TELEMETRY_PROCESS"
+          and detail_eventSubId_s has_any ("TELEMETRY_PROCESS_CREATE","TELEMETRY_PROCESS_LOAD_IMAGE","TELEMETRY_PROCESS_OPEN")
+      | parse filters_s with * "[" filters: string "]"
+      | parse-kv filters as (description: string, name: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
+      | extend
+          ActingProcessId = tostring(toint(detail_processPid_d)),
+          TargetProcessId = tostring(toint(detail_objectPid_d)),
+          ParentProcessId = tostring(toint(detail_parentPid_d)),
+          TargetProcessCreationTime = unixtime_milliseconds_todatetime(detail_objectLaunchTime_d),
+          ActingProcessCreationTime = unixtime_milliseconds_todatetime(detail_processLaunchTime_d),
+          ActingProcessFilename = GetFilenamePart(detail_processFilePath_s),
+          ParentProcessCreationTime = unixtime_milliseconds_todatetime(detail_parentLaunchTime_d),
+          ParentProcessName = detail_parentName_s,
+          TargetProcessFilename = GetFilenamePart(detail_objectFilePath_s),
+          ActingProcessFileSize = tolong(detail_processFileSize_d),
+          TargetUserSessionId = tostring(toint(detail_objectAuthId_d)),
+          ActorSessionId = tostring(toint(detail_authId_d)),
+          TargetProcessMD5 = replace_string(detail_objectFileHashMd5_g, "-", ""),
+          ActingProcessMD5 = replace_string(detail_processFileHashMd5_g, "-", ""),
+          ParentProcessMD5 = replace_string(detail_parentFileHashMd5_g, "-", ""),
+          TargetProcessCommandLine = replace_string(detail_objectCmd_s, '"', ''),
+          ActingProcessCommandLine = replace_string(detail_processCmd_s, '"', ''),
+          AdditionalFields = bag_pack(
+                        "name", name,
+                        "tags", detail_tags_s
+                    )
+      | lookup EventSeverityLookup on detail_filterRiskLevel_s
+      | invoke _ASIM_ResolveDvcFQDN('detail_endpointHostName_s')
+      | lookup IntegrityLevelLookup on $left.detail_parentIntegrityLevel_d == $right.IntegrityLevel
+      | project-rename ParentProcessIntegrityLevel = IntegrityType
+      | lookup IntegrityLevelLookup on $left.detail_objectIntegrityLevel_d == $right.IntegrityLevel
+      | project-rename TargetProcessIntegrityLevel = IntegrityType
+      | lookup IntegrityLevelLookup on $left.detail_integrityLevel_d == $right.IntegrityLevel
+      | project-rename ActingProcessIntegrityLevel = IntegrityType
+      | extend
+          EventCount = int(1),
+          EventProduct = "Vision One",
+          EventResult = "Success",
+          EventSchemaVersion = "0.1.4",
+          EventType = "ProcessCreated",
+          EventVendor = "Trend Micro",
+          EventSchema = "ProcessEvent",
+          DvcAction = "Allowed"
+      | project-rename
+          ActorUsername = detail_processUser_s,
+          EventStartTime = detail_eventTimeDT_t,
+          TargetProcessName = detail_objectName_s,
+          TargetUsername = detail_objectUser_s,
+          ActingProcessName = detail_processName_s,
+          ActingProcessSHA1 = detail_processFileHashSha1_s,
+          ActingProcessSHA256 = detail_processFileHashSha256_s,
+          DvcId = detail_endpointGuid_g,
+          DvcOs = detail_osName_s,
+          DvcOsVersion = detail_osVer_s,
+          EventOriginalSubType = detail_eventSubId_s,
+          EventOriginalType = detail_eventId_s,
+          EventOriginalUid = detail_uuid_g,
+          EventOriginalSeverity = detail_filterRiskLevel_s,
+          EventProductVersion = detail_pver_s,
+          ParentProcessSHA1 = detail_parentFileHashSha1_s,
+          ParentProcessSHA256 = detail_parentFileHashSha256_s,
+          TargetProcessSHA1 = detail_objectFileHashSha1_s,
+          TargetProcessSHA256 = detail_objectFileHashSha256_s,
+          EventUid = _ItemId,
+          EventMessage = description
+      | extend 
+          Dvc = DvcHostname,
+          EventEndTime = EventStartTime,
+          CommandLine = TargetProcessCommandLine,
+          Process = TargetProcessName,
+          User = TargetUsername,
+          Hash = coalesce(TargetProcessSHA256, TargetProcessSHA1, TargetProcessMD5)
+      | extend
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+          ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
+          TargetUsernameType = iff(isnotempty(TargetUsername), "Simple", ""),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+          HashType = case(
+                isnotempty(Hash) and isnotempty(TargetProcessSHA256),
+                "TargetProcessSHA256",
+                isnotempty(Hash) and isnotempty(TargetProcessSHA1),
+                "TargetProcessSHA1",
+                isnotempty(Hash) and isnotempty(TargetProcessMD5),
+                "TargetProcessMD5",
+                ""
+            )
+      | project-away
+          *_d,
+          *_s,
+          *_g,
+          *_t,
+          *_b,
+          _ResourceId,
+          Computer,
+          MG,
+          ManagementGroupName,
+          RawData,
+          SourceSystem,
+          TenantId,
+          filters,
+          name
+  };
+  parser(disabled=disabled)

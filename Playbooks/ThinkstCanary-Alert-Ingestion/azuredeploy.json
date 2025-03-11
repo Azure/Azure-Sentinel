@@ -1,0 +1,119 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata": {
+        "title": "Thinkst Canary Microsoft Sentinel Alert Integration",
+        "description": "This Playbook Integrate Thinkst Canary cloud console alerts with Microsoft Sentinel",
+        "prerequisites": [
+            "All playbook templates leverage a webhook in the Azure logic app. To receive the alerts into Sentinel, you need to configure the URL of the webhook in your Thinkst Canary cloud console global or flock specific settings. For instructions on how to do this, please follow: https://help.canary.tools/hc/en-gb/articles/4523140483101-How-do-I-configure-Webhook-notifications-for-Microsoft-Sentinel-",
+            "Requires a Microsoft Sentinel Log Analytics workspace in Azure"
+        ],
+        "postDeployment": [
+            "1. Once the deployment is completed, you will need to authorize the connection to log analytics in the logic app",
+            "2. Enable analytics rules in Microsoft Sentinel that create alerts and incidents which includes the relevant entities.",
+            "3. Configure your Canary Console. Head over to your Console Global Settings. Scroll down and expand the Webhooks, select the + button on the Generic webhook option and paste your listener URL into the text field. Finally, click Add.",
+            "4. The playbook requires a workspace ID and key for the Azure Log Analytics workspace associated with Microsoft Sentinel."
+        ],
+        "lastUpdateTime": "2023-02-09T00:00:00.000Z",
+        "entities": [ "ip", "host", "url" ],
+        "tags": [ "Alert Ingestion", "Deception", "Alerts", "ThinkstCanary"],
+        "support": {
+            "tier": "microsoft",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Gavin Knapp - Bridewell Consulting Limited"
+        }
+    },    
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Thinkst-Canary-Sentinel-Connector",
+            "type":  "string"
+        }
+    },
+    "variables":  {
+        "AzureloganalyticsdatacollectorConnectionName":  "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "manual":  {
+                            "type":  "Request",
+                            "kind":  "Http",
+                            "inputs":  {
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Send_Data":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@{triggerBody()}",
+                                "headers":  {
+                                    "Log-Type":  "Thinkst_Canary"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector_1']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/api/logs"
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azureloganalyticsdatacollector_1":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        }
+    ]
+}

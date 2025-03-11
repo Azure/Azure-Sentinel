@@ -1,0 +1,47 @@
+id: 27553108-4aaf-4a3e-8ecd-5439d820d474
+name: VMware SD-WAN Edge - IDS/IPS Signature Update Failed
+version: 1.0.0
+kind: Scheduled
+description: |-
+  The VMware SD-WAN Edge Management Plane reported a failed IDS/IPS signature update. This can indicate a potential management plane issue, an Edge OS version mismatch (IDS/IPS has been introduced in release 5.2.0.0), or a software issue.
+
+  If the Edge was able to download signature files before, this error means that the IPS/IDS engine can still provide a level of protection, however, signatures might be missing or inaccurate. If the Edge has no valid signature file, this error could indicate that the Edge Firewall cannot protect from network threats.
+severity: High
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+requiredDataConnectors:
+  - connectorId: VMwareSDWAN
+    dataTypes:
+      - SDWAN
+query: |+
+  VMware_VECO_EventLogs_CL
+  | where event == "MGD_ATPUP_APPLY_IDPS_SIGNATURE_FAILED"
+  | extend idpsSignatureVersion = extract("\"version\":\"([0-9]+)\"", 1, tostring(todynamic(detail).data))
+  | extend todynamic(detail).edgeSerialNumber
+  | extend todynamic(detail).data
+  | project-rename idpsSignatureData = detail_data
+  | project-rename edgeSerialNumber = detail_edgeSerialNumber
+  | project-away detail
+
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDescriptionFormat: '{{message}} '
+  alertDynamicProperties: []
+customDetails:
+  idpsSignatureVersion: idpsSignatureVersion
+  edgeSerialNumber: edgeSerialNumber
+suppressionDuration: 5h

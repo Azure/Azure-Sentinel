@@ -1,8 +1,8 @@
-# Microsoft Security Event ASIM RegistryEvent Normalization Parser
+# Security Events ASIM RegistryEvent Normalization Parser
 
-This template deploys the ASIM RegistryEvent schema parser for Microsoft Security Event.
+ARM template for ASIM RegistryEvent schema parser for Security Events.
 
-This ASIM parser supports normalizing Microsoft Security Event logs, produced by the Microsoft AMA connector, to the ASIM Registry Event normalized schema (event number 4657).
+This ASIM parser supports normalizing Microsoft Windows events (event numbers 4657 and 4663), logs ingested in 'SecurityEvent' table to the ASIM Registry Event normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

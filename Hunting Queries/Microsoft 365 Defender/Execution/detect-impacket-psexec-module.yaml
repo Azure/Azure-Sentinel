@@ -1,0 +1,50 @@
+id: 6e6e6486-1bfc-4de0-bcbe-1ed88dfee2a1
+name: detect-impacket-psexec-module
+description: |
+  This query looks for signs of impacket psexec module usage. May hit other psexec-like techniques too.
+  Author: Jouni Mikkola
+  More info: https://threathunt.blog/impacket-psexec/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+  - DeviceFileEvents
+  - DeviceProcessEvents
+tactics:
+- Execution
+relevantTechniques:
+  - T1569.002
+query: |
+  let lookuptime = 30d;
+  let RareFilesCreated =
+  DeviceFileEvents
+  | where ActionType == 'FileCreated'
+  | where Timestamp >ago(lookuptime)
+  | where InitiatingProcessFolderPath == @"c:\windows\system32\ntoskrnl.exe"
+  | summarize count() by SHA1
+  | where count_ < 3
+  | distinct SHA1;
+  DeviceEvents
+  | where Timestamp >ago(lookuptime)
+  | where InitiatingProcessFolderPath == @"c:\windows\system32\ntoskrnl.exe"
+  | where ActionType == @"NamedPipeEvent"
+  | project DeviceName, NamedPipeTimeStamp = Timestamp, NamedPipeProcess = InitiatingProcessFileName, NamedPipeProcessId = InitiatingProcessId, NamedPipeProcessStartTime = InitiatingProcessCreationTime, NamedPipeProcessSHA1 = InitiatingProcessSHA1, FileOperation=extractjson("$.FileOperation", AdditionalFields, typeof(string)), NamedPipeEnd=extractjson("$.NamedPipeEnd", AdditionalFields, typeof(string)), PipeName=extractjson("$.PipeName", AdditionalFields, typeof(string))
+  | join kind=leftouter (
+  DeviceFileEvents
+  | where Timestamp >ago(lookuptime)
+  | where InitiatingProcessFolderPath == @"c:\windows\system32\ntoskrnl.exe"
+  | where ActionType == 'FileCreated' 
+  | where SHA1 in~ (RareFilesCreated)
+  | project DeviceName, FileCreationTimestamp = Timestamp, NamedPipeProcess = InitiatingProcessFileName, NamedPipeProcessId = InitiatingProcessId, NamedPipeProcessStartTime = InitiatingProcessCreationTime, NamedPipeProcessSHA1 = InitiatingProcessSHA1, FileCreated = FileName, FileCreatedSHA1 = SHA1, FileCreatedFolder = FolderPath
+  ) on NamedPipeProcessId, NamedPipeProcessSHA1, NamedPipeProcessStartTime
+  | project-away NamedPipeProcessId1, NamedPipeProcessSHA11, NamedPipeProcessStartTime1
+  | join kind=leftouter (
+  DeviceProcessEvents
+  | where Timestamp >ago(lookuptime)
+  | where InitiatingProcessFileName =~ "services.exe"
+  | where SHA1 in~ (RareFilesCreated)
+  | project DeviceName, FileCreated = FileName, FileCreatedSHA1 = SHA1, FileCreatedFolder = FolderPath, StartedProcessCommandLine = ProcessCommandLine, StartedProcessName = FileName, StartedProcessSHA1 = SHA1, StartedProcessParent = InitiatingProcessFileName, StartedProcessTimestamp = Timestamp
+  ) on FileCreated, FileCreatedSHA1, FileCreatedFolder
+  | where StartedProcessTimestamp between (NamedPipeTimeStamp .. (NamedPipeTimeStamp+1m))
+  | project-away  FileCreated1, FileCreatedSHA11, NamedPipeProcess1, DeviceName1, DeviceName2, FileCreatedSHA11
+  | summarize NamedPipes = make_set(PipeName), StartedProcessTimestamps = make_set(StartedProcessTimestamp), NamedPipeTimeStamps = make_set(NamedPipeTimeStamp) by DeviceName, NamedPipeProcess, NamedPipeProcessId, NamedPipeProcessSHA1, FileCreated, FileCreatedSHA1, FileCreatedFolder, StartedProcessCommandLine, StartedProcessName, StartedProcessSHA1, StartedProcessParent

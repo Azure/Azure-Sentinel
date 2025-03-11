@@ -642,6 +642,8 @@ def main():
                     oms_agent_install_url = "opinsights.azure.us"
                 elif "-p" in sys.argv[index]:
                     port_argument = True
+                elif "-d" in sys.argv[index]:
+                    oms_agent_install_url = sys.argv[index+1]
                 elif port_argument:
                     omsagent_incoming_port = sys.argv[index]
                     print_notice("Notice: omsagent incoming port was changed to " + sys.argv[index])

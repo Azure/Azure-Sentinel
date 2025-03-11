@@ -1,6 +1,8 @@
 id: c46eeb45-c324-4a84-9df1-248c6d1507bb
 name: Risky base64 encoded command in URL
 description: |
+    'This query detects risky Base64-encoded commands in web requests. It identifies potential C2 server communication and illuminates injected webshells. Note that base64 is case-sensitive, requiring multiple permutations for full coverage.'
+description-detailed: |
   'This hunting query will detect risky base64 encoded commands are seen in web requests. Some threat actors transmit base64 commands from the target host
   back to the C2 servers so they know which command has been executed. This query also reguarly illumniates base64 encoded webshells being injected.
   The limitation of this query is that base64 is case sensitive, so different case versions of each command need generating for full coverage. This query
@@ -47,7 +49,12 @@ query: |
       | mv-expand match_list to typeof(string)
   ) on $left.B64MatchData == $right.match_list
   | project TimeGenerated, B64MatchData, CommandFound, RequestURL, RequestMethod, DestinationHostName, DestinationIP, SourceIP, DeviceVendor, DeviceProduct, Activity
-  | extend timestamp = TimeGenerated, DomainCustomEntity = DestinationHostName, IPCustomEntity = DestinationIP
+  | extend timestamp = TimeGenerated
+  | extend HostName = tostring(split(DestinationHostName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DestinationHostName, '.'), 1, -1), '.'))
+  | extend IP_0_Address = SourceIP
+  | extend IP_1_Address = DestinationIP
+  | extend DNS_0_HostName = HostName
+  | extend DNS_0_DnsDomain = DnsDomain  
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -59,6 +66,8 @@ entityMappings:
         columnName: DestinationIP
   - entityType: DNS
     fieldMappings:
-      - identifier: DomainName
-        columnName: DestinationHostName 
-version: 1.0.0
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1

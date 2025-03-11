@@ -1,290 +1,271 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "metadata": {
-        "title": "Tanium-ResolveThreatResponseAlert",
-        "description": "This playbook will resolve any Tanium Threat Response alerts associated with a Microsoft Sentinel incident.",
-        "prerequisites": [
-            "1. Microsoft Sentinel incidents created from Tanium Threat Response alerts by the analytics rules shipped by the Tanium solution for Microsoft Sentinel",
-            "2. A [Tanium API Token](https://docs.tanium.com/platform_user/platform_user/console_api_tokens.html) granting access to your Tanium environment: the query will be made with the user priviledges of that token.",
-            "3. A hostname for your Tanium environment reachable from Logic Apps."
-        ],
-        "postDeploymentSteps": [
-            "1. Ensure the Logic App API connection to Microsoft Sentinel is authenticated."
-        ],
-        "entities": [ "host" ],
-        "tags": ["Remediation"],
-        "lastUpdateTime": "2022-09-15T00:00:00.000Z",
-        "support": {
-            "tier": "developer",
-            "link": "https://www.tanium.com"
-        },
-        "author": {
-            "name": "Tanium"
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Tanium-ResolveThreatResponseAlert",
+    "description": "This playbook will resolve any Tanium Threat Response alerts associated with a Microsoft Sentinel incident.",
+    "prerequisites": [
+      "1. Microsoft Sentinel incidents created from Tanium Threat Response alerts by the analytics rules shipped by the Tanium solution for Microsoft Sentinel",
+      "2. A [Tanium API Token](https://docs.tanium.com/platform_user/platform_user/console_api_tokens.html) granting access to your Tanium environment: the query will be made with the user priviledges of that token.",
+      "3. A hostname for your Tanium environment reachable from Logic Apps."
+    ],
+    "postDeploymentSteps": [
+      "1. Ensure the Logic App API connection to Microsoft Sentinel is authenticated."
+    ],
+    "entities": [ "host" ],
+    "tags": [ "Remediation" ],
+    "lastUpdateTime": "2022-09-15T00:00:00.000Z",
+    "support": {
+      "tier": "developer",
+      "link": "https://www.tanium.com"
+    },
+    "author": {
+      "name": "Tanium"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Tanium-ResolveThreatResponseAlert",
+      "type": "string"
+    },
+    "IntegrationAccountName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "The name of an existing Azure Integration Account (required to run inline JavaScript actions)"
+      }
+    },
+    "IntegrationAccountResourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource group name for the existing Azure Integration Account"
+      }
+    },
+    "TaniumApiToken": {
+      "defaultValue": "",
+      "type": "securestring",
+      "metadata": {
+        "description": "The Tanium API Token used for this logic app. The logic app will be restricted to the level of access available to the user who generated the token."
+      }
+    },
+    "TaniumServerHostname": {
+      "defaultValue": "hostname",
+      "type": "String",
+      "metadata": {
+        "description": "The hostname for your Tanium server e.g. tanium.example.com"
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "TaniumApiGatewayApi": "[uri(concat('https://',parameters('TaniumServerHostname')),'/plugin/products/gateway/graphql')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": { },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
         }
+      }
     },
-    "parameters": {
-        "PlaybookName": {
-            "defaultValue": "Tanium-ResolveThreatResponseAlert",
-            "type": "string"
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "integrationAccount": {
+          "id": "[resourceId(parameters('integrationAccountResourceGroupName'), 'Microsoft.Logic/integrationAccounts', parameters('integrationAccountName'))]"
         },
-        "IntegrationAccountName": {
-            "defaultValue": "Tanium-ResolveThreatResponseAlert-Integration",
-            "type": "string",
-            "metadata": {
-                "description": "An Integration Account is required to run inline JavaScript actions"
-            }
-        },
-        "IntegrationAccountPricingTier": {
-            "type": "string",
-            "defaultValue": "Free",
-            "allowedValues": [
-                "Free",
-                "Basic",
-                "Standard"
-            ],
-            "metadata": {
-                "description": "Specify the Pricing Tier of the Integration Account."
-            }
-        },
-        "TaniumApiToken": {
-            "defaultValue": "",
-            "type": "securestring",
-            "metadata": {
-                "description": "The Tanium API Token used for this logic app. The logic app will be restricted to the level of access available to the user who generated the token."
-            }
-        },
-        "TaniumServerHostname": {
-            "defaultValue": "hostname",
-            "type": "String",
-            "metadata": {
-                "description": "The hostname for your Tanium server e.g. tanium.example.com"
-            }
-        }
-    },
-    "variables": {
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "TaniumApiGatewayApi": "[uri(concat('https://',parameters('TaniumServerHostname')),'/plugin/products/gateway/graphql')]"
-    },
-    "resources": [
-        {
-          "type": "Microsoft.Web/connections",
-          "apiVersion": "2018-07-01-preview",
-          "name": "[variables('AzureSentinelConnectionName')]",
-          "location": "[resourceGroup().location]",
-          "properties": {
-              "displayName": "[variables('AzureSentinelConnectionName')]",
-              "customParameterValues": {},
-              "api": {
-                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-              }
-          }
-        },
-        {
-            "type": "Microsoft.Logic/integrationAccounts",
-            "apiVersion": "2016-06-01",
-            "name": "[parameters('IntegrationAccountName')]",
-            "location": "[resourceGroup().location]",
-            "sku": {
-                "name": "[parameters('IntegrationAccountPricingTier')]"
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": { },
+              "type": "Object"
             },
-            "properties": {
-                "state": "Enabled"
+            "TaniumApiGatewayApi": {
+              "type": "String"
+            },
+            "TaniumApiToken": {
+              "type": "securestring",
+              "metadata": {
+                "description": "The Tanium API Token provides access to the Tanium Server. Access is restricted to the level of access available to the user who generated the token."
+              }
             }
-        },
-        {
-            "type": "Microsoft.Logic/workflows",
-            "apiVersion": "2019-05-01",
-            "name": "[parameters('PlaybookName')]",
-            "location": "[resourceGroup().location]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
-            ],
-            "properties": {
-                "state": "Enabled",
-                "integrationAccount": {
-                    "id": "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
                 },
-                "definition": {
-                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        },
-                        "TaniumApiGatewayApi": {
-                            "type": "String"
-                        },
-                        "TaniumApiToken": {
-                            "type": "securestring",
-                            "metadata": {
-                                "description": "The Tanium API Token provides access to the Tanium Server. Access is restricted to the level of access available to the user who generated the token."
-                            }
-                        }
-                    },
-                    "triggers": {
-                        "Microsoft_Sentinel_incident": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/incident-creation"
-                            }
-                        }
-                    },
-                    "actions": {
-                        "Check_API_Gateway_response": {
-                            "actions": {
-                                "Comment_success": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p><span style=\"font-size: 16px\"><strong>Resolved Tanium Threat Response Alert</strong></span></p><p><span style=\"font-size: 12px\">\nThreat Response alert </span><span style=\"font-size: 12px\">@{body('Extract_Threat_Response_Alert_GUID')}</span><span style=\"font-size: 12px\"> is now resolved</span></p>"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/Incidents/Comment"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Resolve_Threat_Response_Alert_using_Tanium_API_Gateway": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "else": {
-                                "actions": {
-                                    "Comment_failure": {
-                                        "runAfter": {},
-                                        "type": "ApiConnection",
-                                        "inputs": {
-                                            "body": {
-                                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                "message": "<p><span style=\"font-size: 16px\"><strong>Failed to resolve Tanium Threat Response Alert</strong></span></p><p>Threat Response alert @{body('Extract_Threat_Response_Alert_GUID')['body']} failed to resolve<br>\nError: @{body('Resolve_Threat_Response_Alert_using_Tanium_API_Gateway')?['errors']?[0]['message']}</p>"
-                                            },
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                }
-                                            },
-                                            "method": "post",
-                                            "path": "/Incidents/Comment"
-                                        }
-                                    }
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@body('Resolve_Threat_Response_Alert_using_Tanium_API_Gateway')?['errors']",
-                                            "@null"
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "Extract_Threat_Response_Alert_GUID": {
-                            "runAfter": {},
-                            "type": "JavaScriptCode",
-                            "inputs": {
-                                "code": "var sentinel = workflowContext.trigger.outputs.body;\r\n\r\nreturn JSON.parse(sentinel.object.properties.relatedEntities.find(function(e) {\r\n\treturn e.kind === 'Url';\r\n}).properties.url.replace(/\\\\/g, '')).alert_guid;"
-                            }
-                        },
-                        "Initialize_API_Gateway_mutation": {
-                            "runAfter": {
-                                "Extract_Threat_Response_Alert_GUID": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "api gateway mutation",
-                                        "type": "string",
-                                        "value": "mutation($threatResponseAlert: ThreatResponseAlertRef!) {\n  threatResponseAlertResolve(ref: $threatResponseAlert) {\n    error {\n      message\n      retryable\n      timedOut\n    }\n    guid\n    resolved\n  }\n}"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_API_Gateway_mutation_variables": {
-                            "runAfter": {
-                                "Initialize_API_Gateway_mutation": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "api gateway mutation variables",
-                                        "type": "object",
-                                        "value": {
-                                            "threatResponseAlert": {
-                                                "guid": "@body('Extract_Threat_Response_Alert_GUID')"
-                                            }
-                                        }
-                                    }
-                                ]
-                            }
-                        },
-                        "Resolve_Threat_Response_Alert_using_Tanium_API_Gateway": {
-                            "runAfter": {
-                                "Initialize_API_Gateway_mutation_variables": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "body": {
-                                    "query": "@variables('api gateway mutation')",
-                                    "variables": "@variables('api gateway mutation variables')"
-                                },
-                                "headers": {
-                                    "Content-Type": "application/json",
-                                    "session": "@parameters('TaniumApiToken')"
-                                },
-                                "method": "POST",
-                                "uri": "@parameters('TaniumApiGatewayApi')"
-                            }
-                        }
-                    },
-                    "outputs": {}
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
                 },
-                "parameters": {
-                    "$connections": {
-                        "value": {
-                            "azuresentinel": {
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
-                            }
-                        }
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Check_API_Gateway_response": {
+              "actions": {
+                "Comment_success": {
+                  "runAfter": { },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p><span style=\"font-size: 16px\"><strong>Resolved Tanium Threat Response Alert</strong></span></p><p><span style=\"font-size: 12px\">\nThreat Response alert </span><span style=\"font-size: 12px\">@{body('Extract_Threat_Response_Alert_GUID')}</span><span style=\"font-size: 12px\"> is now resolved</span></p>"
                     },
-                    "TaniumApiToken": {
-                        "value": "[parameters('TaniumApiToken')]"
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
                     },
-                    "TaniumApiGatewayApi": {
-                        "value": "[variables('TaniumApiGatewayApi')]"
-                    }
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  }
                 }
+              },
+              "runAfter": {
+                "Resolve_Threat_Response_Alert_using_Tanium_API_Gateway": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Comment_failure": {
+                    "runAfter": { },
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "<p><span style=\"font-size: 16px\"><strong>Failed to resolve Tanium Threat Response Alert</strong></span></p><p>Threat Response alert @{body('Extract_Threat_Response_Alert_GUID')['body']} failed to resolve<br>\nError: @{body('Resolve_Threat_Response_Alert_using_Tanium_API_Gateway')?['errors']?[0]['message']}</p>"
+                      },
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "path": "/Incidents/Comment"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@body('Resolve_Threat_Response_Alert_using_Tanium_API_Gateway')?['errors']",
+                      "@null"
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "Extract_Threat_Response_Alert_GUID": {
+              "runAfter": { },
+              "type": "JavaScriptCode",
+              "inputs": {
+                "code": "var sentinel = workflowContext.trigger.outputs.body;\r\n\r\nreturn JSON.parse(sentinel.object.properties.relatedEntities.find(function(e) {\r\n\treturn e.kind === 'Url';\r\n}).properties.url.replace(/\\\\/g, '')).alert_guid;"
+              }
+            },
+            "Initialize_API_Gateway_mutation": {
+              "runAfter": {
+                "Extract_Threat_Response_Alert_GUID": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "api gateway mutation",
+                    "type": "string",
+                    "value": "mutation($threatResponseAlert: ThreatResponseAlertRef!) {\n  threatResponseAlertResolve(ref: $threatResponseAlert) {\n    error {\n      message\n      retryable\n      timedOut\n    }\n    guid\n    resolved\n  }\n}"
+                  }
+                ]
+              }
+            },
+            "Initialize_API_Gateway_mutation_variables": {
+              "runAfter": {
+                "Initialize_API_Gateway_mutation": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "api gateway mutation variables",
+                    "type": "object",
+                    "value": {
+                      "threatResponseAlert": {
+                        "guid": "@body('Extract_Threat_Response_Alert_GUID')"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "Resolve_Threat_Response_Alert_using_Tanium_API_Gateway": {
+              "runAfter": {
+                "Initialize_API_Gateway_mutation_variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "body": {
+                  "query": "@variables('api gateway mutation')",
+                  "variables": "@json(variables('api gateway mutation variables'))"
+                },
+                "headers": {
+                  "Content-Type": "application/json",
+                  "session": "@parameters('TaniumApiToken')"
+                },
+                "method": "POST",
+                "uri": "@parameters('TaniumApiGatewayApi')"
+              }
             }
+          },
+          "outputs": { }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+              }
+            }
+          },
+          "TaniumApiToken": {
+            "value": "[parameters('TaniumApiToken')]"
+          },
+          "TaniumApiGatewayApi": {
+            "value": "[variables('TaniumApiGatewayApi')]"
+          }
         }
-    ]
+      }
+    }
+  ]
 }

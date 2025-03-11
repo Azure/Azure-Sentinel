@@ -1,0 +1,73 @@
+id: dc451755-8ab3-4059-b805-e454c45d1d44
+name: GSA Enriched Office 365 - Exchange AuditLog Disabled
+description: |
+  Identifies when the Exchange audit logging has been disabled, which may indicate an adversary attempt to evade detection or bypass other defenses.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Exchange)      
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  // OfficeActivity Query
+  let OfficeEvents = OfficeActivity
+      | where OfficeWorkload =~ "Exchange" 
+      | where UserType in~ ("Admin", "DcAdmin")
+      // Only admin or global-admin can disable audit logging
+      | where Operation =~ "Set-AdminAuditLogConfig"
+      | extend ParsedParameters = parse_json(Parameters)
+      | extend AdminAuditLogEnabledValue = tostring(ParsedParameters[3].Value)
+      | where AdminAuditLogEnabledValue =~ "False"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() 
+          by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters, AdminAuditLogEnabledValue
+      | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), 
+                          iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), UserId))
+      | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+      | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '');
+  // EnrichedMicrosoft365AuditLogs Query
+  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+      | where Workload =~ "Exchange"
+      | where UserType in~ ("Admin", "DcAdmin")
+      | where Operation =~ "Set-AdminAuditLogConfig"
+      | extend ParsedParameters = parse_json(AdditionalProperties.Parameters)
+      | extend AdminAuditLogEnabledValue = tostring(ParsedParameters[3].Value)
+      | where AdminAuditLogEnabledValue =~ "False"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() 
+          by Operation, UserType, UserId, ClientIP = SourceIp, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters), AdminAuditLogEnabledValue
+      | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), 
+                          iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), UserId))
+      | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+      | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '');
+  // Combine Office and Enriched Events and Deduplicate
+  let CombinedEvents = OfficeEvents
+      | union EnrichedEvents
+      | summarize arg_min(StartTimeUtc, *) by Operation, UserId, ClientIP;
+  // Project Final Output
+  CombinedEvents
+      | project StartTimeUtc, EndTimeUtc, Operation, UserType, UserId, ClientIP, ResultStatus, Parameters, AdminAuditLogEnabledValue, AccountName, AccountUPNSuffix, AccountNTDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 2.0.8
+kind: Scheduled

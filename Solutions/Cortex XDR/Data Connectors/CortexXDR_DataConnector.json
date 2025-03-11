@@ -1,0 +1,169 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "connectorResourceName": {
+            "type": "string"
+        },
+        "logAnalyticsWorkspaceName": {
+            "type": "string"
+        },
+        "connectorUniqueId": {
+            "type": "string"
+        },
+        "workspace-location": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`. We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        }
+    },
+    "variables": {
+        "dataconnectorId": "[concat('DEFEND-', parameters('connectorUniqueId'))]",
+        "_dataconnectorId": "[variables('dataconnectorId')]",
+        "xdrAuthId": "{{apiKeyId}}",
+        "_xdrAuthId": "[variables('xdrAuthId')]"
+    },
+    "functions": [],
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2023-02-01-preview",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/', parameters('connectorResourceName'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [],
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "[variables('_dataconnectorId')]",
+                    "publisher": "DEFEND Ltd.",
+                    "title": "Cortex XDR - Incidents",
+                    "descriptionMarkdown": "Custom Data connector from DEFEND to utilise the Cortex API to ingest incidents from Cortex XDR platform into Microsoft Sentinel.",
+                    "graphQueriesTableName": "CortexXDR_Incidents_CL",
+
+                    "sampleQueries": [
+                        {
+                            "description": "All Cortex XDR Incidents",
+                            "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "availability": {
+                        "isPreview": true,
+                        "status": 1
+                    },
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": ["APIPolling"]
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)",
+                            "name": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "graphQueries": [
+                        {
+                            "baseQuery": "{{graphQueriesTableName}}",
+                            "legend": "Cortex XDR Incidents",
+                            "metricName": "Total data received"
+                        }
+                    ],
+                    "instructionSteps": [
+                        {
+                            "description": "Connect Cortex XDR to Microsoft Sentinel via Cortex API to process Cortex Incidents.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [
+                                            {
+                                                "displayText": "API Endpoint, excluding the 'api-' portion (example.xdr.au.paloaltonetworks.com)",
+                                                "placeHolderName": "{{fqdn}}",
+                                                "requestObjectKey": "apiEndpoint"
+                                            },
+                                            {
+                                                "displayText": "API Key Id",
+                                                "placeHolderName": "{{apiKeyId}}",
+                                                "pollingKeyPaths": [
+                                                    "$.request.headers.x-xdr-auth-id"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ],
+                            "title": "Enable Cortex XDR API"
+                        }
+                    ],
+                    "permissions": {
+                        "customs": [
+                            {
+                                "description": "**Cortex API Token** is required for REST API. [See the documentation to learn more about API](https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api.html). Check all requirements and follow the instructions for obtaining credentials.",
+                                "name": "Cortex API credentials"
+                            }
+                        ],
+                        "resourceProvider": [
+                            {
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "providerDisplayName": "Workspace",
+                                "requiredPermissions": {
+                                    "delete": true,
+                                    "read": true,
+                                    "write": true
+                                },
+                                "scope": "Workspace"
+                            },
+                            {
+                                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                "providerDisplayName": "Keys",
+                                "requiredPermissions": {
+                                    "action": true
+                                },
+                                "scope": "Workspace"
+                            }
+                        ]
+                    }
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "apiKeyName": "Authorization",
+                        "authType": "APIKey"
+                    },
+                    "isActive": true,
+                    "paging": {
+                        "pagingType": "None"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://api-{{fqdn}}/public_api/v1/incidents/get_incidents/",
+                        "headers": {
+                            "x-xdr-auth-id": "[variables('_xdrAuthId')]"
+                        },
+                        "httpMethod": "Post",
+                        "queryParametersTemplate": "{ 'request_data': { 'filters': [ { 'field': 'modification_time', 'operator': 'gte', 'value': {_QueryWindowStartTime} } ], 'sort': { 'field': 'modification_time', 'keyword': 'desc' } } }",
+                        "queryTimeFormat": "UnixTimestampInMills",
+                        "queryWindowInMin": 5
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$..incidents"
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

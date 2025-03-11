@@ -4,9 +4,9 @@ Author: Accelerynt
 For any technical questions, please contact info@accelerynt.com  
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Azure-AD-Disable-User%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Azure-AD-Disable-User%2Fazuredeploy.json)    
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Azure-AD-Disable-User%2Fazuredeploy.json)
 
-This playbook is intended to be run from a Microsoft Sentinel incident. It will disable the Azure AD user accounts associated with the entities from Microsoft Sentinel incidents.
+This playbook is intended to be run from a Microsoft Sentinel incident. It will disable the Azure AD user accounts associated with the entities from Microsoft Sentinel incidents. This playbook is meant to be used in tandem with our [AS-Azure-AD-Enable-User](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Azure-AD-Enable-User) playbook.
 
 ![Azure_AD_Disable_User_Demo_1](Images/Azure_AD_Disable_User_Demo_1.png)
 
@@ -16,7 +16,7 @@ This playbook is intended to be run from a Microsoft Sentinel incident. It will 
 
 To configure and deploy this playbook:
 
-Open your browser and ensure you are logged into your Microsoft Sentinel workspace. In a separate tab, open the link to our playbook on the Arbala Security GitHub Repository:
+Open your browser and ensure you are logged into your Microsoft Sentinel workspace. In a separate tab, open the link to our playbook on the Accelerynt Security GitHub Repository:
 
 https://github.com/Accelerynt-Security/AS-Azure-AD-Disable-User
 
@@ -25,15 +25,15 @@ https://github.com/Accelerynt-Security/AS-Azure-AD-Disable-User
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
-In the **Project Details** section:
+In the **Project details** section:
 
-* Select the “**Subscription**” and “**Resource Disable_User**” from the dropdown boxes you would like the playbook deployed to.  
+* Select the **Subscription** and **Resource group** from the dropdown boxes you would like the playbook deployed to.  
 
-In the **Instance Details** section:  
+In the **Instance details** section:  
                                                   
 * **Playbook Name**: This can be left as "**AS-Azure-AD-Disable-User**" or you may change it. 
 
-Towards the bottom, click on “**Review + create**”. 
+Towards the bottom, click on "**Review + create**". 
 
 ![Azure_AD_Disable_User_Deploy_1](Images/Azure_AD_Disable_User_Deploy_1.png)
 
@@ -46,7 +46,7 @@ Click the one corresponding to the Logic App.
 
 ![Azure_AD_Disable_User_Deploy_3](Images/Azure_AD_Disable_User_Deploy_3.png)
 
-Click on the “**Edit**” button. This will bring us into the Logic Apps Designer.
+Click on the "**Edit**" button. This will bring us into the Logic Apps Designer.
 
 ![Azure_AD_Disable_User_Deploy_4](Images/Azure_AD_Disable_User_Deploy_4.png)
 

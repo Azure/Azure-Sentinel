@@ -1,0 +1,109 @@
+﻿id: cda5928c-2c1e-4575-9dfa-07568bc27a4f
+name: Multiple admin membership removals from newly created admin.
+description: |
+  'This query detects when newly created Global admin removes multiple existing global admins which can be an attempt by adversaries to lock down organization and retain sole access. 
+   Investigate reasoning and intention of multiple membership removal by new Global admins and take necessary actions accordingly.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Impact
+relevantTechniques:
+  - T1531
+tags:
+  - DEV-0537
+query: |
+  let lookback = 7d; 
+  let timeframe = 1h; 
+  let GlobalAdminsRemoved = AuditLogs 
+  | where TimeGenerated > ago(timeframe) 
+  | where Category =~ "RoleManagement" 
+  | where AADOperationType in ("Unassign", "RemoveEligibleRole") 
+  | where ActivityDisplayName has_any ("Remove member from role", "Remove eligible member from role") 
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend Target = tostring(TargetResource.userPrincipalName),
+                 props = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = props on 
+        (
+            where Property.displayName =~ "Role.DisplayName"
+            | extend RoleName = trim('"',tostring(Property.oldValue))
+        )
+  | where RoleName =~ "Global Administrator" // Add other Privileged role if applicable
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName) 
+  | where Initiator != "MS-PIM"  // Filtering PIM events  
+  | summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target,100) by OperationName, RoleName, Initiator, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIpAddress, Result; 
+  let GlobalAdminsAdded = AuditLogs 
+  | where TimeGenerated > ago(lookback) 
+  | where Category =~ "RoleManagement" 
+  | where AADOperationType in ("Assign", "AssignEligibleRole") 
+  | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role") and Result == "success" 
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend Target = tostring(TargetResource.userPrincipalName),
+                 props = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = props on 
+        (
+            where Property.displayName =~ "Role.DisplayName"
+            | extend RoleName = trim('"',tostring(Property.newValue))
+        )
+  | where RoleName =~ "Global Administrator" // Add other Privileged role if applicable
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, tostring(InitiatedBy.user.userPrincipalName)) 
+  | where Initiator != "MS-PIM"  // Filtering PIM events 
+  | summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName, RoleName, Target, Initiator, Result;
+  GlobalAdminsAdded 
+  | join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator 
+  | where AddedGlobalAdminTime < RemovedGlobalAdminTime 
+  | extend NoofAdminsRemoved = array_length(TargetAdmins) 
+  | where NoofAdminsRemoved > 1
+  | project AddedGlobalAdminTime, Initiator, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIpAddress, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved
+  | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0])
+  | extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Target
+      - identifier: Name
+        columnName: TargetName
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatedByName
+      - identifier: UPNSuffix
+        columnName: InitiatedByUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
+version: 1.0.2
+kind: Scheduled

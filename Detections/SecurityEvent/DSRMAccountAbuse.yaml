@@ -19,19 +19,47 @@ relevantTechniques:
 query: |
   Event
   | where EventLog == "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
-  | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" * 
+  | parse EventData with * 'ProcessId">' ProcessId "<"* 'Image">' Image "<" * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" * 'User">' User "<" * 
   | where TargetObject has ("HKLM\\System\\CurrentControlSet\\Control\\Lsa\\DsrmAdminLogonBehavior") and Details == "DWORD (0x00000002)"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer,  TargetObject, Details
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ProcessId, Image, TargetObject, Details, _ResourceId
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(User, "\\")[1]), AccountNTDomain = tostring(split(User, "\\")[0])
+  | extend ImageFileName = tostring(split(Image, "\\")[-1])
+  | extend ImageDirectory = replace_string(Image, ImageFileName, "")
+  | project-away DomainIndex
 entityMappings:
-  - entityType: RegistryKey
-    fieldMappings:
-      - identifier: Key
-        columnName: TargetObject
   - entityType: Host
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.1
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessId
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: ImageFileName
+      - identifier: Directory
+        columnName: ImageDirectory
+  - entityType: RegistryKey
+    fieldMappings:
+      - identifier: Key
+        columnName: TargetObject
+version: 1.0.3
 kind: Scheduled
 metadata:
     source:

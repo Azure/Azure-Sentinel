@@ -1,0 +1,42 @@
+id: faa3e37d-abb7-402b-b00c-9ded95d3bd13
+Function:
+  Title: Parser for StealthwatchEvent
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: StealthwatchEvent
+FunctionAlias: StealthwatchEvent
+FunctionQuery: |
+    Syslog
+    | where SyslogMessage has 'Stealthwatch'
+    | extend EventVendor = 'Cisco'
+    | extend EventProduct = 'Stealthwatch'
+    | parse-kv SyslogMessage as (start:string, end:string, alarmID:string, alarmSev:string, alarmStatus:string, cat:string, domain:string, dst:string, dstPort:string, msg:string, proto:string, sourceHG:string, sourceHostSnapshot:string, src:string, flowCollectorIP:string, flowCollectorName:string, sourceUser:string, targetUser:string, argetHG:string, targetHostname:string, targetHostSnapshot:string) with (pair_delimiter='|', kv_delimiter='=')
+    | parse SyslogMessage with * "argetHG=" argetHG"|" *
+    | parse SyslogMessage with * "targetHG=" targetHG"|" *
+    | extend DstGeoCountry = iff(SyslogMessage contains "argetHG",argetHG, targetHG)
+    | extend EventStartTime=todatetime(start)
+    | extend EventEndTime=todatetime(end)
+    | project-rename EventOriginalUid=alarmID
+                    , EventSeverity=alarmSev
+                    , EventStatus=alarmStatus
+                    , EventType=cat
+                    , SrcDvcDomain=domain
+                    , DstIpAddr=dst
+                    , DstPortNumber=dstPort
+                    , EventMessage=msg
+                    , Protocol=proto
+                    , SrcGeoCountry=sourceHG
+                    , SrcHostSnapshot=sourceHostSnapshot
+                    , SrcIpAddr=src
+                    , DvcIpAddr=flowCollectorIP
+                    , DvcHostname=flowCollectorName
+                    , SrcUserName=sourceUser
+                    , DstUserName=targetUser
+                    , DstDvcHostname=targetHostname
+                    , DstHostSnapshot=targetHostSnapshot
+    | project-away start
+                 , end
+                 , SyslogMessage
+    			 , argetHG
+    			 , targetHG

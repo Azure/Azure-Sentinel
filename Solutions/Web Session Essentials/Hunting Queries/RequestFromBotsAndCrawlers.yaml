@@ -1,0 +1,42 @@
+id: b653c2e0-ae0f-490b-9b2e-836858d28976
+name: Request from bots and crawlers (ASIM Web Session)
+description: |
+  'While most of these values are associated with legitimate bots or crawlers, malicious actors may sometimes spoof or manipulate user agent headers to disguise their activities. It is important to investigate their activities.'
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let lookback = 1d;
+  // You can add or remove items from this list as per your requirement.
+  let BotandCrawlersList = dynamic (['bot','crawler','baiduspider','80legs','ia_archiver','voyager','wget','yahoo','slurp','mediapartners-google','facebookexternalhit','facebookcatalog','okhttp','cURL','Bytespider']);
+    _Im_WebSession (starttime=ago(lookback))
+    | where HttpUserAgent has_any (BotandCrawlersList)
+    | summarize EventCount = count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated), UserAgentList = make_set(HttpUserAgent,100), URLs = make_set(Url,100) by SrcIpAddr, SrcUsername, SrcHostname
+    | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+    | order by EventCount desc
+    | extend IP_0_Address = SrcIpAddr
+    | extend Account_0_Name = Name
+    | extend Account_0_UPNSuffix = UPNSuffix
+    | extend Host_0_HostName = SrcHostname
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.0

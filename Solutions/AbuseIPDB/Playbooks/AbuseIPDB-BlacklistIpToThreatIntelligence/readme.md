@@ -6,6 +6,11 @@ By every day reccurence, this playbook gets triggered and performs the following
 <img src="./playbook_screenshot.png" width="80%"/><br>
 ### Prerequisites 
 1. AbuseIPDB Custom Connector has to be deployed prior to the deployment of this playbook under the same subscription.
+2. To use the Microsoft Graph Security connector actions, Microsoft Entra ID tenant administrator consent needs to be provided. The Microsoft Graph Security connector application ID and name for Microsoft Entra ID in is as follows for Microsoft Entra ID administrator consent: 
+ - Application Name - MicrosoftGraphSecurityConnector
+ - Application ID - c4829704-0edc-4c3d-a347-7c4a67586f3c
+3.To view the Threat Indicators submitted by Microsoft Graph Security connector, "Threat Intelligence Platforms" connector from "Threat Intelligence" Solution need be installed. 
+
 
 ### Deployment instructions 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.

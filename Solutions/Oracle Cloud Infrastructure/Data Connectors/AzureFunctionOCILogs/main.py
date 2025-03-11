@@ -18,8 +18,13 @@ StreamOcid = os.environ['StreamOcid']
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
 LOG_TYPE = 'OCI_Logs'
-
+CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
+PARTITIONS = os.getenv('Partition',"0")
+Message_Limit = os.getenv('Message_Limit',250)
+limit = int(Message_Limit)
+
+FIELD_SIZE_LIMIT_BYTES = 1000 * 32
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -42,10 +47,13 @@ def main(mytimer: func.TimerRequest):
 
     stream_client = oci.streaming.StreamClient(config, service_endpoint=MessageEndpoint)
 
-    cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
-    process_events(stream_client, StreamOcid, cursor, sentinel_connector, start_ts)
+    if CURSOR_TYPE.lower() == 'group' :
+        cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
+    else :
+        cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
+    
+    process_events(stream_client, StreamOcid, cursor, limit, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
-
 
 def parse_key(key_input):
     try:
@@ -95,18 +103,97 @@ def get_cursor_by_group(sc, sid, group_name, instance_name):
     response = sc.create_group_cursor(sid, cursor_details)
     return response.data.value
 
+def get_cursor_by_partition(client, stream_id, partition):
+    logging.info("Creating a cursor for partition {}".format(partition))
+    cursor_details = oci.streaming.models.CreateCursorDetails(
+        partition=partition,
+        type=oci.streaming.models.CreateCursorDetails.TYPE_TRIM_HORIZON)
+    response = client.create_cursor(stream_id, cursor_details)
+    cursor = response.data.value
+    return cursor
 
-def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, sentinel: AzureSentinelConnector, start_ts):
+def check_size(queue):
+        data_bytes_len = len(json.dumps(queue).encode())
+        return data_bytes_len < FIELD_SIZE_LIMIT_BYTES
+
+
+def split_big_request(queue):
+        if check_size(queue):
+            return [queue]
+        else:
+            middle = int(len(queue) / 2)
+            queues_list = [queue[:middle], queue[middle:]]
+            return split_big_request(queues_list[0]) + split_big_request(queues_list[1])
+
+def process_large_field(event_section, field_name, field_size_limit,max_part=10):
+    """Process and split large fields in the event data if they exceed the size limit."""
+    if field_name in event_section:
+        field_data = event_section[field_name]
+        
+        if len(json.dumps(field_data).encode()) > field_size_limit:
+            # Split if field_data is a list
+            if isinstance(field_data, list):
+                queue_list = split_big_request(field_data)
+                for count, item in enumerate(queue_list, 1):
+                    if count > max_part:
+                        break
+                    event_section[f"{field_name}Part{count}"] = item
+                del event_section[field_name]
+
+            # Split if field_data is a dictionary
+            elif isinstance(field_data, dict):
+                queue_list = list(field_data.keys())
+                for count, key in enumerate(queue_list, 1):
+                    if count > max_part:
+                        break
+                    event_section[f"{field_name}Part{key}"] = field_data[key]
+                del event_section[field_name]
+            else:
+                pass
+
+        else:
+            # If within size limit, just serialize it
+            event_section[field_name] = json.dumps(field_data)
+
+
+def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, limit, sentinel: AzureSentinelConnector, start_ts):
     cursor = initial_cursor
     while True:
-        get_response = client.get_messages(stream_id, cursor, limit=1000)
+        get_response = client.get_messages(stream_id, cursor, limit=limit, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
         if not get_response.data:
             return
 
         for message in get_response.data:
-            event = b64decode(message.value.encode()).decode()
-            event = json.loads(event)
-            sentinel.send(event)
+            if message:
+                event = b64decode(message.value.encode()).decode()
+                logging.info('event details {}'.format(event))
+                myjson = str(event)
+                if(myjson.startswith("{")):
+                #if event != 'ok' and event != 'Test': 
+                    event = json.loads(event)
+                    if "data" in event:
+                        if "request" in event["data"] and event["type"] != "com.oraclecloud.loadbalancer.access":
+                            if event["data"]["request"] is not None:
+                                # Process "headers" and "parameters" in "request"
+                                if "headers" in event["data"]["request"]:
+                                    process_large_field(event["data"]["request"], "headers", FIELD_SIZE_LIMIT_BYTES)
+                                if "parameters" in event["data"]["request"]:
+                                    process_large_field(event["data"]["request"], "parameters", FIELD_SIZE_LIMIT_BYTES)
+
+                        if "response" in event["data"] and event["data"]["response"] is not None:
+                            # Process "headers" in "response"
+                            if "headers" in event["data"]["response"]:
+                                process_large_field(event["data"]["response"], "headers", FIELD_SIZE_LIMIT_BYTES)
+
+                        if "additionalDetails" in event["data"]:
+                            process_large_field(event["data"], "additionalDetails", FIELD_SIZE_LIMIT_BYTES)
+
+                        if "stateChange" in event["data"] and event["data"]["stateChange"] is not None:
+                            # Process "current" in "stateChange"
+                            if "current" in event["data"]["stateChange"]:
+                                process_large_field(event["data"]["stateChange"], "current", FIELD_SIZE_LIMIT_BYTES)
+
+                    sentinel.send(event)
 
         sentinel.flush()
         if check_if_script_runs_too_long(start_ts):

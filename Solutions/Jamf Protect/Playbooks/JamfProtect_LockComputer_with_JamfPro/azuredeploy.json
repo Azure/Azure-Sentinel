@@ -1,0 +1,1168 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"metadata": {
+		"title": "Jamf Protect - Remote lock computer with Jamf Pro",
+		"description": "This Playbook can be used manually or in a Automation Rule to send an remote MDM command with Jamf Pro to lock the computer with an randomised 6 digit passcode.",
+		"mainSteps": [
+			"1. Fetches the Host entity from the Incident created based on event data from Jamf Protect",
+			"2. Generates a Access Token using a API Client to authenticate against the Jamf Pro API",
+			"3. Retrieves the JSSID and ManagementUUID from Jamf Pro for given computer",
+			"4. Sends a remote lock MDM command with a randomised 6 digit passcode",
+			"5. Randomised passcode will be stored in the Comments section of the incident itself."
+		],
+		"prerequisites": [
+			"1. Create an API Client in Jamf Pro that is capable of reading computers and sending remote commands. [learn how](https://learn.jamf.com/bundle/jamf-pro-documentation-current)",
+			"2. Use the Client ID and Secret during the deployment of this Playbook"
+		],
+		"lastUpdateTime": "2023-07-20T00:00:00.000Z",
+		"entities": [],
+		"tags": ["Utilities"],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "Thijs Xhaflaire"
+		},
+		"source": {
+			"type": "solution",
+			"name": "Jamf Protect"
+		},
+		"postDeployment": [
+			"** b. Configurations in Sentinel **",
+			"1. This Playbook can be best used as Action while investigating an Incident."
+		],
+		"releaseNotes": [{
+			"version": "1.0.0",
+			"title": "Jamf Protect - Remote lock computer with Jamf Pro",
+			"notes": [
+				"Initial version"
+			]
+		}]
+	},
+	"parameters": {
+		"jamfProClientID": {
+			"type": "String",
+			"metadata": {
+				"description": "The ClientID for the Jamf Pro"
+			}
+		},
+		"jamfProSecret": {
+			"type": "SecureString",
+			"metadata": {
+				"description": "The secret for the ClientID of Jamf Pro"
+			}
+		},
+		"jamfProURL": {
+			"defaultValue": "https://*.jamfcloud.com",
+			"type": "String",
+			"metadata": {
+				"description": "Enter the Jamf Pro instance URL ex: {https://fakevalue.jamfcloud.com}"
+			}
+		},
+		"PlaybookName": {
+			"type": "String",
+			"minLength": 1,
+			"defaultValue": "JamfProtect_LockComputer_with_JamfPro",
+			"metadata": {
+				"description": "Name of the Logic App/Playbook"
+			}
+		}
+	},
+	"variables": {
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+	"resources": [{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2017-07-01",
+			"name": "[parameters('playbookName')]",
+			"location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"properties": {
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						},
+						"jamfProSecret": {
+							"defaultValue": "[parameters('jamfProSecret')]",
+							"type": "SecureString"
+						},
+						"jamfProURL": {
+							"defaultValue": "[parameters('jamfProURL')]",
+							"type": "String"
+						},
+						"jamfProClientID": {
+							"defaultValue": "[parameters('jamfProClientID')]",
+							"type": "String"
+						}
+					},
+					"triggers": {
+						"Microsoft_Sentinel_incident": {
+							"type": "ApiConnectionWebhook",
+							"inputs": {
+								"body": {
+									"callback_url": "@{listCallbackUrl()}"
+								},
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+									}
+								},
+								"path": "/incident-creation"
+							}
+						}
+					},
+                    "actions": {
+                        "Filter_array_for_the_entity_kind_Host": {
+                            "runAfter": {
+                                "Parse_JSON_Entities_from_the_Incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Parse_JSON_Entities_from_the_Incident')",
+                                "where": "@equals(item()['kind'], 'Host')"
+                            }
+                        },
+                        "For_each_host_send_DeviceLock_command": {
+                            "foreach": "@body('Filter_array_for_the_entity_kind_Host')",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Send_DeviceLock_command_to_given_computers_JSSID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><strong>Device Lock</strong> command has been send to&nbsp;@{body('Parse_JSON_for_given_computer_based_on_managementID')?['general']?['name']} with <strong>passcode</strong>:&nbsp;@{outputs('Generate_a_randomised_6_digit_value')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Generate_a_randomised_6_digit_value": {
+                                    "runAfter": {
+                                        "Parse_JSON_for_given_computer_based_on_managementID": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@{rand(0, 9)}@{rand(0, 9)}@{rand(0, 9)}@{rand(0, 9)}@{rand(0, 9)}@{rand(0, 9)}"
+                                },
+                                "Get_JSSID_for_given_computer_in_Jamf_Pro": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{variables('accessToken')}",
+                                            "accept": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{parameters('jamfProURL')}/JSSResource/computers/name/@{items('For_each_host_send_DeviceLock_command')?['properties']?['friendlyName']}"
+                                    }
+                                },
+                                "Get_managementID_for_given_computer_in_Jamf_Pro": {
+                                    "runAfter": {
+                                        "Parse_JSON_response_for_given_computer": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{variables('accessToken')}",
+                                            "accept": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{parameters('jamfProURL')}/api/v1/computers-inventory/@{body('Parse_JSON_response_for_given_computer')?['computer']?['general']?['id']}?section=GENERAL"
+                                    }
+                                },
+                                "Parse_JSON_for_given_computer_based_on_managementID": {
+                                    "runAfter": {
+                                        "Get_managementID_for_given_computer_in_Jamf_Pro": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_managementID_for_given_computer_in_Jamf_Pro')",
+                                        "schema": {
+                                            "properties": {
+                                                "general": {
+                                                    "properties": {
+                                                        "declarativeDeviceManagementEnabled": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "enrolledViaAutomatedDeviceEnrollment": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "initialEntryDate": {
+                                                            "type": "string"
+                                                        },
+                                                        "itunesStoreAccountActive": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "jamfBinaryVersion": {
+                                                            "type": "string"
+                                                        },
+                                                        "lastContactTime": {
+                                                            "type": "string"
+                                                        },
+                                                        "lastEnrolledDate": {
+                                                            "type": "string"
+                                                        },
+                                                        "lastIpAddress": {
+                                                            "type": "string"
+                                                        },
+                                                        "lastReportedIp": {
+                                                            "type": "string"
+                                                        },
+                                                        "managementId": {
+                                                            "type": "string"
+                                                        },
+                                                        "mdmCapable": {
+                                                            "properties": {
+                                                                "capable": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "capableUsers": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "mdmProfileExpiration": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "platform": {
+                                                            "type": "string"
+                                                        },
+                                                        "remoteManagement": {
+                                                            "properties": {
+                                                                "managed": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "managementUsername": {}
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "reportDate": {
+                                                            "type": "string"
+                                                        },
+                                                        "site": {
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "supervised": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "userApprovedMdm": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "udid": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_response_for_given_computer": {
+                                    "runAfter": {
+                                        "Get_JSSID_for_given_computer_in_Jamf_Pro": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_JSSID_for_given_computer_in_Jamf_Pro')",
+                                        "schema": {
+                                            "properties": {
+                                                "computer": {
+                                                    "properties": {
+                                                        "certificates": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "common_name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "expires_epoch": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "expires_utc": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "identity": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "name": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "common_name",
+                                                                    "identity",
+                                                                    "expires_utc",
+                                                                    "expires_epoch",
+                                                                    "name"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "configuration_profiles": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "is_removable": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "uuid": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "name",
+                                                                    "uuid",
+                                                                    "is_removable"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "extension_attributes": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "multi_value": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "value": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "name",
+                                                                    "type",
+                                                                    "multi_value",
+                                                                    "value"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "general": {
+                                                            "properties": {
+                                                                "alt_mac_address": {
+                                                                    "type": "string"
+                                                                },
+                                                                "alt_network_adapter_type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "asset_tag": {
+                                                                    "type": "string"
+                                                                },
+                                                                "barcode_1": {
+                                                                    "type": "string"
+                                                                },
+                                                                "barcode_2": {
+                                                                    "type": "string"
+                                                                },
+                                                                "distribution_point": {
+                                                                    "type": "string"
+                                                                },
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "initial_entry_date": {
+                                                                    "type": "string"
+                                                                },
+                                                                "initial_entry_date_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "initial_entry_date_utc": {
+                                                                    "type": "string"
+                                                                },
+                                                                "ip_address": {
+                                                                    "type": "string"
+                                                                },
+                                                                "itunes_store_account_is_active": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "jamf_version": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_cloud_backup_date_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "last_cloud_backup_date_utc": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_contact_time": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_contact_time_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "last_contact_time_utc": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_enrolled_date_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "last_enrolled_date_utc": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_reported_ip": {
+                                                                    "type": "string"
+                                                                },
+                                                                "mac_address": {
+                                                                    "type": "string"
+                                                                },
+                                                                "management_status": {
+                                                                    "properties": {
+                                                                        "enrolled_via_dep": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "user_approved_enrollment": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "user_approved_mdm": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "mdm_capable": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "mdm_capable_users": {
+                                                                    "properties": {
+                                                                        "mdm_capable_user": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "mdm_profile_expiration_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "mdm_profile_expiration_utc": {
+                                                                    "type": "string"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "network_adapter_type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "platform": {
+                                                                    "type": "string"
+                                                                },
+                                                                "remote_management": {
+                                                                    "properties": {
+                                                                        "managed": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "management_password_sha256": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "management_username": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "report_date": {
+                                                                    "type": "string"
+                                                                },
+                                                                "report_date_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "report_date_utc": {
+                                                                    "type": "string"
+                                                                },
+                                                                "serial_number": {
+                                                                    "type": "string"
+                                                                },
+                                                                "site": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "supervised": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "sus": {
+                                                                    "type": "string"
+                                                                },
+                                                                "udid": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "groups_accounts": {
+                                                            "properties": {
+                                                                "computer_group_memberships": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "local_accounts": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "administrator": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "filevault_enabled": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "home": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "home_size": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "home_size_mb": {
+                                                                                "type": "integer"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "realname": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "uid": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "name",
+                                                                            "realname",
+                                                                            "uid",
+                                                                            "home",
+                                                                            "home_size",
+                                                                            "home_size_mb",
+                                                                            "administrator",
+                                                                            "filevault_enabled"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "user_inventories": {
+                                                                    "properties": {
+                                                                        "disable_automatic_login": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "user": {
+                                                                            "properties": {
+                                                                                "password_history_depth": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "password_max_age": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "password_min_complex_characters": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "password_min_length": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "password_require_alphanumeric": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "username": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "hardware": {
+                                                            "properties": {
+                                                                "active_directory_status": {
+                                                                    "type": "string"
+                                                                },
+                                                                "available_ram_slots": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "battery_capacity": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "ble_capable": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "boot_rom": {
+                                                                    "type": "string"
+                                                                },
+                                                                "bus_speed": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "bus_speed_mhz": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "cache_size": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "cache_size_kb": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "disk_encryption_configuration": {
+                                                                    "type": "string"
+                                                                },
+                                                                "filevault2_users": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "gatekeeper_status": {
+                                                                    "type": "string"
+                                                                },
+                                                                "institutional_recovery_key": {
+                                                                    "type": "string"
+                                                                },
+                                                                "is_apple_silicon": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "make": {
+                                                                    "type": "string"
+                                                                },
+                                                                "mapped_printers": {
+                                                                    "type": "array"
+                                                                },
+                                                                "model": {
+                                                                    "type": "string"
+                                                                },
+                                                                "model_identifier": {
+                                                                    "type": "string"
+                                                                },
+                                                                "nic_speed": {
+                                                                    "type": "string"
+                                                                },
+                                                                "number_cores": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "number_processors": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "optical_drive": {
+                                                                    "type": "string"
+                                                                },
+                                                                "os_build": {
+                                                                    "type": "string"
+                                                                },
+                                                                "os_name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "os_version": {
+                                                                    "type": "string"
+                                                                },
+                                                                "processor_architecture": {
+                                                                    "type": "string"
+                                                                },
+                                                                "processor_speed": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "processor_speed_mhz": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "processor_type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "service_pack": {
+                                                                    "type": "string"
+                                                                },
+                                                                "sip_status": {
+                                                                    "type": "string"
+                                                                },
+                                                                "smc_version": {
+                                                                    "type": "string"
+                                                                },
+                                                                "software_update_device_id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "storage": {
+                                                                    "type": "array"
+                                                                },
+                                                                "supports_ios_app_installs": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "total_ram": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "total_ram_mb": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "xprotect_version": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "iphones": {
+                                                            "type": "array"
+                                                        },
+                                                        "location": {
+                                                            "properties": {
+                                                                "building": {
+                                                                    "type": "string"
+                                                                },
+                                                                "department": {
+                                                                    "type": "string"
+                                                                },
+                                                                "email_address": {
+                                                                    "type": "string"
+                                                                },
+                                                                "phone": {
+                                                                    "type": "string"
+                                                                },
+                                                                "phone_number": {
+                                                                    "type": "string"
+                                                                },
+                                                                "position": {
+                                                                    "type": "string"
+                                                                },
+                                                                "real_name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "realname": {
+                                                                    "type": "string"
+                                                                },
+                                                                "room": {
+                                                                    "type": "string"
+                                                                },
+                                                                "username": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "peripherals": {
+                                                            "type": "array"
+                                                        },
+                                                        "purchasing": {
+                                                            "properties": {
+                                                                "applecare_id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "attachments": {
+                                                                    "type": "array"
+                                                                },
+                                                                "is_leased": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "is_purchased": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "lease_expires": {
+                                                                    "type": "string"
+                                                                },
+                                                                "lease_expires_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "lease_expires_utc": {
+                                                                    "type": "string"
+                                                                },
+                                                                "life_expectancy": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "os_applecare_id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "os_maintenance_expires": {
+                                                                    "type": "string"
+                                                                },
+                                                                "po_date": {
+                                                                    "type": "string"
+                                                                },
+                                                                "po_date_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "po_date_utc": {
+                                                                    "type": "string"
+                                                                },
+                                                                "po_number": {
+                                                                    "type": "string"
+                                                                },
+                                                                "purchase_price": {
+                                                                    "type": "string"
+                                                                },
+                                                                "purchasing_account": {
+                                                                    "type": "string"
+                                                                },
+                                                                "purchasing_contact": {
+                                                                    "type": "string"
+                                                                },
+                                                                "vendor": {
+                                                                    "type": "string"
+                                                                },
+                                                                "warranty_expires": {
+                                                                    "type": "string"
+                                                                },
+                                                                "warranty_expires_epoch": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "warranty_expires_utc": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "security": {
+                                                            "properties": {
+                                                                "activation_lock": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "external_boot_level": {
+                                                                    "type": "string"
+                                                                },
+                                                                "firewall_enabled": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "recovery_lock_enabled": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "secure_boot_level": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "software": {
+                                                            "properties": {
+                                                                "applications": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "bundle_id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "path": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "version": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "name",
+                                                                            "path",
+                                                                            "version",
+                                                                            "bundle_id"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "available_software_updates": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "available_updates": {
+                                                                    "properties": {
+                                                                        "update": {
+                                                                            "properties": {
+                                                                                "name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "package_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "version": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "cached_by_casper": {
+                                                                    "type": "array"
+                                                                },
+                                                                "fonts": {
+                                                                    "type": "array"
+                                                                },
+                                                                "installed_by_casper": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "installed_by_installer_swu": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "licensed_software": {
+                                                                    "type": "array"
+                                                                },
+                                                                "plugins": {
+                                                                    "type": "array"
+                                                                },
+                                                                "running_services": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "unix_executables": {
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Send_DeviceLock_command_to_given_computers_JSSID": {
+                                    "runAfter": {
+                                        "Generate_a_randomised_6_digit_value": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{variables('accessToken')}",
+                                            "accept": "application/json"
+                                        },
+                                        "method": "POST",
+                                        "uri": "@{parameters('jamfProURL')}/JSSResource/computercommands/command/DeviceLock/passcode/@{outputs('Generate_a_randomised_6_digit_value')}/id/@{body('Parse_JSON_for_given_computer_based_on_managementID')?['general']?['site']?['id']}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_array_for_the_entity_kind_Host": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Generate_Access_Token_using_API_Client": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "body": "client_id=@{parameters('jamfProClientID')}&client_secret=@{parameters('jamfProSecret')}&grant_type=client_credentials",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "method": "POST",
+                                "uri": "@{parameters('jamfProURL')}/api/oauth/token"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Parse_JSON_Entities_from_the_Incident": {
+                            "runAfter": {
+                                "Set_accessToken_as_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "properties": {
+                                                "properties": {
+                                                    "address": {
+                                                        "type": "string"
+                                                    },
+                                                    "friendlyName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "id",
+                                            "name",
+                                            "type",
+                                            "kind",
+                                            "properties"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Parse_JSON_Response_from_Access_Token": {
+                            "runAfter": {
+                                "Generate_Access_Token_using_API_Client": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Generate_Access_Token_using_API_Client')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "scope": {
+                                            "type": "string"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Set_accessToken_as_variable": {
+                            "runAfter": {
+                                "Parse_JSON_Response_from_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "accessToken",
+                                        "type": "string",
+                                        "value": "@body('Parse_JSON_Response_from_Access_Token')?['access_token']"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+					"outputs": {}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuresentinel": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+								"connectionName": "[variables('AzureSentinelConnectionName')]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	]
+}

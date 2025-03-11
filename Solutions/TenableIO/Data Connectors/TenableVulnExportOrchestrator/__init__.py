@@ -34,7 +34,8 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     logging.info(job_status)
     logging.info(job_status['status'])
 
-    while not 'status' in job_status or not job_status['status'] == 'COMPLETED':
+    tio_status = ['ERROR', 'CANCELLED', 'FINISHED']
+    while not 'status' in job_status or not (job_status['status'] in tio_status):
         job_status = yield context.call_activity(vuln_status_and_chunk, vuln_job_id)
         logging.info(
             f'Checking {vuln_job_id} after waking up again, inside while loop:')
@@ -43,6 +44,16 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
 
         if 'status' in job_status and job_status['status'] == 'FINISHED':
             logging.info('job is completely finished!')
+            chunks = job_status['chunks_available']
+            logging.info(f'Found these chunks: {chunks}')
+            break
+        elif 'status' in job_status and job_status['status'] == 'ERROR':
+            logging.info('job is completed with Error status!')
+            chunks = job_status['chunks_available']
+            logging.info(f'Found these chunks: {chunks}')
+            break
+        elif 'status' in job_status and job_status['status'] == 'CANCELLED':
+            logging.info('job is completed with Cancelled status!')
             chunks = job_status['chunks_available']
             logging.info(f'Found these chunks: {chunks}')
             break
@@ -56,8 +67,12 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     logging.info('Checking that chunks exist...')
     logging.info(f'Number of chunks: {len(chunks)}')
 
+    tenable_status = TenableStatus.finished.value
+    if 'status' in job_status and (job_status['status'] is 'CANCELLED' or job_status['status'] is 'ERROR'):
+        tenable_status = TenableStatus.failed.value
+
     return {
-        'status': TenableStatus.finished.value,
+        'status': tenable_status,
         'id': vuln_job_id,
         'chunks': chunks,
         'vulnInstanceId': context.instance_id,

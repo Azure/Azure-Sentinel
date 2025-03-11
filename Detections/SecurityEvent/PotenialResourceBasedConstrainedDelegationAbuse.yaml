@@ -18,23 +18,38 @@ tactics:
 relevantTechniques:
   - T1134
 query: |
- SecurityEvent
- | where EventID == 5136 
- | parse EventData with * 'ObjectClass">' ObjectClass "<" *
- | parse EventData with * 'AttributeLDAPDisplayName">' AttributeLDAPDisplayName "<" *
- | where ObjectClass == "computer" and AttributeLDAPDisplayName == "msDS-AllowedToActOnBehalfOfOtherIdentity"
- | parse EventData with * 'ObjectDN">' ObjectDN "<" *
- | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserSid, SubjectLogonId, ObjectDN, AttributeLDAPDisplayName
+  SecurityEvent
+  | where EventID == 5136 
+  | parse EventData with * 'ObjectClass">' ObjectClass "<" *
+  | parse EventData with * 'AttributeLDAPDisplayName">' AttributeLDAPDisplayName "<" *
+  | where ObjectClass == "computer" and AttributeLDAPDisplayName == "msDS-AllowedToActOnBehalfOfOtherIdentity"
+  | parse EventData with * 'ObjectDN">' ObjectDN "<" *
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserName, SubjectDomainName, SubjectUserSid, SubjectLogonId, ObjectDN, AttributeLDAPDisplayName
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: SubjectAccount
+      - identifier: Name
+        columnName: SubjectUserName
+      - identifier: NTDomain
+        columnName: SubjectDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: SubjectUserSid
   - entityType: Host
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.1
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.0.3
 kind: Scheduled
 metadata:
     source:

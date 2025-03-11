@@ -1,0 +1,48 @@
+Parser:
+  Title: Dhcp Event ASIM parser for Microsoft Sentinel native Dhcp Event table
+  Version: '0.1.0'
+  LastUpdated: Mar 12 2024
+Product:
+  Name: Native
+Normalization:
+  Schema: DhcpEvent
+  Version: '0.1'
+References:
+- Title: ASIM Dhcp Event Schema
+  Link: https://aka.ms/ASimDhcpEventDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Dhcp Event table (ASimDhcpEventLogs) to the ASIM Dhcp Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: ASimDhcpEventNative
+EquivalentBuiltInParser: _ASim_DhcpEvent_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    disabled:bool = false
+  )
+  {
+    ASimDhcpEventLogs
+    | where not(disabled)
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "DhcpEvent",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        SessionId = DhcpSessionId,
+        Duration = DhcpSessionDuration,
+        Src = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+        User = SrcUsername,
+        IpAddr = SrcIpAddr,
+        Hostname = SrcHostname
+  };
+  parser (disabled = disabled)

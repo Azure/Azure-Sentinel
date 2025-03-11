@@ -1,0 +1,90 @@
+Parser:
+  Title: User Management activity ASIM filtering parser for Microsoft Sentinel native User Management activity table
+  Version: "0.1.0"
+  LastUpdated: "Mar 07 2024"
+Product:
+  Name: Native
+Normalization:
+  Schema: UserManagement
+  Version: '0.1.1'
+References:
+- Title: ASIM User Management Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native User Management activity table to the ASIM User Management activity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: vimUserManagementNative
+EquivalentBuiltInParser: _Im_UserManagement_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime                  = datetime(null)
+    , endtime:datetime                  = datetime(null)
+    , srcipaddr_has_any_prefix:dynamic  = dynamic([])
+    , targetusername_has_any:dynamic    = dynamic([])
+    , actorusername_has_any:dynamic     = dynamic([])
+    , eventtype_in:dynamic              = dynamic([])
+    , disabled:bool                     = false
+  )
+  {
+    ASimUserManagementActivityLogs
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr,srcipaddr_has_any_prefix))
+        and (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))
+        and (array_length(targetusername_has_any) == 0 or TargetUsername has_any (targetusername_has_any))
+        and (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "UserManagement",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        User = ActorUsername,
+        Hostname = DvcHostname,
+        IpAddr = SrcIpAddr,
+        Src = coalesce (SrcHostname,SrcIpAddr, SrcDvcId),
+        UpdatedPropertyName = EventSubType
+    | project-away
+        TenantId,
+        SourceSystem,
+        _SubscriptionId,
+        _ResourceId
+  };
+  parser (
+    starttime                  = starttime
+    , endtime                  = endtime
+    , srcipaddr_has_any_prefix = srcipaddr_has_any_prefix
+    , targetusername_has_any   = targetusername_has_any
+    , actorusername_has_any    = actorusername_has_any
+    , eventtype_in             = eventtype_in
+    , disabled                 = disabled
+  )

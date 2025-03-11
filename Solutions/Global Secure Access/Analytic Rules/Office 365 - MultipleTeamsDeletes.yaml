@@ -1,0 +1,58 @@
+id: db60e4b6-a845-4f28-a18c-94ebbaad6c6c
+name: GSA Enriched Office 365 - Multiple Teams deleted by a single user
+description: |
+  This detection flags the occurrences of deleting multiple teams within a day.
+  This data is a part of Office 365 Connector in Microsoft Sentinel.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1489
+query: |
+  // Set the maximum number of deleted teams to flag suspicious activity
+  let max_delete_count = 3;
+  // EnrichedMicrosoft365AuditLogs Query
+  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+      | where Workload =~ "MicrosoftTeams"
+      | where Operation =~ "TeamDeleted"
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(tostring(AdditionalProperties.TeamName), 1000) by UserId
+      | where array_length(DeletedTeams) > max_delete_count
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  // OfficeActivity Query
+  let OfficeEvents = OfficeActivity
+      | where OfficeWorkload =~ "MicrosoftTeams"
+      | where Operation =~ "TeamDeleted"
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(TeamName, 1000) by UserId
+      | where array_length(DeletedTeams) > max_delete_count
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  // Combine and Deduplicate Office and Enriched Logs
+  let CombinedEvents = OfficeEvents
+      | union EnrichedEvents
+      | summarize arg_min(StartTime, *) by UserId;
+  // Final Output
+  CombinedEvents
+      | project StartTime, EndTime, DeletedTeams, UserId, AccountName, AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.6
+kind: Scheduled

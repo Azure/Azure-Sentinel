@@ -61,7 +61,7 @@ Once deployment is complete, you will need to authorize each connection.
      c. Find the action with the name "Lists all Azure Firewalls in a resource group", "Gets the specified Azure Firewall","Creates or updates the specified Azure Firewall", "Updates tags for Azure Firewall resource" in the workflow.
         
      d. Click Change connection
-        a. Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. 
+        a. Enter Connection name, ClientId, SecretKey and TenantId captured from Microsoft Entra ID. 
 
 #### b. Configurations in Sentinel
 1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.

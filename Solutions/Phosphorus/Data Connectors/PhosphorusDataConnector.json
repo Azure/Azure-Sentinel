@@ -1,0 +1,144 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+    "workspace": {
+      "type": "string",
+      "defaultValue": ""
+    }
+  },
+    "resources": [
+        {
+            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid(subscription().subscriptionId))]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(subscription().subscriptionId))]",
+            "apiVersion": "2022-12-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "title": "Phosphorus Devices",
+                    "id":"Phosphorus_Polling",
+                    "publisher": "Phosphorus Inc.",
+                    "descriptionMarkdown": "The Phosphorus Device Connector provides the capability to Phosphorus to ingest device data logs into Microsoft Sentinel through the Phosphorus REST API. The Connector provides visibility into the devices enrolled in Phosphorus. This Data Connector pulls devices information along with its corresponding alerts.",
+                    "graphQueriesTableName": "Phosphorus_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total events received",
+                            "legend": "Phosphorus Audit events",
+                            "baseQuery": "Phosphorus_CL"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "Phosphorus_CL",
+                            "lastDataReceivedQuery": "Phosphorus_CL \n | summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": [
+                                "APIPolling"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "action": true,
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "REST API Credentials/permissions",
+                                "description": "**Phosphorus API Key** is required. Please make sure that the API Key associated with the User has the Manage Settings permissions enabled.\n\n Follow these instructions to enable Manage Settings permissions.\n 1. Log in to the Phosphorus Application\n 2. Go to 'Settings' -> 'Groups'\n 3. Select the Group the Integration user is a part of\n 4. Navigate to 'Product Actions' -> toggle on the 'Manage Settings' permission. "
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "description": "**STEP 1 - Configuration steps for the Phosphorus API**\n\n Follow these instructions to create a Phosphorus API  key.\n 1. Log into your Phosphorus instance\n 2. Navigate to Settings -> API \n 3. If the API key has not already been created, press the **Add button** to create the API key\n 4. The API key can now be copied and used during the Phosphorus Device connector configuration"
+                        },
+                        {
+                            "title": "Connect the Phosphorus Application with Microsoft Sentinel",
+                            "description": "**STEP 2 - Fill in the details below**\n\n>**IMPORTANT:** Before deploying the Phosphorus Device data connector, have the Phosphorus Instance Domain Name readily available as well as the Phosphorus API  Key(s)",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [
+                                            {
+                                                "displayText": "Domain Name",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{urlPlaceHolder}}",
+                                                "placeHolderValue": ""
+                                            },
+                                            {
+                                                "displayText": "Integration Name",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{integrationName}}",
+                                                "placeHolderValue": ""
+                                            }
+                                        ]
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "List all Phosphorus Device Logs",
+                            "query": "Phosphorus_CL \n | sort by TimeGenerated desc"
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "apiKeyName": "X-API-KEY"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://{{urlPlaceHolder}}/api/v3/integrations/{{integrationName}}/sentinel/getlogs",
+                        "headers": {
+                            "accept": "application/json"
+                        },
+                        "rateLimitQPS": 10,
+                        "queryWindowInMin": 3,
+                        "httpMethod": "GET",
+                        "retryCount": 3,
+                        "timeoutInSeconds": 100,
+                        "queryParameters": {
+                            "limit": 100,
+                            "offset": 0
+                        }
+                    },
+                    "paging": {
+                        "pagingType": "NextPageToken",
+                        "nextPageParaName": "page",
+                        "nextPageTokenJsonPath": "$.page"
+                    },
+                    "response": {
+                        "eventsJsonPaths": [ "$..devices" ],
+                        "successStatusJsonPath": "$.status",
+                        "successStatusValue": "ok",
+                        "format": "json"
+                    }
+                }
+            }
+        }
+    ]
+}

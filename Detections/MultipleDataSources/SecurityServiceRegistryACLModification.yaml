@@ -1,32 +1,31 @@
-
-id: 473d57e6-f787-435c-a16b-b38b51fa9a4b 
+id: 473d57e6-f787-435c-a16b-b38b51fa9a4b
 name: Security Service Registry ACL Modification
 description: |
     'Identifies attempts to modify registry ACL to evade security solutions. In the Solorigate attack, the attackers were found modifying registry permissions so services.exe cannot access the relevant registry keys to start the service.
-     The detection leverages Security Event as well as MDE data to identify when specific security services registry permissions are modified. 
-     Only some portions of this detection are related to Solorigate, it also includes coverage for some common tools that perform this activity. 
+     The detection leverages Security Event as well as MDE data to identify when specific security services registry permissions are modified.
+     Only some portions of this detection are related to Solorigate, it also includes coverage for some common tools that perform this activity.
      Reference on guidance for enabling registry auditing:
      - https://docs.microsoft.com/windows/security/threat-protection/auditing/advanced-security-auditing-faq
      - https://docs.microsoft.com/windows/security/threat-protection/auditing/appendix-a-security-monitoring-recommendations-for-many-audit-events
      - https://docs.microsoft.com/windows/security/threat-protection/auditing/audit-registry
      - https://docs.microsoft.com/windows/security/threat-protection/auditing/event-4670
        - For the event 4670 to be created the audit policy for the registry must have auditing enabled for Write DAC and/or Write Owner
-     - https://github.com/OTRF/Set-AuditRule 
+     - https://github.com/OTRF/Set-AuditRule
      - https://docs.microsoft.com/dotnet/api/system.security.accesscontrol.registryrights?view=dotnet-plat-ext-5.0'
 severity: High
 requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
-      - SecurityEvent 
+      - SecurityEvent
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
   - connectorId: WindowsSecurityEvents
-    dataTypes: 
-      - SecurityEvents 
+    dataTypes:
+      - SecurityEvents
   - connectorId: WindowsForwardedEvents
-    dataTypes: 
-      - WindowsEvent 
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -35,11 +34,10 @@ tactics:
   - DefenseEvasion
 relevantTechniques:
   - T1562
-tags: 
+tags:
   - Solorigate
   - NOBELIUM
 query: |
- 
   let servicelist = dynamic(['Services\\HealthService', 'Services\\Sense', 'Services\\WinDefend', 'Services\\MsSecFlt', 'Services\\DiagTrack', 'Services\\SgrmBroker', 'Services\\SgrmAgent', 'Services\\AATPSensorUpdater' , 'Services\\AATPSensor', 'Services\\mpssvc']);
   let filename = dynamic(["subinacl.exe",'SetACL.exe']);
   let parameters = dynamic (['/deny=SYSTEM', '/deny=S-1-5-18', '/grant=SYSTEM=r', '/grant=S-1-5-18=r', 'n:SYSTEM;p:READ', 'n1:SYSTEM;ta:remtrst;w:dacl']);
@@ -64,7 +62,7 @@ query: |
   | where TimeGenerated >= ago(timeframe)
   | where EventID == 4688
   | extend ProcessName = tostring(split(NewProcessName, '\\')[-1])
-  | where ProcessName in~ (filename) 
+  | where ProcessName in~ (filename)
   | where CommandLine has_any (servicelist) and CommandLine has_any (parameters)
   | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
   ),
@@ -93,8 +91,8 @@ query: |
   | where EventID == 4688 and EventData has_any (filename) and EventData has_any (servicelist) and EventData has_any (parameters)
   | extend NewProcessName = tostring(EventData.NewProcessName)
   | extend ProcessName = tostring(split(NewProcessName, '\\')[-1])
-  | where ProcessName in~ (filename) 
-  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where ProcessName in~ (filename)
+  | extend CommandLine = tostring(EventData.CommandLine)
   | where CommandLine has_any (servicelist) and CommandLine has_any (parameters)
   | extend  Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | extend  AccountDomain = tostring(EventData.AccountDomain)
@@ -105,30 +103,40 @@ query: |
   (
   DeviceProcessEvents
   | where TimeGenerated >= ago(timeframe)
-  | where InitiatingProcessFileName in~ (filename) 
+  | where InitiatingProcessFileName in~ (filename)
   | where InitiatingProcessCommandLine has_any(servicelist) and InitiatingProcessCommandLine has_any (parameters)
   | extend Account = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName), Computer = DeviceName
   | project TimeGenerated, Computer, Account, AccountDomain, ProcessName = InitiatingProcessFileName, ProcessNameFullPath = FolderPath, Activity = ActionType, CommandLine = InitiatingProcessCommandLine, Type, InitiatingProcessParentFileName
   )
   )
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
- 
+  | extend AccountName = tostring(split(Account, "\\")[0]), AccountNTDomain = tostring(split(Account, "\\")[1])
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.1.2
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+version: 1.1.4
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

@@ -1,0 +1,53 @@
+id: 8717e498-7b5d-4e23-9e7c-fa4913dbfd79
+name: Anomaly in SMB Traffic(ASIM Network Session schema)
+description: |
+  'This detection detects abnormal SMB traffic, a file-sharing protocol. By calculating the average deviation of SMB connections over last 14 days, flagging sources exceeding 50 average deviations.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1021
+  - T1021.002
+query: |
+  // Define the threshold for deviation
+  let threshold = 50;
+  // Define the time range for the baseline data
+  let starttime = 14d;
+  let endtime = 1d;
+  // Define the SMB ports to monitor
+  let SMBPorts = dynamic(["139", "445"]);
+  // Get the baseline data for user network sessions and Filter for the defined time range
+  let userBaseline = _Im_NetworkSession(starttime=ago(starttime), endtime=ago(endtime))
+    | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports
+    | summarize Count = count() by SrcIpAddr, DstPortNumber // Group by source IP and destination port
+    | summarize AvgCount = avg(Count) by SrcIpAddr, DstPortNumber; // Calculate the average count
+  // Get the recent user activity data and Filter for recent activity
+  let recentUserActivity = _Im_NetworkSession(starttime=ago(endtime))
+    | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports
+    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by SrcIpAddr, DstPortNumber; // Group by source IP and destination port
+  // Join the baseline and recent activity data
+  let UserBehaviorAnalysis = userBaseline
+    | join kind=inner (recentUserActivity) on SrcIpAddr, DstPortNumber
+    | extend Deviation = abs(RecentCount - AvgCount) / AvgCount; // Calculate the deviation
+  // Filter for deviations greater than the threshold
+  UserBehaviorAnalysis
+    | where Deviation > threshold
+    | project SrcIpAddr, DstPortNumber, Deviation, Count = RecentCount; // Project the required columns
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

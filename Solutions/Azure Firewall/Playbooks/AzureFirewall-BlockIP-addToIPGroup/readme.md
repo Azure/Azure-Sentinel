@@ -65,7 +65,7 @@ Once deployment is complete, you will need to authorize each connection.
 
      c. Find the action with the name "Gets all IpGroups in a resource group", "Gets the specified ipGroups","Creates or updates an ipGroups in a specified resource group" in the workflow.
         
-     d. Click Change connection [ Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. ]
+     d. Click Change connection [ Enter Connection name, ClientId, SecretKey and TenantId captured from Microsoft Entra ID. ]
 
 #### b. Configurations in Sentinel
 1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.

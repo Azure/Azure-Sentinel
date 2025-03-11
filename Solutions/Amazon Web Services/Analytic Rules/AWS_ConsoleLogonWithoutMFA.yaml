@@ -3,8 +3,7 @@ name: Login to AWS Management Console without MFA
 description: |
   'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA.
   You can limit this detection to trigger for adminsitrative accounts if you do not have MFA enabled on all accounts.
-  This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used
-  and the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'
+  This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used and the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'
 severity: Low
 status: Available
 requiredDataConnectors:
@@ -31,17 +30,26 @@ query: |
   | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), indexId = indexof(tostring(UserIdentityPrincipalid),":")
   | where MFAUsed !~ "Yes" and LoginResult !~ "Failure"
   | where SessionIssuerUserName !contains "AWSReservedSSO"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,
+  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,
   UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, indexId
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = iif(isempty(UserIdentityUserName),substring(UserIdentityPrincipalid, toint(indexId)+1), UserIdentityUserName), IPCustomEntity = SourceIpAddress
+  | extend timestamp = StartTimeUtc
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.3
+        columnName: SourceIpAddress
+version: 1.0.5
 kind: Scheduled

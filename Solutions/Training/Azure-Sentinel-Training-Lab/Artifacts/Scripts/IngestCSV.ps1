@@ -1,7 +1,12 @@
-PARAM(
+<#
+ # {PARAM(
     [Parameter(Mandatory=$true)]$CustomerId, # The log lanlyics workspace ID
     [Parameter(Mandatory=$true)]$SharedKey # The log lanlyics WorkspaceId
-)
+):Enter a comment or description}
+#>
+
+$CustomerId = ${Env:CustomerId}
+$SharedKey = ${Env:SharedKey}
 
 # You can use an optional field to specify the timestamp from the data. If the time field is not specified, Azure Monitor assumes the time is the message ingestion time
 #$TimeStampField = ""

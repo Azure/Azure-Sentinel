@@ -24,34 +24,52 @@ query: |
   AuditLogs
     | where OperationName has "Consent to application"
     | where Result =~ "failure"
-    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
-    | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
     | extend userAgent = iif(AdditionalDetails[0].key == "User-Agent", tostring(AdditionalDetails[0].value), tostring(AdditionalDetails[1].value))
     | where isnotempty(TargetResources)
-    | extend AppName = tostring(TargetResources[0].displayName)
+    | extend TargetAppName = tostring(TargetResources[0].displayName)
+    | extend TargetAppId = tostring(TargetResources[0].id)
     | mv-expand TargetResources[0].modifiedProperties
     | extend TargetResources_0_modifiedProperties = columnifexists("TargetResources_0_modifiedProperties", '')
     | where isnotempty(TargetResources_0_modifiedProperties)
     | where TargetResources_0_modifiedProperties.displayName =~ "MethodExecutionResult."
+    | extend TargetPropertyDisplayName = tostring(TargetResources_0_modifiedProperties.displayName)
     | extend FailureReason = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))
     | where FailureReason contains "Risky"
-    | project-reorder TimeGenerated, OperationName, Result, AppName, FailureReason, userPrincipalName, userAgent, ipAddress
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, OperationName, Result, TargetAppName, TargetAppId, FailureReason, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, userAgent
 entityMappings:
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: ipAddress
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: userPrincipalName
-version: 1.0.1
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: TargetAppId
+      - identifier: Name
+        columnName: TargetAppName
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

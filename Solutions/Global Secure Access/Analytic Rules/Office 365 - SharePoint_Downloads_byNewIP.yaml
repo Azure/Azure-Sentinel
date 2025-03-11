@@ -1,0 +1,97 @@
+id: 7460e34e-4c99-47b2-b7c0-c42e339fc586
+name: GSA Enriched Office 365 - SharePoint File Operation via Previously Unseen IPs
+description: |
+  Identifies anomalies using user behavior by setting a threshold for significant changes in file upload/download activities from new IP addresses. It establishes a baseline of typical behavior, compares it to recent activity, and flags deviations exceeding a default threshold of 25.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+  let threshold = 25;
+  let szSharePointFileOperation = "SharePointFileOperation";
+  let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+  let starttime = 14d;
+  let endtime = 1d;
+  
+  // Define a baseline of normal user behavior for OfficeActivity
+  let userBaselineOffice = OfficeActivity
+      | where TimeGenerated between(ago(starttime)..ago(endtime))
+      | where RecordType =~ szSharePointFileOperation
+      | where Operation in~ (szOperations)
+      | where isnotempty(UserAgent)
+      | summarize Count = count() by UserId, Operation, Site_Url, ClientIP
+      | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIP;
+  
+  // Get recent user activity for OfficeActivity
+  let recentUserActivityOffice = OfficeActivity
+      | where TimeGenerated > ago(endtime)
+      | where RecordType =~ szSharePointFileOperation
+      | where Operation in~ (szOperations)
+      | where isnotempty(UserAgent)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;
+  
+  // Define a baseline of normal user behavior for EnrichedMicrosoft365AuditLogs
+  let userBaselineEnriched = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated between(ago(starttime)..ago(endtime))
+      | where RecordType == szSharePointFileOperation
+      | where Operation in (szOperations)
+      | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+      | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+      | where isnotempty(UserAgent)
+      | summarize Count = count() by UserId, Operation, Site_Url, ClientIp
+      | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIp;
+  
+  // Get recent user activity for EnrichedMicrosoft365AuditLogs
+  let recentUserActivityEnriched = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated > ago(endtime)
+      | where RecordType == szSharePointFileOperation
+      | where Operation in (szOperations)
+      | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+      | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+      | where isnotempty(UserAgent)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIp, ObjectId, Workload, UserAgent;
+  
+  // Combine user baselines and recent activity, calculate deviation, and deduplicate
+  let UserBehaviorAnalysis = userBaselineOffice
+      | join kind=inner (recentUserActivityOffice) on UserId, Operation, Site_Url, ClientIP
+      | union (userBaselineEnriched | join kind=inner (recentUserActivityEnriched) on UserId, Operation, Site_Url, ClientIp)
+      | extend Deviation = abs(RecentCount - AvgCount) / AvgCount;
+  
+  // Filter for significant deviations
+  UserBehaviorAnalysis
+      | where Deviation > threshold
+      | project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, Site_Url, ObjectId, OfficeObjectId, OfficeWorkload, Workload, UserAgent, Deviation, Count = RecentCount
+      | order by Count desc, ClientIP asc, Operation asc, UserId asc
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Site_Url
+version: 2.0.6
+kind: Scheduled

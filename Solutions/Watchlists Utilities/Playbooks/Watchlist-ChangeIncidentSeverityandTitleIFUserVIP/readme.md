@@ -46,3 +46,83 @@ After deployment, you can run this playbook manually on an alert or attach it to
 ![Alert Trigger](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Watchlists%20Utilities/Playbooks/Watchlist-ChangeIncidentSeverityandTitleIFUserVIP/alert-trigger/images/alertTrigger-light.png)
 
 ![Alert Trigger](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Watchlists%20Utilities/Playbooks/Watchlist-ChangeIncidentSeverityandTitleIFUserVIP/alert-trigger/images/alertTrigger-dark.png)
+
+# Scenario based changes
+1.The erroneous behaviour happens because same user account has been used to create the VIP User watchlist in one of the scenario
+please follow the below steps
+
+**Step1:**
+Set variable: “Set watchlist items”
+
+{
+
+    "inputs": {
+
+        "name": "WatchlistItemsArray",
+
+        "value": "@body('Parse_JSON')?['properties']?['watchlistItems']"
+
+    }
+
+}
+
+
+**Step2:**
+
+Set variable: “Set UPN”
+
+ 
+
+{
+
+    "inputs": {
+
+        "name": "UPN",
+
+        "value": "@{items('For_each_2')?['properties.itemsKeyValue']?['User Principal Name']}"
+
+    }
+
+}
+variables(‘UPN’) contains ‘Accounts Name’
+
+
+##Screenshots
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/139563098/f0414435-44a9-4481-8b44-c7ae37f00f7e)
+
+expression": {
+                                    "and": [
+                                        {
+                                            "contains": [
+                                                "@variables('UPN')",
+                                                "@items('For_each')?['Name']"
+                                            ]
+                                        }
+                                    ]
+                                },
+
+
+
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/139563098/d41c594b-7976-40d1-9bd5-6be452267f0f)
+
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/139563098/280eab55-b653-4dc2-9cfe-aee20f95f0b7)
+
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/139563098/ad6f09da-485d-4633-8fdc-d45e2f1aec53)
+
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/139563098/5d7041da-6d50-490e-ad0a-9da746166083)
+
+
+
+
+
+
+
+
+
+
+

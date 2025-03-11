@@ -21,6 +21,7 @@ class AzureSentinelConnectorAsync:
 
     async def send_events(self, data: list, log_type: str):
         if data:
+            logging.info("Size of the event object {} of Type {}".format(len(json.dumps(data).encode()), log_type))
             data = self._split_big_request(data)
             await asyncio.gather(*[self._post_data(self.session, self.workspace_id, self.shared_key, d, log_type) for d in data])
 

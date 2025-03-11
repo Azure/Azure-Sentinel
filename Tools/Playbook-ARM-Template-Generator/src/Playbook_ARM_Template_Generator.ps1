@@ -580,13 +580,13 @@ foreach($GetSubscription in $GetSubscriptions) {
                 # Remove Parameter default values                
                 foreach($PlaybookParameter in $playbookResource.properties.definition.parameters.PSObject.Properties) {
                     
-                    if ($PlaybookParameter.Name -ne '$connections') {                        
+                   if ($PlaybookParameter.Name -ne '$connections') {                        
                         $playbookResource.properties.definition.parameters.PSObject.Properties.Remove($PlaybookParameter.Name)                        
                         $playbookResource.properties.definition.parameters | Add-Member -MemberType NoteProperty -Name $($PlaybookParameter.Name) -Value @{"defaultValue"="[parameters('$($PlaybookParameter.Name)')]" 
-                        "type"= "string" }     
+                        "type"= "$($PlaybookParameter.Value.type)" }     
                         
                         $PlaybookARMParameters.Add($($PlaybookParameter.Name), [ordered] @{                            
-                            "type"= "string"
+                            "type"= "$($PlaybookParameter.Value.type)"
                             "metadata"= @{
                                 "description"="Enter value for $($PlaybookParameter.Name)"
                             }

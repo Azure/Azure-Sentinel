@@ -1,0 +1,31 @@
+id: 93e0affa-35d8-4fe3-8af3-e8a8e1084483
+Function:
+  Title: Parser for DigitalGuardianDLPEvent
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: DigitalGuardianDLPEvent
+FunctionAlias: DigitalGuardianDLPEvent
+FunctionQuery: |
+    Syslog
+    | where SyslogMessage contains 'managed_device_id' and SyslogMessage contains 'number_of_incidents'
+    | mv-apply ExtractedFields = extract_all(@'\s(?P<key>[a-zA-Z0-9-_]+)=\"?(?P<value>[a-zA-Z0-9-_:/@.,#{}>< ]+)\"?', dynamic(["key","value"]), SyslogMessage) on (
+        project packed = pack(tostring(ExtractedFields[0]), tostring(ExtractedFields[1]))
+        | summarize bag = make_bag(packed)
+    )
+    | evaluate bag_unpack(bag)
+    | extend EventEndTime=todatetime(timestamp)
+    | project-away timestamp
+    | project-rename DvcAvtion=action_taken
+                    , DstUserName=destination
+                    , DstIpAddr=destination_ip
+                    , DstPortNumber=destination_port
+                    , IncidentId=incident_id
+                    , IncidentStatus=incident_status
+                    , IncidentsUrl=incidents_url
+                    , MatchedPolicies=matched_policies_by_severity
+                    , EventCount=number_of_incidents
+                    , NetworkApplicationProtocol=protocol
+                    , SrcUserName=source
+                    , SrcIpAddr=source_ip
+                    , SrcPortNumber=source_port

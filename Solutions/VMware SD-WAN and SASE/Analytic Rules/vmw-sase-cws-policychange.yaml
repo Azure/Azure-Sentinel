@@ -1,0 +1,48 @@
+id: 3efebd49-c985-431b-9da8-d7d397092d18
+name: VMware Cloud Web Security - Policy Change Detected
+version: 1.0.0
+kind: Scheduled
+description: This Analytics rule provides notifications when a VMware CWS policy has been modified. These alerts serve audit purposes. Policy changes might lower the level of security controls.
+severity: Informational
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+requiredDataConnectors:
+  - connectorId: VMwareSDWAN
+    dataTypes:
+      - CWS
+query: |+
+  VMware_VECO_EventLogs_CL
+  | where event == "CWS_EVENT"
+  | extend cwsPolicyAction = todynamic(detail).subEvent
+  | where cwsPolicyAction contains "SECURITY_RULE"
+  | extend cwsRuleName = todynamic(detail).name
+  | extend cwsRuleType = todynamic(detail).data.ruleType
+  | extend cwsPolicyName = todynamic(detail).policyName
+
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDescriptionFormat: |+
+    CWS Policy Change Detected:
+
+    CWS Policy Name: {{cwsPolicyName}}
+     - Rule changed: {{cwsRuleName}}
+        - Audited Action: {{cwsPolicyAction}}
+
+  alertDynamicProperties:
+  - alertProperty: ProductComponentName
+    value: cwsRuleType
+suppressionDuration: 5h

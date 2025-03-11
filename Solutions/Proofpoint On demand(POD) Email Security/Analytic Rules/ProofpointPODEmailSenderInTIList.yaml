@@ -1,0 +1,52 @@
+id: 35a0792a-1269-431e-ac93-7ae2980d4dde
+name: ProofpointPOD - Email sender in TI list
+description: |
+  'Email sender in TI list.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_maillog_CL
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1567
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(EmailSenderAddress)
+  | extend TI_emailEntity = EmailSenderAddress
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+         ProofpointPOD
+         | where TimeGenerated >= ago(dt_lookBack)
+         | where isnotempty(SrcUserUpn)
+         | extend ProofpointPOD_TimeGenerated = TimeGenerated, ClientEmail = SrcUserUpn
+  )
+  on $left.TI_emailEntity == $right.ClientEmail
+  | where ProofpointPOD_TimeGenerated < ExpirationDateTime
+  | summarize ProofpointPOD_TimeGenerated = arg_max(ProofpointPOD_TimeGenerated, *) by IndicatorId, ClientEmail
+  | project ProofpointPOD_TimeGenerated, Description, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, ClientEmail
+  | extend timestamp = ProofpointPOD_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ClientEmail
+version: 1.1.2
+kind: Scheduled

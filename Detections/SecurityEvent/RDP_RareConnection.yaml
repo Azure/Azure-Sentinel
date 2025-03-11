@@ -1,7 +1,7 @@
 id: 45b903c5-6f56-4969-af10-ae62ac709718
 name: Rare RDP Connections
 description: |
-  'Identifies when an RDP connection is new or rare related to any logon type by a given account today based on comparison with the previous 14 days.
+  'Identifies when an RDP connection is new or rare related to any logon type by a given account today compared with the previous 14 days.
   RDP connections are indicated by the EventID 4624 with LogonType = 10'
 severity: Medium
 requiredDataConnectors:
@@ -65,27 +65,38 @@ query: |
   ) on Account, Computer
   | summarize StartTime = min(StartTime), EndTime = max(EndTime), ConnectionCount = sum(ConnectionCount)
   by Account, Computer, IpAddress, AccountType, Activity, LogonTypeName, ProcessName
-  | extend timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(Account, @"\")[1]), AccountNTDomain = tostring(split(Account, @"\")[0])
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.2.3
+        columnName: IpAddress
+version: 1.2.5
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Shain
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

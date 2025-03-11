@@ -1,0 +1,93 @@
+  Parser:
+    Title: Registry Event ASIM parser for CrowdStrike Falcon Data Replicator
+    Version: '0.1'
+    LastUpdated: Jun 9, 2023
+  Product:
+    Name: Falcon Data Replicator
+  Normalization:
+    Schema: AuditEvent
+    Version: '0.1.0'
+  References:
+    - Title: ASIM Audit Event Schema
+      Link: https://aka.ms/ASimAuditEventDoc
+    - Title: ASIM
+      Link: https://aka.ms/AboutASIM
+  Description: |
+    This ASIM parser supports normalizing CrowdStrike Falcon Data Replicator logs produced by the Microsoft Sentinel AWS S3 connector to the ASIM Audit Event normalized schema.
+  ParserName: ASimAuditEventCrowdStrikeFalcon
+  ParserParams:
+    - Name: disabled
+      Type: bool
+      Default: false
+  ParserQuery: |
+    let EventResultLookup = parse_json('{"VolumeSnapshotDeleted": {"EventType": "Delete","Operation": "Volume Snapshot Deleted","ObjectType": "Other"},"VolumeSnapshotCreated": {"EventType": "Create","Operation": "Volume Snapshot Created","ObjectType": "File"},"SmbServerShareOpenedEtw": {"EventType": "Set","Operation": "SMB Server Share Opened Etw","ObjectType": "Other"},"SmbClientShareOpenedEtw": {"EventType": "Set","Operation": "SMB Client Share Opened Etw","ObjectType": "Other"},"SmbClientShareClosedEtw": {"EventType": "Set","Operation": "SMB Client Share Closed Etw","ObjectType": "Other"},"ProvisioningStarted": {"EventType": "Start","Operation": "Provisioning Started","ObjectType": "Other"},"ProvisioningEnded": {"EventType": "Stop","Operation": "Provisioning Ended","ObjectType": "Other"},"OsfmDownloadComplete": {"EventType": "Other","Operation": "Osfm Download Complete","ObjectType": "File"},"NetShareSecurityModify": {"EventType": "Set","Operation": "NetShare Security Modify","ObjectType": "Other"},"NetShareDelete": {"EventType": "Delete","Operation": "NetShare Delete","ObjectType": "Other"},"NetShareAdd": {"EventType": "Create","Operation": "NetShare Add","ObjectType": "Other"},"MemoryScanEnabled": {"EventType": "Enable","Operation": "Memory Scan Enabled","ObjectType": "Other"},"ManifestDownloadComplete": {"EventType": "Other","Operation": "Manifest Download Complete","ObjectType": "File"},"LfoUploadStart": {"EventType": "Start","Operation": "LFO Upload Start","ObjectType": "Other"},"IoSessionConnected": {"EventType": "Other","Operation": "IO Session Connected","ObjectType": "Other"},"InstallServiceDownloadComplete": {"EventType": "Install","Operation": "Install Service Download Complete","ObjectType": "File"},"InstallBundleDownloadComplete": {"EventType": "Install","Operation": "Install Bundle Download Complete","ObjectType": "File"},"HostnameChanged": {"EventType": "Set","Operation": "Hostname Changed","ObjectType": "Host"},"FirewallSetRule": {"EventType": "Set","Operation": "Firewall Set Rule","ObjectType": "Policy Rule"},"FirewallEnabled": {"EventType": "Enable","Operation": "Firewall Enabled","ObjectType": "Other"},"FirewallDisabled": {"EventType": "Disable","Operation": "Firewall Disabled","ObjectType": "Other"},"FirewallDeleteRule": {"EventType": "Delete","Operation": "Firewall Delete Rule","ObjectType": "Policy Rule"},"FirewallChangeOption": {"EventType": "Set","Operation": "Firewall Change Option","ObjectType": "Other"},"FileVaultStatus": {"EventType": "Set","Operation": "File Vault Status","ObjectType": "Other"},"FileRenameInfo": {"EventType": "Set","Operation": "File Rename","ObjectType": "File"},"FileOpenInfo": {"EventType": "Other","Operation": "File Open","ObjectType": "File"},"FileDeleteInfo": {"EventType": "Delete","Operation": "File Delete","ObjectType": "File"},"FileCreateInfo": {"EventType": "Create","Operation": "File Create","ObjectType": "File"},"EventLogCleared": {"EventType": "Other","Operation": "Event Logs Cleared","ObjectType": "File"},"DcUsbDeviceWhitelisted": {"EventType": "Other","Operation": "DC USB Device Whitelisted","ObjectType": "Other"},"DcUsbDeviceDisconnected": {"EventType": "Other","Operation": "DC USB Device Disconnected","ObjectType": "Other"},"DcBluetoothDeviceDisconnected": {"EventType": "Other","Operation": "DC Bluetooth Device Disconnected","ObjectType": "Other"},"DcBluetoothDeviceConnected": {"EventType": "Other","Operation": "DC Bluetooth Device Connected","ObjectType": "Other"},"CriticalEnvironmentVariableChanged": {"EventType": "Set","Operation": "Critical Environment Variable Changed","ObjectType": "Other"},"ConfigStateUpdate": {"EventType": "Set","Operation": "Config State Update","ObjectType": "Configuration"},"ActiveDirectoryAccountUnlocked": {"EventType": "Other","Operation": "Active Directory Account Unlocked","ObjectType": "Account"},"ActiveDirectoryAccountPasswordUpdate": {"EventType": "Set","Operation": "Active Directory Account Password Update","ObjectType": "Account"},"ActiveDirectoryAccountOuUpdate": {"EventType": "Set","Operation": "Active Directory Account Ou Update","ObjectType": "Account"},"ActiveDirectoryAccountNameUpdate": {"EventType": "Set","Operation": "Active Directory Account Name Update","ObjectType": "Account"},"ActiveDirectoryAccountLocked": {"EventType": "Other","Operation": "Active Directory Account Locked","ObjectType": "Account"},"ActiveDirectoryAccountEnabled": {"EventType": "Enable","Operation": "Active Directory Account Enabled","ObjectType": "Account"},"ActiveDirectoryAccountDisabled": {"EventType": "Disable","Operation": "Active Directory Account Disabled","ObjectType": "Account"},"ActiveDirectoryAccountDepartmentUpdate": {"EventType": "Set","Operation": "Active Directory Account Department Update","ObjectType": "Account"},"ActiveDirectoryAccountCreated": {"EventType": "Create","Operation": "Active Directory Account Created","ObjectType": "Account"},"IOServiceRegister": {"EventType": "Other","Operation": "IO Service Register","ObjectType": "Other"}}');
+    source
+        | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01')),
+                 contextDatetime = datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01'))
+        | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())
+        | project-rename
+            DvcIpAddr = aip,
+            DvcId = aid,
+            ActorUsername = UserName,
+            EventOriginalType = name,
+            EventOriginalUid = id,
+            EventProductVersion = ConfigBuild
+        | extend 
+            DvcOs = case(event_platform == "Win", "Windows", 
+                        event_platform == "Mac", "Macintosh",
+                        event_platform == "Lin", "Linux", 
+                        ""),
+            ActorUsernameType = iff(isnotempty(ActorUsername),"Simple",""),
+            EventStartTime = iff(isnotempty(contextDatetime),contextDatetime,TimeGenerated)
+        | extend 
+                Operation = tostring(EventResultLookup[event_simpleName].Operation),
+                Object = case(
+                              event_simpleName =~ "VolumeSnapshotDeleted", VolumeSnapshotName,
+                              event_simpleName =~ "VolumeSnapshotCreated", TargetFileName,
+                              event_simpleName startswith "Smb", SmbShareName,
+                              event_simpleName startswith "Provisioning", "Agent",
+                              event_simpleName =~ "OsfmDownloadComplete", TargetFileName,
+                              event_simpleName startswith "NetShare", ShareName,
+                              event_simpleName =~ "MemoryScanEnabled", "Memory Scan",
+                              event_simpleName =~ "ManifestDownloadComplete", TargetFileName,
+                              event_simpleName =~ "LfoUploadStart", UploadId,
+                              event_simpleName =~ "IoSessionConnected", SessionId,
+                              event_simpleName =~ "IOServiceRegister", IOServiceName,
+                              event_simpleName startswith "Install", TargetFileName,
+                              event_simpleName =~ "HostnameChanged", ComputerName,
+                              event_simpleName =~ "FirewallSetRule", iff(isnotempty(FirewallRule),strcat(FirewallRule,'\\',FirewallRuleId),FirewallRuleId),
+                              event_simpleName in~ ("FirewallEnabled","FirewallDisabled"), "Firewall",
+                              event_simpleName =~ "FirewallDeleteRule", FirewallRuleId,
+                              event_simpleName =~ "FirewallChangeOption", FirewallOption,
+                              event_simpleName =~ "FileVaultStatus", "File Vault",
+                              event_simpleName =~ "FileRenameInfo", SourceFileName,
+                              event_simpleName startswith "File", TargetFileName,
+                              event_simpleName =~ "EventLogCleared", TargetFileName,
+                              event_simpleName =~ "DcUsbDeviceWhitelisted", iff(isnotempty(DeviceVendorId),strcat(DeviceVendorId,'\\',DeviceProductId),DeviceProductId),
+                              event_simpleName =~ "DcUsbDeviceDisconnected", DeviceSerialNumber,
+                              event_simpleName startswith "DcBluetoothDevice", BluetoothDeviceAddress,
+                              event_simpleName =~ "CriticalEnvironmentVariableChanged", EnvironmentVariableName,
+                              event_simpleName =~ "ConfigStateUpdate", "Config State",
+                              event_simpleName startswith "ActiveDirectoryAccount", SamAccountName,  
+                              ""),
+                ObjectType = tostring(EventResultLookup[event_simpleName].ObjectType),
+                OldValue = case(
+                              event_simpleName == "FileRenameInfo", SourceFileName, 
+                              ""),
+                NewValue = case(
+                              event_simpleName == "FirewallChangeOption", iff(isnotempty(FirewallOptionNumericValue),FirewallOptionNumericValue,FirewallOptionStringValue), 
+                              event_simpleName == "FileVaultStatus", FileVaultIsEnabled,
+                              event_simpleName == "FileRenameInfo", TargetFileName,
+                              event_simpleName == "CriticalEnvironmentVariableChanged", EnvironmentVariableName,
+                              event_simpleName == "ConfigStateUpdate", ConfigStateData,
+                              event_simpleName == "ActiveDirectoryAccountOuUpdate", ActiveDirectoryOuDn,
+                              event_simpleName == "ActiveDirectoryAccountDepartmentUpdate", ActiveDirectoryDepartment,
+                              ""),
+                EventEndTime = EventStartTime,
+                EventType = tostring(EventResultLookup[event_simpleName].EventType),
+                EventCount = toint(1),
+                EventSchemaVersion = "0.1.0",
+                EventVendor = "CrowdStrike",
+                EventProduct = "Falcon Data Replicator",
+                EventResult = "Success",
+                EventSeverity = "Informational"

@@ -1,0 +1,286 @@
+Parser:
+  Title: File events ASIM parser for Google Workspace
+  Version: '0.1.0'
+  LastUpdated: Dec 19, 2023
+Product:
+  Name: Google Workspace
+Normalization:
+  Schema: FileEvent
+  Version: '0.2.1'
+References:
+- Title: ASIM File Event Schema
+  Link: https://aka.ms/ASimFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Google Workspace documentation
+  Link: https://developers.google.com/admin-sdk/reports/v1/appendix/activity/drive
+Description: |
+  This ASIM parser supports normalizing the Google Workspace (Drive) logs ingested in GWorkspace_ReportsAPI_drive_CL table to the ASIM file activity normalized schema.
+ParserName: ASimFileEventGoogleWorkspace
+EquivalentBuiltInParser: _ASim_FileEvent_GoogleWorkspace
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    disabled: bool = false
+    ) {
+    let GoogleWorkspaceSchema = datatable (
+    event_name_s: string,
+    event_type_s: string,
+    id_uniqueQualifier_s: string,
+    actor_email_s: string,
+    actor_profileId_s: string,
+    IPAddress: string,
+    doc_type_s: string,
+    doc_title_s: string,
+    originating_app_id_s: string,
+    id_applicationName_s: string,
+    old_value_s: string,
+    new_value_s: string,
+    destination_folder_title_s: string,
+    source_folder_title_s: string,
+    copy_type_s: string,
+    target_user_s: string,
+    doc_id_s: string,
+    primary_event_b: bool,
+    billable_b: bool,
+    owner_s: string,
+    owner_is_shared_drive_b: bool,
+    is_encrypted_b: bool,
+    visibility_s: string,
+    shared_drive_id_s: string,
+    destination_folder_id_s: string,
+    source_folder_id_s: string,
+    TimeGenerated: datetime,
+    _ResourceId: string,
+    Computer: string,
+    MG: string,
+    ManagementGroupName: string,
+    RawData: string,
+    SourceSystem: string,
+    TenantId: string,
+    _ItemId: string
+  )[];
+      let EventFieldsLookup = datatable (
+      EventOriginalSubType: string,
+      EventType: string,
+      EventSubType: string
+  )
+          [
+      "download", "FileAccessed", "Download",
+      "edit", "FileModified", "Checkin",
+      "upload", "FileCreated", "Upload",
+      "create", "FileCreated", "Checkin",
+      "rename", "FileRenamed", "",
+      "view", "FileAccessed", "Preview",
+      "preview", "FileAccessed", "Preview",
+      "copy", "FileCopied", "",
+      "source_copy", "FileCopied", "",
+      "delete", "FileDeleted", "",
+      "trash", "FileDeleted", "Recycle",
+      "move", "FileMoved", "",
+      "untrash", "FileCreatedOrModified", "Checkin",
+      "deny_access_request", "FileAccessed", "Preview",
+      "expire_access_request", "FileAccessed", "Preview",
+      "request_access", "FileAccessed", "Preview",
+      "add_to_folder", "FileCreated", "Checkin",
+      "approval_canceled", "FileAccessed", "",
+      "approval_comment_added", "FileAccessed", "",
+      "approval_completed", "FileAccessed", "Preview",
+      "approval_decisions_reset", "FileAccessed", "",
+      "approval_due_time_change", "FileAccessed", "",
+      "approval_requested", "FileAccessed", "Preview",
+      "approval_reviewer_change", "FileAccessed", "",
+      "approval_reviewer_responded", "FileAccessed", "",
+      "create_comment", "FileModified", "Checkin",
+      "delete_comment", "FileModified", "Checkin",
+      "edit_comment", "FileModified", "Checkin",
+      "reassign_comment", "FileModified", "Checkin",
+      "reopen_comment", "FileModified", "Checkin",
+      "resolve_comment", "FileModified", "Checkin",
+      "add_lock", "FileModified", "",
+      "print", "FileAccessed", "Print",
+      "remove_from_folder", "FileDeleted", "",
+      "remove_lock", "FileModified", "",
+  ];
+      let SupportedEventNames = EventFieldsLookup
+          | project EventOriginalSubType;
+      union isfuzzy=true GoogleWorkspaceSchema, GWorkspace_ReportsAPI_drive_CL
+      | where not(disabled)
+      | where event_name_s in (SupportedEventNames)
+      | lookup EventFieldsLookup on $left.event_name_s == $right.EventOriginalSubType
+      | project-rename 
+          EventOriginalUid = id_uniqueQualifier_s,
+          ActorUsername = actor_email_s,
+          ActorUserId = actor_profileId_s,
+          SrcIpAddr = IPAddress,
+          TargetFileMimeType = doc_type_s,
+          TargetFilePath = doc_title_s,
+          ActingAppId = originating_app_id_s,
+          EventOriginalType=event_type_s
+      | extend
+          TargetAppName = iif(id_applicationName_s == 'drive', "Google Workspace - Drive", ""),
+          TargetAppType = iif(id_applicationName_s == 'drive', "SaaS application", ""),
+          ActorUserIdType = iif(isnotempty(ActorUserId), "GWorkspaceProfileID", ""),
+          SrcFilePath = iif(event_name_s has_any ('rename', 'copy', 'source_copy'), old_value_s, ""),
+          TargetFilePath = iif(event_name_s has ('source_copy'), new_value_s, TargetFilePath),
+          TargetFileDirectory = iif(event_name_s has_any ('move'), destination_folder_title_s, ""),
+          SrcFileDirectory = iif(event_name_s has_any ('move'), source_folder_title_s, ""),
+          EventType = case(
+                  TargetFileMimeType == "folder" and event_name_s == "create",
+                  "FolderCreated",
+                  TargetFileMimeType == "folder" and event_name_s == "rename",
+                  "FolderModified",
+                  TargetFileMimeType == "folder" and event_name_s == "delete",
+                  "FolderDeleted",
+                  TargetFileMimeType == "folder" and event_name_s == "trash",
+                  "FolderDeleted",
+                  TargetFileMimeType == "folder" and event_name_s == "move",
+                  "FolderMoved",
+                  TargetFileMimeType == "folder" and event_name_s == "untrash",
+                  "FolderCreated",
+                  EventType
+              ),
+          EventSubType = case(
+                    TargetFileMimeType == "folder" and event_name_s == "create",
+                    "",
+                    TargetFileMimeType == "folder" and event_name_s == "trash",
+                    "",
+                    TargetFileMimeType == "folder" and event_name_s == "untrash",
+                    "",
+                    EventSubType
+                ),
+          EventMessage = case(
+                    event_name_s == 'download',
+                    strcat(ActorUsername, " deleted an item"),
+                    event_name_s == 'edit',
+                    strcat(ActorUsername, " edited an item"),
+                    event_name_s == 'upload',
+                    strcat(ActorUsername, " uploaded an item"),
+                    event_name_s == 'create',
+                    strcat(ActorUsername, " created an item"),
+                    event_name_s == 'rename',
+                    strcat(ActorUsername, " renamed ", old_value_s, " to ", TargetFilePath),
+                    event_name_s == 'view',
+                    strcat(ActorUsername, " viewed an item"),
+                    event_name_s == 'preview',
+                    strcat(ActorUsername, " previewed an item"),
+                    event_name_s == 'copy',
+                    strcat(ActorUsername, " created a copy of original document ", old_value_s),
+                    event_name_s == 'delete',
+                    strcat(ActorUsername, " deleted an item"),
+                    event_name_s == 'trash',
+                    strcat(ActorUsername, " trashed an item"),
+                    event_name_s == 'move',
+                    strcat(ActorUsername, " moved an item from ", source_folder_title_s, " to ", destination_folder_title_s),
+                    event_name_s == 'untrash',
+                    strcat(ActorUsername, " restored an item"),
+                    event_name_s == 'source_copy',
+                    strcat(ActorUsername, " copied this item, creating a new item ", copy_type_s, " your organication ", new_value_s),
+                    event_name_s == 'deny_access_request',
+                    strcat(ActorUsername, " denied an access request for ", target_user_s),
+                    event_name_s == 'expire_access_request',
+                    strcat("An access request for ", target_user_s, " expired "),
+                    event_name_s == 'request_access',
+                    strcat(ActorUsername, " requested access to an item for ", target_user_s),
+                    event_name_s == 'add_to_folder',
+                    strcat(ActorUsername, " added an item to ", destination_folder_title_s),
+                    event_name_s == 'approval_canceled',
+                    strcat(ActorUsername, " canceled an approval on an item"),
+                    event_name_s == 'approval_comment_added',
+                    strcat(ActorUsername, " added a comment on an approval on an item"),
+                    event_name_s == 'approval_completed',
+                    "An approval was completed",
+                    event_name_s == 'approval_decisions_reset',
+                    "Approval decisions were reset",
+                    event_name_s == 'approval_due_time_change',
+                    strcat(ActorUsername, " requested a due time change on an approval"),
+                    event_name_s == 'approval_requested',
+                    strcat(ActorUsername, " requested approval on an item"),
+                    event_name_s == 'approval_reviewer_change',
+                    strcat(ActorUsername, " requested a reviewer change on an approval"),
+                    event_name_s == 'approval_reviewer_responded',
+                    strcat(ActorUsername, " reviewed an approval on an item"),
+                    event_name_s == 'create_comment',
+                    strcat(ActorUsername, " created a comment"),
+                    event_name_s == 'delete_comment',
+                    strcat(ActorUsername, " deleted a comment"),
+                    event_name_s == 'edit_comment',
+                    strcat(ActorUsername, " edited a comment"),
+                    event_name_s == 'reassign_comment',
+                    strcat(ActorUsername, " reassigned a comment"),
+                    event_name_s == 'reopen_comment',
+                    strcat(ActorUsername, " reopened a comment"),
+                    event_name_s == 'resolve_comment',
+                    strcat(ActorUsername, " resolved a comment"),
+                    event_name_s == 'add_lock',
+                    strcat(ActorUsername, " locked an item"),
+                    event_name_s == 'print',
+                    strcat(ActorUsername, " printed an item"),
+                    event_name_s == 'remove_from_folder',
+                    strcat(ActorUsername, " removed an item from from ", source_folder_title_s),
+                    event_name_s == 'remove_lock',
+                    strcat(ActorUsername, " unlocked an item"),
+                    ""
+                ),
+          AdditionalFields = bag_pack(
+                        "Doc_Id",
+                        doc_id_s,
+                        "Primary_Event",
+                        primary_event_b,
+                        "Billable",
+                        billable_b,
+                        "Owner",
+                        owner_s,
+                        "Owner_Is_Shared_Drive",
+                        owner_is_shared_drive_b,
+                        "Is_Encrypted",
+                        is_encrypted_b,
+                        "Visibility",
+                        visibility_s,
+                        "Copy_Type",
+                        copy_type_s,
+                        "Shared_Drive_Id",
+                        shared_drive_id_s,
+                        "Destination_Folder_Id",
+                        destination_folder_id_s,
+                        "Source_Folder_Id",
+                        source_folder_id_s
+                    )
+      | extend
+          EventOriginalSubType = event_name_s,
+          Application = TargetAppName,
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          TargetFileName=TargetFilePath,
+          FilePath = TargetFilePath,
+          TargetFilePathType = iif(isnotempty(TargetFilePath), "FileNameOnly", ""),
+          SrcFilePathType = iif(isnotempty(SrcFilePath), "FileNameOnly", ""),
+          FileName = TargetFilePath,
+          SrcFileName = SrcFilePath,
+          User = ActorUsername,
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          EventProduct = "Workspace",
+          EventVendor = "Google",
+          EventResult = "Success",
+          EventSchemaVersion = "0.2.1",
+          EventSchema = "FileEvent",
+          EventUid = _ItemId,
+          Dvc = "Workspace"
+      | project-away 
+          *_s,
+          *_b,
+          _ResourceId,
+          Computer,
+          MG,
+          ManagementGroupName,
+          RawData,
+          SourceSystem,
+          TenantId
+  };
+  parser (disabled = disabled)
+

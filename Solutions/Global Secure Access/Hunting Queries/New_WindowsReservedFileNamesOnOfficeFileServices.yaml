@@ -1,0 +1,106 @@
+id: 641ecd2d-27c9-4f05-8433-8205096b09fc
+name: GSA Enriched Office 365 - New Windows Reserved Filenames staged on Office file services
+description: |
+  'This identifies new Windows Reserved Filenames on Office services like SharePoint and OneDrive in the past 7 days. It also detects when a user uploads these files to another user's workspace, which may indicate malicious activity.'
+description-detailed: |
+  'Identifies when new Windows Reserved Filenames show up on Office services such as SharePoint and OneDrive in relation to the previous 7 days.
+  List currently includes ''CON'', ''PRN'', ''AUX'', ''NUL'', ''COM1'', ''COM2'', ''COM3'', ''COM4'', ''COM5'', ''COM6'',
+  ''COM7'', ''COM8'', ''COM9'', ''LPT1'', ''LPT2'', ''LPT3'', ''LPT4'', ''LPT5'', ''LPT6'', ''LPT7'', ''LPT8'', ''LPT9'' file extensions.
+  Additionally, identifies when a given user is uploading these files to another users workspace.
+  This may be indication of a staging location for malware or other malicious activity.
+  References: https://docs.microsoft.com/windows/win32/fileio/naming-a-file'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1105
+query: |
+    let starttime = todatetime('{{StartTimeISO}}');
+      let endtime = todatetime('{{EndTimeISO}}');
+      let lookback = totimespan((endtime - starttime) * 7);
+      
+      // Reserved file names and extensions for Windows
+      let Reserved = dynamic(['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9']);
+      
+      // EnrichedMicrosoft365AuditLogs Query
+      let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+          | where TimeGenerated between (starttime .. endtime)
+          | extend FileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
+          | extend ClientUserAgent = tostring(parse_json(tostring(AdditionalProperties)).ClientUserAgent)
+          | extend SiteUrl = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+          | where isnotempty(ObjectId)
+          | where ObjectId !~ FileName
+          | where ObjectId in (Reserved) or FileName in (Reserved)
+          | where ClientUserAgent !has "Mac OS"
+          | join kind=leftanti (
+              EnrichedMicrosoft365AuditLogs
+              | where TimeGenerated between (ago(lookback) .. starttime)
+              | extend FileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
+              | extend ClientUserAgent = tostring(parse_json(tostring(AdditionalProperties)).ClientUserAgent)
+              | extend SiteUrl = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+              | where isnotempty(ObjectId)
+              | where ObjectId !~ FileName
+              | where ObjectId in (Reserved) or FileName in (Reserved)
+              | where ClientUserAgent !has "Mac OS"
+              | summarize PrevSeenCount = count() by ObjectId, UserId, FileName
+          ) on ObjectId
+          | extend SiteUrlUserFolder = tolower(split(SiteUrl, '/')[-2])
+          | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
+          | extend UserIdDiffThanUserFolder = iff(SiteUrl has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true, false)
+          | summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Operations = make_list(Operation, 100000), UserAgents = make_list(ClientUserAgent, 100000), Ids = make_list(Id, 100000),
+              SourceRelativeUrls = make_list(ObjectId, 100000), FileNames = make_list(FileName, 100000) by Workload, RecordType, UserType, UserKey, UserId, ClientIp, SiteUrl, ObjectId, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
+          | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+          | extend IP_0_Address = ClientIp
+          | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix, URL_0_Url = SiteUrl;
+      // OfficeActivity Query
+      let OfficeEvents = OfficeActivity
+          | where TimeGenerated between (starttime .. endtime)
+          | where isnotempty(SourceFileExtension)
+          | where SourceFileName !~ SourceFileExtension
+          | where SourceFileExtension in (Reserved) or SourceFileName in (Reserved)
+          | where UserAgent !has "Mac OS"
+          | join kind=leftanti (
+              OfficeActivity
+              | where TimeGenerated between (ago(lookback) .. starttime)
+              | where isnotempty(SourceFileExtension)
+              | where SourceFileName !~ SourceFileExtension
+              | where SourceFileExtension in (Reserved) or SourceFileName in (Reserved)
+              | where UserAgent !has "Mac OS"
+              | summarize PrevSeenCount = count() by SourceFileExtension
+          ) on SourceFileExtension
+          | extend SiteUrlUserFolder = tolower(split(Site_Url, '/')[-2])
+          | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
+          | extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true, false)
+          | summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Operations = make_list(Operation, 100000), UserAgents = make_list(UserAgent, 100000), OfficeIds = make_list(OfficeId, 100000),
+              SourceRelativeUrls = make_list(SourceRelativeUrl, 100000), FileNames = make_list(SourceFileName, 100000) by OfficeWorkload, RecordType, UserType, UserKey, UserId, ClientIP, Site_Url, SourceFileExtension, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
+          | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+          | extend IP_0_Address = ClientIP
+          | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix, URL_0_Url = Site_Url;
+      // Combine Office and Enriched Logs
+      let CombinedEvents = OfficeEvents
+          | union EnrichedEvents
+          | summarize arg_min(StartTime, *) by UserId, ClientIP;
+      // Final Output
+      CombinedEvents
+          | project StartTime, EndTime, Operations, UserAgents, IP_0_Address, Account_0_Name, Account_0_UPNSuffix, URL_0_Url
+          | order by StartTime desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IP_0_Address
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URL_0_Url
+version: 2.0.2
+kind: Scheduled

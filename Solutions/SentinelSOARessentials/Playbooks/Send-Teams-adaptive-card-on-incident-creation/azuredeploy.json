@@ -1,0 +1,415 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Send Teams Adaptive Card on incident creation",
+        "description": "This playbook will send Microsoft Teams Adaptive Card on incident creation, with the option to change the incident's severity and/or status.",
+        "prerequisites": ["1. Get Teams Group ID and Teams Channel ID. (instructions available on - https://www.linkedin.com/pulse/3-ways-locate-microsoft-team-id-christopher-barber-/). It is possible to choose Teams group and channel after deployment as well."],
+        "postDeployment": [
+            "1. Assign Microsoft Sentinel Responder role to the Playbook's Managed Identity.",
+            "2. Authorize Microsoft Teams connector."
+        ],
+        "lastUpdateTime": "2022-08-04T00:00:00.000Z",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Benjamin Kovacevic"
+        },
+        "releaseNotes": [
+        {
+          "version": "1.0.0",
+          "title": "Send Teams Adaptive Card on incident creation",
+          "notes": [
+            "Initial version"
+          ]
+        }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Send-Teams-adaptive-card-on-incident-creation",
+            "type": "string"
+        },
+        "Teams Group ID": {
+            "defaultValue": "",
+            "type": "string"
+        },
+        "Teams Channel ID": {
+            "defaultValue": "",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Compose_-_Adaptive_card_body": {
+                            "runAfter": {
+                            },
+                            "type": "Compose",
+                            "inputs": {
+                                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                                "actions": [
+                                    {
+                                        "data": {
+                                            "x": "confirm"
+                                        },
+                                        "title": "Submit response!",
+                                        "type": "Action.Submit"
+                                    }
+                                ],
+                                "body": [
+                                    {
+                                        "size": "Large",
+                                        "text": "New Microsoft Sentinel incident created",
+                                        "type": "TextBlock",
+                                        "wrap": true
+                                    },
+                                    {
+                                        "text": "[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})",
+                                        "type": "TextBlock",
+                                        "wrap": true
+                                    },
+                                    {
+                                        "facts": [
+                                            {
+                                                "size": "medium",
+                                                "spacing": "large",
+                                                "title": "Incident Title",
+                                                "value": "@{triggerBody()?['object']?['properties']?['title']}"
+                                            },
+                                            {
+                                                "spacing": "Medium",
+                                                "title": "Incident ID",
+                                                "value": "@{triggerBody()?['object']?['properties']?['incidentNumber']}"
+                                            },
+                                            {
+                                                "spacing": "Medium",
+                                                "title": "Incident Creation time (UTC)",
+                                                "value": "@{triggerBody()?['object']?['properties']?['createdTimeUtc']}"
+                                            },
+                                            {
+                                                "spacing": "Medium",
+                                                "title": "Severity",
+                                                "value": "@{triggerBody()?['object']?['properties']?['severity']}"
+                                            },
+                                            {
+                                                "spacing": "Medium",
+                                                "title": "Alert Providers",
+                                                "value": "@{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'],'; ')}"
+                                            },
+                                            {
+                                                "spacing": "Medium",
+                                                "title": "Tactics",
+                                                "value": "@{join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '; ')}"
+                                            },
+                                            {
+                                                "spacing": "Medium",
+                                                "title": "Description",
+                                                "value": "@{triggerBody()?['object']?['properties']?['description']}"
+                                            }
+                                        ],
+                                        "type": "FactSet"
+                                    },
+                                    {
+                                        "size": "Large",
+                                        "spacing": "Large",
+                                        "text": "Respond:",
+                                        "type": "TextBlock",
+                                        "weight": "Bolder"
+                                    },
+                                    {
+                                        "size": "Small",
+                                        "style": "Person",
+                                        "type": "Image",
+                                        "url": "https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png"
+                                    },
+                                    {
+                                        "text": "Close Microsoft Sentinel incident?",
+                                        "type": "TextBlock"
+                                    },
+                                    {
+                                        "choices": [
+                                            {
+                                                "isSelected": true,
+                                                "title": "Close incident - False Positive",
+                                                "value": "FalsePositive - IncorrectAlertLogic"
+                                            },
+                                            {
+                                                "title": "Close incident - True Positive",
+                                                "value": "TruePositive - SuspiciousActivity"
+                                            },
+                                            {
+                                                "title": "Close incident - Benign Positive",
+                                                "value": "BenignPositive - SuspiciousButExpected"
+                                            },
+                                            {
+                                                "title": "Don't close the incident",
+                                                "value": "no"
+                                            }
+                                        ],
+                                        "id": "incidentStatus",
+                                        "style": "compact",
+                                        "type": "Input.ChoiceSet",
+                                        "value": "no"
+                                    },
+                                    {
+                                        "text": "Change Microsoft Sentinel incident severity?",
+                                        "type": "TextBlock"
+                                    },
+                                    {
+                                        "choices": [
+                                            {
+                                                "isSelected": true,
+                                                "title": "High",
+                                                "value": "High"
+                                            },
+                                            {
+                                                "title": "Medium",
+                                                "value": "Medium"
+                                            },
+                                            {
+                                                "title": "Low",
+                                                "value": "Low"
+                                            },
+                                            {
+                                                "title": "Informational",
+                                                "value": "Informational"
+                                            },
+                                            {
+                                                "title": "Don't change",
+                                                "value": "same"
+                                            }
+                                        ],
+                                        "id": "incidentSeverity",
+                                        "style": "compact",
+                                        "type": "Input.ChoiceSet",
+                                        "value": "same"
+                                    }
+                                ],
+                                "type": "AdaptiveCard",
+                                "version": "1.4"
+                            }
+                        },
+                        "Condition_-_Change_Severity": {
+                            "actions": {
+                                "Update_incident_-_update_severity": {
+                                    "runAfter": {
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "severity": "@{body('Post_Adaptive_Card_and_wait_for_a_response')?['data']?['incidentSeverity']}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Post_adaptive_card_and_wait_for_a_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@body('Post_Adaptive_Card_and_wait_for_a_response')?['data']?['incidentSeverity']",
+                                                "same"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_Close_incident": {
+                            "actions": {
+                                "Update_incident_-_close_incident": {
+                                    "runAfter": {
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "classification": {
+                                                "ClassificationAndReason": "@{body('Post_Adaptive_Card_and_wait_for_a_response')?['data']?['incidentStatus']}",
+                                                "ClassificationReasonText": "User choice from Send Teams adaptive card on incident creation playbook."
+                                            },
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "status": "Closed"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_-_Change_Severity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@body('Post_Adaptive_Card_and_wait_for_a_response')?['data']?['incidentStatus']",
+                                                "no"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Post_adaptive_card_and_wait_for_a_response": {
+                            "runAfter": {
+                                "Compose_-_Adaptive_card_body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "body": {
+                                        "messageBody": "@{outputs('Compose_-_Adaptive_card_body')}",
+                                        "recipient": {
+                                            "channelId": "[parameters('Teams Channel ID')]",
+                                            "groupId": "[parameters('Teams Group ID')]"
+                                        },
+                                        "updateMessage": "Thanks for your response!"
+                                    },
+                                    "notificationUrl": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftsentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Send-Teams-adaptive-card-on-incident-creation",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

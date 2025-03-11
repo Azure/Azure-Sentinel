@@ -26,7 +26,7 @@ param (
     [string]
     $LogPath=(Join-Path (Get-Location).Path Logs),
     [Parameter()]
-    [ValidateSet("VPC","CloudTrail","GuardDuty", "CustomLog")][string]$AwsLogType
+    [ValidateSet("VPC","CloudTrail","GuardDuty", "CloudWatch", "CustomLog")][string]$AwsLogType
 )
 # Include helper scripts
 . ".\Utils\HelperFunctions.ps1"
@@ -34,6 +34,7 @@ param (
 . ".\Utils\CommonAwsPolicies.ps1"
 . ".\Utils\AwsPoliciesUpdate.ps1"
 . ".\Utils\AwsSentinelTag.ps1"
+. ".\Enviornment\EnviornmentConstants.ps1"
 
 # Verify that the AWS CLI is available
 if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue)) 
@@ -64,7 +65,7 @@ if ($AwsLogType -eq "")
     {
         try
         {
-            [ValidateSet("VPC","CloudTrail","GuardDuty", "CustomLog")]$AwsLogType = Read-ValidatedHost -Prompt "Please enter the AWS log type to configure (VPC, CloudTrail, GuardDuty, CustomLog)"
+            [ValidateSet("VPC","CloudTrail","GuardDuty", "CloudWatch", "CustomLog")]$AwsLogType = Read-ValidatedHost -Prompt "Please enter the AWS log type to configure (VPC, CloudTrail, GuardDuty, CloudWatch, CustomLog)"
         }
         catch{}
     } until ($?)
@@ -75,6 +76,7 @@ switch ($AwsLogType)
     "VPC" {.\ConfigVpcFlowDataConnector.ps1; break}
     "CloudTrail" {.\ConfigCloudTrailDataConnector.ps1 ; break }
     "GuardDuty" {.\ConfigGuardDutyDataConnector.ps1 ; break }
+    "CloudWatch" {.\ConfigCloudWatchDataConnector.ps1 ; break }
     "CustomLog" {.\ConfigCustomLogDataConnector.ps1 ; break }
     default {Write-Log -Message "Invalid log type" -LogFileName $LogFileName -Severity Error; exit}
 }

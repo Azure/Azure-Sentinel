@@ -1,0 +1,500 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "VectraIncidentTimelineUpdate",
+        "description": "This playbook will update the incident timeline by keeping most recent alerts and adding most recent detections from entities timeline to the incident timeline.",
+        "prerequisites": [
+            "1. The Vectra XDR data connector should be configured to send appropriate alerts to Microsoft Sentinel."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Go to your logic app → API connections → Select AzureMonitorLogs connection resource",
+            "2. Go to General → edit API connection",
+            "5. Click Authorize",
+            "6. Sign in",
+            "7. Click Save",
+            "8. Repeat steps for other connections",
+            "**b. Assign Role to update incident**",
+            "After authorizing each connection, assign role to this playbook.",
+            "1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add",
+            "2. Add role assignment",
+            "3. Assignment type: Job function roles",
+            "4. Role: Microsoft Sentinel Contributor",
+            "5. Members: select managed identity for assigned access to and add your logic app as member",
+            "6. Click on review+assign",
+            "**c. Configurations in Microsoft Sentinel**",
+            "1. In Microsoft sentinel, below analytical rules should be configured to trigger an incident.",
+            "a. Vectra Detection Account Alerts",
+            "b. Vectra Detection Host Alerts",
+            "c. Vectra Priority Account Incidents",
+            "d. Vectra Priority Host Incidents",
+            "e. Vectra Create Incident Based On Tag For Entity Type Account.",
+            "f. Vectra Create Incident Based On Tag For Entity Type Host.",
+            "2. In Microsoft Sentinel, Configure the automation rules to trigger the playbook.",
+            "a. Go to Microsoft Sentinel → <your workspace> → Automation",
+            "b. Click on Create → Automation rule",
+            "c. Provide name for your rule",
+            "d. In Analytic rule name condition, select analytic rule which you have created.",
+            "e. In Actions dropdown select Run playbook",
+            "f. In second dropdown select your deployed playbook",
+            "g. Click on Apply",
+            "h. Save the Automation rule.",
+            "NOTE: If you want to manually run the playbook on a particular incident follow the below steps:",
+            "a. Go to Microsoft Sentinel → <your workspace> → Incidents",
+            "b. Select an incident.",
+            "c. In the right pane, click on Actions, and from the dropdown select the 'Run Playbook' option.",
+            "d. click on the Run button beside this playbook."
+        ],
+        "entities": ["Account", "Host"],
+        "tags": ["Vectra", "IncidentTimeline", "Entities", "Detections"],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Vectra"
+        },
+        "lastUpdateTime": "2024-09-02T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "VectraIncidentTimelineUpdate",
+            "type": "string"
+        },
+        "WorkSpaceName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Log Analytics Workspace name in which you have deployed Data Connector."
+            }
+        }
+    },
+    "variables": {
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', trim(parameters('PlaybookName')))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', trim(parameters('PlaybookName')))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_to_check_Response_of_Query": {
+                            "actions": {
+                                "Iterate_to_add_alerts_in_the_incident_timeline": {
+                                    "foreach": "@body('Run_query_and_list_most_recent_Alerts_to_keep_in_Incident_Timeline')?['value']",
+                                    "actions": {
+                                        "Add_alert_to_incident": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "relatedResourceId": "@{items('Iterate_to_add_alerts_in_the_incident_timeline')?['SystemAlertId']}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Relation/Create"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Iterate_to_remove_alerts_from_incident_other_then_most_recent_alerts": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "Iterate_to_remove_alerts_from_incident_other_then_most_recent_alerts": {
+                                    "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                                    "actions": {
+                                        "Remove_alert_from_incident": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "relatedResourceId": "@items('Iterate_to_remove_alerts_from_incident_other_then_most_recent_alerts')['properties']['systemAlertId']"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Relation/Delete"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Run_query_and_list_most_recent_Alerts_to_keep_in_Incident_Timeline": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@empty(body('Run_query_and_list_most_recent_Alerts_to_keep_in_Incident_Timeline')?['value'])",
+                                                "@true"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_to_do_action_on_host_or_account_entity_available_or_not": {
+                            "actions": {
+                                "Terminate": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Iterate_to_find_host_or_account_entity_value": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('IsEntityHostAvailable')",
+                                            "@false"
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@variables('IsEntityAccountAvailable')",
+                                            "@false"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_detection_filter_variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DetectionNameStartsWith",
+                                        "type": "string",
+                                        "value": "Vectra AI Detection"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_Incident_ARM_Name": {
+                            "runAfter": {
+                                "Initialize_variable_is_entity_account_available_or_not": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ARM Name",
+                                        "type": "string",
+                                        "value": "@triggerBody()?['object']?['name']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_alert_ids_to_add_in_incident": {
+                            "runAfter": {
+                                "Initialize_detection_filter_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AlertIdsToAddInIncident",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_entity": {
+                            "runAfter": {
+                                "Initialize_variable_alert_ids_to_add_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Entity",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_is_entity_account_available_or_not": {
+                            "runAfter": {
+                                "Initialize_variable_is_entity_host_available_or_not": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IsEntityAccountAvailable",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_is_entity_host_available_or_not": {
+                            "runAfter": {
+                                "Initialize_variable_entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IsEntityHostAvailable",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Iterate_to_find_host_or_account_entity_value": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                            "actions": {
+                                "Condition_to_check_entity_kind_to_Host": {
+                                    "actions": {
+                                        "Append_to_string_variable_host_value": {
+                                            "runAfter": {
+                                                "Set_variable_flag_to_true_if_entity_host_is_available": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Entity",
+                                                "value": "@{items('Iterate_to_find_host_or_account_entity_value')?['properties']?['hostName']}"
+                                            }
+                                        },
+                                        "Set_variable_flag_to_true_if_entity_host_is_available": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "IsEntityHostAvailable",
+                                                "value": "@true"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Condition_to_check_entity_kind_to_Account": {
+                                                "actions": {
+                                                    "Append_to_string_variable_account_value": {
+                                                        "runAfter": {
+                                                            "Set_variable_flag_to_true_if_entity_account_is_available": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToStringVariable",
+                                                        "inputs": {
+                                                            "name": "Entity",
+                                                            "value": "@concat(items('Iterate_to_find_host_or_account_entity_value')?['properties']?['accountName'],'@',items('Iterate_to_find_host_or_account_entity_value')?['properties']?['upnSuffix'])"
+                                                        }
+                                                    },
+                                                    "Set_variable_flag_to_true_if_entity_account_is_available": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "IsEntityAccountAvailable",
+                                                            "value": "@true"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@items('Iterate_to_find_host_or_account_entity_value')?['kind']",
+                                                                "Account"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('Iterate_to_find_host_or_account_entity_value')?['kind']",
+                                                    "Host"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_Incident_ARM_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Run_query_and_list_most_recent_Alerts_to_keep_in_Incident_Timeline": {
+                            "runAfter": {
+                                "Condition_to_do_action_on_host_or_account_entity_available_or_not": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let alertIds = SecurityIncident\n| where TimeGenerated >= ago(30d)\n| where IncidentName == \"@{variables('ARM Name')}\"\n| top 1 by TimeGenerated desc\n| parse RelatedAnalyticRuleIds with '[\"' ruleId:string '\"]'\n| extend IncidentAlertType = ruleId\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind=inner(SecurityAlert) on $left.AlertId == $right.SystemAlertId;\nlet newalerts = SecurityAlert\n| where TimeGenerated >= ago(30d)\n| where SystemAlertId !in (alertIds)\n| where DisplayName startswith \"@{variables('DetectionNameStartsWith')}\"\n| parse-kv Entities as (HostName:string,Name:string) with (pair_delimiter=\",\", kv_delimiter=\":\", quote='\"')\n| where (HostName == \"@{variables('Entity')}\" and @{variables('IsEntityHostAvailable')} == @{true}) or (Name == \"@{variables('Entity')}\" and @{variables('IsEntityAccountAvailable')} == @{true}) ;\nlet detections = union alertIds, newalerts\n| where DisplayName startswith \"Vectra AI Detection\"\n| extend timetosort = iff(AlertType contains IncidentAlertType , StartTime, TimeGenerated)\n| summarize arg_max(timetosort, *) by DisplayName\n| project SystemAlertId;\nlet incidentalerts = union alertIds, newalerts\n| where DisplayName !startswith \"Vectra AI Detection\"\n| top 1 by StartTime\n| project SystemAlertId;\nunion detections, incidentalerts",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[resourceGroup().name]",
+                                    "resourcename": "[trim(parameters('WorkSpaceName'))]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[subscription().subscriptionId]",
+                                    "timerange": "Set in query"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "VectraIncidentTimelineUpdate",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

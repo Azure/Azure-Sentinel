@@ -1,0 +1,35 @@
+id: 905da21a-c7d2-4f5b-b8fc-c8321da3ee83
+name: RecordedFuture Threat Hunting Hash All Actors
+description: |
+  'Recorded Future Threat Hunting hash correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tags:
+  - RecordedFuture
+query: |
+  imFileEvent
+  | where isnotempty(Hash)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(FileHashValue)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Description startswith "Recorded Future - Threat Hunt"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.Hash == $right.FileHashValue
+  | project Hash, HashType
+  | extend FileHash_0_Value = Hash
+  | extend FileHash_0_Algorithm = HashType
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: Hash_s
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: HashType

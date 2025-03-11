@@ -1,0 +1,606 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Wiz - support@wiz.io",
+    "comments": "Solution template for Wiz"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Wiz Findings overview",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@wiz.io",
+    "_email": "[variables('email')]",
+    "_solutionName": "Wiz",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "wizinc1627338511749.wizinc1627338511749_wiz_mss-sentinel",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "Wiz",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Wiz",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "workbookVersion1": "2.0.0",
+    "workbookContentId1": "WizFindingsWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Wiz data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Wiz (using Azure Functions)",
+                  "publisher": "Wiz",
+                  "descriptionMarkdown": "The Wiz connector allows you to easily send Wiz Issues, Vulnerability Findings, and Audit logs to Microsoft Sentinel.",
+                  "logo": "Wiz.svg",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WizIssues",
+                      "baseQuery": "union isfuzzy=true \n(WizIssues_CL),\n(WizIssuesV2_CL)"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WizVulnerabilities",
+                      "baseQuery": "union isfuzzy=true \n(WizVulnerabilities_CL),\n(WizVulnerabilitiesV2_CL)"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WizAuditLogs",
+                      "baseQuery": "union isfuzzy=true \n(WizAuditLogs_CL),\n(WizAuditLogsV2_CL)"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Summary by Issues's severity",
+                      "query": "union isfuzzy=true \n(WizIssues_CL),\n(WizIssuesV2_CL)\n       | summarize Count=count() by severity_s"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "union isfuzzy=true \n(WizIssues_CL),\n(WizIssuesV2_CL)\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "union isfuzzy=true \n(WizVulnerabilities_CL),\n(WizVulnerabilitiesV2_CL)\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "union isfuzzy=true \n(WizAuditLogs_CL),\n(WizAuditLogsV2_CL)\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "WizIssues",
+                      "lastDataReceivedQuery": "union isfuzzy=true \n(WizIssues_CL),\n(WizIssuesV2_CL)\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "WizVulnerabilities",
+                      "lastDataReceivedQuery": "union isfuzzy=true \n(WizVulnerabilities_CL),\n(WizVulnerabilitiesV2_CL)\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "WizAuditLogs",
+                      "lastDataReceivedQuery": "union isfuzzy=true \n(WizAuditLogs_CL),\n(WizAuditLogsV2_CL)\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 2,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Wiz Service Account credentials",
+                        "description": "Ensure you have your Wiz service account client ID and client secret, API endpoint URL, and auth URL. Instructions can be found on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz)."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector: Uses Azure Functions to connect to Wiz API to pull Wiz Issues, Vulnerability Findings, and Audit Logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.\nCreates an Azure Key Vault with all the required parameters stored as secrets."
+                    },
+                    {
+                      "description": "\nFollow the instructions on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz) to get the erquired credentials.",
+                      "title": "STEP 1 - Get your Wiz credentials"
+                    },
+                    {
+                      "description": "\n>**IMPORTANT:** Before deploying the Wiz Connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Wiz credentials from the previous step.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "STEP 2 - Deploy the connector and the associated Azure Function"
+                    },
+                    {
+                      "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-wiz-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the following parameters: \n> - Choose **KeyVaultName** and **FunctionName** for the new resources \n >- Enter the following Wiz credentials from step 1: **WizAuthUrl**, **WizEndpointUrl**, **WizClientId**, and **WizClientSecret** \n>- Enter the Workspace credentials **AzureLogsAnalyticsWorkspaceId** and **AzureLogAnalyticsWorkspaceSharedKey**\n>- Choose the Wiz data types you want to send to Microsoft Sentinel, choose at least one from **Wiz Issues**, **Vulnerability Findings**, and **Audit Logs**.\n \n>- (optional) follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#optional-create-a-filter-for-wiz-queries) to add **IssuesQueryFilter**, **VulnerbailitiesQueryFilter**, and **AuditLogsQueryFilter**.\n \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n",
+                      "title": "Option 1: Deploy using the Azure Resource Manager (ARM) Template"
+                    },
+                    {
+                      "description": ">Follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#manual-deployment) to deploy the connector manually.",
+                      "title": "Option 2: Manual Deployment of the Azure Function"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Wiz",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Wiz",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Wiz",
+                  "tier": "Partner",
+                  "email": "support@wiz.io",
+                  "link": "https://support.wiz.io/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Wiz (using Azure Functions)",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Wiz",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Wiz",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Wiz",
+          "tier": "Partner",
+          "email": "support@wiz.io",
+          "link": "https://support.wiz.io/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Wiz (using Azure Functions)",
+          "publisher": "Wiz",
+          "descriptionMarkdown": "The Wiz connector allows you to easily send Wiz Issues, Vulnerability Findings, and Audit logs to Microsoft Sentinel.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "WizIssues",
+              "baseQuery": "union isfuzzy=true \n(WizIssues_CL),\n(WizIssuesV2_CL)"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "WizVulnerabilities",
+              "baseQuery": "union isfuzzy=true \n(WizVulnerabilities_CL),\n(WizVulnerabilitiesV2_CL)"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "WizAuditLogs",
+              "baseQuery": "union isfuzzy=true \n(WizAuditLogs_CL),\n(WizAuditLogsV2_CL)"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "WizIssues",
+              "lastDataReceivedQuery": "union isfuzzy=true \n(WizIssues_CL),\n(WizIssuesV2_CL)\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "WizVulnerabilities",
+              "lastDataReceivedQuery": "union isfuzzy=true \n(WizVulnerabilities_CL),\n(WizVulnerabilitiesV2_CL)\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "WizAuditLogs",
+              "lastDataReceivedQuery": "union isfuzzy=true \n(WizAuditLogs_CL),\n(WizAuditLogsV2_CL)\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "union isfuzzy=true \n(WizIssues_CL),\n(WizIssuesV2_CL)\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                "union isfuzzy=true \n(WizVulnerabilities_CL),\n(WizVulnerabilitiesV2_CL)\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                "union isfuzzy=true \n(WizAuditLogs_CL),\n(WizAuditLogsV2_CL)\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Summary by Issues's severity",
+              "query": "union isfuzzy=true \n(WizIssues_CL),\n(WizIssuesV2_CL)\n       | summarize Count=count() by severity_s"
+            }
+          ],
+          "availability": {
+            "status": 2,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Wiz Service Account credentials",
+                "description": "Ensure you have your Wiz service account client ID and client secret, API endpoint URL, and auth URL. Instructions can be found on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector: Uses Azure Functions to connect to Wiz API to pull Wiz Issues, Vulnerability Findings, and Audit Logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.\nCreates an Azure Key Vault with all the required parameters stored as secrets."
+            },
+            {
+              "description": "\nFollow the instructions on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#collect-authentication-info-from-wiz) to get the erquired credentials.",
+              "title": "STEP 1 - Get your Wiz credentials"
+            },
+            {
+              "description": "\n>**IMPORTANT:** Before deploying the Wiz Connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Wiz credentials from the previous step.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "STEP 2 - Deploy the connector and the associated Azure Function"
+            },
+            {
+              "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-wiz-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the following parameters: \n> - Choose **KeyVaultName** and **FunctionName** for the new resources \n >- Enter the following Wiz credentials from step 1: **WizAuthUrl**, **WizEndpointUrl**, **WizClientId**, and **WizClientSecret** \n>- Enter the Workspace credentials **AzureLogsAnalyticsWorkspaceId** and **AzureLogAnalyticsWorkspaceSharedKey**\n>- Choose the Wiz data types you want to send to Microsoft Sentinel, choose at least one from **Wiz Issues**, **Vulnerability Findings**, and **Audit Logs**.\n \n>- (optional) follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#optional-create-a-filter-for-wiz-queries) to add **IssuesQueryFilter**, **VulnerbailitiesQueryFilter**, and **AuditLogsQueryFilter**.\n \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n",
+              "title": "Option 1: Deploy using the Azure Resource Manager (ARM) Template"
+            },
+            {
+              "description": ">Follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#manual-deployment) to deploy the connector manually.",
+              "title": "Option 2: Manual Deployment of the Azure Function"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "WizFindings Workbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "A visualized overview of Wiz Findings.\nExplore, analize and learn about your security posture using Wiz Findings Overview"
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizIssues_CL),\\n(WizIssuesV2_CL) \\n| summarize count() by TimeGenerated \",\"title\":\"Issues over time\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"Issues over time\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizVulnerabilities_CL),\\n(WizVulnerabilitiesV2_CL) \\n| summarize count() by TimeGenerated \",\"title\":\"Vulnerabilities over time\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"Vulnerabilities over time\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizAuditLogs_CL),\\n(WizAuditLogsV2_CL) \\n| summarize count() by TimeGenerated \",\"title\":\"Audit Logs over time\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"Audit Logs over time\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizIssues_CL),\\n(WizIssuesV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by severity_s\",\"title\":\"Issues by severity\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Issues by severity\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizIssues_CL),\\n(WizIssuesV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by status_s\",\"title\":\"Issues by status\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Issues by status\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizIssues_CL),\\n(WizIssuesV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by entitySnapshot_cloudPlatform_s\",\"title\":\"Issues by cloud platform\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Issues by cloud platform\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizIssues_CL),\\n(WizIssuesV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by entitySnapshot_type_s\",\"title\":\"Issues by entity type\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Issues by entity type\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizAuditLogs_CL),\\n(WizAuditLogsV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by status_s\",\"title\":\"Audit Logs by status\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Audit Logs by status\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizAuditLogs_CL),\\n(WizAuditLogsV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by action_s\",\"title\":\"Audit Logs by actions\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Audit Logs by actions\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizVulnerabilities_CL),\\n(WizVulnerabilitiesV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by vulnerableAsset_type_s\",\"title\":\"Vulnerabilities by Asset Type\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Vulnerabilities by Asset Type\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizVulnerabilities_CL),\\n(WizVulnerabilitiesV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by vendorSeverity_s\",\"title\":\"Vulnerabilities by Vendor Severity\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Vulnerabilities by Vendor Severity\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union isfuzzy=true \\n(WizVulnerabilities_CL),\\n(WizVulnerabilitiesV2_CL) \\n| summarize arg_max(TimeGenerated, *) by id_g\\n| summarize count() by detectionMethod_s\",\"title\":\"Vulnerabilities by Detection Method\",\"size\":3,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"33\",\"name\":\"Vulnerabilities by Detection Method\"}],\"fromTemplateId\":\"sentinel-Alerts overview\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=WizFindingsWorkbook; logoFileName=Wiz_logo.svg; description=A visualized overview of Wiz Findings.\nExplore, analize and learn about your security posture using Wiz Findings Overview; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=2.0.0; title=Wiz Findings overview; templateRelativePath=WizFindings.json; subtitle=; provider=Wiz}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Wiz",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Wiz",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Wiz",
+                  "tier": "Partner",
+                  "email": "support@wiz.io",
+                  "link": "https://support.wiz.io/"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "WizIssues_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "WizVulnerabilities_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "WizAuditLogs_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "WizIssuesV2_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "WizVulnerabilitiesV2_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "WizAuditLogs_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "Wiz",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_workbookContentId1')]",
+        "contentKind": "Workbook",
+        "displayName": "[parameters('workbook1-name')]",
+        "contentProductId": "[variables('_workbookcontentProductId1')]",
+        "id": "[variables('_workbookcontentProductId1')]",
+        "version": "[variables('workbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Wiz",
+        "publisherDisplayName": "Wiz",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Wiz/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://wiz.io/\">Wiz</a> solution for Microsoft Sentinel enables you to ingest <a href=\"https://docs.wiz.io/wiz-docs/docs/issues\">Wiz Issues</a>, <a href=\"https://docs.wiz.io/wiz-docs/docs/vulnerability-findings\">Wiz Vulnerability Findings</a>, and <a href=\"https://docs.wiz.io/wiz-docs/docs/audit-log-settings\">Wiz Audit Logs</a> into Microsoft Sentinel using the Wiz REST API.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/key-vault/#overview\">Azure Key Vault</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Wiz.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Wiz",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Wiz",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Wiz",
+          "email": "support@wiz.io",
+          "tier": "Partner",
+          "link": "https://support.wiz.io/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-06-20",
+        "providers": [
+          "Wiz"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security",
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -11,6 +11,9 @@ This playbook interacts with Rubrik Security Cloud to (1) optionally preserve ev
 3. To perform an IOC scan the IOC YARA rule should be available as a URL.
 4. Obtain Teams group id and channel id.
 5. Store Service account credentials in Key Vault and obtain keyvault name and tenantId
+    a. Create a Key Vault with unique name
+    b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively
+6. Make sure that RubrikIOCScan and RubrikPollAsyncResult playbook is deployed before deploying RubrikRansomwareDiscoveryAndFileRecovery playbook.
 
 ### Deployment instructions
 
@@ -22,7 +25,7 @@ This playbook interacts with Rubrik Security Cloud to (1) optionally preserve ev
     * keyvaultname: Name of keyvault where secrets are stored.
     * tenantId: TenantId where keyvault is located.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520ISE%2FPlaybooks%2FCiscoISE-TakeEndpointActionFromTeams%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520ISE%2FPlaybooks%2FCiscoISE-TakeEndpointActionFromTeams%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikRansomwareDiscoveryAndFileRecovery%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikRansomwareDiscoveryAndFileRecovery%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
@@ -36,4 +39,3 @@ Once deployment is complete, authorize each connection.
 4. Sign in
 5. Click Save
 6. Repeat steps for other connections
-

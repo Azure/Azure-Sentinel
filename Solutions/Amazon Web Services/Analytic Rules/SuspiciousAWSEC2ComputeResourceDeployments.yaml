@@ -1,0 +1,67 @@
+id: 9e457dc4-81f0-4d25-bc37-a5fa4a17946a
+name: Suspicious AWS EC2 Compute Resource Deployments
+description: |
+  'This detection focused on Suspicious deployment of AWS EC2 resource (virtual machine) scale sets was detected. This behavior might indicate that the threat actor is deploying computing resources for cryptocurrency mining activities.This detection centers around identifying suspicious instances of AWS EC2 resource deployment, particularly scale sets. Such behavior raises concerns of potential threat actor involvement, potentially indicative of efforts to deploy computing resources for the purpose of cryptocurrency mining activities.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  -  Impact
+relevantTechniques:
+  - T1496
+query: |
+  // Retrieve AWS CloudTrail events generated within the last day
+  AWSCloudTrail
+  // Filter events related to instance creation
+  | where EventName =~ "RunInstances"
+  // Exclude events with error messages
+  | where isempty(ErrorMessage)
+  // Extract the event source type
+  | extend EventSourceSplit = split(EventSource, ".")
+  | extend Type = tostring(EventSourceSplit[0])
+  // Extract instance-related details from the event data
+  | extend instance = tostring(parse_json(RequestParameters).instanceType),platform = tostring(parse_json(ResponseElements).instancesSet.items[0].platform)
+  // Determine the operating system platform
+  | extend OSplatform = iff(isempty(platform), tostring("Linux"), platform),CPU = tostring(parse_json(ResponseElements).instancesSet.items[0].cpuOptions),core = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.coreCount),corThread = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.threadsPerCore),InstanceId = tostring(parse_json(ResponseElements).instancesSet.items[0].instanceId)
+  // Filter out instances with empty core values
+  | where isnotempty(core)
+  // Calculate the total compute based on core and thread counts
+  | extend totalCorecompute = core * corThread
+  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  // Summarize relevant information for analysis
+  | summarize Start= min(TimeGenerated),
+    end=   max(TimeGenerated),
+    totalgpu= sum(totalCorecompute)
+    by SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserAgent
+  // Filter results based on total GPU compute and time duration
+  | where totalgpu > 800
+  | where datetime_diff('hour', end, Start) < 8
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIpAddress
+customDetails:
+    UserAgent: UserAgent
+    AWSUser: UserIdentityArn
+    SourceIpAddress: SourceIpAddress
+kind: Scheduled
+version: 1.0.1

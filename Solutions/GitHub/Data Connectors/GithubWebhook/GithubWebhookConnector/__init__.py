@@ -11,6 +11,7 @@ import re
 
 sentinel_customer_id = os.environ.get('WorkspaceID')
 sentinel_shared_key = os.environ.get('WorkspaceKey')
+github_webhook_secret = os.environ.get('GithubWebhookSecret')
 sentinel_log_type =  'githubscanaudit'
 logging.info("Sentinel Logtype:{}".format(sentinel_log_type))
 logAnalyticsUri = os.environ.get('LogAnaltyicsUri')
@@ -31,7 +32,26 @@ def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
      logging.info('Info:Current retry count:{}'.format(context.retry_context.retry_count))   
      logging.info('Info:Github webhook data connector started')  
      logging.info("Sentinel Logtype:{}".format(sentinel_log_type))  
+
+     # check webhook signature if GitHubWebhookSecret exists
+     if ((github_webhook_secret not in (None, '') and not str(github_webhook_secret).isspace())):    
+        hash_object = hmac.new(github_webhook_secret.encode('utf-8'), msg=req.get_body(), digestmod=hashlib.sha256)
+        expected_signature = "sha256=" + hash_object.hexdigest()
+        if 'x-hub-signature-256' not in req.headers:
+            return func.HttpResponse(
+             "Github webhook signature header is missing.",
+             status_code=403
+        )
+        signature_header = req.headers['x-hub-signature-256']
+        if not hmac.compare_digest(expected_signature, signature_header):
+            return func.HttpResponse(
+             "Github webhook signature verification failed.",
+             status_code=403
+        )
+
      req_body = req.get_json()
+     if "x-github-event" in req.headers:
+        req_body["event"] = req.headers["x-github-event"]
      body = json.dumps(customizeJson(json.dumps(req_body)))
      logging.info("Info:Converted input json to dict and further to json")
      logging.info(body)     

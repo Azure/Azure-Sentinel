@@ -1,36 +1,88 @@
 import fs from "fs";
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
-import * as logger from "./utils/logger";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
+import * as logger from "./utils/logger.js";
 
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
-    if (!filePath.includes("azure-pipelines"))
+    const ignoreFiles = ["azure-pipelines", "azureDeploy", "host.json", "proxies.json", "azuredeploy", "function.json"]
+    const dataFolder = ["/Data/", "/data/"]
+    const dataConnectorsFolder = ["/DataConnectors/", "/Data Connectors/"]
+    let requiredFolderFiles = [...dataFolder, ...dataConnectorsFolder, "createUiDefinition.json"];
+
+    const hasIgnoredFile = ignoreFiles.filter(item => { return filePath.includes(item)}).length > 0
+    const hasRequiredFolderFiles = requiredFolderFiles.filter(item => { return filePath.includes(item)}).length > 0
+
+    if (!hasIgnoredFile && hasRequiredFolderFiles)
     {
-        const fileContent = fs.readFileSync(filePath, "utf8");
-        const searchText = "Azure Sentinel"
-        const replaceText = '"targetProduct": "Azure Sentinel"';
+        const searchText = "Azure Sentinel";
+        const expectedText = "Microsoft Sentinel";
+        let tagContent = "";
+        let tagName = ""
 
-        const hasTargetProductAzureSentinel = fileContent.includes(replaceText);
-        const replacedFileContent = fileContent.replace(replaceText, "");
-        const hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
+        const hasDataFolder = dataFolder.filter(item => { return filePath.includes(item)}).length > 0
+        const hasDataConnectorFolder = dataConnectorsFolder.filter(item => { return filePath.includes(item)}).length > 0
 
-        if (hasAzureSentinelText)
+        const jsonTagObj = JSON.parse(fs.readFileSync('./.script/validate-tag.json', "utf8"));
+        if (jsonTagObj.hasOwnProperty("createUiDefinition") && filePath.includes('createUiDefinition'))
         {
-            if (hasTargetProductAzureSentinel)
-            {
-                throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' except 'targetProduct' key-value pair in file '${filePath}'`);
-            }
-            else
-            {
-                throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' in file '${filePath}'`);
+            tagName = jsonTagObj.createUiDefinition;
+            tagContent = GetTagContent(tagName);
+        }
+        else if (hasDataFolder && jsonTagObj.hasOwnProperty("data"))
+        {
+            tagName = jsonTagObj.data;
+            tagContent = GetTagContent(tagName);
+        }
+        else if (hasDataConnectorFolder && jsonTagObj.hasOwnProperty("dataConnectors"))
+        {
+            tagName = jsonTagObj.dataConnectors;
+            tagContent = GetTagContent(tagName);
+        }
+
+        if (tagContent)
+        {
+            let hasAzureSentinelText = tagContent.toLowerCase().includes(searchText.toLowerCase());
+            if (hasAzureSentinelText) {
+                throw new Error(`Please update text from '${searchText}' to '${expectedText}' in '${tagName}' tag in the file '${filePath}'`);
             }
         }
+        else
+        {
+            console.log(`Skipping file ${filePath} from Content Validation as ${searchText} text not found`);
+        }
     }
+    else
+    {
+        console.log(`Skipping file ${filePath} from Content Validation as the file is not from folder Data, Data Connector or createUiDefinition file`);
+    }
+
     return ExitCode.SUCCESS;
+
+    function GetTagContent(tagName: any) {
+        var fileContentObj = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+        if (filePath.includes("createUiDefinition.json")) {
+            var tagContent = fileContentObj["parameters"]["config"]["basics"][tagName];
+            if (tagContent == undefined) {
+                //MAKE FIRST LETTER OF THE WORD CAPS
+                const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
+                var tagContent = fileContentObj["parameters"]["config"]["basics"][firstLetterCapsInTagName];
+            }
+        }
+        else {
+            var tagContent = fileContentObj[tagName];
+            if (tagContent == undefined) {
+                //MAKE FIRST LETTER OF THE WORD CAPS
+                const firstLetterCapsInTagName = tagName.charAt(0).toUpperCase() + tagName.slice(1)
+                var tagContent = fileContentObj[firstLetterCapsInTagName];
+            }
+        }
+        return tagContent;
+    }
 }
 
-let fileTypeSuffixes = ["json", "txt", "md", "yaml", "yml", "py"];
+let fileTypeSuffixes = ["json"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
     onCheckFile: (filePath: string) => {

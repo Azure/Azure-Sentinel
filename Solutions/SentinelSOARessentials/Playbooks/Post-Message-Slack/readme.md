@@ -2,7 +2,7 @@
 
 Author: Yaniv Shasha
 
-This playbook will post a message in a Slack channel when an alert is created in Azure Sentinel.
+This playbook will post a message in a Slack channel when an alert is created in Microsoft Sentinel.
 
 ## Prerequisites
 

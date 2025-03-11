@@ -1,0 +1,446 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "defaultValue": "[resourceGroup().location]",
+      "type": "string",
+      "metadata": {
+        "description": "The location in which the resources should be deployed."
+      }
+    },
+    "workspaceName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Log analytics workspace name. Can be found under Log analytics \"Settings\"."
+      }
+    },
+    "engine": {
+      "type": "string",
+      "defaultValue": "default",
+      "metadata": {
+        "description": "Comma separated values of engines to be inserted as request query parameter."
+      }
+    },
+    "engineGroup": {
+      "type": "string",
+      "defaultValue": "default",
+      "metadata": {
+        "description": "Comma separated values of engine groups to be inserted as request query parameter."
+      }
+    },
+    "elementsApiUrl": {
+      "type": "string",
+      "defaultValue": "https://api.connect.withsecure.com",
+      "metadata": {
+        "description": "Elements API url"
+      }
+    },
+    "elementsApiClientId": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Client id from the WithSecure Elements Portal. Can be created in \"API clients\" tab under \"Management\" section."
+      }
+    },
+    "elementsApiClientSecret": {
+      "type": "securestring",
+      "minLength": 1,
+      "metadata": {
+        "description": "Client secret from the WithSecure Elements Portal. Can be created in \"API clients\" tab under \"Management\" section."
+      }
+    },
+    "entraClientId": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Client id of Entra Application"
+      }
+    },
+    "entraClientSecret": {
+      "type": "securestring",
+      "minLength": 1,
+      "metadata": {
+        "description": "Client secret of Entra Application"
+      }
+    },
+    "entraTenantId": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Tenant Id of Entra Application"
+      }
+    },
+    "entraObjectId": {
+      "type": "string",
+      "metadata": {
+        "description": "Entra App principal id"
+      }
+    }
+  },
+  "variables": {
+    "appRoleName": "[concat('ConnectorRole', variables('suffix'))]",
+    "permissionScope": "[resourceGroup().id]",
+    "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+    "storageTable": "[concat('StateTable', variables('suffix'))]",
+    "storageAccount": "[toLower(concat('StateAcc', variables('suffix')))]",
+    "functionAppName": "[concat('Connector', variables('suffix'))]",
+    "endpointName": "[concat('LogsEndpoint', variables('suffix'))]",
+    "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+    "ruleName": "[concat('CollecionRule', variables('suffix'))]",
+    "dcrRoleName": "[concat('EntraRole', variables('suffix'))]",
+    "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]"
+  },
+  "resources": [
+    {
+        "type": "Microsoft.Insights/components",
+        "apiVersion": "2020-02-02",
+        "name": "[variables('functionAppName')]",
+        "location": "[parameters('location')]",
+        "kind": "web",
+        "properties": {
+          "Application_Type": "web",
+          "ApplicationId": "[variables('functionAppName')]"
+        }
+    },
+    {
+        "type": "Microsoft.Web/sites",
+        "apiVersion": "2022-09-01",
+        "name": "[variables('functionAppName')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Insights/components', variables('functionAppName'))]"
+        ],
+        "location": "[parameters('location')]",
+        "kind": "functionapp,linux",
+        "identity": {
+          "type": "SystemAssigned"
+        },
+        "properties": {
+          "enabled": true,
+          "reserved": true,
+          "alwaysOn": true,
+          "httpsOnly": true,
+          "siteConfig": {
+            "linuxFxVersion": "PYTHON|3.10"
+          }
+        },
+        "resources": [
+            {
+              "apiVersion": "2022-09-01",
+              "type": "config",
+              "name": "appsettings",
+              "dependsOn": [
+                "[concat('Microsoft.Web/sites/', variables('functionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccount'))]"
+              ],
+              "properties": {
+                "FUNCTIONS_EXTENSION_VERSION": "~4",
+                "FUNCTIONS_WORKER_RUNTIME": "python",
+                "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('functionAppName')), '2020-02-02').InstrumentationKey]",
+                "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccount'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccount')), '2022-09-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
+                "STATE_TABLE_CS": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccount'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccount')), '2022-09-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
+                "STATE_TABLE": "[variables('storageTable')]",
+                "ELEMENTS_API_URL": "[parameters('elementsApiUrl')]",
+                "ELEMENTS_API_CLIENT_ID": "[parameters('elementsApiClientId')]",
+                "ELEMENTS_API_CLIENT_SECRET": "[parameters('elementsApiClientSecret')]",
+                "ENTRA_CLIENT_ID": "[parameters('entraClientId')]",
+                "ENTRA_CLIENT_SECRET": "[parameters('entraClientSecret')]",
+                "ENTRA_TENANT_ID": "[parameters('entraTenantId')]",
+                "ENGINE": "[parameters('engine')]",
+                "ENGINE_GROUP": "[parameters('engineGroup')]",
+                "LOGS_DCR_RULE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('ruleName'))).immutableId]",
+                "LOGS_DCR_STREAM_NAME": "Custom-WsSecurityEvents_CL",
+                "LOGS_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-WithSecureElementsViaFunction-functionapp"
+              }
+            }
+          ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('storageAccount')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_RAGRS",
+        "tier": "Standard"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "allowCrossTenantReplication": false,
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "virtualNetworkRules": [],
+          "ipRules": [],
+          "defaultAction": "Allow"
+        }
+      },
+      "resources": [
+        {
+          "type": "tableServices",
+          "apiVersion": "2022-09-01",
+          "name": "default",
+          "dependsOn": [
+            "[variables('storageAccount')]"
+          ],
+          "resources": [
+            {
+              "type": "tables",
+              "apiVersion": "2023-01-01",
+              "name": "[variables('storageTable')]",
+              "dependsOn": [
+                "default"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+        "type": "Microsoft.Insights/dataCollectionEndpoints",
+        "apiVersion": "2022-06-01",
+        "name": "[variables('endpointName')]",
+        "location": "[parameters('location')]",
+        "kind": "Linux",
+        "properties": {
+          "description": "Data collection endpoint for ingestion api",
+          "networkAcls": {
+            "publicNetworkAccess": "Enabled"
+          }
+        }
+      },
+    {
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "name": "[concat(parameters('workspaceName'), '/', 'WsSecurityEvents_CL')]",
+        "properties": {
+          "plan": "Analytics",
+          "schema": {
+            "name": "WsSecurityEvents_CL",
+            "columns": [
+              {
+                "name": "Activity",
+                "type": "string"
+              },
+              {
+                "name": "AdditionalExtensions",
+                "type": "string"
+              },
+              {
+                "name": "DeviceAction",
+                "type": "string"
+              },
+              {
+                "name": "DeviceCustomString1",
+                "type": "string"
+              },
+              {
+                "name": "DeviceCustomString1Label",
+                "type": "string"
+              },
+              {
+                "name": "DeviceCustomString2",
+                "type": "string"
+              },
+              {
+                "name": "DeviceCustomString2Label",
+                "type": "string"
+              },
+              {
+                "name": "DeviceEventClassID",
+                "type": "string"
+              },
+              {
+                "name": "DeviceVendor",
+                "type": "string"
+              },
+              {
+                "name": "LogSeverity",
+                "type": "int"
+              },
+              {
+                "name": "Message",
+                "type": "string"
+              },
+              {
+                "name": "SimplifiedDeviceAction",
+                "type": "string"
+              },
+              {
+                "name": "SourceHostName",
+                "type": "string"
+              },
+              {
+                "name": "SourceUserName",
+                "type": "string"
+              },
+              {
+                "name": "PersistenceTimestamp",
+                "type": "dateTime"
+              },
+              {
+                "name": "TimeGenerated",
+                "type": "dateTime"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "apiVersion": "2022-06-01",
+        "name": "[variables('ruleName')]",
+        "location": "[parameters('location')]",
+        "dependsOn": [
+          "[concat(variables('logWsResId'), '/tables/WsSecurityEvents_CL')]"
+        ],
+        "properties": {
+          "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+          "streamDeclarations": {
+            "Custom-WsSecurityEvens_CL": {
+              "columns": [
+                {
+                  "name": "Activity",
+                  "type": "string"
+                },
+                {
+                  "name": "AdditionalExtensions",
+                  "type": "string"
+                },
+                {
+                  "name": "DeviceAction",
+                  "type": "string"
+                },
+                {
+                  "name": "DeviceCustomString1",
+                  "type": "string"
+                },
+                {
+                  "name": "DeviceCustomString1Label",
+                  "type": "string"
+                },
+                {
+                  "name": "DeviceCustomString2",
+                  "type": "string"
+                },
+                {
+                  "name": "DeviceCustomString2Label",
+                  "type": "string"
+                },
+                {
+                  "name": "DeviceEventClassID",
+                  "type": "string"
+                },
+                {
+                  "name": "DeviceVendor",
+                  "type": "string"
+                },
+                {
+                  "name": "LogSeverity",
+                  "type": "int"
+                },
+                {
+                  "name": "Message",
+                  "type": "string"
+                },
+                {
+                  "name": "SimplifiedDeviceAction",
+                  "type": "string"
+                },
+                {
+                  "name": "SourceHostName",
+                  "type": "string"
+                },
+                {
+                  "name": "SourceUserName",
+                  "type": "string"
+                },
+                {
+                  "name": "PersistenceTimestamp",
+                  "type": "datetime"
+                }
+              ]
+            }
+          },
+          "destinations": {
+            "logAnalytics": [
+              {
+                "workspaceResourceId": "[variables('logWsResId')]",
+                "name": "[concat('RuleDest', variables('suffix'))]"
+              }
+            ]
+          },
+          "dataFlows": [
+            {
+              "streams": [
+                "Custom-WsSecurityEvents_CL"
+              ],
+              "transformKql": "source | extend TimeGenerated=now()\n",
+              "outputStream": "Custom-WsSecurityEvents_CL",
+              "destinations": [
+                "[concat('RuleDest', variables('suffix'))]"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Authorization/roleDefinitions",
+        "apiVersion": "2022-04-01",
+        "name": "[variables('dcrRoleId')]",
+        "properties": {
+          "assignableScopes": [
+            "[resourceGroup().id]",
+            "[resourceId('Microsoft.Insights/dataCollectionRules', variables('ruleName'))]"
+          ],
+          "description": "Entra ID application access role",
+          "permissions": [
+            {
+              "actions": [
+                "Microsoft.Insights/Register/Action",
+                "Microsoft.Support/*",
+                "Microsoft.Resources/subscriptions/resourceGroups/read"
+              ],
+              "dataActions": [
+                "Microsoft.Insights/Metrics/Write",
+                "Microsoft.Insights/Telemetry/Write"
+              ]
+            }
+          ],
+          "roleName": "[variables('dcrRoleName')]",
+          "type": "customRole"
+        }
+      },
+      {
+        "type": "Microsoft.Authorization/roleAssignments",
+        "apiVersion": "2022-04-01",
+        "name": "[guid(resourceGroup().id, concat('DCR Role assignment', variables('functionAppName')))]",
+        "dependsOn": [
+          "[variables('dcrRoleId')]",
+          "[variables('ruleName')]"
+        ],
+        "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('ruleName'))]",
+        "properties": {
+          "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+          "principalId": "[parameters('entraObjectId')]"
+        }
+      }
+  ],
+  "outputs": {
+    "functionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppName')]"
+    },
+    "dcrRuleId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('ruleName'))).immutableId]"
+    },
+    "ingestionEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]"
+    }
+  }
+}

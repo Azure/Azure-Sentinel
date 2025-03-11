@@ -1,0 +1,128 @@
+id: efd17c5f-5167-40f8-a1e9-0818940785d9
+name: GSA Enriched Office 365 - SharePointFileOperation via devices with previously unseen user agents
+description: |
+  Identifies anomalies if the number of documents uploaded or downloaded from device(s) associated with a previously unseen user agent exceeds a threshold (default is 5) and deviation (default is 25%).
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+  let threshold = 5;
+  let szSharePointFileOperation = "SharePointFileOperation";
+  let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+  let starttime = 14d;
+  let endtime = 1d;
+  
+  // OfficeActivity - Base Events
+  let BaseeventsOffice = OfficeActivity
+      | where TimeGenerated between (ago(starttime)..ago(endtime))
+      | where RecordType =~ szSharePointFileOperation
+      | where Operation in~ (szOperations)
+      | where isnotempty(UserAgent);
+  
+  // OfficeActivity - Frequent User Agents
+  let FrequentUAOffice = BaseeventsOffice
+      | summarize FUACount = count() by UserAgent, RecordType, Operation
+      | where FUACount >= threshold
+      | distinct UserAgent;
+  
+  // OfficeActivity - User Baseline
+  let UserBaseLineOffice = BaseeventsOffice
+      | summarize Count = count() by UserId, Operation, Site_Url
+      | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;
+  
+  // OfficeActivity - Recent User Activity
+  let RecentActivityOffice = OfficeActivity
+      | where TimeGenerated > ago(endtime)
+      | where RecordType =~ szSharePointFileOperation
+      | where Operation in~ (szOperations)
+      | where isnotempty(UserAgent)
+      | where UserAgent in~ (FrequentUAOffice)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OfficeObjectIdCount = dcount(OfficeObjectId), OfficeObjectIdList = make_set(OfficeObjectId), UserAgentSeenCount = count()
+          by RecordType, Operation, UserAgent, UserType, UserId, ClientIP , OfficeWorkload, Site_Url;
+  
+  // EnrichedMicrosoft365AuditLogs - Base Events
+  let BaseeventsEnriched = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated between (ago(starttime)..ago(endtime))
+      | where RecordType == szSharePointFileOperation
+      | where Operation in (szOperations)
+      | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+      | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+      | where isnotempty(UserAgent);
+  
+  // EnrichedMicrosoft365AuditLogs - Frequent User Agents
+  let FrequentUAEnriched = BaseeventsEnriched
+      | summarize FUACount = count() by UserAgent, RecordType, Operation
+      | where FUACount >= threshold
+      | distinct UserAgent;
+  
+  // EnrichedMicrosoft365AuditLogs - User Baseline
+  let UserBaseLineEnriched = BaseeventsEnriched
+      | summarize Count = count() by UserId, Operation, Site_Url
+      | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;
+  
+  // EnrichedMicrosoft365AuditLogs - Recent User Activity
+  let RecentActivityEnriched = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated > ago(endtime)
+      | where RecordType == szSharePointFileOperation
+      | where Operation in (szOperations)
+      | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+      | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+      | extend  ClientIP = ClientIp
+      | where isnotempty(UserAgent)
+      | where UserAgent in (FrequentUAEnriched)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ObjectIdCount = dcount(ObjectId), ObjectIdList = make_set(ObjectId), UserAgentSeenCount = count()
+          by RecordType, Operation, UserAgent, UserId,ClientIP, Site_Url;
+  
+  // Combine Baseline and Recent Activity, Calculate Deviation, and Deduplicate
+  let UserBehaviorAnalysisOffice = UserBaseLineOffice
+      | join kind=inner (RecentActivityOffice) on UserId, Operation, Site_Url
+      | extend Deviation = abs(UserAgentSeenCount - AvgCount) / AvgCount;
+  
+  let UserBehaviorAnalysisEnriched = UserBaseLineEnriched
+      | join kind=inner (RecentActivityEnriched) on UserId, Operation, Site_Url
+      | extend Deviation = abs(UserAgentSeenCount - AvgCount) / AvgCount;
+  
+  // Combine Office and Enriched Logs
+  let CombinedUserBehaviorAnalysis = UserBehaviorAnalysisOffice
+      | union UserBehaviorAnalysisEnriched;
+  
+  // Filter and Format Final Results
+  CombinedUserBehaviorAnalysis
+      | where Deviation > 0.25
+      | extend UserIdName = tostring(split(UserId, '@')[0]), 
+               UserIdUPNSuffix = tostring(split(UserId, '@')[1])
+      | project-reorder StartTimeUtc, EndTimeUtc, UserAgent, UserAgentSeenCount, UserId, ClientIP, Site_Url
+      | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: UserIdName
+      - identifier: UPNSuffix
+        columnName: UserIdUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Site_Url
+version: 2.2.6
+kind: Scheduled

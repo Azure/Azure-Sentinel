@@ -1,0 +1,47 @@
+Id: 9867c0fe-d890-476b-be4f-f21948b51700
+Parser:
+  Title: Registry Event ASIM parser for Microsoft Sentinel native Registry Event table
+  Version: "0.1.0"
+  LastUpdated: Nov 22 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: RegistryEvent
+  Version: "0.1.2"
+References:
+  - Title: ASIM Registry Schema
+    Link: https://aka.ms/ASimRegistryEventDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Registry Event table (ASimRegistryEventLogs) to the ASIM Registry Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: ASimRegistryEventNative
+EquivalentBuiltInParser: _ASim_RegistryEvent_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled: bool=false) {
+    ASimRegistryEventLogs
+    | where not(disabled)
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "RegistryEvent",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        User =  ActorUsername,
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        Process =  ActingProcessName
+    | project-away
+        TenantId,
+        SourceSystem,
+        _SubscriptionId,
+        _ResourceId
+  };
+  parser (disabled=disabled)

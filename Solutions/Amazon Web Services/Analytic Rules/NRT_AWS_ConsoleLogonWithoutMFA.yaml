@@ -3,8 +3,7 @@ name: NRT Login to AWS Management Console without MFA
 description: |
   'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA.
   You can limit this detection to trigger for administrative accounts if you do not have MFA enabled on all accounts.
-  This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used
-  and the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'
+  This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used and the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'
 severity: Low
 status: Available
 requiredDataConnectors:
@@ -27,16 +26,25 @@ query: |
   | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)
   | where MFAUsed !~ "Yes" and LoginResult !~ "Failure"
   | where SessionIssuerUserName !contains "AWSReservedSSO"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,
-  UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion
+  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,
+    UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: UserIdentityUserName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.1
+version: 1.0.3
 kind: NRT

@@ -17,7 +17,7 @@ When deploying the parsers, you:
 
 The template deploys the following:
 
-- ASIM Sysmon File Activity (11, 23 and 26) parsers - vimFileEventMicrosoftSysmonCreated, vimFileEventMicrosoftSysmonDeleted
+- ASIM Sysmon File Activity (11, 23 and 26) parsers - vimFileEventMicrosoftSysmon
 - ASIM Sysmon Process Events (1 and 5) parsers - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon
 - ASIM Sysmon Registry Events (12,13 and 14) parser - vimRegistryEventMicrosoftSysmon
 - ASIM Sysmon DNS event (22) parsers - ASimDnsMicrosoftSysmon (regular), vimDnsMicrosoftSysmon (parametrized)

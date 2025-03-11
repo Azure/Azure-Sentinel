@@ -1,0 +1,29 @@
+id: 7b5eb44d-3533-440e-9774-73a4d99bc2b2
+name: RecordedFuture Threat Hunting IP All Actors
+description: |
+  'Recorded Future Threat Hunting IP correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tags:
+  - RecordedFuture
+query: |
+  imNetworkSession
+  | join kind= innerunique  (
+    ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(NetworkIP)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Description startswith "Recorded Future - Threat Hunt"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.DstIpAddr == $right.NetworkIP
+  | project DstIpAddr
+  | extend IP_0_Address = DstIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IP_0_Address

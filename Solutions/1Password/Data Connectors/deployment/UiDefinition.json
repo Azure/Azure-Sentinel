@@ -1,0 +1,119 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+	"handler": "Microsoft.Azure.CreateUIDef",
+	"version": "0.1.2-preview",
+	"parameters": {
+		"config": {
+			"isWizard": true,
+			"basics": {
+				"description": "<img src=\"https://lever-client-logos.s3.us-west-2.amazonaws.com/f2192f1c-fc87-4e38-9764-293c0eb616a2-1682022825728.png\">\n\n**1Password Solution** deployment, more information about this project [here](https://github.com/azurekid/Azure-Sentinel/).\n\n_**Information:** The 1Password solution for Microsoft Sentinel is in active development. This feature is provided without a service level agreement. Certain features might not be supported or might have constrained capabilities._\n\nThe 1Password Microsoft Sentinel Solution provides a consolidated way to provision Azure Sentinel with content like a Data Connector, Workbooks and Analytics rules in your workspace with a single deployment step.\n\nInitially it takes around 15 minutes to see the first data to appear in Log Analytics.\n\n",
+				"location": {
+					"metadata": {
+						"hidden": "Hiding location, we get it from the log analytics workspace"
+					},
+					"visible": false
+				},
+				"resourceGroup": {
+					"allowExisting": true
+				}
+			}
+		},
+		"basics": [
+			{
+				"name": "getLAWorkspace",
+				"type": "Microsoft.Solutions.ArmApiControl",
+				"toolTip": "This filters by workspaces that exist in the Resource Group selected",
+				"condition": "[greater(length(resourceGroup().name),0)]",
+				"request": {
+					"method": "GET",
+					"path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+				}
+			},
+			{
+				"name": "workspace",
+				"type": "Microsoft.Common.DropDown",
+				"label": "Workspace",
+				"placeholder": "Select a workspace",
+				"toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+				"constraints": {
+					"allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+					"required": true
+				},
+				"visible": true
+			}
+		],
+		"steps": [
+			{
+				"name": "1Password",
+				"label": "1Password",
+				"elements": [
+					{
+						"name": "textBlock1",
+						"type": "Microsoft.Common.TextBlock",
+						"visible": true,
+						"options": {
+							"text": "Provide the 1Password API key",
+							"link": {
+								"label": "Learn more on how to create a API key for 1Password",
+								"uri": "https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens"
+							}
+						}
+					},
+					{
+						"name": "password",
+						"type": "Microsoft.Common.PasswordBox",
+						"label": {
+							"password": "1Password API Key"
+						},
+						"toolTip": "",
+						"constraints": {
+							"required": true,
+							"regex": "",
+							"validationMessage": ""
+						},
+						"options": {
+							"hideConfirmation": true
+						},
+						"visible": true
+					},
+					{
+						"name": "apiEndpoint",
+						"type": "Microsoft.Common.DropDown",
+						"label": "Your 1Password Region",
+						"placeholder": "",
+						"defaultValue": "events.1password.com",
+						"toolTip": "Choose the option that matches how you sign into 1Password. For example, if you sign into 1Password at acme.1password.eu, choose 1Password.eu.",
+						"constraints": {
+							"allowedValues": [
+								{
+									"label": "1Password.com",
+									"value": "https://events.1password.com"
+								},
+								{
+									"label": "1Password Enterprise",
+									"value": "https://events.ent.1password.com"
+								},
+								{
+									"label": "1Password.eu",
+									"value": "https://events.1password.eu"
+								},
+								{
+									"label": "1Password.ca",
+									"value": "https://events.1password.ca"
+								}
+							],
+							"required": true
+						},
+						"visible": true
+					}
+				]
+			}
+		],
+		"outputs": {
+			"workspaceName": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.name))]",
+			"workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+			"apiToken": "[steps('1Password').password]",
+			"apiEndpoint": "[steps('1Password').apiEndpoint]"
+		}
+	}
+}

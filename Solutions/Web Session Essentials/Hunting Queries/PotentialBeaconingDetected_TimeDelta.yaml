@@ -1,0 +1,58 @@
+id: 6338ca43-ae7c-4a91-9fe4-0f1ad4edf4a5
+name: Potential beaconing detected (ASIM Web Session)
+description: |
+  'Identifies beaconing patterns from web traffic logs based on recurrent timedelta patterns.
+  Reference Blog:
+  https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/detect-network-beaconing-via-intra-request-time-delta-patterns/ba-p/779586'
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+  - T1571
+query: |
+  let starttime = 2d;
+  let endtime = 1d;
+  let TimeDeltaThreshold = 25; // Minimum time difference in seconds between two events of same SourceIP and DestinationIP
+  let TotalEventsThreshold = 30; // Total number of events in an hour
+  let MostFrequentTimeDeltaThreshold = 25; // Most frequent time difference in seconds between two events of same SourceIP
+  let PercentBeaconThreshold = 80; // what percent of times the requests were sent at same interval within an hour
+  _Im_WebSession(starttime=startofday(ago(starttime)), endtime=startofday(ago(endtime)))
+  | where isnotempty(SrcIpAddr) and isnotempty(DstIpAddr) and isnotempty(SrcBytes)
+  | where ipv4_is_private(DstIpAddr)== false // Focus only on traffic going to internet
+  | project TimeGenerated, SrcIpAddr, DstIpAddr, SrcBytes, DstBytes, SrcUsername
+  | sort by SrcIpAddr asc,TimeGenerated asc, DstIpAddr asc
+  | serialize
+  | extend NextTimeGenerated = next(TimeGenerated,1), NextSrcIpAddr = next(SrcIpAddr,1)
+  | extend TimeDeltaInSeconds = datetime_diff('second', NextTimeGenerated, TimeGenerated)
+  | where SrcIpAddr == NextSrcIpAddr
+  | where TimeDeltaInSeconds > TimeDeltaThreshold
+  | summarize EventCount=count(), sum(DstBytes), sum(SrcBytes) by TimeDeltaInSeconds, bin(TimeGenerated,1h), SrcUsername, SrcIpAddr, DstIpAddr
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(EventCount, TimeDeltaInSeconds), TotalEvents=sum(EventCount), TotalSentBytes = sum(sum_SrcBytes), TotalReceivedBytes = sum(sum_DstBytes) by bin(TimeGenerated,1h), SrcUsername, SrcIpAddr, DstIpAddr
+  | where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold
+  | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
+  | where BeaconPercent > PercentBeaconThreshold
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  | extend IP_0_Address = SrcIpAddr
+  | extend IP_1_Address = DstIpAddr
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.0

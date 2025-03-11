@@ -1,7 +1,7 @@
 id: 3f0c20d5-6228-48ef-92f3-9ff7822c1954
 name: A host is potentially running a hacking tool (ASIM Web Session schema)
 description: |
-  'This rule identifies a web request with a user agent header known to belong to a hacking tool. This indicates a hacking tool is used on the host.<br>You can add custom hacking tool indicating User-Agent headers using a watchlist, for more information refer to the [UnusualUserAgents Watchlist](https://aka.ms/ASimUnusualUserAgentsWatchlist).<br><br>
+  'This rule identifies a web request with a user agent header known to belong to a hacking tool. This indicates a hacking tool is used on the host.<br>You can add custom hacking tool indicating User-Agent headers using a watchlist, for more information refer to the [UnusualUserAgents Watchlist](https://aka.ms/ASimUnusualUserAgentsWatchlist).
    This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'
 severity: Medium
 tags:
@@ -22,7 +22,19 @@ queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - CommandandControl
+  - Execution
+  - Discovery
+  - LateralMovement
+  - Collection
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1059
+  - T1046
+  - T1021
+  - T1557
+  - T1102
+  - T1020
 query: |
     let threatCategory="Hacking Tool";
     let knownUserAgentsIndicators = materialize(externaldata(UserAgent:string, Category:string)
@@ -32,7 +44,8 @@ query: |
     let customUserAgents=toscalar(_GetWatchlist("UnusualUserAgents") | where SearchKey==threatCategory | extend UserAgent=column_ifexists("UserAgent","") | where isnotempty(UserAgent) | summarize make_list(UserAgent));
     let fullUAList = array_concat(knownUserAgents,customUserAgents);
     _Im_WebSession(httpuseragent_has_any=fullUAList)
-    | project SrcIpAddr, Url, TimeGenerated,HttpUserAgent, SrcUsername
+    | project SrcIpAddr, Url, TimeGenerated, HttpUserAgent, SrcUsername
+    | extend AccountName = tostring(split(SrcUsername, "@")[0]), AccountUPNSuffix = tostring(split(SrcUsername, "@")[1])
 entityMappings:
   - entityType: URL
     fieldMappings:
@@ -44,8 +57,12 @@ entityMappings:
         columnName: SrcIpAddr
   - entityType: Account
     fieldMappings:
-      - identifier: Name
+      - identifier: FullName
         columnName: SrcUsername
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
 
 alertDetailsOverride:
   alertDisplayNameFormat: 'Host {{SrcIpAddr}} is potentially running a hacking tool'
@@ -55,7 +72,7 @@ customDetails:
 
 eventGroupingSettings:
   aggregationKind: AlertPerResult
-version: 1.1.1
+version: 1.1.5
 kind: Scheduled
 metadata:
     source:

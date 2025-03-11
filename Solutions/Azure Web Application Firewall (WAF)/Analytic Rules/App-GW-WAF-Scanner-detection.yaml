@@ -1,0 +1,56 @@
+id: 9b8dd8fd-f192-42eb-84f6-541920400a7a
+name: App Gateway WAF - Scanner Detection 
+description: | 
+  'Identifies a match for a Scanner detection user agent based attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+  References: https://owasp.org/www-community/Vulnerability_Scanning_Tools'
+severity: High 
+status: Available 
+requiredDataConnectors: 
+  - connectorId: WAF
+    dataTypes: 
+      - AzureDiagnostics
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - DefenseEvasion
+  - Execution
+  - InitialAccess
+  - Reconnaissance
+  - Discovery
+relevantTechniques:
+  - T1548
+  - T1203
+  - T1190
+  - T1595
+  - T1046
+tags:
+  - Scanner Detection
+query:  | 
+  let Threshold = 3;
+  AzureDiagnostics
+  | where ResourceProvider == 'MICROSOFT.NETWORK' and Category == 'ApplicationGatewayFirewallLog'
+  | where action_s == "Matched"
+  | where Message contains "Found User-Agent associated with security scanner"
+  | project transactionId_g, hostname_s, requestUri_s, TimeGenerated, clientIp_s, Message, details_message_s, details_data_s
+  | join kind = inner(
+  AzureDiagnostics
+  | where ResourceProvider == 'MICROSOFT.NETWORK' and Category == 'ApplicationGatewayFirewallLog'
+  | where action_s == "Blocked"
+  ) on transactionId_g
+  | extend Uri = strcat(hostname_s,requestUri_s)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(transactionId_g), Message = make_set(Message), Detail_Message = make_set(details_message_s), Detail_Data = make_set(details_data_s), Total_TransactionId = dcount(transactionId_g) by clientIp_s, Uri, action_s
+  | where Total_TransactionId >= Threshold
+# The Threshold value above can be changed as per your infrastructure's requirement
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Uri
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: clientIp_s 
+version: 1.0.2
+kind: Scheduled

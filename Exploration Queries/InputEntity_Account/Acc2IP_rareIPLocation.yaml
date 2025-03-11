@@ -9,17 +9,20 @@ InputFields:
 OutputEntityTypes:
   - Ip
 QueryPeriodBefore: 7d
-QueryPeriodAfter: 7d
+QueryPeriodAfter: 7d 
 DataSources:
   - SigninLogs
+  - imAuthentication
 Tactics:
   - CredentialAccess
   - Collection
 query: |
-
-  let IPsFromRareLocations = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_AadUserId:string){
-  let LocationPrevalence =
-  SigninLogs
+  let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+  let Legacy = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_AadUserId:string){
+  (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+  | join
+  (SigninLogs
+  | where ResultType == 0
   | extend p_Account_Name = case(
   // Handles mixed use scenario of NTDomain\AccountName@UPNSuffix
   v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
@@ -34,11 +37,9 @@ query: |
   )
   | parse UserPrincipalName with Account_Name '@' Account_UPNSuffix
   | extend Account_AadUserId = toguid(UserId)
-  | where (isnotempty(Account_Name) and Account_Name =~ p_Account_Name and isnotempty(Account_UPNSuffix) and Account_UPNSuffix =~ p_Account_UPNSuffix)
-  or (isnotempty(Account_AadUserId) and Account_AadUserId == toguid(v_Account_AadUserId))
+  | where (isnotempty(Account_Name) and Account_Name =~ p_Account_Name and isnotempty(Account_UPNSuffix) and Account_UPNSuffix =~ p_Account_UPNSuffix)  or (isnotempty(Account_AadUserId) and Account_AadUserId == toguid(v_Account_AadUserId))
   | extend FullLocation = strcat(Location,'|', LocationDetails.state, '|', LocationDetails.city)
-  | summarize ConnectionCount = count() by FullLocation, UserPrincipalName, IPAddress, Account_Name, Account_UPNSuffix, Account_AadUserId;
-  LocationPrevalence
+  | summarize ConnectionCount = count() by FullLocation, UserPrincipalName, IPAddress, Account_Name, Account_UPNSuffix, Account_AadUserId
   | summarize make_list(IPAddress), make_list(FullLocation), make_list(ConnectionCount), dcount(FullLocation), totalActivity = sum(ConnectionCount) by UserPrincipalName, Account_Name, Account_UPNSuffix, Account_AadUserId
   | mvexpand Location = list_FullLocation, ConnectionCount = list_ConnectionCount, IPAddress = list_IPAddress
   | extend Location = tostring(Location), ConnectionCount = toint(ConnectionCount), IPAddress = tostring(IPAddress)
@@ -50,7 +51,29 @@ query: |
   | extend IP_Location_Country = tostring(split(Location,'|')[0]), IP_Location_Region = tostring(split(Location,'|')[1]), IP_Location_City = tostring(split(Location,'|')[2])
   | extend Account_Aux_info = pack('PercentOfActivity', percentOfActivity, 'ConnectionCount', ConnectionCount)
   | parse UserPrincipalName with Account_NTDomain '\\' *
-  | project Account_UnstructuredName = UserPrincipalName, Account_Name, Account_NTDomain, Account_UPNSuffix, Account_AadUserId, IP_Address = IPAddress, IP_Location_Country, IP_Location_Region, IP_Location_City, Account_Aux_info
-  };
-  // Where <Name> is the UserName such as John from John@contoso.com, <UPNSuffix> is the domain such as contoso.com from John@contoso.com and <AadUserId> is the GUID assigned in AAD to the user
-  IPsFromRareLocations('<Name>', '<UPNSuffix>', '<AadUserId>')
+  | project Account_UnstructuredName = UserPrincipalName, TargetUsername = Account_Name, Account_NTDomain, TargetUserScope = Account_UPNSuffix, TargetUserId = Account_AadUserId, IP_Address = IPAddress, IP_Location_Country, IP_Location_Region, IP_Location_City, Account_Aux_info
+  | extend exists=int(1)) on exists
+  | project-away exists, exists1 };
+   let Normalized = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+  | join kind=inner (imAuthentication(targetusername_has=v_Account_Name)
+  | where EventResult =~ "Success"
+  | extend FullLocation = strcat(SrcGeoCountry,'|', SrcGeoRegion, '|', SrcGeoCity)
+  | extend TargetUserScope = column_ifexists("TargetUserScope", iif(User has "@", split(User, "@")[1], "Unknown"))
+  | extend SrcIpAddr = column_ifexists("SrcIpAddr", "")
+  | extend IpAddr = column_ifexists("IpAddr", SrcIpAddr)
+  | summarize ConnectionCount = count() by FullLocation, User, IpAddr, TargetUsername,TargetUserScope,  TargetUserId
+  | summarize make_list(IpAddr), make_list(FullLocation), make_list(ConnectionCount), dcount(FullLocation), totalActivity = sum(ConnectionCount) by User, TargetUsername, TargetUserScope, TargetUserId
+  | mvexpand Location = list_FullLocation, ConnectionCount = list_ConnectionCount, IPAddress = list_IpAddr
+  | extend Location = tostring(Location), ConnectionCount = toint(ConnectionCount), IPAddress = tostring(IPAddress)
+  | extend percentOfActivity = 100*round(todouble(ConnectionCount)/totalActivity,4)
+  | where percentOfActivity < 10
+  | project User, TargetUserScope, TargetUserId, IPAddress, ConnectionCount, percentOfActivity, Location, TargetUsername
+  | sort by percentOfActivity asc, ConnectionCount desc
+  | top 10 by percentOfActivity asc
+  | extend IP_Location_Country = tostring(split(Location,'|')[0]), IP_Location_Region = tostring(split(Location,'|')[1]), IP_Location_City = tostring(split(Location,'|')[2])
+  | extend Account_Aux_info = pack('PercentOfActivity', percentOfActivity, 'ConnectionCount', ConnectionCount)
+  | parse User with Account_NTDomain '\\' *
+  | project Account_UnstructuredName = User, TargetUsername, Account_NTDomain, TargetUserScope, TargetUserId, IP_Address = IPAddress, IP_Location_Country, IP_Location_Region, IP_Location_City, Account_Aux_info
+  | extend exists=int(1)) on exists | project-away exists, exists1 };
+  union isfuzzy=true Legacy('<v_Account_Name>', '<v_Account_UPNSuffix>', '<v_Account_AadUserId>'), Normalized('<v_Account_Name>')

@@ -1,4 +1,4 @@
-import { LogoValidationError } from "../validationError";
+import { LogoValidationError } from "../validationError.js";
 let errorMessage="";
 export function isValidLogoImageSVGContent(LogoImagesContent: string) {
   if (isLogoSVGHasillegalAttribute(LogoImagesContent)) {

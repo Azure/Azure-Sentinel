@@ -1,3 +1,6 @@
+## 2.2
+- Updated path for key file 
+
 ## 2.1
 - Implemented new logic to ingest users without duplication
 - Adding UserId and UserName to Storage Account Table to avoid duplication

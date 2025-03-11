@@ -16,7 +16,7 @@ We value your feedback. Here are some channels to help surface your questions or
 5. General feedback on community and contribution process - File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
 
 
-# Contributing
+# Contribution guidelines
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
@@ -31,7 +31,7 @@ Brand new or update to a contribution via these methods:
     * Browse to the folder you want to upload your file to
     * Choose Upload Files and browse to your file. 
     * You will be required to create your own branch and then submit the Pull Request for review.
-* Use [GitHub Desktop](https://help.github.com/en/desktop/getting-started-with-github-desktop) or [Visual Studio](https://visualstudio.microsoft.com/vs/) or [VSCode](https://code.visualstudio.com/?wt.mc_id=DX_841432)
+* Use [GitHub Desktop](https://docs.github.com/en/desktop/overview/getting-started-with-github-desktop) or [Visual Studio](https://visualstudio.microsoft.com/vs/) or [VSCode](https://code.visualstudio.com/?wt.mc_id=DX_841432)
     * [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo)  
     * [Clone the repo](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository)
     * [Create your own branch](https://help.github.com/en/desktop/contributing-to-projects/creating-a-branch-for-your-work)
@@ -57,8 +57,8 @@ A total of 1 test files matched the specified pattern.
    Expected object to be <null>, but found System.ComponentModel.DataAnnotations.ValidationException with message "An old mapping for entity 'AccountCustomEntity' does not have a matching new mapping entry."
 ```
 
-### Pull Request Kql Validation Check
-As part of the PR checks we run a syntax validation of the kql queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
+### Pull Request KQL Validation Check
+As part of the PR checks we run a syntax validation of the KQL queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
 ![Azurepipeline](.github/Media/Azurepipeline.png)
 In the pipeline you can see which test failed and what is the cause:
 ![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
@@ -94,8 +94,8 @@ your table schema is defined in json file in the folder *Azure-Sentinel\\.script
   ]
 }
 ```
-### Run Kql Validation Locally
-In order to run the kql validation before submitting Pull Request in you local machine:
+### Run KQL Validation Locally
+In order to run the KQL validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
 * Open Shell and navigate to  `Azure-Sentinel\\.script\tests\KqlvalidationsTests\`
 * Execute `dotnet test`
@@ -140,7 +140,7 @@ The schema validation includes the detection's frequency and period, the detecti
 A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
 
 ### Run Detection Schema Validation Locally
-In order to run the kql validation before submitting Pull Request in you local machine:
+In order to run the KQL validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
 * Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateSchemaValidation\`
 * Execute `dotnet test`

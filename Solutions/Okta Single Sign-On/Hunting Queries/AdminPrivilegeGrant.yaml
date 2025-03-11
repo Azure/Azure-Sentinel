@@ -1,6 +1,8 @@
 id: 5309ea6b-463c-4449-a3c4-2fc8ee0080ee
 name: Admin privilege granted (Okta)
 description: |
+  'Query checks for admin permissions granted to users/groups, often used by adversaries for access and privilege elevation.'
+description-detailed: |
   'This query searches for successful grant of administrator permissions to user/groups. Adversaries often attempt to assign administrator permission to users/group to maintain access as well as to elevate privileges.
    Please verify that the behavior is known and filter out anything that is expected.
    Refrence: https://developer.okta.com/docs/reference/api/event-types/'
@@ -8,20 +10,23 @@ requiredDataConnectors:
   - connectorId: OktaSSO
     dataTypes: 
       - Okta_CL
+  - connectorId: OktaSSOv2
+    dataTypes:
+      - OktaSSO
 tactics:
   - Persistence
 relevantTechniques:
   - T1098
 query: |
   let Events = dynamic(["group.privilege.grant", "user.account.privilege.grant"]);
-  Okta_CL
+  OktaSSO
   | where eventType_s in (Events)
   | where outcome_result_s =~ "SUCCESS"
   | extend Target=parsejson(target_s)
   | mvexpand bagexpansion=array (Target)
   | evaluate bag_unpack(Target)
   | extend Target_Id = tostring(column_ifexists('id', "")), Target_type = tostring(column_ifexists('type', "")), Target_user = tostring(column_ifexists('displayName', "")), Target_alternateId = tostring(column_ifexists('alternateId', ""))
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_id_s, actor_type_s, actor_alternateId_s, actor_displayName_s, Target_alternateId, Target_Id, Target_type, Target_user,debugContext_debugData_privilegeGranted_s,domain_s,
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_id_s, actor_type_s, actor_alternateId_s, actor_displayName_s, Target_alternateId, Target_Id, Target_type, Target_user,column_ifexists('debugContext_debugData_privilegeGranted_s', ""),domain_s,
    authenticationContext_externalSessionId_s, eventType_s, displayMessage_s, transaction_id_s, uuid_g
 entityMappings:
   - entityType: Account

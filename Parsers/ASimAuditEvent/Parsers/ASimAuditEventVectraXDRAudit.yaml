@@ -1,0 +1,54 @@
+Parser:
+  Title: Audit Event ASIM parser for Vectra XDR Audit Logs Event
+  Version: '0.1.1'
+  LastUpdated: Sept 18, 2023
+Product:
+  Name: Vectra
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Vectra XDR Audit Logs Event in the Audits_Data_CL table to the ASIM Audit Event schema.
+ParserName: ASimAuditEventVectraXDRAudit
+EquivalentBuiltInParser: _ASim_AuditEvent_VectraXDRAudit
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool = false)
+  {
+    Audits_Data_CL
+    | where not(disabled) and event_action_s !in ("login","logout")
+    | extend
+          EventEndTime = event_timestamp_t,
+          EventProduct = 'XDR',
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "0.1.0",
+          EventStartTime = event_timestamp_t,
+          EventType = "Other",
+          EventVendor = 'Vectra',
+          Type = "Audit Log",
+          EventUid = tostring(toint(id_d)),
+          ActorUserId = tostring(toint(user_id_d)),
+          ActorUserIdType = "UID",
+          ActorUsernameType = "UPN",
+          EventResult = case(result_status_s=="success", "Success", result_status_s=="failure", "Failure","NA")
+    | project-rename
+          Dvc = source_ip_s,
+          Operation = event_action_s,
+          ActorUsername = username_s,
+          Object = event_object_s,
+          ActorOriginalUserType = user_type_s,
+          EventMessage = Message,
+          EventProductVersion = version_s
+    | extend User = ActorUsername
+    | project-away
+          id_d, user_id_d, user_role_s, result_status_s,event_timestamp_t, event_data_s, api_client_id_g, TenantId, _ResourceId, RawData, SourceSystem, Computer, MG, ManagementGroupName
+  };
+  parser (disabled=disabled)

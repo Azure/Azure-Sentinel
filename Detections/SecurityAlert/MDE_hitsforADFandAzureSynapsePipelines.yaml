@@ -2,8 +2,7 @@ id: a333d8bf-22a3-4c55-a1e9-5f0a135c0253
 name: Microsoft Defender for Endpoint (MDE) signatures for Azure Synapse pipelines and Azure Data Factory
 description: |
   'This query looks for Microsoft Defender for Endpoint detections related to the remote command execution attempts on Azure IR with Managed VNet or SHIR. 
-  In Microsoft Sentinel, the SecurityAlerts table includes the name of the impacted device. Additionally, this query joins the DeviceInfo table to connect other information such as device group, 
-  IP address, signed in users, and others allowing analysts using Microsoft Sentinel to have more context related to the alert. 
+  In Microsoft Sentinel, the SecurityAlerts table includes the name of the impacted device. Additionally, this query joins the DeviceInfo table to connect other information such as device group, IP address, signed in users, and others allowing analysts using Microsoft Sentinel to have more context related to the alert. 
   Reference: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2022-29972 , 
   https://msrc-blog.microsoft.com/2022/05/09/vulnerability-mitigated-in-the-third-party-data-connector-used-in-azure-synapse-pipelines-and-azure-data-factory-cve-2022-29972'
 severity: High
@@ -32,23 +31,30 @@ query: |
   | where ThreatName in~ (mde_threats) or ThreatFamilyName in~ (mde_threats)
   | extend CompromisedEntity = tolower(CompromisedEntity)
   ) on $left.DeviceName == $right.CompromisedEntity
-  | summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities
+  | summarize by bin(TimeGenerated, 1d), DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId, CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities
+  | extend HostName = tostring(split(CompromisedEntity, ".")[0]), DomainIndex = toint(indexof(CompromisedEntity, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(CompromisedEntity, DomainIndex + 1), CompromisedEntity)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: FullName
         columnName: CompromisedEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: PublicIP
-version: 1.0.3
+version: 1.0.6
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ashwin Patil
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

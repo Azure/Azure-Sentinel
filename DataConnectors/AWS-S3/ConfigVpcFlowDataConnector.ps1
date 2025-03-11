@@ -5,6 +5,8 @@ Write-Log -Message "Starting Vpc flow data connector configuration script" -LogF
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable VPCFlow Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName
 Write-ScriptNotes
 
+# Add an Identity Provider
+New-OidcProvider
 # Create new Arn Role
 New-ArnRole
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
@@ -45,8 +47,8 @@ Set-RetryAction({
 	$vpcTagSpecifications = "ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=${vpcName}}, {Key=$(Get-SentinelTagKey),Value=$(Get-SentinelTagValue)}]"
 	Write-Log -Message "Vpc tag specification: $vpcTagSpecifications" -LogFileName $LogFileName
 
-	Write-Log -Message "Executing: aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceIds.Split(' ') --traffic-type $vpcTrafficType --log-destination-type s3 --log-destination arn:aws:s3:::$bucketName --tag-specifications $vpcTagSpecifications 2>&1" -LogFileName $LogFileName -Severity Verbose
-	$tempForOutput = aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceIds.Split(' ') --traffic-type $vpcTrafficType.ToUpper() --log-destination-type s3 --log-destination arn:aws:s3:::$bucketName --tag-specifications $vpcTagSpecifications 2>&1
+	Write-Log -Message "Executing: aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceIds.Split(' ') --traffic-type $vpcTrafficType --log-destination-type s3 --log-destination $($AwsCloudResource):s3:::$bucketName --tag-specifications $vpcTagSpecifications 2>&1" -LogFileName $LogFileName -Severity Verbose
+	$tempForOutput = aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceIds.Split(' ') --traffic-type $vpcTrafficType.ToUpper() --log-destination-type s3 --log-destination ${AwsCloudResource}:s3:::$bucketName --tag-specifications $vpcTagSpecifications 2>&1
 	Write-Log $tempForOutput -LogFileName $LogFileName -Severity Verbose
 
 })

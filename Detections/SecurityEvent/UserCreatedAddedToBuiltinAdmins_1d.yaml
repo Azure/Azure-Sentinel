@@ -26,73 +26,115 @@ relevantTechniques:
   - T1078
 query: |
   (union isfuzzy=true
-  (SecurityEvent
-  | where EventID == 4720
-  | where AccountType == "User"
-  | project CreatedUserTime = TimeGenerated, CreatedUserEventID = EventID, CreatedUserActivity = Activity, Computer = toupper(Computer), 
-  CreatedUser = tolower(TargetAccount), CreatedUserSid = TargetSid, AccountUsedToCreateUser = strcat(SubjectAccount), SidofAccountUsedToCreateUser = SubjectUserSid
-  ),
-  (WindowsEvent
-  | where EventID == 4720
-  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
-  | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
-  | where AccountType == "User"
-  | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
-  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
-  | extend Activity="4720 - A user account was created."
-  | extend TargetSid = tostring(EventData.TargetSid)
-  | project CreatedUserTime = TimeGenerated, CreatedUserEventID = EventID, CreatedUserActivity = Activity, Computer = toupper(Computer), 
-  CreatedUser = tolower(TargetAccount), CreatedUserSid = TargetSid, AccountUsedToCreateUser = strcat(SubjectAccount), SidofAccountUsedToCreateUser = SubjectUserSid
-  ))
-  | join ((union isfuzzy=true
-  (SecurityEvent 
-  | where AccountType == "User"
-  // 4732 - A member was added to a security-enabled local group
-  | where EventID == 4732
-  // TargetSid is the builin Admins group: S-1-5-32-544
-  | where TargetSid == "S-1-5-32-544"
-  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, Computer = toupper(Computer), GroupName = tolower(TargetAccount), 
-  GroupSid = TargetSid, AccountThatAddedUser = SubjectAccount, SIDofAccountThatAddedUser = SubjectUserSid, CreatedUserSid = MemberSid
-  ),
-  (  WindowsEvent 
-  // 4732 - A member was added to a security-enabled local group
-  | where EventID == 4732 and EventData has "S-1-5-32-544"
-  //TargetSid is the builin Admins group: S-1-5-32-544
-  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
-  | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
-  | where AccountType == "User"
-  | extend TargetSid = tostring(EventData.TargetSid)
-  | where TargetSid == "S-1-5-32-544"
-  | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
-  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
-  | extend Activity="4732 - A member was added to a security-enabled local group."
-  | extend MemberSid = tostring(EventData.MemberSid)
-  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, Computer = toupper(Computer), GroupName = tolower(TargetAccount), 
-  GroupSid = TargetSid, AccountThatAddedUser = SubjectAccount, SIDofAccountThatAddedUser = SubjectUserSid, CreatedUserSid = MemberSid)
-  ))
+      (SecurityEvent
+      | where EventID == 4720
+      | where AccountType == "User"
+      | project CreatedUserTime = TimeGenerated, CreatedUserEventID = EventID, CreatedUserActivity = Activity, Computer = toupper(Computer), 
+      CreatedUser = tolower(TargetAccount), CreatedUserAccountName = TargetUserName, CreatedUserDomainName = TargetDomainName, CreatedUserSid = TargetSid, 
+      AccountUsedToCreateUser = SubjectAccount, CreatedByAccountName = SubjectUserName, CreatedByDomainName = SubjectDomainName, SidofAccountUsedToCreateUser = SubjectUserSid
+      ),
+      (WindowsEvent
+      | where EventID == 4720
+      | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+      | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+      | where AccountType == "User"
+      | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+      | extend SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectUserName = tostring(EventData.SubjectUserName)
+      | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+      | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName) 
+      | extend Activity="4720 - A user account was created."
+      | extend TargetSid = tostring(EventData.TargetSid)
+      | project CreatedUserTime = TimeGenerated, CreatedUserEventID = EventID, CreatedUserActivity = Activity, Computer = toupper(Computer), 
+      CreatedUser = tolower(TargetAccount), CreatedUserAccountName = TargetUserName, CreatedUserDomainName = TargetDomainName, CreatedUserSid = TargetSid, 
+      AccountUsedToCreateUser = SubjectAccount, CreatedByAccountName = SubjectUserName, CreatedByDomainName = SubjectDomainName, SidofAccountUsedToCreateUser = SubjectUserSid
+      )
+    )
+  | join kind=inner
+  (
+    (union isfuzzy=true
+      (SecurityEvent 
+      | where AccountType == "User"
+      // 4732 - A member was added to a security-enabled local group
+      | where EventID == 4732
+      // TargetSid is the builin Admins group: S-1-5-32-544
+      | where TargetSid == "S-1-5-32-544"
+      | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, Computer = toupper(Computer), GroupName = tolower(TargetAccount), 
+      GroupSid = TargetSid, AccountThatAddedUser = SubjectAccount, SIDofAccountThatAddedUser = SubjectUserSid, AddedByAccountName = SubjectUserName, AddedByDomainName = SubjectDomainName,
+      CreatedUserSid = MemberSid
+      ),
+      (  WindowsEvent 
+      // 4732 - A member was added to a security-enabled local group
+      | where EventID == 4732 and EventData has "S-1-5-32-544"
+      //TargetSid is the builin Admins group: S-1-5-32-544
+      | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+      | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+      | where AccountType == "User"
+      | extend TargetSid = tostring(EventData.TargetSid)
+      | where TargetSid == "S-1-5-32-544"
+      | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+      | extend SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectUserName = tostring(EventData.SubjectUserName)
+      | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+      | extend Activity="4732 - A member was added to a security-enabled local group."
+      | extend MemberSid = tostring(EventData.MemberSid)
+      | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, Computer = toupper(Computer), GroupName = tolower(TargetAccount), 
+      GroupSid = TargetSid, AccountThatAddedUser = SubjectAccount, SIDofAccountThatAddedUser = SubjectUserSid, AddedByAccountName = SubjectUserName, AddedByDomainName = SubjectDomainName,
+      CreatedUserSid = MemberSid
+      )
+    )
+  )
   on CreatedUserSid
   //Create User first, then the add to the group.
-  | project Computer, CreatedUserTime, CreatedUserEventID, CreatedUserActivity, CreatedUser, CreatedUserSid, GroupAddTime, GroupAddEventID, 
-  GroupAddActivity, AccountUsedToCreateUser, GroupName, GroupSid, AccountThatAddedUser, SIDofAccountThatAddedUser 
-  | extend timestamp = CreatedUserTime, AccountCustomEntity = CreatedUser, HostCustomEntity = Computer
+  | project Computer, CreatedUserTime, CreatedUserEventID, CreatedUserActivity, CreatedUser, CreatedUserSid, CreatedUserAccountName, CreatedUserDomainName,
+  GroupAddTime, GroupAddEventID, GroupAddActivity, GroupName, GroupSid,
+  AccountUsedToCreateUser, SidofAccountUsedToCreateUser, CreatedByAccountName, CreatedByDomainName, 
+  AccountThatAddedUser, SIDofAccountThatAddedUser, AddedByAccountName, AddedByDomainName
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: AccountUsedToCreateUser
+      - identifier: Name
+        columnName: CreatedByAccountName
+      - identifier: NTDomain
+        columnName: CreatedByDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountThatAddedUser
+      - identifier: Name
+        columnName: AddedByAccountName
+      - identifier: NTDomain
+        columnName: AddedByDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatedUser
+      - identifier: Name
+        columnName: CreatedUserAccountName
+      - identifier: NTDomain
+        columnName: CreatedUserDomainName
+  - entityType: Account
+    fieldMappings:
       - identifier: Sid
         columnName: CreatedUserSid
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.1.3
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+version: 1.2.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Shain
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

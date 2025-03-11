@@ -1,0 +1,123 @@
+id: 6c27521f-47f0-42b5-8be6-1503b8e42c65
+Function:
+  Title: Parser for CiscoISEEvent
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: CiscoISEEvent
+FunctionAlias: CiscoISEEvent
+FunctionQuery: |
+    let EventData = Syslog
+    | where ProcessName has_any  ("CSCO", "CISE")
+    | extend EventVendor = 'CISCO'
+    | extend EventProduct = 'ISE'
+    | parse SyslogMessage with * " " * " " * " " EventId " " EventSeverity " " EventCategory " " RestOfMessage
+    | parse SyslogMessage with * ": " EventMessage"," *
+    | parse-kv SyslogMessage as (ConfigVersionId:int, ['Device IP Address']:string, NetworkDeviceName:string, DestinationIPAddress:string, DestinationPort:int, UserName:string, Protocol:string, RequestLatency:int, ['NAS-IP-Address']:string, ['NAS-Port']:int, ['NAS-Port-Type']:string, ['NAS-Identifier']:string, ['Service-Type']:string, ['Framed-MTU']:int, ['Called-Station-ID']:string, ['Calling-Station-ID']:string, Action:string, ['Privilege-Level']:int, ['Remote-Address']:string, NetworkDeviceProfileId:string, AcsSessionID:string, ['Acct-Session-Id']:string, ['Authen-Type']:string, AuthenticationIdentityStore:string, AuthenticationMethod:string, Service:string, SelectedAccessService:string, SelectedShellProfile:string, IdentityGroup:string, ['Service-Argument']:string, CmdSet:string, MatchedCommandSet:string, ['Authen-Method']:string, SelectedCommandSet:string, NetworkDeviceProfileName:string, PostureStatus:string, SelectedAuthorizationProfiles:string, AuthorizationPolicyMatchedRule:string, MisconfiguredClientFixReason:string, RadiusPacketType:string, FailureReason:string, Type:string, DetailedInfo:string) with (pair_delimiter=', ', kv_delimiter='=')
+    | project-rename DvcIpAddr = ['Device IP Address']
+    				,DvcHostname = NetworkDeviceName
+    				,DstIpAddr = DestinationIPAddress
+    				,DstPortNumber = DestinationPort
+    				,DstUserName = UserName
+    				,NetworkProtocol = Protocol
+    				,RequestLatency = RequestLatency
+    				,NasIpAddress = ['NAS-IP-Address']
+    				,NasPort = ['NAS-Port']
+    				,NasPortType = ['NAS-Port-Type']
+    				,NasIdentifier = ['NAS-Identifier']
+    				,ServiceType = ['Service-Type']
+    				,FramedMtu = ['Framed-MTU']
+    				,CalledStationId = ['Called-Station-ID']
+    				,CallingStationId = ['Calling-Station-ID']
+    				,EventType = Type
+    				,DvcAction = Action
+    				,PrivilegeLevel = ['Privilege-Level']
+    				,SrcIpAddr = ['Remote-Address']
+    				,NetworkDeviceProfileId = NetworkDeviceProfileId
+    				,AcsSessionId = AcsSessionID
+    				,AcctSessionId = ['Acct-Session-Id']
+    				,AuthenType = ['Authen-Type']
+    				,AuthenticationIdentityStore = AuthenticationIdentityStore
+    				,AuthenticationMethod = AuthenticationMethod
+    				,SelectedAccessService = SelectedAccessService
+    				,SelectedShellProfile = SelectedShellProfile
+    				,IdentityGroup = IdentityGroup
+    				,Service = Service
+    				,ServiceArgument = ['Service-Argument']
+    				,CmdSet = CmdSet
+    				,MatchedCommandSet = MatchedCommandSet
+    				,AuthenMethod = ['Authen-Method']
+    				,SelectedCommandSet = SelectedCommandSet
+    				,NetworkDeviceProfileName = NetworkDeviceProfileName
+    				,PostureStatus = PostureStatus
+    				,SelectedAuthorizationProfiles = SelectedAuthorizationProfiles
+    				,AuthorizationPolicyMatchedRule = AuthorizationPolicyMatchedRule
+    				,MisconfiguredClientFixReason = MisconfiguredClientFixReason
+    				,RadiusPacketType = RadiusPacketType
+    				,EventTypeDetailed = FailureReason
+    				,EventResultDetails = DetailedInfo
+    | parse SyslogMessage with * "device-mac=" DvcMacAddr"," *
+    | parse SyslogMessage with * "device-public-mac=" DevicePublicMac"," *
+    | parse SyslogMessage with * "device-platform=" DevicePlatform"," *
+    | parse SyslogMessage with * "device-platform-version=" DevicePlatformVersion"," *
+    | parse SyslogMessage with * "=device-type=" DeviceType"," *
+    | parse SyslogMessage with * "ac-user-agent=" HttpUserAgentOriginal"," *;
+    let EventName=datatable(EventId:string, EventDescription:string)["5200","User authentication ended successfully","5201", "User authentication ended successfully","5202","The requested Command Authorization passed","5203","The requested Session Authorization passed","5205","Dynamic Authorization succeeded","5231","Guest Authentication Passed","5236","Authorize-Only ended successfully","5238","","5240","Previously rejected endpoint was released to continue authentications","5400","User authentication failed. See FailureReason for more information","5401","User authentication failed. See FailureReason for more information","5405","RADIUS request dropped","5406","","5407","TACACS+ Authorization failed","5411","Supplicant did not respond to the last message that ISE sent to it","5417","Dynamic Authorization failed","5434","Endpoint conducted several failed authentications of the same scenario","5436","Ignoring this request because it is a duplicate of another packet that is currently being processed","5440","Endpoint started new authentication while previous is still in progress. Most probable that supplicant on that endpoint stopped conducting the previous authentication and started the new one. Closing the previous authentication","5449","Endpoint failed authentication of the same scenario several times and all further requests will be rejected for the duration of the Request Rejection Interval","12508","EAP-TLS handshake failed","12514","EAP-TLS failed SSL/TLS handshake because of an unknown CA in the client certificates chain","12516","EAP-TLS failed SSL/TLS handshake because of an expired certificate in the client certificates chain","60114","ISE server shutdown has been initiated","60166","Certificate Expiration warning","60167","Certificate has expired","80002","This message is generated when a profiler endpoint is profiled","86009","Guest user record is not found in the database","86010","Guest user authentication failed. Please check your password and account permission","86011","Guest user authentication failed. User is not enabled. Please contact your System Administrator","86012","Guest User must accept Access-Use policy before network access is granted","86013","Portal is not found in the database. Please contact your System Administrator","86014","User authentication failed. User account is suspended","86015","Invalid password change. Use correct password based on the password policy","86016","Timeout from server has exceeded the threshold. Please contact your System Administrator","86017","SessionID is missing. Please contact your System Administrator","86018","Guest Change of Authorization has failed. Please contact your System Administrator","86019","User access is restricted based on time profile. Please contact your System Administrator","86020","User authentication failed. Please contact your System Administrator"];
+    EventData
+    | lookup EventName on EventId
+    | project TimeGenerated
+            , EventVendor
+            , EventProduct
+            , EventId
+            , EventSeverity
+            , EventCategory
+            , EventMessage
+            , EventDescription
+            , ConfigVersionId
+            , DvcIpAddr
+            , DvcHostname
+            , DstIpAddr
+            , DstPortNumber
+            , DstUserName
+            , NetworkProtocol
+            , RequestLatency
+            , NasIpAddress
+            , NasPort
+            , NasPortType
+            , NasIdentifier
+            , ServiceType
+            , FramedMtu
+            , CalledStationId
+            , CallingStationId
+            , EventType
+            , DvcAction
+            , PrivilegeLevel
+            , SrcIpAddr
+            , NetworkDeviceProfileId
+            , AcsSessionId
+            , AuthenType
+            , AuthenticationIdentityStore
+            , AuthenticationMethod
+            , SelectedAccessService
+            , SelectedShellProfile
+            , IdentityGroup
+            , Service
+            , ServiceArgument
+            , CmdSet
+            , MatchedCommandSet
+            , AuthenMethod
+            , SelectedCommandSet
+            , NetworkDeviceProfileName
+            , PostureStatus
+            , SelectedAuthorizationProfiles
+            , AuthorizationPolicyMatchedRule
+            , DvcMacAddr
+            , DevicePublicMac
+            , DevicePlatform
+            , DevicePlatformVersion
+            , DeviceType
+            , HttpUserAgentOriginal
+            , MisconfiguredClientFixReason
+            , RadiusPacketType
+            , EventTypeDetailed
+            , EventResultDetails

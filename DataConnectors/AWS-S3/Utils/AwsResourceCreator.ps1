@@ -1,3 +1,73 @@
+function New-OidcProvider
+{
+    <#
+    .SYNOPSIS
+        Checks if an OIDC provider already exists, gets a list of the approved client IDs, and adds a new client ID if it's not already there.
+        if the OIDC provider doesn't exists creates an IAM entity to describe an identity provider (IdP) that supports OpenID Connect (OIDC) provider for Sentinel Application.
+    #>
+
+    Write-Log -Message "Checking existing OIDC provider" -LogFileName $LogFileName -Severity Information -LinePadding 2
+    Write-Log -Message "Executing Set-RetryAction" -LogFileName $LogFileName -Severity Verbose
+
+    Set-RetryAction({
+        
+        Write-Log -Message "Executing: aws sts get-caller-identity --query 'Account' --output text" -LogFileName $LogFileName -Severity Verbose
+        $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
+        Write-Log -Message $CustomerAWSAccountId -LogFileName $LogFileName -Severity Verbose
+         
+        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/' 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/" 2>&1
+        Write-Log -Message $providerInfo -LogFileName $LogFileName -Severity Verbose
+
+        # If the provider was retrieved then the provider already exists
+        $OIDCProviderExists = $lastexitcode -eq 0
+        if ($OIDCProviderExists)
+        {
+            Write-Log -Message "OIDC provider already exists" -LogFileName $LogFileName -Severity Information -Indent 2
+
+            # Get the list of client IDs
+            $clientIds = $providerInfo | ConvertFrom-Json | Select-Object -ExpandProperty ClientIDList
+            Write-Log -Message "Approved client IDs: $clientIds" -LogFileName $LogFileName -Severity Information -Indent 2
+            # Check if the new client ID is already in the list
+            if ($clientIds -contains $SentinelClientId)
+            {
+                Write-Log -Message "Client ID $SentinelClientId is already approved" -LogFileName $LogFileName -Severity Information -Indent 2
+            }
+            else
+            {
+                Write-Log -Message "Adding new client ID $SentinelClientId" -LogFileName $LogFileName -Severity Information -Indent 2
+                Write-Log -Message "Executing: aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/' --client-id $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
+                aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/" --client-id $SentinelClientId 2>&1
+
+                # If the client ID was added then the operation was successful
+                if ($lastexitcode -eq 0)
+                {
+                    Write-Log -Message "Client ID $SentinelClientId added successfully" -LogFileName $LogFileName -Severity Information -Indent 2
+                }
+            }
+        }
+        # If the provider doesn't exist
+        else
+        {
+            Write-Log -Message "Creating OpenID Connect provider" -LogFileName $LogFileName -Severity Information -LinePadding 2
+            Write-Log -Message "Executing Set-RetryAction" -LogFileName $LogFileName -Severity Verbose
+        
+            Set-RetryAction({
+        
+                Write-Log -Message "Executing: aws iam create-open-id-connect-provider --url 'https://sts.windows.net/$($SentinelTenantId)/' --ThumbprintList '626d44e704d1ceabe3bf0d53397464ac8080142c' --client-id-list $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
+                $tempForOutput = aws iam create-open-id-connect-provider --url "https://sts.windows.net/$($SentinelTenantId)/" --thumbprint-list "626d44e704d1ceabe3bf0d53397464ac8080142c"  --client-id-list $SentinelClientId 2>&1
+                Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+        
+                # If the provider was created then the operation was successful
+                if ($lastexitcode -eq 0)
+                {
+                    Write-Log -Message "OpenID Connect provider created successfully" -LogFileName $LogFileName -Severity Information -Indent 2
+                }
+            })
+        }
+    })
+}
+
 function New-ArnRole
 {
    <#
@@ -10,7 +80,6 @@ function New-ArnRole
    Set-RetryAction({
 
         $script:roleName = Read-ValidatedHost -Prompt 'Please enter role name. If you have already configured an assume role for Azure Sentinel, use the same role name'
-        Write-Log -Message "Using role name: $roleName" -LogFileName $LogFileName -Severity Information -Indent 2
         
         # Determine if this role already exists before continuing
         Write-Log "Executing: aws iam get-role --role-name $roleName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
@@ -20,16 +89,21 @@ function New-ArnRole
         $isRuleNotExist = $lastexitcode -ne 0
         if ($isRuleNotExist)
         {
+            $script:roleName = "OIDC_$roleName"
+            Write-Log -Message "Using role name: $roleName with OIDC prefix because OpenID Connect authentication is being used." -LogFileName $LogFileName -Severity Information -Indent 2
+
             Write-Output "`n`n"
             Write-Log "You must specify the the Azure Sentinel Workspace ID. This is found in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 1
             
             $workspaceId = Read-ValidatedHost -Prompt "Please enter your Azure Sentinel External ID (Workspace ID)"
             Write-Log "Using Azure Sentinel Workspace ID: $workspaceId" -LogFileName $LogFileName -Severity Information -Indent 2
 
-            $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
+            $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
+            $rolePolicy = Get-OIDCRoleArnPolicy -WorkspaceId $workspaceId -CustomerAWSAccountId $CustomerAWSAccountId
+            # $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
             
-            Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(Get-SentinelTagInJsonFormat) 2>&1" -LogFileName $LogFileName -Severity Verbose
-            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags [$(Get-SentinelTagInJsonFormat)] 2>&1
+            Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1" -LogFileName $LogFileName -Severity Verbose
+            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1
             Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
             
             # If the role was retrieved then the role was created successfully
@@ -63,11 +137,14 @@ function New-S3Bucket
 
         Write-Log -Message "Executing: aws s3api head-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
         $headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
+        # If there was an error the bucket does not already exist or no permissions.
+        Write-Log -Message "output $headBucketOutput 2>&1" -LogFileName $LogFileName -Severity Verbose
+        Write-Log -Message "error code $lastexitcode 2>&1" -LogFileName $LogFileName -Severity Verbose
             
-        $isBucketNotExist = $null -ne $headBucketOutput
+        $isBucketNotExist = $lastexitcode -ne 0
         if ($isBucketNotExist)
         {
-            $bucketCreationConfirm = Read-ValidatedHost -Prompt "Bucket doesn't exist, would you like to create a new bucket ? [y/n]" -ValidationType Confirm
+            $bucketCreationConfirm = Read-ValidatedHost -Prompt "Bucket doesn't exist or you don't have permission to access it, would you like to create a new bucket ? [y/n]" -ValidationType Confirm
             Write-Log -Message "Creating new bucket: $bucketCreationConfirm " -LogFileName $LogFileName -Indent 2 
             
             if ($bucketCreationConfirm -eq 'y')
@@ -88,8 +165,8 @@ function New-S3Bucket
                 if ($lastexitcode -eq 0)
                 {
                     Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
-                    Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
-                    aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
+                    Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging $(ConvertTo-Json -InputObject @{'TagSet'=@($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json)} -Depth 99 -Compress)" -LogFileName $LogFileName -Severity Verbose
+                    aws s3api put-bucket-tagging --bucket $bucketName --tagging  $(ConvertTo-Json -InputObject @{'TagSet'=@($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json)} -Depth 99 -Compress)
                 }
                 elseif($error[0] -Match "InvalidBucketName")
                 {
@@ -121,7 +198,7 @@ function New-SQSQueue
         $script:sqsName = Read-ValidatedHost -Prompt "Please enter Sqs Name"
         Write-Log -Message "Using Sqs name: $sqsName" -LogFileName $LogFileName -Indent 2
 
-        $sentinelTags =  "{\""$(Get-SentinelTagKey)\"": \""$(Get-SentinelTagValue)\""}"
+        $sentinelTags = @{(Get-SentinelTagKey) = (Get-SentinelTagValue)} | ConvertTo-Json -Depth 99 -Compress
         Write-Log -Message "Executing: aws sqs create-queue --queue-name $sqsName --tags $sentinelTags 2>&1" -LogFileName $LogFileName -Severity Verbose
         $tempForOutput = aws sqs create-queue --queue-name $sqsName --tags $sentinelTags 2>&1
         Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
@@ -187,15 +264,15 @@ function Enable-S3EventNotification
 
         if ($null -ne $existingEventConfig)
         {
-            $newEventConfigObject = $newEventConfig | ConvertFrom-Json
-            $existingEventConfigObject = $existingEventConfig | ConvertFrom-Json 
+            $newEventConfigObject = $($newEventConfig | ConvertFrom-Json)
+            $existingEventConfigObject = $($existingEventConfig | ConvertFrom-Json)
             
             $newEventConfigObject.QueueConfigurations += $existingEventConfigObject.QueueConfigurations
-            $updatedEventConfigs = ($newEventConfigObject | ConvertTo-Json -Depth 6 ).Replace('"','\"')
+            $updatedEventConfigs = $($newEventConfigObject | ConvertTo-Json -Depth 99 -Compress)
         }
         else
         {
-            $updatedEventConfigs = $newEventConfig.Replace('"','\"')
+            $updatedEventConfigs = $newEventConfig
         }
         Write-Log -Message "Executing: aws s3api put-bucket-notification-configuration --bucket $bucketName --notification-configuration $updatedEventConfigs 2>&1" -LogFileName $LogFileName -Severity Verbose
         $tempForOutput = aws s3api put-bucket-notification-configuration --bucket $bucketName --notification-configuration $updatedEventConfigs 2>&1
@@ -224,7 +301,7 @@ function New-KMS
         $isKmsNotExist = $lastexitcode -ne 0
         if ($isKmsNotExist)
         {
-            $sentinelTag = "{\""TagKey\"": \""$(Get-SentinelTagKey)\"", \""TagValue\"": \""$(Get-SentinelTagValue)\""}"
+            $sentinelTag = @{'TagKey'= (Get-SentinelTagKey); 'TagValue' = (Get-SentinelTagValue)} | ConvertTo-Json -Depth 99 -Compress
             Write-Log -Message "Executing: aws kms create-key --tags $sentinelTag" -LogFileName $LogFileName -Severity Verbose    
             $script:kmsKeyDescription = aws kms create-key --tags $sentinelTag          
             Write-Log -Message $kmsKeyDescription -LogFileName $LogFileName -Severity Verbose

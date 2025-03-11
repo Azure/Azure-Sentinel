@@ -91,6 +91,7 @@ CONNECTIONMODE="abap"
 CONFIGPATH="/opt"
 TRUSTEDCA=()
 CLOUD='public'
+UPDATEPOLICY='{ "auto_update" : true }'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -117,6 +118,10 @@ while [[ $# -gt 0 ]]; do
 	--sid)
 		SID="$2"
 		shift 2
+		;;
+    --hostnetwork)
+		HOSTNETWORK=1
+		shift 1
 		;;
 	--clientnumber)
 		CLIENTNUMBER="$2"
@@ -218,6 +223,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--http-proxy)
 		HTTPPROXY="$2"
+		shift 2
 		;;
 	--confirm-all-prompts)
 		CONFIRMALL=1
@@ -261,9 +267,10 @@ while [[ $# -gt 0 ]]; do
 		echo "--keymode [kvmi|kvsi|cfgf]"
 		echo "--connectionmode [abap|mserv]"
 		echo "--configpath <path>"
-		echo "--apabserver <servername>"
+		echo "--abapserver <servername>"
 		echo "--systemnr <system number>"
 		echo "--sid <SID>"
+  		echo "--hostnetwork"
 		echo "--clientnumber <client number>"
 		echo "--messageserverhost <servername>"
 		echo "--messageserverport <servername>"
@@ -410,20 +417,12 @@ In order to complete the installation process, you need:
 
 - SAP system details: Make a note of your SAP system IP address, system number, system ID, and client for use during the installation.
 
-- SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SAP/CR.
-
-Configure the following SAP Log change requests to enable support for ingesting specific SAP logs into Azure Sentinel.
-- SAP Basis versions 7.5 and higher:  install NPLK900180
-- SAP Basis version 7.4:  install NPLK900179
-- To create your SAP role in any SAP version: install NPLK900163
+- SAP change requests: To enable support for ingesting specific SAP logs into Microsoft Sentinel, you may need to configure additional SAP log change requests. 
+  Some change requests are mandatory for proper integration. 
+  Please consult our documentation to identify which CRs are required and which ones are recommended based on your environment.
 
 Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
 This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
-
-SAP notes required for versions earlier than SAP Basis 7.5 SP13:
-- SAP Note 2641084, named *Standardized read access for the Security Audit log data*
-- SAP Note 2173545, named *CHANGEDOCUMENT_READ_ALL*
-- SAP Note 2502336, named *RSSCD100 - read only from archive, not from database*
 
 Note: The required SAP log change requests expose custom RFC FMs that are required for the connector, and do not change any standard or custom objects.
 
@@ -434,7 +433,8 @@ pause '[Press enter to agree and proceed as we guide you through the installatio
 
 #Globals
 containername=sapcon
-sysconf=systemconfig.ini
+sysconf=systemconfig.json
+settingsjson=settings.json
 
 os=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="ID" {print $2}')
 ver_id=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="VERSION_ID" {print $2}' | awk '{print substr($0, 2, length($0) - 2) }')
@@ -547,6 +547,14 @@ if { [ "$MODE" == 'kvmi' ] && [ -z "$kv" ]; } || { [ "$MODE" == 'kvsi' ] && [ -z
 	read_value kv "KeyVault Name"
 fi
 
+validateKeyVault() {
+	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
+	if [ ! $? -eq 0 ]; then
+		echo "Cannot connect to Key Vault $kv. Agent identity must have 'Key Vault Secrets User' role or list, get secret permissions on the Key Vault."
+		exit 1
+	fi
+}
+
 if [ "$MODE" == "kvmi" ]; then
 	echo "Validating Azure managed identity"
 	az login --identity --allow-no-subscriptions >/dev/null 2>&1
@@ -554,6 +562,7 @@ if [ "$MODE" == "kvmi" ]; then
 		printf 'VM is not set with managed identity or the AZ client was not installed correctly.\nSet and grant relevant Key Vault permissions and make sure that Azure CLI is installed by running "az login"\nFor more information check - https://docs.microsoft.com/cli/azure/install-azure-cli'
 		exit 1
 	fi
+	validateKeyVault
 elif [ "$MODE" == "kvsi" ]; then
 	echo "Validating service principal identity"
 	az login --service-principal -u "$APPID" -p "$APPSECRET" --tenant "$TENANT" --allow-no-subscriptions >/dev/null 2>&1
@@ -561,11 +570,32 @@ elif [ "$MODE" == "kvsi" ]; then
 		echo "Logon with $APPID failed, please check application ID, secret and tenant ID. Ensure the application has been added as an enterprise application"
 		exit 1
 	fi
-	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
-	if [ ! $? -eq 0 ]; then
-		echo "Cannot connect to keyvault $kv. Make sure application $APPID has been granted privileges to the keyvault"
-		exit 1
+	validateKeyVault
+fi
+
+# If $HTTPPROXY is set, configure the Docker Daemon to explicitly use it;
+# otherwise, Docker commands (e.g., 'docker pull') will ignore any proxy settings defined at the OS level.
+if [ -n "$HTTPPROXY" ]; then
+	# https://docs.docker.com/engine/daemon/proxy/#systemd-unit-file
+	if ! sudo mkdir -p /etc/systemd/system/docker.service.d; then
+			echo "Error: Failed to create directory /etc/systemd/system/docker.service.d"
+			exit 1
 	fi
+
+		if ! sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf > /dev/null <<EOF
+[Service]
+Environment="HTTP_PROXY=${HTTPPROXY}"
+Environment="HTTPS_PROXY=${HTTPPROXY}"
+Environment="NO_PROXY=localhost,127.0.0.1"
+EOF
+	then
+			echo "Error: Failed to write /etc/systemd/system/docker.service.d/http-proxy.conf"
+			exit 1
+	fi
+
+	echo "Proxy $HTTPPROXY successfully configured, restarting Docker Daemon..."
+	sudo systemctl daemon-reload
+	sudo systemctl restart docker
 fi
 
 echo 'Deploying Azure Sentinel SAP data connector.'
@@ -755,17 +785,18 @@ while [ -z "$SDKFILELOC" ] || [ ! -f "$SDKFILELOC" ]; do
 	SDKFILELOC="${SDKFILELOC/#\~/$HOME}"
 done
 
-#Verifying SDK version
-
-unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
-SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
-sdkok=$?
-rm -rf /tmp/nwrfcsdk
-if [ ! $sdkok -eq 0 ]; then
-	echo "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
-	echo $SDKLOADRESULT
-	echo "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
-	exit 1
+#Verifying SDK version only in case of non-fedora OS
+if [ "$os" != "fedora" ]; then
+	unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
+	SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
+	sdkok=$?
+	rm -rf /tmp/nwrfcsdk
+	if [ ! $sdkok -eq 0 ]; then
+		echo "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
+		echo $SDKLOADRESULT
+		echo "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
+		exit 1
+	fi
 fi
 
 #Building the container
@@ -784,11 +815,15 @@ if [ $USESNC ]; then
 fi
 
 if [ -n "$HTTPPROXY" ]; then
-	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
+	httpproxyline="-e HTTP_PROXY=$HTTPPROXY -e HTTPS_PROXY=$HTTPPROXY -e NO_PROXY=169.254.169.254"
 fi
-
+cmdparams=" --label Cloud=$CLOUD"
 # Generating SENTINEL_AGENT_GUID
-cmdparams=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
+cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
+
+if [ $HOSTNETWORK ]; then
+	cmdparams+=" --network host "
+fi
 
 if [ "$MODE" == "kvmi" ]; then
 	echo "Creating docker container for use with Azure Key vault and managed VM identity"
@@ -802,32 +837,47 @@ elif [ "$MODE" == "cfgf" ]; then
 fi
 echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
 
-sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.ini "$sysfileloc$sysconf"
+sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.json "$sysfileloc$sysconf"
 if [ ! $? -eq 0 ]; then
 	echo 'Error accessing the local folder.'
 	exit 1
 fi
 
-# Defining configuration file
+### start of json config creation
+
+# Generate a GUID for the root key
+GUID=$(uuidgen)
+
+# jq --arg guid "$GUID" '{ ($guid): . }' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 if [ "$CONNECTIONMODE" == 'abap' ]; then
-	#             '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"ashost = $ABAPSERVER"'' "$sysfileloc"$sysconf
+    jq --arg ashost "$ABAPSERVER" '.abap_central_instance += {"ashost": $ashost}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	sed -i '/\[ABAP Central Instance]/a'"mshost = $MESSAGESERVERHOST"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"msserv = $MESSAGESERVERPORT"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"group = $LOGONGROUP"'' "$sysfileloc"$sysconf
+    jq --arg mshost "$MESSAGESERVERHOST" '.abap_central_instance += {"mshost": $mshost}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg msserv "$MESSAGESERVERPORT" '.abap_central_instance += {"msserv": $msserv}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg group "$LOGONGROUP" '.abap_central_instance += {"group": $group}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 fi
 
-sed -i '/\[ABAP Central Instance]/a'"sysnr = $SYSTEMNR"'' "$sysfileloc"$sysconf
-sed -i '/\[ABAP Central Instance]/a'"client = $CLIENTNUMBER"'' "$sysfileloc"$sysconf
-sed -i '/\[ABAP Central Instance]/a'"sysid = $SID"'' "$sysfileloc"$sysconf
+if [ -n "$AZURERESOURCEID" ]; then
+    jq --arg azure_resource_id "$AZURERESOURCEID" '.Azure Credentials += {"azure_resource_id": $azure_resource_id}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+fi
+
+jq --arg sysnr "$SYSTEMNR" '.abap_central_instance += {"sysnr": $sysnr}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+jq --arg client "$CLIENTNUMBER" '.abap_central_instance += {"client": $client}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+jq --arg sysid "$SID" '.abap_central_instance += {"sysid": $sysid}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
+    jq '.secrets_source += {"secrets": "AZURE_KEY_VAULT"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg intprefix "$intprefix" '.secrets_source += {"intprefix": $intprefix}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg keyvault "$kv" '.secrets_source += {"keyvault": $keyvault}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
-	sed -i '/\[Secrets Source]/a'"secrets = AZURE_KEY_VAULT"'' "$sysfileloc"$sysconf
-	sed -i '/\[Secrets Source]/a'"intprefix = $intprefix"'' "$sysfileloc"$sysconf
-	sed -i '/\[Secrets Source]/a'"keyvault = $kv"'' "$sysfileloc"$sysconf
+	log 'Setting secrets in Azure Key Vault'
+	log 'Please sign-in with a user that has access to set secrets in Azure Key Vault.'
+	az login
+	if [ ! $? -eq 0 ]; then
+		echo 'Unable to sign-in to Azure. Exiting.'
+		exit 1
+	fi
 
 	if [ ! $USESNC ]; then
 		az keyvault secret set --name "$intprefix"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
@@ -835,32 +885,42 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 	fi
 	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
 	if [ ! $? -eq 0 ]; then
-		echo 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
+		log 'Unable to set secrets in Azure Key Vault'
+		log 'Make sure user identity has permission to set secrets in the Key Vault.'
 		exit 1
 	fi
 	az keyvault secret set --name "$intprefix"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
+
 elif [ "$MODE" == 'cfgf' ]; then
-	sed -i '/\[Secrets Source]/a'"secrets = DOCKER_FIXED"'' "$sysfileloc"$sysconf
-	sed -i '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf
-	sed -i '/\[Azure Credentials\]/a'"publickey = $logpubkey"'' "$sysfileloc"$sysconf
+    jq '.secrets_source += {"secrets": "DOCKER_FIXED"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg logwsidjs "$logwsid" '.azure_credentials += {"loganalyticswsid": $logwsidjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    jq --arg logpubkeyjs "$logpubkey" '.azure_credentials += {"publickey": $logpubkeyjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+
 	if [ ! $USESNC ]; then
-		sed -i '/\[ABAP Central Instance]/a'"user = $uservar"'' "$sysfileloc"$sysconf
-		sed -i '/\[ABAP Central Instance]/a'"passwd = $passvar"'' "$sysfileloc"$sysconf
+    	jq --arg uservarjs "$uservar" '.abap_central_instance += {"user": $uservarjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+    	jq --arg passjs "$passvar" '.abap_central_instance += {"passwd": $passjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	else
-		#workaround for blank username with SNC used causing a fail during audit log collection
-		sed -i '/\[ABAP Central Instance]/a'"user = X509"'' "$sysfileloc"$sysconf
+		#workaround for blank username with SNC used causing a fail during audit log ollection
+    	jq '.abap_central_instance += {"user": "X509"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	fi
 fi
 
 if [ $USESNC ]; then
-	sed -i '/\[ABAP Central Instance]/a'"snc_lib = \/sapcon-app\/sapcon\/config\/system\/sec\/libsapcrypto.so"'' "$sysfileloc"$sysconf
+    jq '.abap_central_instance += {"snc_lib": "/sapcon-app/sapcon/config/system/sec/libsapcrypto.so"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	if [ -z "$CLIENTPFX" ]; then
 		MYCERT=$(openssl x509 -in "$CLIENTCERT" | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
 	fi
-	sed -i '/\[ABAP Central Instance]/a'"x509cert = $MYCERT"'' "$sysfileloc"$sysconf
+    jq --arg mycertjs "$MYCERT" '.abap_central_instance += {"x509cert": $mycertjs}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 	PARTNERNAME=$(openssl x509 -in "$SERVERCERT" -text -noout | grep Subject: | awk -F: '{print $2}')
-	sed -i '/\[ABAP Central Instance]/a'"snc_partnername = p:$PARTNERNAME"'' "$sysfileloc"$sysconf
+    jq --arg partnernamejs "$PARTNERNAME" '.abap_central_instance += {"snc_partnername": "p:$partnernamejs"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 fi
+
+jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+
+### end of json config creation
+
+# #populate settings.json
+echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
 
 echo 'System information and credentials Has been Updated'
 

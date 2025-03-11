@@ -38,7 +38,7 @@ By default, the logs color is white. In case you want another color you can use 
    - Create an async validation function that gets the file path.  
    In case the validation pass the function returns success, otherwise throws an exception (don't return an error, this will handle by the infrastructure).
    - Create CheckOptions object with 3 properties:  
-     - onCheckFile: the validation validetion function that will run on each file (from step one)  
+     - onCheckFile: the validation validation function that will run on each file (from step one)  
      - onExecError: error behavior in case that the file validation failed  
      - onFinalFailed:  error behavior at the end of the validation, execute in case one of the validation failed
    - Call runCheckOverChangedFiles with properties:
