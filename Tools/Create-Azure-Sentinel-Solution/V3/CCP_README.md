@@ -4,31 +4,30 @@ To create a package using V3 packaging tool refer [Link to V3](https://github.co
 
 ## CCP connector Building Blocks:
 Every CCP connector will have 4 building blocks and should be specified in sequence given below:
-1. `Data Connector Definition` - Consider this an a UI page shown after deployment to users and contains instruction steps and connectorUiConfig section.
-2. `Data Connectors (Poller)` - This will contain details to connect to your REST API and has a poller details.
-3. `Data Collection Rule(DCR)` - Specify, what data should be collected, how to transform that data, and where to send it.
-4. `Tables (Optional)` - Stores your data logs.
+1. `Data Connector Definition` - This file will contain details on how UI page look and contains instruction steps and connectorUiConfig section.
+2. `Data Connectors (Poller)` - This file will contain details on how data will be pulled. For this you can use any of the `kind` type `RestApiPoller`, `GCP`, `AmazonWebServicesS3` or `Push`.
+3. `Data Collection Rule(DCR)` - This file will contain details on what data should be collected, how to transform that data, and where to send it.
+4. `Tables (Optional)` - This file will contain schema of your data logs where the actual data will be stored.
 
-For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector)
+For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector).
 
 ## How to Use ?
 1. In Data input file under Azure-Sentinel/Solutions, open the solution you want to add a CCP connector.
-2. In data input file, under `Data Connectors` array object add a path to new Data Connector Definition file. Data Connector Definition file is the starting point for any CCP connector and this file path should only be specified in data folder input file under `Data Connectors` array. There is no need to specify other file paths for poller, dcr or tables in data input file. 
-3. Navigate to your Solution folder, then go to the Data Connectors folder. Create a new folder for the CCP connector with the suffix `_ccp`, for example: `DataConnectorDefinitionName_ccp`.
-4. Once a folder for the CCP connector is created, add or create four files: Connector Definition, Poller Config, DCR, and Table files (the Table file is optional). These files should follow the naming conventions provided below:
-  - **Folder & File Naming Convention**: The folder name format should be "**_{CompanyName}{ProductName}{LogType}Logs_ccp_**". For example, if the solution name is "Palo Alto Prisma Cloud CWPP," then "PaloAlto" is the CompanyName and "PrismaCloudCWPP" is the ProductName. Determine the type of logs you are pulling, such as SysLogs, CustomLogs, or others, and use the appropriate log type or simply use "Logs". Therefore, the final folder name would be "PaloAltoPrismaCloudCWPPLogs_ccp". The files inside this folder will follow the naming conventions shown in the screenshot below, with suffixes like `_connectorDefinition`, `_PollerConfig`, `_DCR`, or `_Table`. Below is an example of the folder and file structure for CCP.
+2. In data input file, under `Data Connectors` array object add a path to new Data Connector Definition file. Data Connector Definition file is the starting point for any CCP connector and this file path should only be specified in data folder input file under `Data Connectors` array. There is no need to specify other file paths for Poller, DCR or Tables in data input file. 
+3. **Folder & File Naming Convention**: Connector Definition, Poller, DCR, and Table files (the Table file is optional). These files should follow the naming conventions provided below:
+    - The folder name format should be "**_{CompanyName}{ProductName}{LogType}Logs_ccp_**". For example, if the solution name is `Palo Alto Prisma Cloud CWPP` then `PaloAlto` is the CompanyName and `PrismaCloudCWPP` is the ProductName. Determine the type of logs you are pulling, such as SysLogs, CustomLogs, or others, and use the appropriate log type or simply use `Logs`. Therefore, the final folder name would be `PaloAltoPrismaCloudCWPPLogs_ccp`. The files inside this folder will follow the naming conventions shown in the screenshot below, with suffixes like `_connectorDefinition`, `_PollerConfig`, `_DCR`, or `_Table`. Below is an example of the folder and file structure for CCP.
 
-    ![Alt text](./ccpimages/ccp-folder-structure-new.png)
+      ![Alt text](./ccpimages/ccp-folder-structure-new.png)
 
-6. There can be only 1 data definition file per CCP connector. If you have multiple CCP connectors then create multiple data connector definition files and specify the file paths in the data folder input file under `Data Connectors` array. 
+4. There can be only 1 data definition file per CCP connector. If you have multiple CCP connectors then create multiple data connector definition files and specify the file paths in the data folder input file under `Data Connectors` array. 
 
     ![Alt text](./ccpimages/dataInputDataConnectorsArray.png)
 
-7. Mapping between Data Connector Definition and Data Connector(Poller) file should present. Data Connector(Poller) file mapping with Data Collection Rules(DCR) should be present. If table file is present then you can specify the mapping from Data Collection Rules(DCR) with Table file. If mapping is not present and if present but mapping values are not correct between Data Connector Definition and Data Connector Poller or Data Connector Poller with Data Collection Rules(DCR) then packaging will fail. If there is no mapping for table file with Data Collection Rules(DCR) file than also its fine as it will create a table independent of mapping. 
+5. Mapping between Data Connector Definition and Data Connector Poller file should present. Data Connector Poller file mapping with Data Collection Rules(DCR) should be present. If table file is present then you can specify the mapping from Data Collection Rules(DCR) with Table file. If mapping is not present and if present but mapping values are not correct between Data Connector Definition and Data Connector Poller or Data Connector Poller with Data Collection Rules(DCR) then packaging will fail. If there is no mapping for table file with Data Collection Rules(DCR) file than also its fine as it will create a table independent of mapping. 
 
-8. Table file is optional and so, if there is no mapping from Data Collection Rules(DCR) with table then remove the `outputStream` property from Data Collection Rules(DCR) file. You can skip removing property `outputStream` from Data Collection Rules(DCR) file, if it is a Standard table eg: `"outputStream"="Microsoft-ASimNetworkSessionLogs"` in DCR is a Standard table and there is no need to add table file.
+6. Table file is optional and so, if there is no mapping from Data Collection Rules(DCR) with table then remove the `outputStream` property from Data Collection Rules(DCR) file. You can skip removing property `outputStream` from Data Collection Rules(DCR) file, if it is a Standard table eg: `"outputStream"="Microsoft-ASimNetworkSessionLogs"` in DCR is a Standard table and there is no need to add table file.
 
-9. Details for each of the file information is specified below:</br>
+7. Details for each of the file information is specified below:</br>
   - If you have single Data Connector Definition, single Data Connector Poller, single Data Collection Rule(DCR) and/or table file where each of this files are sharing a one-to-one mapping then follow below.
 
   **a. Data Connector Definition File:**
@@ -128,7 +127,7 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
     ![Alt text](./ccpimages/dcrStreamName.png)
 
   - Property dataCollectionEndpoint and dataCollectionRuleImmutableId are optional parameters in dcrConfig object. 
-  - To configure `authentication` object properties refer [Authentication configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#authentication-configuration) link
+  - To configure `authentication` object properties refer [Authentication configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#authentication-configuration) link.
   - To configure `response` object properties refer [Response configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#response-configuration) link.
   - To configure `paging` object properties refer [Paging configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#paging-configuration) link.
   - For kind **`AmazonWebServicesS3`**, please refer [Link](https://learn.microsoft.com/en-us/rest/api/securityinsights/data-connectors/create-or-update?view=rest-securityinsights-2024-01-01-preview&tabs=HTTP#awscloudtraildataconnector).
@@ -199,8 +198,8 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
     ![Alt text](./ccpimages/dcrFields.png)
 
   - Once deployment is done it is recommended to verify if DCR is created in Azure portal, global search by searching for `Data Collection Rules` and then in `Data Collection Rules` search with the name that you specified in the source file on DCR `name` property. If search result shows a record in deployed resource group. If you don't see a result for the `name` property value specified in DCR file then its possibly a problem in DCR source file which failed in DCR creation. The first possible thing to verify if the length of DCR name exceed 65 characters.
-  - In DCR file, `dataFlows` property has `streams` array property. Currently streams doesn't support multiple streams in an array. If you are using custom stream then name it like `Custom-<yourStreamName>`. This name should match with that of your poller file `streamName` field value.
-  - In case of Standard table, DCR file "streams" should be from the given list in the file [StandardLogStreams](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/common/standardLogStreams.ps1). Here `Key` is the `streamName` for poller file while `Value` is your DCR `streams` value. If you are using standard table and mappings from this file doesn't match then it will fail while packaging with an error like there is a mismatch in DCR and poller files streams.
+  - In DCR file, `dataFlows` property has `streams` array property. Currently streams doesn't support multiple streams in an array. If you are using custom stream then name it like `Custom-<yourStreamName>`. This name should match with that of your Poller file `streamName` field value.
+  - In case of Standard table, DCR file "streams" should be from the given list in the file [StandardLogStreams](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/common/standardLogStreams.ps1). Here `Key` is the `streamName` for Poller file while `Value` is your DCR `streams` value. If you are using standard table and mappings from this file doesn't match then it will fail while packaging with an error like there is a mismatch in DCR and Poller files streams.
   - In `dataFlows` array, if you have a custom table as a file then specify the `outputSteam` property. If you are using standard table then there is no need to specify the `outputSteam` property in DCR file i.e. `outputSteam` property is optional here and should be used if you have custom table and a table file for it. If `Microsoft-ASimAuditEventLogs` is a standard table and is suffixed with `Microsoft-` you can skip adding `outputStream` property for such standard tables.
   - To verify length of DCR name, when we open data connector and click on `Connect` button, make sure to open browser `Developer tools` or right click on browser and do `Ctrl+F12` which will open up `Developer tools` and navigate to `Network` tab as shown below:
   - Property `workspaceResourceId` is optional and is not required to be specified. If not specified then it replaces this property with value `[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]` in mainTemplate as a variables.
@@ -260,8 +259,8 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
   - Skip this step if your data is only ingested to standard Log Analytics tables. Examples of standard tables include CommonSecurityLog and ASimDnsActivityLogs.
   - For list of all standard tables refer to [StandardLogStreams](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/common/standardLogStreams.ps1) where "Value" attribute is the standard table name. 
   - If your data source doesn't conform to the schema of a standard table, you have two options:<br/>
-        a) Create a custom table for all the data <br/>
-        b) Create a custom table for some data and split conforming data out to a standard table<br/>
+        a) Create a custom table for all the data. <br/>
+        b) Create a custom table for some data and split conforming data out to a standard table.<br/>
   - If you create the custom table using the Tables API or another programmatic method, add the `_CL` suffix manually to the table name. For more information, see Create a custom table.
   - The `type` property of the file should be `Microsoft.OperationalInsights/workspaces/tables`.
   - The `name` and `properties-->schema-->name` properties values should be same.
@@ -307,7 +306,7 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
 
 ### Working with Single Data Definition having multiple Data Connector Poller in single file and multiple DCR in single file:
 
-  If you have only 1 data definition file which uses same endpoint domain and secrets and want to use it with multiple data connector pollers, DCR's files then create only 1 data definition file. Keep the single data definition file at the root of the `Data Connectors` folder i.e. keep data definition file inside of "Data Connectors" folder and keep each of the poller, DCR and/or table files in a separate folders as shown in below screenshot.
+  If you have only 1 data definition file which uses same endpoint domain and secrets and want to use it with multiple Data Connector Poller's, DCR's files then create only 1 data definition file. Keep the single data definition file at the root of the `Data Connectors` folder i.e. keep data definition file inside of "Data Connectors" folder and keep each of the Poller, DCR and/or Table files in a separate folders as shown in below screenshot.
 
   <h4><u>High level structure and file details for one to many mapping:</u></h4>
     <img src="./ccpimages/ccp_flow_multiple.svg">
@@ -317,19 +316,19 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
   ![Alt text](./ccpimages/singleDefinitionMultiplePollerDCR.png)
 
 
-  <h4><span> Below is the single data definition file which is similar to that of normal CCP connector which contains only one data definition file, data connector poller file, dcr file and/or table file. </span></h4> 
+  <h4><span> Below is the single data definition file which is similar to that of normal CCP connector which contains only one data definition file, Data Connector Poller file, DCR file and/or table file. </span></h4> 
 
   ![Alt text](./ccpimages/singleDefinitionForMultiplePoller.png)
 
-  <h4><span> This data connector poller file differs with normal CCP connector by having multiple JSON object in an array as shown below i.e. multiple data connector pollers are specified in a single file. </span></h4> 
+  <h4><span> This Data Connector Poller file differs with normal CCP connector by having multiple JSON object in an array as shown below i.e. multiple Data Connector Poller's are specified in a single file. </span></h4> 
 
   ![Alt text](./ccpimages/multiplePollerStructure.png)
 
-  <h4><span> Below is the content for multiple data connector poller object specified in a single file inside of an array. For single data definition having multiple data connector poller, green color highlighted property value should be unique i.e `name` property should be unique and should not match this name value with other data connector poller name property in this file i.e. `"name" = "CiscoMerakiAPIRequest"` should be unique. But `connectorDefinitionName` value for all of the data connector poller files should be SAME as shown below as we are using only 1 data definition file.</span></h4> 
+  <h4><span> Below is the content for multiple Data Connector Poller object specified in a single file inside of an array. For single data definition having multiple Data Connector Poller, green color highlighted property value should be unique i.e `name` property should be unique and should not match this name value with other Data Connector Poller name property in this file i.e. `"name" = "CiscoMerakiAPIRequest"` should be unique. But `connectorDefinitionName` value for all of the Data Connector Poller files should be SAME as shown below as we are using only 1 data definition file.</span></h4> 
 
   ![Alt text](./ccpimages/multiplePollerInSingleFile.png)
 
-  <h4><span>  Each of the data connector poller files in previous step should have a corresponding DCR file object as shown below. In data connector poller file, `streamName` property value should match with that of DCR file object `streams` property under `dataFlows` array as shown below. Under `dataFlows` specify different objects for your streams. </span></h4> 
+  <h4><span>  Each of the Data Connector Poller files in previous step should have a corresponding DCR file object as shown below. In Data Connector Poller file, `streamName` property value should match with that of DCR file object `streams` property under `dataFlows` array as shown below. Under `dataFlows` specify different objects for your streams. </span></h4> 
 
   ![Alt text](./ccpimages/multiplePollerDCRStructure.png)
 
