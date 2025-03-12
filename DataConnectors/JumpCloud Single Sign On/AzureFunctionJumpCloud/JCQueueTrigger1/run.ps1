@@ -72,8 +72,16 @@ do {
     #send request to JumpCloud API for latest event entries
     $response = Invoke-WebRequest -uri "$JCuri"  -Method 'POST' -Headers $headers -Body $body
     $JCResultCount = 0
-    $JCResultCount = [int]::parse($response.Headers["X-Result-Count"])
-    $JCSearchAfter = $response.Headers["X-Search_after"]
+    if ($null -ne $response.Headers["X-Result-Count"]) {
+        $JCResultCount = [int]::parse($response.Headers["X-Result-Count"])
+    } else {
+        $JCResultCount = 0
+    }
+    if ($response.Headers.ContainsKey("X-Search_after")) {
+        $JCSearchAfter = $response.Headers["X-Search_after"]
+    } else {
+        $JCSearchAfter = ""
+    }
     $totalrecordcount = $totalrecordcount + $JCResultCount
     #validate we have records and send them to Log Analytics if we do'
     if ($JCResultCount -gt 0) {
