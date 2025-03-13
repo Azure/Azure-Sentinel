@@ -1,7 +1,7 @@
 <#  
     Title:          JumpCloud Data Connector
     Language:       PowerShell
-    Version:        1.0.1
+    Version:        1.0.2
     Author(s):      Microsoft - Chris Abberley
     Last Modified:  2020-08-03
     Comment:        First Release
@@ -18,6 +18,12 @@ param([string] $QueueItem, $TriggerMetadata)
 Write-Output "JumpCloud: Queue trigger for work item: $QueueItem, Queue item insertion time: $($TriggerMetadata.InsertionTime)"
 
 import-module AzTable
+
+# Validate QueueItem
+if ([string]::IsNullOrWhiteSpace($QueueItem)) {
+    Write-Error "QueueItem is empty. Exiting script."
+    exit 1
+}
 
 # Retrieve Environment Variables and prep other Variables for the JumpCloud API request
 $JCService = $QueueItem                         #Which eventlog set to rerieve from JumpCloud
@@ -70,10 +76,19 @@ do {
     }
     $body = $body + '"start_time": "' + $JCStartTime +'"}'
     #send request to JumpCloud API for latest event entries
-    $response = Invoke-WebRequest -uri "$JCuri"  -Method 'POST' -Headers $headers -Body $body
+    $response = Invoke-WebRequest -uri "$JCuri"  -Method 'POST' -Headers $headers -Body $body -ErrorAction Stop
+    if ($response.StatusCode -ne 200) {
+        Write-Error "API request failed with status code $($response.StatusCode): $($response.StatusDescription)"
+        exit 1
+    }
     $JCResultCount = 0
     $JCResultCount = [int]::parse($response.Headers["X-Result-Count"])
-    $JCSearchAfter = $response.Headers["X-Search_after"]
+    try {
+        $JCSearchAfter = $response.Headers["X-Search_after"]
+    } catch {
+        Write-Error "Failed to retrieve 'X-Search_after' header from response."
+        exit 1
+    }
     $totalrecordcount = $totalrecordcount + $JCResultCount
     #validate we have records and send them to Log Analytics if we do'
     if ($JCResultCount -gt 0) {
@@ -126,7 +141,7 @@ do {
 } until($JCResultCount -lt $JCLimit)
 
 #store details in function storage table to retrieve next time function runs 
-if($response.Headers.ContainsKey("X-Search_after")){
+if ($response -and $response.Headers -and $response.Headers.ContainsKey("X-Search_after")) {
     if($response.Headers["X-Search_after"] -ne ''){
         #if($LastRecordTimestamp -eq ''){
             #$LastRecordTimestamp = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId($(([datetime]::parseexact(($response.headers.date),"ddd, dd MMM yyyy HH:mm:ss Z",$null))), [System.TimeZoneInfo]::Local.Id, 'Greenwich Standard Time').Tostring('yyyy-MM-ddTHH:mm:ssZ')
@@ -137,6 +152,9 @@ if($response.Headers.ContainsKey("X-Search_after")){
         #$LastRecordTimestamp = $LastRecordTimeStamp.ToString('yyyy-MM-ddThh:mm:ssZ')
         $result = Add-AzTableRow -table $JCTable -PartitionKey $JCapiToken -RowKey $JCService -property @{"SearchAfter" = ("'"+$response.Headers["X-Search_after"]+"'");"StartTime"=$LastrecordTimestamp} -UpdateExisting
     }
+} else {
+    Write-Error "Response does not contain 'X-Search_after' header."
+    exit 1
 }
 # Write an information log with the current time.
 Write-Output "JumpCloud: function ran using, Event Filter: $JCService, started: $currentUTCtime, Completed:"(Get-Date).ToUniversalTime()", Processed: $totalrecordcount records"
