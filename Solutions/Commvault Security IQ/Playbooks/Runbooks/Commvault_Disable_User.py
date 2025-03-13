@@ -7,8 +7,8 @@ requests.packages.urllib3.disable_warnings(requests.urllib3.exceptions.InsecureR
 # Declare Variables
 print("Reading Variables")
 apiAccessToken = sys.argv[1]
-userIdentity = sys.argv[2]
-EnvironmentEndpointURL = sys.argv[3]
+EnvironmentEndpointURL = sys.argv[2]
+userIdentity = sys.argv[3]
 
 print(userIdentity)
 print(EnvironmentEndpointURL)
@@ -22,8 +22,8 @@ headers = {
 }
 
 # Get all Tenant Users
-url = "/commandcenter/api/User?level=10"
-get_users_url = f"https://{EnvironmentEndpointURL}{url}"
+url = "/User?level=10"
+get_users_url = f"{EnvironmentEndpointURL}{url}"
 get_users_result = requests.get(get_users_url, headers=headers, verify=True)
 
 if get_users_result.status_code == 200:
@@ -46,7 +46,7 @@ else:
     exit()
 
 # Get selected user details
-get_selected_user_details_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/User/{selected_user_id}"
+get_selected_user_details_url = f"{EnvironmentEndpointURL}/User/{selected_user_id}"
 get_selected_user_details_result = requests.get(get_selected_user_details_url, headers=headers, verify=True)
 
 # Check user if user is enabled and take action
@@ -54,7 +54,7 @@ if get_selected_user_details_result.status_code == 200:
     enable_user_status = get_selected_user_details_result.json().get("users", {}).get("enableUser", None)
     if enable_user_status is not None:
         if enable_user_status:
-            disable_user_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/User/{selected_user_id}/Disable"
+            disable_user_url = f"{EnvironmentEndpointURL}/User/{selected_user_id}/Disable"
             disable_user_result = requests.put(disable_user_url, headers=headers, verify=True)
             disable_user_result_error_code = disable_user_result.json().get("response", {}).get("errorCode", None)
             if disable_user_result_error_code == 0:

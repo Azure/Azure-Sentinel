@@ -28,7 +28,6 @@ shared_key = os.environ.get('AzureSentinelSharedKey')
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 key_vault_name = os.environ.get("KeyVaultName","Commvault-Integration-KV")
-uri = None
 url = None
 qsdk_token = None
 headers = {
@@ -110,13 +109,13 @@ def main(mytimer: func.TimerRequest) -> None:
         credential = DefaultAzureCredential()
         client = SecretClient(vault_url=f"https://{key_vault_name}.vault.azure.net", credential=credential)
         secret_name = "environment-endpoint-url"
-        uri = client.get_secret(secret_name).value
-        url = "https://" + uri + "/commandcenter/api"
+        url = client.get_secret(secret_name).value
         secret_name = "access-token"
         qsdk_token = client.get_secret(secret_name).value
         headers["authtoken"] = "QSDK " + qsdk_token
         
         companyId_url = f"{url}/v2/WhoAmI"
+        
         company_response = requests.get(companyId_url, headers=headers)
         if company_response.status_code == 200:
             company_data_json = company_response.json()
@@ -169,18 +168,20 @@ def main(mytimer: func.TimerRequest) -> None:
             post_data = []
             if data:
                 for event in data:
-                    temp = get_incident_details(event["description"])
-                    if temp:
-                        post_data.append(temp)
+                    try :
+                        temp = get_incident_details(event["description"])
+                        if temp:
+                            post_data.append(temp)
+                    except Exception as e:
+                        logging.error("Error while processing event : "+str(e))
                 logging.info("Trying Post Data")
                 gen_chunks(post_data)
                 logging.info("Job Succeeded")
                 print("***Job Succeeded*****")
-                upload_timestamp_blob(cs, container_name, blob_name, to_time+1)
                 logging.info("Function App Executed")
             else:
                 print("No new events found.")
-
+            upload_timestamp_blob(cs, container_name, blob_name, to_time+1)
         else:
             logging.error("Failed to get events with status code : "+str(response.status_code))
     except Exception as e:
@@ -411,8 +412,8 @@ def get_user_details(client_name):
 
     f_url = f"{url}/Client/byName(clientName='{client_name}')"
     response = requests.get(f_url, headers=headers).json()
-    user_id = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userId')
-    user_name = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userName')
+    user_id = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userId',None)
+    user_name = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userName',None)
     return user_id, user_name
 
 
@@ -529,8 +530,8 @@ def get_incident_details(message: str) -> dict | None:
             "description": description,
         }
         return details
-    except:
-        logging.error(f"An error occurred")
+    except Exception as e:
+        logging.error(f"An error occurred : {e}")
         return None
 
 
@@ -592,7 +593,7 @@ def post_data(body, chunk_count):
     logging.info(f"Data :- {body}")
     response = requests.post(uri, data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
-        logging.info("Chunk was processed{} events".format(chunk_count))
+        logging.info("Chunk was processed {} events with status : {}".format(chunk_count, response.content))
     else:
         logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
 
