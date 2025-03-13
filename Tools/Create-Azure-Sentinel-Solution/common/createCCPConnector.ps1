@@ -807,7 +807,12 @@ function ProcessPropertyPlaceholders($armResource, $templateContentConnections,
                     $propertyObject.$($propertyName) = @("[[parameters('$($placeHolderName)')]")
                 } else {
                     # normal string field
-                    $propertyObject.$($propertyName) = "[[parameters('$($placeHolderName)')]"
+                    $hasMoreText = $placeHoldersMatched.Line.Replace("{{$($placeHolderName)}}", '')
+                    if ($hasMoreText.Length -gt 0) {
+                        $propertyObject.$($propertyName) = "[[concat(parameters('$($placeHolderName)'), '$($hasMoreText)')]"
+                    } else {
+                        $propertyObject.$($propertyName) = "[[parameters('$($placeHolderName)')]"
+                    }
                 }
 
                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $isSecret -minLength $minLength
@@ -867,9 +872,17 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         # ApiKey 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'apikey' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'jwttoken') 
+    {
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.userName -propertyName 'value' -isInnerObject $true -innerObjectName 'userName' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.password -propertyName 'value' -isInnerObject $true -innerObjectName 'password' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+    }
     else 
     {
-        Write-Host "Error: For kind RestApiPoller, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2' or 'APIKey'." -BackgroundColor Red
+        Write-Host "Error: For kind RestApiPoller, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'APIKey' or 'JwtToken'." -BackgroundColor Red
         exit 1;
     }
 
@@ -883,26 +896,21 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         if ($placeHoldersMatched.Matches.Value.Count -gt 0) 
         {
             # has some placeholders 
-            $finalizedEndpointUrl = ""
             $finalizedEndpointUrl = "[[concat("
             $closureBrackets = ")]"
 
             foreach ($currentPlaceHolder in $placeHoldersMatched.Matches.Value) {
                 $placeHolderName = $currentPlaceHolder.replace("{{", "").replace("}}", "")
                 $splitEndpoint = $endPointUrl -split "($currentPlaceHolder)"
-                $commaCount = 0
+
                 foreach($splitItem in $splitEndpoint) 
                 {
+                    if ($splitItem -eq '') {
+                        continue
+                    }
                     if ($splitItem -eq $currentPlaceHolder) 
                     {
-                        if ($finalizedEndpointUrl -eq '') 
-                        {
-                            $finalizedEndpointUrl += "parameters('" + $placeHolderName + "')"
-                        } 
-                        else 
-                        {
-                            $finalizedEndpointUrl += ", parameters('" + $placeHolderName + "')"
-                        }
+                        $finalizedEndpointUrl += "parameters('" + $placeHolderName + "'),"
 
                         if ($placeHolderName.Contains("secret") -or $placeHolderName.Contains("password")) 
                         {
@@ -915,20 +923,12 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
                     } 
                     else 
                     {
-                        if ($commaCount -eq 0) 
-                        {
-                            $finalizedEndpointUrl += "'"+ $splitItem + "'"
-                            $commaCount += 1
-                        } 
-                        else 
-                        {
-                            $finalizedEndpointUrl += ", '" + $splitItem + "'"
-                        }
+                        $finalizedEndpointUrl += "'" + $splitItem + "',"
                     }
                 }
             }
 
-            $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
+            $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl.Substring(0, $finalizedEndpointUrl.Length - 1) + $closureBrackets
         }
     }
 
@@ -950,6 +950,48 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
                     $armResource.properties.request.headers."$headerPropName" = "[[parameters('$($placeHolderName)')]"
                     $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $false
                 }
+            }
+        }
+    }
+
+    # paging placeholder
+    $hasPaging = [bool]($armResource.properties.PSobject.Properties.name -match "paging")
+    if ($hasPaging) 
+    {
+        $hasNextPageUrlProperty = [bool]($armResource.properties.paging.PSobject.Properties.name -match "nextPageUrl")
+        if ($hasNextPageUrlProperty) {
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.paging -propertyName 'nextPageUrl' -isInnerObject $true -innerObjectName 'paging' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+        }
+    }
+
+    # stepInfo placeholder
+    $hasStepInfo = [bool]($armResource.properties.PSobject.Properties.name -match "stepInfo")
+    $stepIds = @()
+    if ($hasStepInfo) {
+        $hasNextSteps = [bool]($armResource.properties.stepInfo.PSobject.Properties.name -match "nextSteps")
+        if ($hasNextSteps) {
+            foreach ($step in $armResource.properties.stepInfo.nextSteps) {
+                $stepIds += $step.stepId
+            }
+        } else {
+            Write-Host "Warning: 'stepInfo' object is missing 'nextSteps' array."
+        }
+
+        if ($stepIds.Count -gt 0) {
+            $stepIdsString = $stepIds -join ', '
+            Write-Host "List of identified 'stepId' in 'stepInfo' are: $stepIdsString"
+        }
+    }
+
+    # stepCollectorConfigs placeholder
+    $hasStepCollectorConfigs = [bool]($armResource.properties.PSobject.Properties.name -match "stepCollectorConfigs")
+    if ($hasStepCollectorConfigs) {
+        foreach ($stepId in $stepIds) {
+            # Check if the stepId exists in the stepCollectorConfigs
+            if ($armResource.properties.stepCollectorConfigs.PSObject.Properties.Match($stepId)) {
+                ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.stepCollectorConfigs.$stepId.request -propertyName 'apiEndpoint' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+            } else {
+                Write-Host "Warning: Step ID $stepId not found in stepCollectorConfigs."
             }
         }
     }
