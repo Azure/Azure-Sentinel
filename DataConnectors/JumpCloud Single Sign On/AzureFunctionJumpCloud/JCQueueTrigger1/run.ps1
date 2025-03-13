@@ -19,11 +19,6 @@ Write-Output "JumpCloud: Queue trigger for work item: $QueueItem, Queue item ins
 
 import-module AzTable
 
-# Validate QueueItem
-if ([string]::IsNullOrWhiteSpace($QueueItem)) {
-    Write-Error "QueueItem is empty. Exiting script."
-    exit 1
-}
 
 # Retrieve Environment Variables and prep other Variables for the JumpCloud API request
 $JCService = $QueueItem                         #Which eventlog set to rerieve from JumpCloud
