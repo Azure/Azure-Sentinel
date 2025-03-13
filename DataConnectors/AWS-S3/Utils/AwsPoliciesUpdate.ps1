@@ -19,21 +19,21 @@ function Update-SQSPolicy
         $currentSqsPolicyObject = $currentSqsPolicy | ConvertFrom-Json 	
         $currentSqsPolicies = ($currentSqsPolicyObject.Attributes.Policy) | ConvertFrom-Json 
         
-        $sqsRequiredPoliciesThatNotExistInCurrentPolicy =  $sqsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentSqsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
+        $sqsRequiredPoliciesThatNotExistInCurrentPolicy =  $sqsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 99 -Compress) -notin ($currentSqsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 99 -Compress}  )}
         if ($null -ne $sqsRequiredPoliciesThatNotExistInCurrentPolicy)
         {
             $currentSqsPolicies.Statement += $sqsRequiredPoliciesThatNotExistInCurrentPolicy
 
-            $UpdatedPolicyValue = ($currentSqsPolicies | ConvertTo-Json -Depth 16  -Compress).Replace('"','\\\"')
-            $UpdatedSqsPolicy = ("{'Policy':'${UpdatedPolicyValue}'}").Replace("'",'\"')
+            $UpdatedPolicyValue = ($currentSqsPolicies | ConvertTo-Json -Depth 99  -Compress)
+            $UpdatedSqsPolicy = (@{'Policy' = $UpdatedPolicyValue} | ConvertTo-Json -Depth 99 -Compress)
             aws sqs set-queue-attributes --queue-url $sqsUrl  --attributes $UpdatedSqsPolicy | Out-Null
         }
     }
     else
     {
         Write-Log -Message "No results returned from: aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy " -LogFileName $LogFileName -Severity Verbose
-        $newSqsPolicyValue = ($sqsRequiredPolicies | ConvertFrom-Json |  ConvertTo-Json -Depth 16  -Compress).Replace('"','\\\"')
-        $newSqsPolicyObject = ("{'Policy':'${newSqsPolicyValue}'}").Replace("'",'\"')
+        $newSqsPolicyValue = ($sqsRequiredPolicies | ConvertFrom-Json |  ConvertTo-Json -Depth 99  -Compress)
+        $newSqsPolicyObject = (@{ Policy = $newSqsPolicyValue } | ConvertTo-Json -Depth 99 -Compress)
         aws sqs set-queue-attributes --queue-url $sqsUrl  --attributes $newSqsPolicyObject | Out-Null
     }
 }
@@ -73,11 +73,11 @@ function Update-S3Policy
         $currentBucketPolicyObject = $currentBucketPolicy | ConvertFrom-Json 	
         $currentBucketPolicies = ($currentBucketPolicyObject.Policy) | ConvertFrom-Json 
         
-        $s3RequiredPolicyThatNotExistInCurrentPolicy = $s3RequiredPolicyObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentBucketPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json  -Depth 5}  )}
+        $s3RequiredPolicyThatNotExistInCurrentPolicy = $s3RequiredPolicyObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 99 -Compress) -notin ($currentBucketPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json  -Depth 99 -Compress}  )}
         if ($null -ne $s3RequiredPolicyThatNotExistInCurrentPolicy)
         {
             $currentBucketPolicies.Statement += $s3RequiredPolicyThatNotExistInCurrentPolicy
-            $UpdatedS3Policy = (@{Statement = $currentBucketPolicies.Statement} | ConvertTo-Json -Depth 16).Replace('"','\"')
+            $UpdatedS3Policy = (@{Statement = $currentBucketPolicies.Statement} | ConvertTo-Json -Depth 99 -Compress)
             Write-Log -Message "Executing: aws s3api put-bucket-policy --bucket $bucketName --policy $UpdatedS3Policy | Out-Null" -LogFileName $LogFileName -Severity Verbose
             aws s3api put-bucket-policy --bucket $bucketName --policy $UpdatedS3Policy | Out-Null
         }
@@ -85,7 +85,7 @@ function Update-S3Policy
     else
     {
         $s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json
-        $newS3Policy = ($s3RequiredPolicyObject | ConvertTo-Json -Depth 16).Replace('"','\"')
+        $newS3Policy = ($s3RequiredPolicyObject | ConvertTo-Json -Depth 99 -Compress)
         Write-Log -Message "Executing: aws s3api put-bucket-policy --bucket $bucketName --policy $newS3Policy | Out-Null" -LogFileName $LogFileName -Severity Verbose
         aws s3api put-bucket-policy --bucket $bucketName --policy $newS3Policy | Out-Null
     }
@@ -124,19 +124,19 @@ function Update-KmsPolicy
         $currentKmsPolicyObject = $currentKmsPolicy | ConvertFrom-Json 	
         $currentKmsPolicies = ($currentKmsPolicyObject.Policy) | ConvertFrom-Json
         
-        $kmsRequiredPoliciesThatNotExistInCurrentPolicy =  $kmsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentKmsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
+        $kmsRequiredPoliciesThatNotExistInCurrentPolicy =  $kmsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 99 -Compress) -notin ($currentKmsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 99 -Compress}  )}
         if ($null -ne $kmsRequiredPoliciesThatNotExistInCurrentPolicy)
         {
             $currentKmsPolicies.Statement += $kmsRequiredPoliciesThatNotExistInCurrentPolicy
 
-            $UpdatedKmsPolicyObject = ($currentKmsPolicies | ConvertTo-Json -Depth 16).Replace('"','\"')
+            $UpdatedKmsPolicyObject = ($currentKmsPolicies | ConvertTo-Json -Depth 99 -Compress)
             Write-Log -Message "Executing: aws kms put-key-policy --policy-name default --key-id $kmsKeyId --policy $UpdatedKmsPolicyObject | Out-Null" -LogFileName $LogFileName -Severity Verbose
             aws kms put-key-policy --policy-name default --key-id $kmsKeyId --policy $UpdatedKmsPolicyObject | Out-Null
         }
     }
     else
     {
-        $newKmsPolicyObject = ($RequiredPolicy | ConvertFrom-Json |  ConvertTo-Json -Depth 16).Replace('"','\"')
+        $newKmsPolicyObject = ($RequiredPolicy | ConvertFrom-Json |  ConvertTo-Json -Depth 99 -Compress)
         Write-Log -Message "Executing: aws kms put-key-policy --policy-name default --key-id $kmsKeyId --policy $newKmsPolicyObject | Out-Null" -LogFileName $LogFileName -Severity Verbose
         aws kms put-key-policy --policy-name default --key-id $kmsKeyId --policy $newKmsPolicyObject | Out-Null
     }
