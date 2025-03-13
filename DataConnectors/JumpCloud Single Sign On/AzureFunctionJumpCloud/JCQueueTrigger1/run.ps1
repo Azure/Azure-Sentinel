@@ -143,7 +143,8 @@ if($response.Headers.ContainsKey("X-Search_after")){
         #}
         $jbody = ConvertFrom-json $response.Content
         $LastRecordTimestamp= $jbody.timestamp[($jbody.count - 1)]
-        $LastRecordTimestamp = $LastRecordTimeStamp.ToString('yyyy-MM-ddThh:mm:ssZ')
+        $LastRecordTimestamp = Get-Date $LastRecordTimestamp -Format 'yyyy-MM-ddTHH:mm:ssZ'
+        #$LastRecordTimestamp = $LastRecordTimeStamp.ToString('yyyy-MM-ddThh:mm:ssZ')
         $result = Add-AzTableRow -table $JCTable -PartitionKey $JCapiToken -RowKey $JCService -property @{"SearchAfter" = ("'"+$response.Headers["X-Search_after"]+"'");"StartTime"=$LastrecordTimestamp} -UpdateExisting
     }
 }
