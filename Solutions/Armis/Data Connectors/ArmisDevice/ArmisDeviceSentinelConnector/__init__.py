@@ -36,31 +36,7 @@ ERROR_MESSAGES = {
 }
 
 CHECKPOINT_TABLE_NAME = "ArmisDeviceCheckpoint"
-DEVICE_FIELD_LIST = [
-    "accessSwitch",
-    "category",
-    "firstSeen",
-    "id",
-    "ipAddress",
-    "lastSeen",
-    "macAddress",
-    "manufacturer",
-    "model",
-    "name",
-    "operatingSystem",
-    "operatingSystemVersion",
-    "riskLevel",
-    "sensor",
-    "site",
-    "tags",
-    "type",
-    "user",
-    "visibility",
-    "serialNumber",
-    "plcModule",
-    "purdueLevel",
-    "firmwareVersion",
-]
+
 MAX_RETRY = 5
 FUNCTION_APP_TIMEOUT_SECONDS = 570
 body = ""
@@ -287,7 +263,6 @@ class ArmisDevice:
                 "aql": aql_data,
                 "orderBy": "lastSeen",
                 "length": 1000,
-                "fields": ",".join(DEVICE_FIELD_LIST),
             }
             while self._data_device_from is not None:
                 if int(time.time()) >= self.start_time + FUNCTION_APP_TIMEOUT_SECONDS:
@@ -328,7 +303,6 @@ class ArmisDevice:
             last_seen_time = datetime.datetime.strptime(
                 last_seen_time, "%Y-%m-%dT%H:%M:%S"
             )
-            last_seen_time += datetime.timedelta(seconds=1)
             last_seen_time = last_seen_time.strftime("%Y-%m-%dT%H:%M:%S")
             checkpoint_table_object.merge(
                 "armisdevice",
@@ -502,7 +476,6 @@ class AzureSentinel:
         resource = "/api/logs"
         rfc1123date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
         content_length = len(body)
-        timestamp_date = "armis_device_time"
         try:
             signature = self.build_signature(
                 rfc1123date,
@@ -529,8 +502,7 @@ class AzureSentinel:
             "content-type": content_type,
             "Authorization": signature,
             "Log-Type": log_type,
-            "x-ms-date": rfc1123date,
-            "time-generated-field": timestamp_date,
+            "x-ms-date": rfc1123date
         }
         try:
             response = requests.post(uri, data=body, headers=headers)

@@ -20,10 +20,11 @@ container_name = "sentinelcontainer"
 blob_name = "timestamp"
 
 cs = os.environ.get('AzureWebJobsStorage')
+backfill_days = int(os.environ.get('NumberOfDaysToBackfill', "2")) # this is just for testing
 
 customer_id = os.environ.get('AzureSentinelWorkspaceId','')
 shared_key = os.environ.get('AzureSentinelSharedKey')
-verify = False
+
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 key_vault_name = os.environ.get("KeyVaultName","Commvault-Integration-KV")
@@ -114,19 +115,36 @@ def main(mytimer: func.TimerRequest) -> None:
         secret_name = "access-token"
         qsdk_token = client.get_secret(secret_name).value
         headers["authtoken"] = "QSDK " + qsdk_token
+        
+        companyId_url = f"{url}/v2/WhoAmI"
+        company_response = requests.get(companyId_url, headers=headers)
+        if company_response.status_code == 200:
+            company_data_json = company_response.json()
+            logging.info(f"Company Response : {company_data_json}")
+            company_data = company_data_json.get("company", {})
+            companyId = company_data.get("id")
+            audit_url = f"{url}/V4/Company/{companyId}/SecurityPartners/Register/6"
+            logging.info(f"Company Id : {companyId}")            
+            audit_response = requests.put(audit_url, headers=headers)
+            if audit_response.status_code == 200:
+                logging.info(f"Audit Log request sent Successfully. Audit Response : {audit_response.json()}" )
+            else:
+                logging.error(f"Failed to send Audit Log request with status code : {audit_response.status_code}")
+        else:
+            logging.error(f"Failed to get Company Id with status code : {company_response.status_code}")
         ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=true&showAnomalous=true"
         f_url = url + ustring
         current_date = datetime.now(timezone.utc)
         to_time = int(current_date.timestamp())
         fromtime = read_blob(cs, container_name, blob_name)
         if fromtime is None:
-            fromtime = int((current_date - timedelta(days=2)).timestamp())
+            fromtime = int((current_date - timedelta(days=backfill_days)).timestamp())
             logging.info("From Time : [{}] , since the time read from blob is None".format(fromtime))
         else:
             fromtime_dt = datetime.fromtimestamp(fromtime, tz=timezone.utc)
             time_diff = current_date - fromtime_dt
-            if time_diff > timedelta(days=2):
-                updatedfromtime = int((current_date - timedelta(days=2)).timestamp())
+            if time_diff > timedelta(days=backfill_days):
+                updatedfromtime = int((current_date - timedelta(days=backfill_days)).timestamp())
                 logging.info("From Time : [{}] , since the time read from blob : [{}] is older than 2 days".format(updatedfromtime,fromtime))
                 fromtime = updatedfromtime
             elif time_diff < timedelta(minutes = 5):
@@ -138,8 +156,9 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("Starts at: [{}]".format(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")))
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
         logging.info("Event endpoint : [{}]".format(event_endpoint))
-        response = requests.get(event_endpoint, headers=headers, verify=verify)
+        response = requests.get(event_endpoint, headers=headers)
         logging.info("Response Status Code : " + str(response.status_code))
+        
         if response.status_code == 200:
             events = response.json()
             logging.info("Events Data")
@@ -151,7 +170,8 @@ def main(mytimer: func.TimerRequest) -> None:
             if data:
                 for event in data:
                     temp = get_incident_details(event["description"])
-                    post_data.append(temp)
+                    if temp:
+                        post_data.append(temp)
                 logging.info("Trying Post Data")
                 gen_chunks(post_data)
                 logging.info("Job Succeeded")
@@ -292,7 +312,7 @@ def get_files_list(job_id) -> list:
         "advConfig": {"browseAdvancedConfigBrowseByJob": {"jobId": int(job_id)}}
     }
     f_url = url+"/DoBrowse"
-    response = requests.post(f_url, headers=headers, json=job_details_body, verify=verify)
+    response = requests.post(f_url, headers=headers, json=job_details_body)
     resp = response.json()
     browse_responses = resp.get("browseResponses", [])
     file_list = []
@@ -322,7 +342,7 @@ def get_subclient_content_list(subclient_id) -> dict:
     """
 
     f_url = url + "/Subclient/" + str(subclient_id)
-    resp = requests.get(f_url, headers=headers, verify=verify).json()
+    resp = requests.get(f_url, headers=headers).json()
     resp = resp.get("subClientProperties", [{}])[0].get("content")
     return resp
 
@@ -364,7 +384,7 @@ def get_job_details(job_id, url, headers):
     """
 
     f_url = f"{url}/Job/{job_id}"
-    response = requests.get(f_url, headers=headers, verify=verify)
+    response = requests.get(f_url, headers=headers)
     data = response.json()
     if ("totalRecordsWithoutPaging" in data) and (
             int(data["totalRecordsWithoutPaging"]) > 0
@@ -390,9 +410,9 @@ def get_user_details(client_name):
     """
 
     f_url = f"{url}/Client/byName(clientName='{client_name}')"
-    response = requests.get(f_url, headers=headers, verify=False).json()
-    user_id = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userId']
-    user_name = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userName']
+    response = requests.get(f_url, headers=headers).json()
+    user_id = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userId')
+    user_name = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userName')
     return user_id, user_name
 
 
@@ -406,108 +426,112 @@ def get_incident_details(message: str) -> dict | None:
     Returns:
         dict | None: Incident details or None if not found
     """
-    anomaly_sub_type = extract_from_regex(
-        message,
-        "0",
-        rf"{Constants.anomaly_sub_type}:\[(.*?)\]",
-    )
-    if anomaly_sub_type is None or anomaly_sub_type == "0":
-        return None
-    anomaly_sub_type = get_backup_anomaly(int(anomaly_sub_type))
-    job_id = extract_from_regex(
-        message,
-        "0",
-        rf"{Constants.job_id}:\[(.*?)\]",
-    )
+    try:
+        anomaly_sub_type = extract_from_regex(
+            message,
+            "0",
+            rf"{Constants.anomaly_sub_type}:\[(.*?)\]",
+        )
+        if anomaly_sub_type is None or anomaly_sub_type == "0":
+            return None
+        anomaly_sub_type = get_backup_anomaly(int(anomaly_sub_type))
+        job_id = extract_from_regex(
+            message,
+            "0",
+            rf"{Constants.job_id}:\[(.*?)\]",
+        )
 
-    description = format_alert_description(message)
+        description = format_alert_description(message)
 
-    job_details = get_job_details(job_id,url,headers)
-    if job_details is None:
-        print(f"Invalid job [{job_id}]")
+        job_details = get_job_details(job_id,url,headers)
+        if job_details is None:
+            print(f"Invalid job [{job_id}]")
+            return None
+        job_start_time = int(
+            job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobStartTime")
+        )
+        job_end_time = int(
+            job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobEndTime")
+        )
+        subclient_id = (
+            job_details.get("jobs", [{}])[0]
+            .get("jobSummary", {})
+            .get("subclient", {})
+            .get("subclientId")
+        )
+        files_list, scanned_folder_list = fetch_file_details(job_id, subclient_id)
+        originating_client = extract_from_regex(message, "", r"{}:\[(.*?)\]".format(Constants.originating_client))
+        user_id, username = get_user_details(originating_client)
+        details = {
+            "subclient_id": subclient_id,
+            "files_list": files_list,
+            "scanned_folder_list": scanned_folder_list,
+            "anomaly_sub_type": anomaly_sub_type,
+            "severity": define_severity(anomaly_sub_type),
+            "originating_client": originating_client,
+            "user_id": user_id,
+            "username": username,
+            "affected_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.affected_files_count
+                    ),
+                )
+            ),
+            "modified_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.modified_files_count
+                    ),
+                )
+            ),
+            "deleted_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.deleted_files_count
+                    ),
+                )
+            ),
+            "renamed_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.renamed_files_count
+                    ),
+                )
+            ),
+            "created_files_count": if_zero_set_none(
+                extract_from_regex(
+                    message,
+                    None,
+                    r"{}:\[(.*?)\]".format(
+                            Constants.created_files_count
+                    ),
+                )
+            ),
+            "job_start_time": datetime.utcfromtimestamp(job_start_time).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
+            "job_end_time": datetime.utcfromtimestamp(job_end_time).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
+            "job_id": job_id,
+            "external_link": extract_from_regex(
+                message, "", "href='(.*?)'", 'href="(.*?)"'
+            ),
+            "description": description,
+        }
+        return details
+    except:
+        logging.error(f"An error occurred")
         return None
-    job_start_time = int(
-        job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobStartTime")
-    )
-    job_end_time = int(
-        job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobEndTime")
-    )
-    subclient_id = (
-        job_details.get("jobs", [{}])[0]
-        .get("jobSummary", {})
-        .get("subclient", {})
-        .get("subclientId")
-    )
-    files_list, scanned_folder_list = fetch_file_details(job_id, subclient_id)
-    originating_client = extract_from_regex(message, "", r"{}:\[(.*?)\]".format(Constants.originating_client))
-    user_id, username = get_user_details(originating_client)
-    details = {
-        "subclient_id": subclient_id,
-        "files_list": files_list,
-        "scanned_folder_list": scanned_folder_list,
-        "anomaly_sub_type": anomaly_sub_type,
-        "severity": define_severity(anomaly_sub_type),
-        "originating_client": originating_client,
-        "user_id": user_id,
-        "username": username,
-        "affected_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.affected_files_count
-                ),
-            )
-        ),
-        "modified_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.modified_files_count
-                ),
-            )
-        ),
-        "deleted_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.deleted_files_count
-                ),
-            )
-        ),
-        "renamed_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.renamed_files_count
-                ),
-            )
-        ),
-        "created_files_count": if_zero_set_none(
-            extract_from_regex(
-                message,
-                None,
-                r"{}:\[(.*?)\]".format(
-                        Constants.created_files_count
-                ),
-            )
-        ),
-        "job_start_time": datetime.utcfromtimestamp(job_start_time).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "job_end_time": datetime.utcfromtimestamp(job_end_time).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
-        "job_id": job_id,
-        "external_link": extract_from_regex(
-            message, "", "href='(.*?)'", 'href="(.*?)"'
-        ),
-        "description": description,
-    }
-    return details
 
 
 def build_signature(date, content_length, method, content_type, resource):
@@ -625,8 +649,11 @@ def upload_timestamp_blob(connection_string, container_name, blob_name, timestam
         timestamp_str = str(timestamp)
 
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-
+        
         container_client = blob_service_client.get_container_client(container_name)
+        
+        if not container_client.exists():
+            container_client.create_container()
 
         blob_client = container_client.get_blob_client(blob_name)
 
