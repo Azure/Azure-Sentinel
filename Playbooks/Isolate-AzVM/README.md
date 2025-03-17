@@ -1,5 +1,7 @@
 # How to Implement Automated Digital Forensics Incident Response in Azure
 
+Author: Aaron Lightle
+
 - [Executive Summary](#executive-summary)
   - [Scenario](#scenario)
   - [Overview](#overview)
@@ -28,7 +30,7 @@ Contoso utilizes Azure with multiple subscriptions in a single tenant, including
 
 SOC operators require the capability to isolate and snapshot a VM through playbook automation for digital forensics incident response (DFIR) and reverse engineering. This SOC optimization solution enables rapid "quarantine in place" of an affected VM using security orchestration, automation, and response (SOAR). It also snapshots the running VM’s disks, allowing forensics analysts to convert and mount them for in-depth investigation and reverse engineering if necessary. The following overview details how the solution is utilized in such scenarios.
 
-![Overview diagram of the automated VM isolation and DFIR solution.](./Images/OV-1.png)
+![Overview diagram of automated VM isolation with snapshots in support of digital forensics incident response (DFIR).](./Images/OV-1.png)
 
 1. Malware or nefarious activity is detected on a VM, and an event is sent to Log Analytics.
 2. A Microsoft Sentinel analytic rule creates an incident for the SOC to review.
@@ -41,7 +43,7 @@ SOC operators require the capability to isolate and snapshot a VM through playbo
 
 ## Implement
 
-This implementation guide will address the solution's prerequisites:
+This implementation guide will address the playbook's prerequisites:
 - A **DFIR environment** deployed in the SOC subscription: dedicated subnet, Disk Access, private endpoint, storage account, and a VM with reverse engineering and forensics tools.
 - The **SOC-Isolate-AzVM** Logic App’s system-assigned Managed Identity requires:
   - **Reader**, **Network Contributor**, and **Virtual Machine Contributor** roles on all subscriptions within the SOC’s Area of Responsibility (AOR) which is the entire Tenant.
