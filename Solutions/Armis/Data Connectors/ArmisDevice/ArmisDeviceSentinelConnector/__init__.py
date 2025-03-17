@@ -28,15 +28,16 @@ armis_devices_table_name = os.environ["ArmisDeviceTableName"]
 
 HTTP_ERRORS = {
     400: "Armis Device Connector: Bad request: Missing aql parameter.",
-    401: "Armis Device Connector: Authentication error: Authorization information is missing or invalid.",
+    401: "Armis Device Connector: Authentication error: Authorization information is missing or invalid."
 }
 ERROR_MESSAGES = {
     "ACCESS_TOKEN_NOT_FOUND": "Armis Device Connector: Access token not found. please check Key.",
-    "HOST_CONNECTION_ERROR": "Armis Device Connector: Invalid host while verifying 'armis account'.",
+    "HOST_CONNECTION_ERROR": "Armis Device Connector: Invalid host while verifying 'armis account'."
 }
 
 CHECKPOINT_TABLE_NAME = "ArmisDeviceCheckpoint"
 
+PAGE_SIZE = 1000
 MAX_RETRY = 5
 FUNCTION_APP_TIMEOUT_SECONDS = 570
 body = ""
@@ -52,6 +53,8 @@ class ArmisDevice:
         self._header = {}
         self._secret_key = API_KEY
         self._data_device_from = 0
+        self.last_seen = None
+        self.logs_starts_with = "Armis Device Connector"
 
     def _get_access_token_device(self, armis_link_suffix):
         """
@@ -66,28 +69,28 @@ class ArmisDevice:
             try:
                 response = requests.post((self._link + armis_link_suffix), data=body)
                 if response.status_code == 200:
-                    logging.info("Armis Device Connector: Getting access token.")
+                    logging.info("{}: Getting access token.".format(self.logs_starts_with))
                     response = response.json()
                     _access_token = response.get("data", {}).get("access_token")
                     self._header.update({"Authorization": _access_token})
                 elif response.status_code == 400:
                     raise ArmisException(
-                        "Armis Device Connector: Please check either armis URL or armis secret key is wrong."
+                        "{}: Please check either armis URL or armis secret key is wrong.".format(self.logs_starts_with)
                     )
                 else:
                     raise ArmisException(
-                        "Armis Device Connector: Error while generating the access token. Code: {} Message: {}.".format(
-                            response.status_code, response.text
+                        "{}: Error while generating the access token. Code: {} Message: {}.".format(
+                            self.logs_starts_with, response.status_code, response.text
                         )
                     )
             except ArmisException as err:
                 logging.error(err)
                 raise ArmisException(
-                    "Armis Device Connector: Error while generating the access token."
+                    "{}: Error while generating the access token.".format(self.logs_starts_with)
                 )
         else:
             raise ArmisException(
-                "Armis Device Connector: The secret key or link has not been initialized."
+                "{}: The secret key or link has not been initialized.".format(self.logs_starts_with)
             )
 
     def validate_timestamp(self, last_seen_time):
@@ -106,24 +109,24 @@ class ArmisDevice:
                 if len(last_seen_time) == 10:
                     last_seen_time += "T00:00:00"
                     logging.info(
-                        "Armis Device Connector: 'T:00:00:00' added as only date is available."
+                        "{}: 'T:00:00:00' added as only date is available.".format(self.logs_starts_with)
                     )
                 else:
                     splited_time = last_seen_time.split("T")
                     if len(splited_time[1]) == 5:
                         splited_time[1] += ":00"
                         logging.info(
-                            "Armis Device Connector: ':00' added as seconds not available."
+                            "{}: ':00' added as seconds not available.".format(self.logs_starts_with)
                         )
                     elif len(splited_time[1]) == 2:
                         splited_time[1] += ":00:00"
                         logging.info(
-                            "Armis Device Connector: ':00:00' added as only hour is available."
+                            "{}: ':00:00' added as only hour is available.".format(self.logs_starts_with)
                         )
                     last_seen_time = "T".join(splited_time)
             return last_seen_time
         except Exception as err:
-            logging.error("Armis Device Connector: Error occurred: {}".format(err))
+            logging.error("{}: Error occurred: {}".format(self.logs_starts_with, err))
             raise ArmisException(err)
 
     def _get_device_data(self, armis_link_suffix, parameter):
@@ -143,12 +146,12 @@ class ArmisDevice:
                     headers=self._header,
                 )
                 if response.status_code == 200:
-                    logging.info("Armis Device Connector: Status Code : 200")
+                    logging.info("{}: Status Code : 200".format(self.logs_starts_with))
                     results = response.json()
 
                     if results["data"]["count"] == 0:
                         raise ArmisDataNotFoundException(
-                            "Armis Device Connector: Data not found."
+                            "{}: Data not found.".format(self.logs_starts_with)
                         )
 
                     if (
@@ -165,14 +168,15 @@ class ArmisDevice:
                         for i in data:
                             i["armis_device_time"] = i["lastSeen"]
 
-                        logging.info(
-                            "Armis Device Connector: From {}, total length {}".format(
-                                self._data_device_from, total_data_length
-                            )
-                        )
                         self._data_device_from = results["data"]["next"]
                         last_seen_time = data[-1]["lastSeen"][:19]
                         last_seen_time = self.validate_timestamp(last_seen_time)
+
+                        logging.info(
+                            "{}: Updated last_seen to: {} for next API call.".format(
+                                self.logs_starts_with, last_seen_time
+                            )
+                        )
 
                         return (
                             data,
@@ -182,53 +186,53 @@ class ArmisDevice:
                         )
                     else:
                         raise ArmisException(
-                            "Armis Device Connector: There are no proper keys in data."
+                            "{}: There are no proper keys in data."
                         )
 
                 elif response.status_code == 400:
                     logging.error(
-                        "Armis Device Connector: Status Code : 400, Error: {}".format(
-                            HTTP_ERRORS[400]
+                        "{}: Status Code : 400, Error: {}".format(
+                            self.logs_starts_with, HTTP_ERRORS[400]
                         )
                     )
                     raise ArmisException(HTTP_ERRORS[400])
 
                 elif response.status_code == 401:
                     logging.info(
-                        "Armis Device Connector: Retry number: {}".format(str(i + 1))
+                        "{}: Retry number: {}".format(self.logs_starts_with, str(i + 1))
                     )
                     logging.error(
-                        "Armis Device Connector: Status Code : 401, Error: {}".format(
-                            HTTP_ERRORS[401]
+                        "{}: Status Code : 401, Error: {}".format(
+                            self.logs_starts_with, HTTP_ERRORS[401]
                         )
                     )
                     self._get_access_token_device("/access_token/")
                     continue
                 else:
                     raise ArmisException(
-                        "Armis Device Connector: Error while fetching data. status Code:{} error message:{}.".format(
-                            response.status_code, response.text
+                        "{}: Error while fetching data. status Code:{} error message:{}.".format(
+                            self.logs_starts_with, response.status_code, response.text
                         )
                     )
-            logging.error("Armis Device Connector: Max retry reached.")
-            raise ArmisException("Armis Device Connector: Max retry reached.")
+            logging.error("{}: Max retry reached.".format(self.logs_starts_with))
+            raise ArmisException("{}: Max retry reached.".format(self.logs_starts_with))
 
         except requests.exceptions.ConnectionError:
             logging.error(ERROR_MESSAGES["HOST_CONNECTION_ERROR"])
             raise ArmisException(
-                "Armis Device Connector: Connection error while getting data from device api."
+                "{}: Connection error while getting data from device api.".format(self.logs_starts_with)
             )
 
         except requests.exceptions.RequestException as request_err:
             logging.error(request_err)
             raise ArmisException(
-                "Armis Device Connector: Request error while getting data from Device api."
+                "{}: Request error while getting data from Device api.".format(self.logs_starts_with)
             )
 
         except ArmisException as err:
             logging.error(err)
             raise ArmisException(
-                "Armis Device Connector: Error while getting data from device api."
+                "{}: Error while getting data from device api.".format(self.logs_starts_with)
             )
 
         except ArmisDataNotFoundException as err:
@@ -239,8 +243,7 @@ class ArmisDevice:
         self,
         checkpoint_table_object: ExportsTableStore,
         table_name,
-        last_seen_not_available,
-        last_time=None,
+        last_seen_not_available
     ):
         """Fetch_device_data is used to push all the data into table.
 
@@ -248,26 +251,25 @@ class ArmisDevice:
             checkpoint_table_object (object): Azure Storage table object.
             table_name (String): table name to store the data in microsoft sentinel.
             last_seen_not_available (bool): it is a flag that contains the value if last seen exists or not.
-            last_time (String): it will contain latest time stamp.
         """
         try:
             if last_seen_not_available:
                 aql_data = "in:devices"
             else:
-                aql_data = "in:devices after:{}".format(last_time)
-            logging.info("Armis Device Connector: aql query: " + aql_data)
+                aql_data = "in:devices after:{}".format(self.last_seen)
+            logging.info("{}: aql query: {}".format(self.logs_starts_with, aql_data))
             self._get_access_token_device("/access_token/")
 
             azuresentinel = AzureSentinel()
             parameter_device = {
                 "aql": aql_data,
                 "orderBy": "lastSeen",
-                "length": 1000,
+                "length": PAGE_SIZE,
+                "from": 0
             }
             while self._data_device_from is not None:
                 if int(time.time()) >= self.start_time + FUNCTION_APP_TIMEOUT_SECONDS:
                     raise ArmisTimeOutException()
-                parameter_device.update({"from": self._data_device_from})
                 (
                     data,
                     last_seen_time,
@@ -275,50 +277,53 @@ class ArmisDevice:
                     count_per_frame_data,
                 ) = self._get_device_data("/search/", parameter_device)
                 logging.info(
-                    "Armis Device Connector: Total length of data is %s ",
-                    total_data_length,
+                    "{}: Total length of data is {}.".format(self.logs_starts_with, total_data_length)
                 )
+                if total_data_length < PAGE_SIZE:
+                    logging.info(
+                        "{}: Last page is not ready due to delay of data in Armis"
+                        ", Hence Stopping Execution. "
+                        "Last Page Details - lastSeen: {}, Total Records: {}, Count: {}"
+                        ".".format(self.logs_starts_with, last_seen_time, total_data_length, count_per_frame_data)
+                    )
+                    break
                 azuresentinel.post_data(customer_id, json.dumps(data), table_name)
                 logging.info(
-                    "Armis Device Connector: Collected %s device data and ingested into sentinel.",
-                    count_per_frame_data,
+                    "{}: Collected: {} device data and ingested into sentinel with table name: {}.".format(
+                        self.logs_starts_with, count_per_frame_data, table_name
+                    )
+                )
+                last_seen_time = datetime.datetime.strptime(
+                    last_seen_time, "%Y-%m-%dT%H:%M:%S"
+                )
+                last_seen_time = last_seen_time.strftime("%Y-%m-%dT%H:%M:%S")
+                self.last_seen = last_seen_time
+                checkpoint_table_object.merge(
+                    "armisdevice",
+                    "devicecheckpoint",
+                    {"last_seen": self.last_seen}
+                )
+                logging.info(
+                    "{}: Updated last_seen to '{}' in Checkpoint table".format(
+                        self.logs_starts_with, last_seen_time
+                    )
                 )
 
-                if self._data_device_from is not None:
-                    checkpoint_table_object.merge(
-                        "armisdevice",
-                        "devicecheckpoint",
-                        {"offset": self._data_device_from},
-                    )
-                    logging.info(
-                        "Armis Device Connector: Offset updated in Checkpoint table as: "
-                        + str(self._data_device_from)
-                    )
+                parameter_device.update({"aql": "in:devices after:{}".format(self.last_seen)})
+                logging.info(
+                    "{}: Updated aql query: {}.".format(self.logs_starts_with, parameter_device["aql"])
+                )
 
             logging.info(
-                "Armis Device Connector: Data collection and ingestion is completed till last_seen: {}".format(
-                    last_seen_time
-                )
-            )
-            last_seen_time = datetime.datetime.strptime(
-                last_seen_time, "%Y-%m-%dT%H:%M:%S"
-            )
-            last_seen_time = last_seen_time.strftime("%Y-%m-%dT%H:%M:%S")
-            checkpoint_table_object.merge(
-                "armisdevice",
-                "devicecheckpoint",
-                {"last_seen": last_seen_time, "offset": 0},
-            )
-            logging.info(
-                "Armis Device Connector: Set last_seen '{}' and offset '0' in Checkpoint table".format(
-                    last_seen_time
+                "{}: Data collection and ingestion is completed till last_seen: {}".format(
+                    self.logs_starts_with, self.last_seen
                 )
             )
 
         except ArmisException as err:
             logging.error(err)
             raise ArmisException(
-                "Armis Device Connector: Error while processing the data."
+                "{}: Error while processing the data.".format(self.logs_starts_with)
             )
         except ArmisTimeOutException:
             raise ArmisTimeOutException()
@@ -343,36 +348,36 @@ class ArmisDevice:
             last_time_devices = self.state_devices.get()
 
             if last_time_devices is not None:
+                self.last_seen = last_time_devices
                 logging.info(
-                    "Armis Device Connector: The checkpoint file in file share is available for device endpoint."
+                    "{}: The checkpoint file is available in device endpoint file share.".format(self.logs_starts_with)
                 )
                 logging.info(
-                    "Armis Device Connector: Last timestamp stored in file for devices: {}".format(
-                        last_time_devices
+                    "{}: Last timestamp stored in file for devices: {}".format(
+                        self.logs_starts_with, self.last_seen
                     )
                 )
-                logging.info("Armis Device Connector: Creating Checkpoint table.")
+                logging.info("{}: Creating Checkpoint table.".format(self.logs_starts_with))
                 checkpoint_table_obj.create()
 
                 logging.info(
-                    "Armis Device Connector: Storing value in Checkpoint table - last_seen: {}, offset: 0".format(
-                        last_time_devices
+                    "{}: Storing value in Checkpoint table - last_seen: {}".format(
+                        self.logs_starts_with, self.last_seen
                     )
                 )
                 checkpoint_table_obj.merge(
                     "armisdevice",
                     "devicecheckpoint",
-                    {"last_seen": last_time_devices, "offset": 0},
+                    {"last_seen": self.last_seen}
                 )
                 self.state_devices.delete()
                 logging.info(
-                    "Armis Device Connector: Checkpoint file deleted from fileshare."
+                    "{}: Checkpoint file deleted from fileshare.".format(self.logs_starts_with)
                 )
                 self._fetch_device_data(
                     checkpoint_table_obj,
                     armis_devices_table_name,
-                    False,
-                    last_time_devices,
+                    False
                 )
                 return
 
@@ -381,55 +386,60 @@ class ArmisDevice:
             record = checkpoint_table_obj.get("armisdevice", "devicecheckpoint")
             if not record:
                 # first iteration and start from the beginning
-                logging.info("Armis Device Connector: Creating Checkpoint table.")
+                logging.info("{}: Creating Checkpoint table.".format(self.logs_starts_with))
                 checkpoint_table_obj.create()
                 checkpoint_table_obj.post(
-                    "armisdevice", "devicecheckpoint", {"offset": 0}
+                    "armisdevice", "devicecheckpoint", {"last_seen": None}
                 )
                 is_last_seen_not_available = True
             else:
                 logging.info(
-                    "Armis Device Connector: Fetching Entity from Checkpoint table: {}".format(
-                        CHECKPOINT_TABLE_NAME
+                    "{}: Fetching Entity from Checkpoint table: {}".format(
+                        self.logs_starts_with, CHECKPOINT_TABLE_NAME
                     )
                 )
-                last_time_devices = record.get("last_seen")
-                self._data_device_from = (
-                    record.get("offset") if record.get("offset") else 0
-                )
-                logging.info(
-                    "Armis Device Connector: Checkpoint table: {} last_seen: {}, offset: {}".format(
-                        armis_devices_table_name,
-                        last_time_devices,
-                        self._data_device_from,
-                    )
-                )
-                if last_time_devices is None:
+                self.last_seen = record.get("last_seen")
+                offset = record.get("offset")
+                if offset or offset == 0:
                     logging.info(
-                        "Armis Device Connector: last_seen value not available in checkpoint table."
+                        "{}: Removing the offset from checkpoint.".format(
+                            self.logs_starts_with
+                        )
+                    )
+                    checkpoint_table_obj.upsert(
+                        "armisdevice",
+                        "devicecheckpoint",
+                        {"last_seen": self.last_seen, "offset": None}
+                    )
+                logging.info(
+                    "{}: last_seen: {} is available in Checkpoint Table.".format(
+                        self.logs_starts_with, self.last_seen
+                    )
+                )
+                if not self.last_seen:
+                    logging.info(
+                        "{}: last_seen value not available in checkpoint table.".format(self.logs_starts_with)
                     )
                     is_last_seen_not_available = True
                 else:
                     logging.info(
-                        "Armis Device Connector: last_seen value is available in checkpoint table."
+                        "{}: last_seen value is available in checkpoint table.".format(self.logs_starts_with)
                     )
-
             self._fetch_device_data(
                 checkpoint_table_obj,
                 armis_devices_table_name,
-                is_last_seen_not_available,
-                last_time_devices,
+                is_last_seen_not_available
             )
 
         except ArmisTimeOutException:
             logging.info(
-                "Armis Device Connector: 9:30 mins executed hence stopping the execution"
+                "{}: 9:30 mins executed hence stopping the execution.".format(self.logs_starts_with)
             )
             return
         except ArmisException as err:
             logging.error(err)
             raise ArmisException(
-                "Armis Device Connector: Error occured during checking whether log table exist or not."
+                "{}: Error occured during checking whether log table exist or not.".format(self.logs_starts_with)
             )
 
         except ArmisDataNotFoundException:
@@ -536,8 +546,7 @@ def main(mytimer: func.TimerRequest) -> None:
         datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
     )
     logging.info(
-        "Armis Device Connector: Python timer trigger function ran at %s",
-        utc_timestamp,
+        "Armis Device Connector: Python timer trigger function ran at {}.".format(utc_timestamp)
     )
     start_time = time.time()
     armis_obj = ArmisDevice(start_time)
@@ -550,8 +559,7 @@ def main(mytimer: func.TimerRequest) -> None:
         datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
     )
     logging.info(
-        "Armis Device Connector: execution completed for device at %s.",
-        utc_timestamp_final,
+        "Armis Device Connector: execution completed for device at {}.".format(utc_timestamp_final)
     )
     if mytimer.past_due:
         logging.info("Armis Device Connector: The timer is past due!")
