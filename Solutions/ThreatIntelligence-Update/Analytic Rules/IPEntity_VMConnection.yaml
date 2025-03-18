@@ -53,12 +53,14 @@ let dt_lookBack = 1h; // Look back 1 hour for VMConnection events
     )
     on $left.TI_ipEntity == $right.RemoteIp
     // Filter out VMConnection events that occurred after the expiration of the corresponding indicator
-    | where VMConnection_TimeGenerated < ExpirationDateTime
+    | where VMConnection_TimeGenerated < ValidUntil
     // Group the results by IndicatorId and keep the VMConnection event with the latest timestamp
-    | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated, *) by IndicatorId, RemoteIp
+    | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated, *) by Id, RemoteIp
     // Select the desired output fields
-    | project VMConnection_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
-      TI_ipEntity, Computer, Direction, ProcessName, SourceIp, DestinationIp, RemoteIp, Protocol, DestinationPort, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+    | extend Description = tostring(parse_json(Data).description)
+    | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+    | project VMConnection_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
+      TI_ipEntity, Computer, Direction, ProcessName, SourceIp, DestinationIp, RemoteIp, Protocol, DestinationPort, NetworkSourceIP, Type//, ThreatType, Url, NetworkIP, NetworkDestinationIP, EmailSourceIpAddress,
     | extend timestamp = VMConnection_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
 entityMappings:
   - entityType: Host

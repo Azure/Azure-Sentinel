@@ -56,10 +56,12 @@ let dt_lookBack = 1h;
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (Signins) on $left.TI_ipEntity == $right.IPAddress
   | project-rename SigninLogs_TimeGenerated = TimeGenerated
-  | where SigninLogs_TimeGenerated < ExpirationDateTime
+  | where SigninLogs_TimeGenerated < ValidUntil
   | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)
-  | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, IPAddress
-  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+  | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by Id, IPAddress
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, NetworkSourceIP, Type//, ThreatType, Url, NetworkIP, NetworkDestinationIP, EmailSourceIpAddress
   | extend timestamp = SigninLogs_TimeGenerated, Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
 entityMappings:
   - entityType: Account

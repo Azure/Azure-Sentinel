@@ -62,13 +62,15 @@ let dt_lookBack = 1h; // Look back 1 hour for AzureDiagnostics logs
     )
     on $left.TI_ipEntity == $right.RemoteIP
     // Filter out logs that occurred after the expiration of the corresponding indicator
-    | where AzureFirewall_TimeGenerated < ExpirationDateTime
+    | where AzureFirewall_TimeGenerated < ValidUntil
     // Group the results by IndicatorId and RemoteIP, and keep the log entry with the latest timestamp
-    | summarize AzureFirewall_TimeGenerated = arg_max(AzureFirewall_TimeGenerated, *) by IndicatorId, RemoteIP
+    | summarize AzureFirewall_TimeGenerated = arg_max(AzureFirewall_TimeGenerated, *) by Id, RemoteIP
     // Select the desired output fields
-    | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore,
+    | extend Description = tostring(parse_json(Data).description)
+    | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+    | project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
       AzureFirewall_TimeGenerated, TI_ipEntity, Resource, Category, msg_s, SourceAddress, DestinationAddress, Firewall_Action, Protocol,
-      NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+      NetworkSourceIP, Type//, Url, NetworkIP, NetworkDestinationIP, DomainName, EmailSourceIpAddress
     // Rename the timestamp field
     | extend timestamp = AzureFirewall_TimeGenerated
 entityMappings:

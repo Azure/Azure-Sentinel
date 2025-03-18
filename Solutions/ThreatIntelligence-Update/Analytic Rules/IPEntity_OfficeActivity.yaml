@@ -55,11 +55,13 @@ let dt_lookBack = 1h; // Look back 1 hour for OfficeActivity events
   | join kind=innerunique (OfficeActivity_)
     on $left.TI_ipEntity == $right.IPAddress
   // Filter out OfficeActivity events that occurred after the expiration of the corresponding indicator
-  | where OfficeActivity_TimeGenerated < ExpirationDateTime
+  | where OfficeActivity_TimeGenerated < ValidUntil
   // Group the results by IndicatorId and keep the OfficeActivity event with the latest timestamp
-  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId
+  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by Id
   // Select the desired output fields
-  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkSourceIP, Type//, ThreatType, Url, NetworkIP, NetworkDestinationIP, EmailSourceIpAddress
   | extend timestamp = OfficeActivity_TimeGenerated, Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
 entityMappings:
   - entityType: Account
