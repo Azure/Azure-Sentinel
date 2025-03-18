@@ -48,6 +48,5 @@ The CloudFormation template will create:
   | where TimeGenerated > ago(1h)
 - Ensure logs appear correctly.
 ## Troubleshooting
-- No logs in Sentinel? Check Event Notifications in S3 Bucket Prefix path and S3 bucket logs path should be same.
+- No logs in Sentinel? Check Event Notifications in S3 Bucket to ensure the Prefix path matches the S3 bucket logs path.
 - IAM permission errors? Ensure CloudFormation created the correct policies.
-- Logs delayed? Verify the S3 Event Notification and SQS processing.
