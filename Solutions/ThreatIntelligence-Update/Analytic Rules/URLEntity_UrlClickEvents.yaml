@@ -25,7 +25,7 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-let dt_lookBack = 1h;
+  let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let UrlClickEvents_ = materialize(UrlClickEvents
       | where TimeGenerated >= ago(dt_lookBack)
@@ -47,7 +47,7 @@ let dt_lookBack = 1h;
   | where isnotempty(Url)
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | where TimeGenerated >= ago(ioc_lookBack)
-//    | where isnotempty(Url) and tolower(Url) in (ClickedUrls)
+  //    | where isnotempty(Url) and tolower(Url) in (ClickedUrls)
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
     | where IsActive == true and ValidUntil > now()
     | project-rename TI_Url = Url, TI_Type = Type
@@ -56,9 +56,11 @@ let dt_lookBack = 1h;
     (TI | join kind=innerunique (ChainReportID) on $left.TI_Url == $right.Url))
   | project-away UrlChain
   | join kind=innerunique (UrlClickEvents_) on ReportId
-  | where UrlClickEvents_TimeGenerated < ExpirationDateTime
-  | summarize UrlClickEvents_TimeGenerated = arg_max(UrlClickEvents_TimeGenerated, *) by IndicatorId
-  | project UrlClickEvents_TimeGenerated, AccountUpn, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, NetworkMessageId
+  | where UrlClickEvents_TimeGenerated < ValidUntil
+  | summarize UrlClickEvents_TimeGenerated = arg_max(UrlClickEvents_TimeGenerated, *) by Id
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project UrlClickEvents_TimeGenerated, AccountUpn, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, Url, NetworkMessageId
   | extend timestamp = UrlClickEvents_TimeGenerated
   | extend timestamp = UrlClickEvents_TimeGenerated, Name = tostring(split(AccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(AccountUpn, '@', 1)[0])
 entityMappings:

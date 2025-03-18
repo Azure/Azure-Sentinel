@@ -28,7 +28,7 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-let dt_lookBack = 1h;
+  let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let URLRegex = "((https?|ftp|ldap|wss?|file):\\/\\/(([\\:\\%\\w\\_\\-]+(\\.|@))*((xn--)?[a-zA-Z0-9\\-]+\\.)+(xn--[a-z0-9]+|[A-Za-z]+)|\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{0,3})[.,:\\w@?^=%&\\/~+#-]*[\\w@?^=%&\\/~+#-])";
   let SecurityEvents = materialize(SecurityAlert
@@ -51,11 +51,11 @@ let dt_lookBack = 1h;
   | where IndicatorType == "url"
   | extend Url = ObservableValue
   | where isnotempty(Url)
-| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   | where isnotempty(Url)
   | where TimeGenerated >= ago(ioc_lookBack)
   | extend Url = tolower(Url)
-//  | where tolower(Url) in (EventUrls)
+  //  | where tolower(Url) in (EventUrls)
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
   | where IsActive == true and ValidUntil > now()
   | extend Description = tostring(parse_json(Data).description)
@@ -63,9 +63,11 @@ let dt_lookBack = 1h;
    | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (SecurityEvents) on Url
-  | where Alert_TimeGenerated < ExpirationDateTime
-  | summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName
-  | project timestamp = Alert_TimeGenerated, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, AlertName, AlertSeverity, Description, Url, Compromised_Host
+  | where Alert_TimeGenerated < ValidUntil
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by Id, AlertName
+  | project timestamp = Alert_TimeGenerated, ActivityGroupNames, Id, Type, ValidUntil, Confidence, AlertName, AlertSeverity, Description, Url, Compromised_Host
 entityMappings:
   - entityType: Host
     fieldMappings:

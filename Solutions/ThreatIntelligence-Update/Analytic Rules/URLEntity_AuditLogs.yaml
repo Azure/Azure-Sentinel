@@ -51,9 +51,11 @@ query: |
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (AuditEvents) on Url
-  | where Audit_TimeGenerated < ExpirationDateTime
-  | summarize Audit_TimeGenerated = arg_max(Audit_TimeGenerated, *) by IndicatorId, Url
-  | project Audit_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
+  | where Audit_TimeGenerated < ValidUntil
+  | summarize Audit_TimeGenerated = arg_max(Audit_TimeGenerated, *) by Id, Url
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project Audit_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence,
   OperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url
   | extend AccountName = tostring(split(userPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(userPrincipalName, "@")[1])
   | extend HostName = tostring(split(TargetResourceDisplayName, ".")[0]), DomainIndex = toint(indexof(TargetResourceDisplayName, '.'))

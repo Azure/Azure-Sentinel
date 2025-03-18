@@ -25,7 +25,7 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-let dt_lookBack = 1h;
+  let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let DeviceNetworkEvents_ = DeviceNetworkEvents
     | where isnotempty(RemoteUrl)
@@ -52,9 +52,11 @@ let dt_lookBack = 1h;
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
      | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type
   | join kind=innerunique (DeviceNetworkEvents_) on $left.Url == $right.RemoteUrl
-  | where DeviceNetworkEvents_TimeGenerated < ExpirationDateTime
-  | summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated, *) by IndicatorId, Url
-  | project DeviceNetworkEvents_TimeGenerated, IndicatorId, Url, ConfidenceScore, Description, ThreatType, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, RemoteIP, RemotePort
+  | where DeviceNetworkEvents_TimeGenerated < ValidUntil
+  | summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated, *) by Id, Url
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project DeviceNetworkEvents_TimeGenerated, Id, Url, Confidence, Description, Type, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, RemoteIP, RemotePort
   | extend Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])
   | extend timestamp = DeviceNetworkEvents_TimeGenerated, UserPrincipalName = InitiatingProcessAccountUpn
 entityMappings:

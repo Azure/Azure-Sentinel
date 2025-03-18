@@ -25,7 +25,7 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-let dt_lookBack = 1h;
+  let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   ThreatIntelIndicators
   //extract key part of kv pair
@@ -33,7 +33,7 @@ let dt_lookBack = 1h;
   | where IndicatorType == "url"
   | extend Url = ObservableValue
   | where isnotempty(Url)
-| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(Url)
   | where TimeGenerated >= ago(ioc_lookBack)
@@ -57,9 +57,11 @@ let dt_lookBack = 1h;
     | where isnotempty(PA_Url)
     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
   ) on $left.Url == $right.PA_Url
-  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
-  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, PA_Url
-  | project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, PA_Url, DeviceName
+  | where CommonSecurityLog_TimeGenerated < ValidUntil
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, PA_Url
+  | project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, DeviceAction, SourceIP, PA_Url, DeviceName
 entityMappings:
   - entityType: Host
     fieldMappings:

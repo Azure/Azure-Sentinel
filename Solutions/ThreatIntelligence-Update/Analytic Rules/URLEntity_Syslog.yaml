@@ -25,7 +25,7 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-let dt_lookBack = 1h;
+  let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   ThreatIntelIndicators
   // Picking up only IOC's that contain the entities we want
@@ -34,7 +34,7 @@ let dt_lookBack = 1h;
   | where IndicatorType == "url"
   | extend Url = ObservableValue
   | where isnotempty(Url)
-| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   | where isnotempty(Url)
   | where TimeGenerated >= ago(ioc_lookBack)
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
@@ -49,9 +49,11 @@ let dt_lookBack = 1h;
     | where isnotempty(Url)
     | extend Syslog_TimeGenerated = TimeGenerated
   ) on Url
-  | where Syslog_TimeGenerated < ExpirationDateTime
-  | summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by IndicatorId, Url
-  | project timestamp = Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, Url, HostIP
+  | where Syslog_TimeGenerated < ValidUntil
+  | summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by Id, Url
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project timestamp = Syslog_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, Url, HostIP
 entityMappings:
   - entityType: Host
     fieldMappings:
