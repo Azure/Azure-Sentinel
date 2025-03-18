@@ -48,11 +48,15 @@ relevantTechniques:
     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
     )
   on $left.FileHashValue == $right.FileHash
-  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+  | where CommonSecurityLog_TimeGenerated < ValidUntil
   | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
   SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,
-  RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType
+  RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType//, Url
   | extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))
   | extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])
   | extend timestamp = CommonSecurityLog_TimeGenerated

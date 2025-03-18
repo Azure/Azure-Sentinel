@@ -22,7 +22,7 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-  let dt_lookBack = 1h; // Look back 1 hour
+    let dt_lookBack = 1h; // Look back 1 hour
   let ioc_lookBack = 14d; // Look back 14 days
   // Create a list of top-level domains (TLDs) from the threat feed data for later validation
   let SecurityLog = materialize(
@@ -52,15 +52,15 @@ query: |
       | where isnotempty(DomainName)
       | where TimeGenerated >= ago(ioc_lookBack)
       | extend TI_DomainEntity = tolower(DomainName)
-      | extend IndicatorId = tostring(split(Id, "--")[2])
-      | where TI_DomainEntity in (LogDomains)
+      //| where TI_DomainEntity in (LogDomains)
       | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
       | where IsActive == true and ValidUntil > now());
   // Join threat intelligence indicators with common security logs
   Domain_Indicators | join kind=innerunique (SecurityLog) on $left.TI_DomainEntity == $right.Domain
-  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
-  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
+  | where CommonSecurityLog_TimeGenerated < ValidUntil
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id
+  | extend Description = tostring(parse_json(Data).description), ActivityGroupNames = tostring(parse_json(Data).activitygroupnames)
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, Id, ValidUntil, Confidence, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
   | extend timestamp = CommonSecurityLog_TimeGenerated
 entityMappings:
   - entityType: Host

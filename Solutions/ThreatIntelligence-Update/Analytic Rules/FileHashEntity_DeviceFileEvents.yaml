@@ -47,9 +47,12 @@ query: |
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
     | project-reorder *, FileHashType, FileHashValue, Type
   | join kind=innerunique (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue
-  | where TimeGenerated < ExpirationDateTime
+  | where TimeGenerated < ValidUntil
   | summarize TimeGenerated = arg_max(TimeGenerated, *) by  IndicatorId, DeviceId
-  | project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, ThreatType, FileHashValue, FileHashType, ExpirationDateTime, ConfidenceScore, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, FileHashValue, FileHashType, ValidUntil, Confidence, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup
   | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Account

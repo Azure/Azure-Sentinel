@@ -82,11 +82,13 @@ let dt_lookBack = 1h;  // Duration to look back for recent logs (1 hour)
           | where tld in~ (list_tlds)
           | extend CommonSecurityLog_TimeGenerated = TimeGenerated
       ) on $left.TI_DomainEntity == $right.Domain
-      | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+      | where CommonSecurityLog_TimeGenerated < ValidUntil
       // Group the results by IndicatorId and Domain and keep only the latest CommonSecurityLog_TimeGenerated
       | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Domain
       // Select the desired fields for the final result set
-      | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
+      | extend Description = tostring(parse_json(Data).description)
+      | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+      | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ValidUntil, Confidence, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
       // Add a new field 'timestamp' for convenience, using the CommonSecurityLog_TimeGenerated as its value
       | extend timestamp = CommonSecurityLog_TimeGenerated
 entityMappings:

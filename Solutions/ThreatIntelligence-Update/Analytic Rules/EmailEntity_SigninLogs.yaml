@@ -49,7 +49,7 @@ let dt_lookBack = 1h;
   | extend EmailSenderAddress = ObservableValue
   | extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, "@") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, "@") - 1)
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-  | extend IndicatorId = tostring(split(Id, "--")[2])
+  | extend Id = tostring(split(Id, "--")[2])
   | where isnotempty(EmailSenderAddress)
   | where TimeGenerated >= ago(ioc_lookBack)
 // | where EmailSenderAddress in (SigninUPNs)
@@ -59,9 +59,11 @@ let dt_lookBack = 1h;
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
     | project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type
   | join kind=innerunique (Signins) on $left.EmailSenderAddress == $right.UserPrincipalName
-  | where SigninLogs_TimeGenerated < ExpirationDateTime
-  | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, UserPrincipalName
-  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP, Type
+  | where SigninLogs_TimeGenerated < ValidUntil
+  | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by Id, UserPrincipalName
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkLocationDetails, Type//, Url, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, NetworkIP, NetworkDestinationIP, NetworkSourceIP
   | extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
   | extend timestamp = SigninLogs_TimeGenerated
 entityMappings:

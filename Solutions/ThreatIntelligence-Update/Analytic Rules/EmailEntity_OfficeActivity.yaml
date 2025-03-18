@@ -51,9 +51,11 @@ let dt_lookBack = 1h;
   | project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (OfficeEvents) on $left.EmailSenderAddress == $right.UserId
-  | where OfficeActivity_TimeGenerated < ExpirationDateTime
-  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId, UserId
-  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, UserId, ClientIP, Operation, UserType, RecordType, OfficeWorkload, Parameters
+  | where OfficeActivity_TimeGenerated < ValidUntil
+  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by Id, UserId
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, EmailSourceDomain, UserId, ClientIP, Operation, UserType, RecordType, OfficeWorkload, Parameters//, Url, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType
   | extend Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
   | extend timestamp = OfficeActivity_TimeGenerated
 entityMappings:

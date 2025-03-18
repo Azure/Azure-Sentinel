@@ -65,11 +65,13 @@ let dt_lookBack = 1h;  // Define the time range to look back for syslog data (1 
       | where tld in~ (list_tlds)
       | extend Syslog_TimeGenerated = TimeGenerated
     ) on $left.TI_DomainEntity==$right.domain
-    | where Syslog_TimeGenerated < ExpirationDateTime
+    | where Syslog_TimeGenerated < ValidUntil
     // Retrieve the latest syslog timestamp for each indicator and domain combination
     | summarize Syslog_TimeGenerated = arg_max(Syslog_TimeGenerated, *) by IndicatorId, domain
     // Select the desired columns for the final result set
-    | project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, domain, HostIP, Url, Type, TI_DomainEntity
+    | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+    | extend Description = tostring(parse_json(Data).description)
+    | project Syslog_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, domain, HostIP, Type, TI_DomainEntity//, Url
     // Extract the hostname from the Computer field
     | extend HostName = tostring(split(Computer, '.', 0)[0])
     // Extract the DNS domain from the Computer field
