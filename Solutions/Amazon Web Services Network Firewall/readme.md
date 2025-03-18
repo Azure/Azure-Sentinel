@@ -27,6 +27,9 @@ The CloudFormation template will create:
 - Three SQS queues for log processing and forwarding.
 - S3 Event Notifications to trigger log forwarding.
 - IAM Roles & Policies with the necessary permissions.
+### Configuring AWS Network Firewall Logs
+- Go to the Firewall Service, navigate to the Logging tab, and enable the log types: FLOW, ALERT, and TLS.
+- Select S3 as the log destination and enter the S3 bucket name created by the CloudFormation stack.
 ### Configuring Microsoft Sentinel
 - In Microsoft Sentinel, navigate to Content Hub.
 - Search for AWS Network Firewall and install it
@@ -37,12 +40,13 @@ The CloudFormation template will create:
 ## Verifying Logs in Sentinel
 - Go to Log Analytics in Microsoft Sentinel.
 - Run the following Kusto Query Language (KQL) query:
-kql
-Copy
-Edit
-- AWSNetworkFirewallLogs
-| where TimeGenerated > ago(1h)
-Ensure logs appear correctly.
+- AWSNetworkFirewall_FlowLogV2_CL
+  | where TimeGenerated > ago(1h)
+- AWSNetworkFirewall_AlertLogV2_CL
+  | where TimeGenerated > ago(1h)
+- AWSNetworkFirewall_TlsLogV2_CL
+  | where TimeGenerated > ago(1h)
+- Ensure logs appear correctly.
 ## Troubleshooting
 - No logs in Sentinel? Check Event Notifications in S3 Bucket Prefix path and S3 bucket logs path should be same.
 - IAM permission errors? Ensure CloudFormation created the correct policies.
