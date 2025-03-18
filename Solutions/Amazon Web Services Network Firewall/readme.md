@@ -4,7 +4,7 @@ This guide explains how to integrate AWS Network Firewall logs with Microsoft Se
 ## Prerequisites
 Before deploying, ensure you have:
 - An AWS account with permissions to deploy CloudFormation stacks.
-- An existing AWS Network Firewall setup with logging enabled to S3 Bucket.
+- An existing AWS Network Firewall setup.
 - An active Microsoft Sentinel Log Analytics Workspace ID.
 - Required IAM permissions to configure AWS services.
 
