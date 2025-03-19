@@ -47,111 +47,132 @@
     },
     "resources":  [
         {
-            "properties":  {
-                "provisioningState":  "Succeeded",
-                "state":  "Enabled",
-                "definition":  {
-                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion":  "1.0.0.0",
-                    "parameters":  {
-                        "$connections":  {
-                            "defaultValue":  {
-                            },
-                            "type":  "Object"
-                        }
-                    },
-                    "triggers":  {
-                        "Microsoft_Sentinel_incident":  {
-                            "type":  "ApiConnectionWebhook",
-                            "inputs":  {
-                                "body":  {
-                                    "callback_url":  "@{listCallbackUrl()}"
-                                },
-                                "host":  {
-                                    "connection":  {
-                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+            "apiVersion": "2017-07-01",
+            "dependsOn": ["[resourceId('Microsoft.Web/connections', variables('AzureautomationConnectionName'))]", "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]", "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "location": "[resourceGroup().location]",
+            "name": "[parameters('PlaybookName')]",
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Access_Token": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
                                     }
                                 },
-                                "path":  "/incident-creation"
-                            }
-                        }
-                    },
-                    "actions":  {
-                        "Access_Token":  {
-                            "runAfter":  {
-                            },
-                            "type":  "ApiConnection",
-                            "inputs":  {
-                                "host":  {
-                                    "connection":  {
-                                        "name":  "@parameters('$connections')['keyvault']['connectionId']"
-                                    }
-                                },
-                                "method":  "get",
-                                "path":  "/secrets/@{encodeURIComponent('access-token')}/value"
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('access-token')}/value"
                             }
                         },
-                        "Disable_Data_Aging":  {
-                            "actions":  {
-                                "Disable_Data_Aging_Job":  {
-                                    "runAfter":  {
-                                    },
-                                    "type":  "ApiConnection",
-                                    "inputs":  {
-                                        "body":  {
-                                            "properties":  {
-                                                "parameters":  {
-                                                    "ClientName":  "@variables('da_client_name')",
-                                                    "EnvironmentEndpointURL":  "@body('Environment_Endpoint_URL')?['value']",
-                                                    "apiAccessToken":  "@body('Access_Token')?['value']"
+                        "Disable_Data_Aging": {
+                            "actions": {
+                                "For_each": {
+                                    "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                                    "actions": {
+                                        "Parse_JSON": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('For_each')?['properties']?['additionalData']?['Custom Details']",
+                                                "schema": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "Client": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "User": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         },
-                                        "host":  {
-                                            "connection":  {
-                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
-                                            }
-                                        },
-                                        "method":  "put",
-                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
-                                        "queries":  {
-                                            "runbookName":  "Commvault_Disable_Data_Aging",
-                                            "wait":  true,
-                                            "x-ms-api-version":  "2015-10-31"
+                                        "For_each_1": {
+                                            "foreach": "@body('Parse_JSON')?['Client']",
+                                            "actions": {
+                                                "Disable_Data_Aging_Job_Output": {
+                                                    "runAfter": {
+                                                        "Create_Disable_Data_Aging": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureautomation']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Create_Disable_Data_Aging')?['properties']?['jobId'])}/output",
+                                                        "queries": {
+                                                            "x-ms-api-version": "2015-10-31"
+                                                        }
+                                                    }
+                                                },
+                                                "Create_Disable_Data_Aging": {
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureautomation']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "body": {
+                                                            "properties": {
+                                                                "parameters": {
+                                                                    "ClientName": "@items('For_each_1')",
+                                                                    "EnvironmentEndpointURL": "@body('Environment_Endpoint_URL')?['value']",
+                                                                    "apiAccessToken": "@body('Access_Token')?['value']"
+                                                                }
+                                                            }
+                                                        },
+                                                        "path": "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
+                                                        "queries": {
+                                                            "x-ms-api-version": "2015-10-31",
+                                                            "runbookName": "Commvault_Disable_Data_Aging",
+                                                            "wait": true
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
                                         }
-                                    }
-                                },
-                                "Disable_Data_Aging_Job_Output":  {
-                                    "runAfter":  {
-                                        "Disable_Data_Aging_Job":  [
-                                            "Succeeded"
-                                        ]
                                     },
-                                    "type":  "ApiConnection",
-                                    "inputs":  {
-                                        "host":  {
-                                            "connection":  {
-                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
-                                            }
-                                        },
-                                        "method":  "get",
-                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_Data_Aging_Job')?['properties']?['jobId'])}/output",
-                                        "queries":  {
-                                            "x-ms-api-version":  "2015-10-31"
-                                        }
-                                    }
+                                    "type": "Foreach"
                                 }
                             },
-                            "runAfter":  {
-                                "For_each_3":  [
+                            "runAfter": {
+                                "Environment_Endpoint_URL": [
                                     "Succeeded"
                                 ]
                             },
-                            "expression":  {
-                                "and":  [
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
                                     {
-                                        "not":  {
-                                            "contains":  [
+                                        "not": {
+                                            "contains": [
                                                 "@triggerBody()?['object']?['properties']?['owner']",
                                                 "Data"
                                             ]
@@ -159,193 +180,93 @@
                                     }
                                 ]
                             },
-                            "type":  "If"
+                            "type": "If"
                         },
-                        "Environment_Endpoint_URL":  {
-                            "runAfter":  {
-                                "Access_Token":  [
+                        "Environment_Endpoint_URL": {
+                            "runAfter": {
+                                "Access_Token": [
                                     "Succeeded"
                                 ]
                             },
-                            "type":  "ApiConnection",
-                            "inputs":  {
-                                "host":  {
-                                    "connection":  {
-                                        "name":  "@parameters('$connections')['keyvault']['connectionId']"
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
                                     }
                                 },
-                                "method":  "get",
-                                "path":  "/secrets/@{encodeURIComponent('environment-endpoint-url')}/value"
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('environment-endpoint-url')}/value"
                             }
-                        },
-                        "Extract_client_name_from_the_entities":  {
-                            "runAfter":  {
-                                "Extract_the_entities_from_the_Incident":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
-                                    {
-                                        "name":  "da_client_name",
-                                        "type":  "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "Extract_the_entities_from_the_Incident":  {
-                            "runAfter":  {
-                                "Environment_Endpoint_URL":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
-                                    {
-                                        "name":  "entities",
-                                        "type":  "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "For_each_3":  {
-                            "foreach":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                            "actions":  {
-                                "Condition":  {
-                                    "actions":  {
-                                        "Set_variable_2":  {
-                                            "runAfter":  {
-                                            },
-                                            "type":  "SetVariable",
-                                            "inputs":  {
-                                                "name":  "da_client_name",
-                                                "value":  "@body('Parse_JSON')?['properties']?['hostName']"
-                                            }
-                                        }
-                                    },
-                                    "runAfter":  {
-                                        "Parse_JSON":  [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "expression":  {
-                                        "and":  [
-                                            {
-                                                "equals":  [
-                                                    "@body('Parse_JSON')?['kind']",
-                                                    "Host"
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type":  "If"
-                                },
-                                "Parse_JSON":  {
-                                    "runAfter":  {
-                                    },
-                                    "type":  "ParseJson",
-                                    "inputs":  {
-                                        "content":  "@item()",
-                                        "schema":  {
-                                            "properties":  {
-                                                "id":  {
-                                                    "type":  "string"
-                                                },
-                                                "kind":  {
-                                                    "type":  "string"
-                                                },
-                                                "name":  {
-                                                    "type":  "string"
-                                                },
-                                                "properties":  {
-                                                    "properties":  {
-                                                        "friendlyName":  {
-                                                            "type":  "string"
-                                                        },
-                                                        "hostName":  {
-                                                            "type":  "string"
-                                                        },
-                                                        "netBiosName":  {
-                                                            "type":  "string"
-                                                        }
-                                                    },
-                                                    "type":  "object"
-                                                },
-                                                "type":  {
-                                                    "type":  "string"
-                                                }
-                                            },
-                                            "type":  "object"
-                                        }
-                                    }
-                                }
-                            },
-                            "runAfter":  {
-                                "Extract_client_name_from_the_entities":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "Foreach"
                         }
                     },
-                    "outputs":  {
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
                     }
                 },
-                "parameters":  {
-                    "$connections":  {
-                        "value":  {
-                            "azureautomation":  {
-                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzureautomationConnectionName'))]",
-                                "connectionName":  "[variables('AzureautomationConnectionName')]",
-                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureautomation')]",
-                                "connectionProperties":  {
-                                    "authentication":  {
-                                        "type":  "ManagedServiceIdentity"
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureautomation": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureautomationConnectionName'))]",
+                                "connectionName": "[variables('AzureautomationConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
                                     }
-                                }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureautomation')]"
                             },
-                            "azuresentinel":  {
-                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
-                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
-                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
-                                "connectionProperties":  {
-                                    "authentication":  {
-                                        "type":  "ManagedServiceIdentity"
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
                                     }
-                                }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
                             },
-                            "keyvault":  {
-                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
-                                "connectionName":  "[variables('KeyvaultConnectionName')]",
-                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
-                                "connectionProperties":  {
-                                    "authentication":  {
-                                        "type":  "ManagedServiceIdentity"
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
                                     }
-                                }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
                             }
                         }
                     }
-                }
+                },
+                "state": "Enabled"
             },
-            "name":  "[parameters('PlaybookName')]",
-            "type":  "Microsoft.Logic/workflows",
-            "location":  "[resourceGroup().location]",
-            "tags":  {
-                "hidden-SentinelTemplateName":  "logic-app-disable-data-aging",
-                "hidden-SentinelTemplateVersion":  "1.0"
+            "tags": {
+                "hidden-SentinelTemplateName": "logic-app-disable-data-aging",
+                "hidden-SentinelTemplateVersion": "1.1"
             },
-            "identity":  {
-                "type":  "SystemAssigned"
-            },
-            "apiVersion":  "2017-07-01",
-            "dependsOn":  [
-                "[resourceId('Microsoft.Web/connections', variables('AzureautomationConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
-            ]
+            "type": "Microsoft.Logic/workflows"
         },
         {
             "type":  "Microsoft.Web/connections",

@@ -245,6 +245,18 @@ function addWorkspaceParameter($templateResourceObj, $parameterName) {
     return $templateResourceObj;
 }
 
+function addGuidValueParameter($templateResourceObj) {
+    $hasParameter = [bool]($templateResourceObj.parameters.PSobject.Properties.name -match "guidValue")
+    if (!$hasParameter) {
+        $templateResourceObj.parameters | Add-Member -NotePropertyName "guidValue" -NotePropertyValue ([PSCustomObject] @{
+            defaultValue = "[[newGuid()]";
+            type         = "string";
+        })
+    }
+
+    return $templateResourceObj;
+}
+
 function Add-NewObjectParameter {
     param (
         [Parameter(Mandatory = $true)] [PSCustomObject] $TemplateResourceObj,
@@ -378,17 +390,18 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $splitNamesBySlash = $dataConnectorName -split '/'
                 $concatenateParts = @()
                 $outputString = ''
+                $guidValue = "parameters('guidValue')"
 
                 foreach ($currentName in $splitNamesBySlash) {
                     if ($currentName.Contains('{{')) {
                         $placeHolderFieldName = $currentName -replace '{{', '' -replace '}}', ''
                         $placeHolderMatched = [regex]::Matches($currentName, $placeHolderPatternMatches)
                         if ($placeHolderMatched.Length -eq $currentName.Length) {
-                            $concatenateParts += "parameters('$($placeHolderFieldName)')"
-            
-                            if ($placeHolderFieldName -like '*workspace*') {
+                            if ($placeHolderFieldName -eq 'workspace') {
+                                $concatenateParts += "parameters('innerWorkspace')"
                                 $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName)
                             } else {
+                                $concatenateParts += "parameters('$($placeHolderFieldName)')"
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName) -isSecret $false
                             }
                         } else {
@@ -396,12 +409,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $concatenateParts += "'/$($text)'"
                             $parameterNameValue = $placeHolderMatched.Value -replace '{{', '' -replace '}}', ''
                             $concatenateParts += "parameters('$($parameterNameValue)')"
-            
+
                             $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($parameterNameValue) -isSecret $false
                         }
                     } else {
                         if ($currentName.Count -eq 1 -and $currentName -like '{{') {
-                            $concatenateParts = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$($currentName)')]"
+                            $concatenateParts = "[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($currentName)', $guidValue)]"
                         } else {
                             if ($concatenateParts.Count -ge 1) {
                                 # if we have multiple parts in name {{innerWorkspace}}/Microsoft.SecurityInsights/OktaDCV1_{{domainname}}
@@ -413,19 +426,15 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         }
                     }
                 }
-            
+
                 if ($concatenateParts.Count -gt 1 -and $concatenateParts -notmatch 'concat') {
-                    $outputString = "[[concat($($concatenateParts -join ', '))]"
+                    $outputString = "[[concat($($concatenateParts -join ', '), $guidValue)]"
                 } elseif ($concatenateParts.Count -eq 1 -and $concatenateParts[0] -match 'parameters') {
                     # if we just have parameters('abcwork')
-                    $outputString = "[[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]))]"
+                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue)]"
                 } else {
                     # if we just have 'abcwork'
-                    $outputString = "[[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])')]"
-                }
-            
-                if ($outputString -like "*parameters('workspace')*") {
-                    $outputString = $outputString.Replace("[[", "[")
+                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue)]"
                 }
             
                 return $outputString
@@ -433,7 +442,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             function CCPDataConnectorsResource($fileContent) {
                 if ($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
-                    
+                    # add parameter of guidValue if not present
+                    $templateContentConnections.properties.mainTemplate = addGuidValueParameter -templateResourceObj $templateContentConnections.properties.mainTemplate
+
+                    # add parameter of innerWorkspace if not present
+                    $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'innerWorkspace' -isSecret $false
+
                     Write-Host "Processing for CCP Poller file path: $ccpPollerFilePath"
                     $resourceName = GetDataConnectorPollerResourceName -dataConnectorName $fileContent.name
 
