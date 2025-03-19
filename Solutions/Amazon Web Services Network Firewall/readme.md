@@ -8,8 +8,20 @@ Before deploying, ensure you have:
 - An active Microsoft Sentinel Log Analytics Workspace ID.
 - Required IAM permissions to configure AWS services.
 
+## CloudFormation Templates
+- Download the CloudFormation templates and deploy them in your AWS environment.
+  
+1. OIDC Web Identity ProviderOIDC Web Identity Provider
+
+   The OIDC (OpenID Connect) Web Identity Provider allows AWS services to securely authenticate using an external identity provider without managing long-term credentials. The CloudFormation template configures OIDC as a trusted identity provider in AWS, enabling secure role-based access for forwarding AWS Network Firewall logs to Microsoft Sentinel.
+   
+2. AWS Network Firewall Configuration
+
+      The AWS Network Firewall Configuration template sets up logging for AWS Network Firewall by creating an S3 bucket, SQS queues, and event notifications. This ensures logs are captured and forwarded to Microsoft Sentinel for monitoring and threat detection.
+
 ## CloudFormation Deployment
 ### Deploying the Stack
+
 - Navigate to the AWS CloudFormation console.
 - Upload the provided CloudFormation template.
 - Enter the required parameters:
@@ -31,21 +43,29 @@ The CloudFormation template will create:
 - Go to the Firewall Service, navigate to the Logging tab, and enable the log types: FLOW, ALERT, and TLS.
 - Select S3 as the log destination and enter the S3 bucket name created by the CloudFormation stack.
 ### Configuring Microsoft Sentinel
-- In Microsoft Sentinel, navigate to Content Hub.
-- Search for AWS Network Firewall and install it
-- Navigate to Data Connectors Search AWS Network Firewall Connector Open Connector Page.
+- Navigate to microsoft sentinel
+- Go to AWS Netwrok Firewall Connector
 - Navigate to Add New Collector
 - Provide the Requried Details Role ARN, Queue URL
   
 ## Verifying Logs in Sentinel
 - Go to Log Analytics in Microsoft Sentinel.
 - Run the following Kusto Query Language (KQL) query:
-- AWSNetworkFirewall_FlowLogV2_CL
-  | where TimeGenerated > ago(1h)
-- AWSNetworkFirewall_AlertLogV2_CL
-  | where TimeGenerated > ago(1h)
-- AWSNetworkFirewall_TlsLogV2_CL
-  | where TimeGenerated > ago(1h)
+  - For Flow Logs
+    ```
+    AWSNetworkFirewall_FlowLogV2_CL
+    | where TimeGenerated > ago(1h)
+    ```
+  - For Alert Logs
+    ```
+    AWSNetworkFirewall_AlertLogV2_CL
+    | where TimeGenerated > ago(1h)
+    ```
+  - For Tls Logs
+    ```
+    AWSNetworkFirewall_TlsLogV2_CL
+    | where TimeGenerated > ago(1h)
+    ```
 - Ensure logs appear correctly.
 ## Troubleshooting
 - No logs in Sentinel? Check Event Notifications in S3 Bucket to ensure the Prefix path matches the S3 bucket logs path.
