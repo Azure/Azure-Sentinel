@@ -1,4 +1,4 @@
-# Amazon Web Services S3 DNS Route53 Data Connector Configuration Guide
+# Amazon Web Services DNS Route53 Data Connector Configuration Guide
 
 This connector enables the ingestion of AWS Route 53 DNS logs into Microsoft Sentinel, providing enhanced visibility into DNS activity and strengthening threat detection capabilities. It supports direct ingestion of DNS Resolver query logs from AWS S3 buckets, while Public DNS query logs and Route 53 audit logs can be integrated via Microsoft Sentinel’s AWS CloudWatch and CloudTrail connectors. Detailed setup instructions are provided for each log type. Use this connector to monitor DNS traffic, identify potential threats, and enhance your cloud security posture.
 
@@ -22,7 +22,7 @@ You can ingest the following type of logs from AWS Route 53 to Microsoft Sentine
 
 1. Download the CloudFormation templates provided below:
    - [OIDCWebIdProvider.json](https://github.com/Azure/Azure-Sentinel/blob/c1344c7c13a718f771f444a54e51a3962a6dbbbd/DataConnectors/AWS-S3/CloudFormation/OIDCWebIdProvider.json): Template to configure the OIDC Web Identity Provider.
-   - [Route53ResourcesAndConfig.json](https://github.com/Azure/Azure-Sentinel/blob/c1344c7c13a718f771f444a54e51a3962a6dbbbd/DataConnectors/AWS-S3/CloudFormation/DNSRoute53/AWSRoute53ResolverLogs_CloudFormation.json): Template to deploy Route53 resources and configurations.
+   - [AWSRoute53ResolverLogs_CloudFormation.json](https://github.com/Azure/Azure-Sentinel/blob/c1344c7c13a718f771f444a54e51a3962a6dbbbd/DataConnectors/AWS-S3/CloudFormation/DNSRoute53/AWSRoute53ResolverLogs_CloudFormation.json): Template to deploy Route53 resources and configurations.
 2. Go to the [AWS CloudFormation Stacks](https://console.aws.amazon.com/cloudformation/home) page. Make sure to select the right AWS region where you want all resources need to be created.
 3. Create a new Stack for each template:
    - First, create Stack using the `OIDCWebIdProvider.json` template:
