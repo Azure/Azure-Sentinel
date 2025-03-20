@@ -9,9 +9,9 @@ Before deploying, ensure you have:
 - Required IAM permissions to configure AWS services.
 
 ## CloudFormation Templates
-- Download the CloudFormation templates and deploy them in your AWS environment.
+- Download the CloudFormation templates from the GitHub and deploy in your AWS environment.
   
-1. OIDC Web Identity ProviderOIDC Web Identity Provider
+1. OIDC Web Identity Provider
 
    The OIDC (OpenID Connect) Web Identity Provider allows AWS services to securely authenticate using an external identity provider without managing long-term credentials. The CloudFormation template configures OIDC as a trusted identity provider in AWS, enabling secure role-based access for forwarding AWS Network Firewall logs to Microsoft Sentinel.
    
@@ -31,7 +31,7 @@ Before deploying, ensure you have:
     -  Firewall Name 
     - Microsoft Sentinel Workspace ID
 - Deploy the stack and wait for completion.
-- Go to Outpts Tab in the stacks Save the output for future purpose
+- Go to Outpts Tab in the stacks and Save the output for future purpose.
 ### Resources Created
 The CloudFormation template will create:
 
