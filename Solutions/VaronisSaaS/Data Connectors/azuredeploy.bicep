@@ -38,7 +38,7 @@ var functionWorkerRuntime = 'dotnet'
 var functionPlanOS = 'Linux'
 var functionAppPlanSku = 'Y1'
 var packageUri = 'https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VaronisSaaS/Data%20Connectors/Varonis.Sentinel.Functions.zip'
-var linuxFxVersion = 'DOTNET|6.0'
+var linuxFxVersion = 'DOTNET|8.0'
 var hostingPlanName = functionAppName
 var applicationInsightsName = functionAppName
 var storageAccountName = '${uniqueString(resourceGroup().id)}sa'
@@ -113,6 +113,10 @@ resource functionApp 'Microsoft.Web/sites@2022-03-01' = {
         {
           name: 'FUNCTIONS_WORKER_RUNTIME'
           value: functionWorkerRuntime
+        }
+        {
+          name: 'FUNCTIONS_INPROC_NET8_ENABLED'
+          value: '1'
         }
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
