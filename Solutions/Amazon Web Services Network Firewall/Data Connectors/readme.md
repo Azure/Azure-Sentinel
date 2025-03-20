@@ -26,7 +26,7 @@ Before deploying, ensure you have:
 - Choose Create stack
 - Select Upload a template file
 - Upload the ODIC Web identity template and select next
-- Provide the stack name and selsect next
+- Provide the stack name and select next
 - Submit the stack
 
   ### AWS Network Firewall Configuration
@@ -34,12 +34,12 @@ Before deploying, ensure you have:
 - Navigate to the [AWS CloudFormation console](https://aka.ms/awsCloudFormationLink#/stacks/create)
 - Choose Create stack
 - Select Upload a template file
-- Upload the Aws netwrok Firewall Configration template and select next
+- Upload the Aws network Firewall Configuration template and select next
 - Enter the required parameters:
      - Provide The Stack Name
      - Microsoft Sentinel Workspace ID Where logs to be stored
 - Deploy the stack and wait for completion.
-- Go to Outpts Tab in the stacks and Save the output for future purpose
+- Go to Outputs Tab in the stacks and Save the output for future purpose
 ### Resources Created
 The CloudFormation template will create:
 
@@ -52,9 +52,9 @@ The CloudFormation template will create:
 - Select S3 as the log destination and enter the S3 bucket name created by the CloudFormation stack.
 ### Configuring Microsoft Sentinel
 - Navigate to microsoft sentinel
-- Go to AWS Netwrok Firewall Connector
+- Go to AWS Network Firewall Connector
 - Select to Add New Collector
-- Provide the Requried Details Role ARN, Queue URL, Datatype
+- Provide the Required Details Role ARN, Queue URL, Datatype
 - Ensure that the ARN remains the same for all data types (Alert, Flow, and TLS), while each data type has its respective Queue URL.
 ## Verifying Logs in Sentinel
 - Go to Log Analytics in Microsoft Sentinel.
@@ -79,7 +79,7 @@ The CloudFormation template will create:
 - No logs in Sentinel? Check Event Notifications in S3 Bucket to ensure the Prefix path matches the S3 bucket logs path.
 - Event Notification Path
   ```
-  AWS S3 Bucket -> Properties -> Event Notifications -> Select Event Notofication -> Edit -> General configuration Make sure S3 bucket path and prefix path should be the same
+  AWS S3 Bucket -> Properties -> Event Notifications -> Select Event Notification -> Edit -> General configuration Make sure S3 bucket path and prefix path should be the same
   ```
   
 - IAM permission errors? Ensure CloudFormation created the correct policies.
