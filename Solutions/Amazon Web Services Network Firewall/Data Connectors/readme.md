@@ -9,7 +9,7 @@ Before deploying, ensure you have:
 - Required IAM permissions to configure AWS services.
 
 ## CloudFormation Templates
-- Download the CloudFormation templates from the GitHub and deploy in your AWS environment.
+ Download the CloudFormation templates from the GitHub and deploy in your AWS environment.
   
 1. OIDC Web Identity Provider
 
@@ -21,25 +21,25 @@ Before deploying, ensure you have:
 
 ## CloudFormation Deployment
 ### Deploying the Stack
-### ODIC Web Identity
+#### ODIC Web Identity
 - Navigate to the [AWS CloudFormation console](https://aka.ms/awsCloudFormationLink#/stacks/create)
-- Choose Create stack
-- Select Upload a template file
+- Choose create stack
+- Select upload a template file
 - Upload the ODIC Web identity template and select next
 - Provide the stack name and select next
 - Submit the stack
 
-  ### AWS Network Firewall Configuration
+#### AWS Network Firewall Configuration
 
 - Navigate to the [AWS CloudFormation console](https://aka.ms/awsCloudFormationLink#/stacks/create)
-- Choose Create stack
-- Select Upload a template file
-- Upload the Aws network Firewall Configuration template and select next
+- Choose create stack
+- Select upload a template file
+- Upload the Aws Networkfirewall Configuration template and select next
 - Enter the required parameters:
-     - Provide The Stack Name
-     - Microsoft Sentinel Workspace ID Where logs to be stored
+     - Provide the stack Name
+     - Microsoft Sentinel Workspace ID where logs to be stored
 - Deploy the stack and wait for completion.
-- Go to Outputs Tab in the stacks and Save the output for future purpose
+- Go to Outputs Tab in the stacks and save the output for future purpose
 ### Resources Created
 The CloudFormation template will create:
 
@@ -52,9 +52,9 @@ The CloudFormation template will create:
 - Select S3 as the log destination and enter the S3 bucket name created by the CloudFormation stack.
 ### Configuring Microsoft Sentinel
 - Navigate to microsoft sentinel
-- Go to AWS Network Firewall Connector
-- Select to Add New Collector
-- Provide the Required Details Role ARN, Queue URL, Datatype
+- Go to Amazon Web Services NetworkFirewall data connector
+- Select Add New collector
+- Provide the Required Details - Role ARN, Queue URL, Datatype
 - Ensure that the ARN remains the same for all data types (Alert, Flow, and TLS), while each data type has its respective Queue URL.
 ## Verifying Logs in Sentinel
 - Go to Log Analytics in Microsoft Sentinel.
