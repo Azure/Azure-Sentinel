@@ -77,5 +77,9 @@ The CloudFormation template will create:
 - Ensure logs appear correctly.
 ## Troubleshooting
 - No logs in Sentinel? Check Event Notifications in S3 Bucket to ensure the Prefix path matches the S3 bucket logs path.
-- **AWS S3 Bucket-Properties-Event Notification-Select Event Notofications- Edit- General configrucation Make sure S3 backet path and prefix path should be the same**
+- Event Notification Path
+  ```
+  AWS S3 Bucket -> Properties -> Event Notifications -> Select Event Notofication -> Edit -> General configuration Make sure S3 bucket path and prefix path should be the same
+  ```
+  
 - IAM permission errors? Ensure CloudFormation created the correct policies.
