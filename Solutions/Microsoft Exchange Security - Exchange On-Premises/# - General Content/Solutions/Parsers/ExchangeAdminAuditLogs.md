@@ -3,9 +3,11 @@
 ```Kusto
 // Title:           ESI - Exchange Admin Audit Logs Parser
 // Author:          Microsoft
-// Version:         1.3.0
-// Last Updated:    01/11/2023
+// Version:         1.4.0
+// Last Updated:    11/03/2025
 // Comment:  
+//      v1.4 :
+//          - Update Documentation Link to new repository
 //      v1.3 :
 //          - Implement a VIP search in all VIP information (DisplayName, UPN, ObjectGUID ...). MESCheckVIP parser is now mandatory
 //      v1.2 :
@@ -33,7 +35,7 @@
 // This parser assumes that MS Exchange Management Logs from Exchange Servers Event Logs are collected in Log Analytics.
 //
 //
-let CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv"]with(format="csv",ignoreFirstRecord=true);
+let CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h"https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/%23%20-%20General%20Content/Operations/Watchlists/CmdletWatchlist.csv"]with(format="csv",ignoreFirstRecord=true);
 let SensitiveCmdlets = CmdletCheck | project tostring(Cmdlet) ;
 let Check = (T:(*)) {
     let fuzzyWatchlist = datatable(displayName:string, userPrincipalName:string, sAMAccountName:string, objectSID:string, objectGUID:guid, canonicalName:string, comment:string) [
