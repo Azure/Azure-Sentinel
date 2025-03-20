@@ -21,8 +21,8 @@ You can ingest the following type of logs from AWS Route 53 to Microsoft Sentine
 ### Configuration Steps:
 
 1. Download the CloudFormation templates provided below:
-   - [OIDCWebIdProvider.json](OIDCWebIdProvider.json): Template to configure the OIDC Web Identity Provider.
-   - [Route53ResourcesAndConfig.json](AWSRoute53ResolverLogs_CloudFormation.json): Template to deploy Route53 resources and configurations.
+   - [OIDCWebIdProvider.json](https://github.com/Azure/Azure-Sentinel/blob/c1344c7c13a718f771f444a54e51a3962a6dbbbd/DataConnectors/AWS-S3/CloudFormation/OIDCWebIdProvider.json): Template to configure the OIDC Web Identity Provider.
+   - [Route53ResourcesAndConfig.json](https://github.com/Azure/Azure-Sentinel/blob/c1344c7c13a718f771f444a54e51a3962a6dbbbd/DataConnectors/AWS-S3/CloudFormation/DNSRoute53/AWSRoute53ResolverLogs_CloudFormation.json): Template to deploy Route53 resources and configurations.
 2. Go to the [AWS CloudFormation Stacks](https://console.aws.amazon.com/cloudformation/home) page. Make sure to select the right AWS region where you want all resources need to be created.
 3. Create a new Stack for each template:
    - First, create Stack using the `OIDCWebIdProvider.json` template:
