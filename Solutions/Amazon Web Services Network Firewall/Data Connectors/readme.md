@@ -31,7 +31,7 @@ Before deploying, ensure you have:
 
   ### AWS Network Firewall Configuration
 
-- Navigate to the AWS CloudFormation console https://aka.ms/awsCloudFormationLink#/stacks/create.
+- Navigate to the [AWS CloudFormation console](https://aka.ms/awsCloudFormationLink#/stacks/create)
 - Choose Create stack
 - Select Upload a template file
 - Upload the Aws netwrok Firewall Configration template and select next
@@ -39,7 +39,7 @@ Before deploying, ensure you have:
      - Provide The Stack Name
      - Microsoft Sentinel Workspace ID Where logs to be stored
 - Deploy the stack and wait for completion.
-- Go to Outpts Tab in the stacks and Save the output for future purpose.
+- Go to Outpts Tab in the stacks and Save the output for future purpose
 ### Resources Created
 The CloudFormation template will create:
 
