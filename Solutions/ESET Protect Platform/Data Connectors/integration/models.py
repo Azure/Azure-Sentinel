@@ -55,6 +55,7 @@ class Config:
             self.requests_timeout = config.get("requests_timeout")
             self.buffer: int = config.get("buffer")  # type: ignore
             self.data_sources: dict[str, t.Any] = config.get("data_sources")  # type: ignore
+            self.version: str = config.get("version")  # type: ignore
 
     def get_config_params(self) -> dict[str, t.Any] | t.Any:
         try:
@@ -78,14 +79,15 @@ class EnvVariables:
         self.endpoint_uri: str = os.getenv("ENDPOINT_URI", "")
         self.dcr_immutableid: str = os.getenv("DCR_IMMUTABLEID", "")
         self.stream_name: str = os.getenv("STREAM_NAME", "")
+        self.ep_instance: str = os.getenv("EP_INSTANCE", "")
+        self.ei_instance: str = os.getenv("EI_INSTANCE", "")
+        self.ecos_instance: str = os.getenv("ECOS_INSTANCE", "")
         self.__conn_str: str = os.getenv("WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", "")
         self.__key_base64: str = os.getenv("KEY_BASE64", "")
 
         region = os.getenv("INSTANCE_REGION", "eu")
         self.oauth_url: str = f"https://{region}.business-account.iam.eset.systems"
-        self.detections_url: str = (
-            f"https://{region}.incident-management.eset.systems"
-        )
+        self.detections_url: str = f"https://{region}.incident-management.eset.systems"
 
     @property
     def username(self) -> str | None:
