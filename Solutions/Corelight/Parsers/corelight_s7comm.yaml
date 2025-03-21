@@ -1,33 +1,98 @@
-id: 94e1434e-b58e-5b95-b10e-717776b31c85
+
+id: 15ceed25-739f-4d91-a7c4-59a7d0c7606c
 Function:
-  Title: corelight_s7comm parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight S7comm Events
+  Version: 1.1.0
+  LastUpdated: '2024-12-09'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_s7comm
 FunctionAlias: corelight_s7comm
-FunctionQuery: |+
-  let corelight_s7comm = view () {
-      Corelight_v2_s7comm_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          uid=uid_s,
-          id_orig_h=id_orig_h_s,
-          id_orig_p=id_orig_p_d,
-          id_resp_h=id_resp_h_s,
-          id_resp_p=id_resp_p_d,
-          rosctr=rosctr_s,
-          parameter=parameter_s,
-          item_count=item_count_d,
-          data_info=data_info_s
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="s7comm",
-          ts=TimeGenerated
-  };
-  corelight_s7comm
-
-...
+FunctionQuery: |
+  let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let corelight_s7comm = view () {
+        union isfuzzy=true Corelight_v2_s7comm_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+        | join kind=leftouter 
+        ( corelight_conn
+        | project uid, local_orig, local_resp
+        ) on $left.uid_s == $right.uid
+        | project-away uid
+        | extend
+            subfunction_code = column_ifexists("subfunction_code_s", ""),
+            subfunction_name = column_ifexists("subfunction_name_s", ""),
+            error_code = column_ifexists("error_code_s", ""),
+            error_class = column_ifexists("error_class_s", ""),
+            timestamp = column_ifexists("_timestamp_t", ""),
+            rosctr_code = column_ifexists("rosctr_code_d", real(null)),
+            write_ts = column_ifexists("_write_ts_t", ""),
+            function_code = column_ifexists("function_code_s", ""),
+            version = column_ifexists("_version_s", ""),
+            path = column_ifexists("_path_s", ""),
+            pdu_reference = column_ifexists("pdu_reference_d", real(null)),
+            is_orig = column_ifexists("is_orig_b", ""),
+            _timestamp = column_ifexists("_timestamp_s", ""),
+            system_name = column_ifexists("_system_name_s", ""),
+            id_orig_h = column_ifexists("id_orig_h_s", ""),
+            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
+            id_resp_h = column_ifexists("id_resp_h_s", ""),
+            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
+            uid = column_ifexists("uid_s", ""),
+            function_name = column_ifexists("function_name_s", ""),
+            rosctr_name = column_ifexists("rosctr_name_s", "")
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "s7comm",
+            ts = TimeGenerated,
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            sensor_name = coalesce(system_name, "unknown"),
+            timestamp = coalesce(tostring(timestamp), _timestamp)
+        | extend
+            is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false"),
+            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+        | project
+            TimeGenerated,
+            subfunction_code,
+            subfunction_name,
+            error_code,
+            error_class,
+            timestamp,
+            rosctr_code,
+            write_ts,
+            function_code,
+            version,
+            path,
+            pdu_reference,
+            is_orig,
+            system_name,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            uid,
+            function_name,
+            rosctr_name,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            sensor_name,
+            is_broadcast,
+            is_dest_internal_ip,
+            is_src_internal_ip,
+            direction
+    };
+    corelight_s7comm
