@@ -947,14 +947,7 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
     }
 
     # paging placeholder
-    $hasPaging = [bool]($armResource.properties.PSobject.Properties.name -match "paging")
-    if ($hasPaging) 
-    {
-        $hasNextPageUrlProperty = [bool]($armResource.properties.paging.PSobject.Properties.name -match "nextPageUrl")
-        if ($hasNextPageUrlProperty) {
-            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.paging -propertyName 'nextPageUrl' -isInnerObject $true -innerObjectName 'paging' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
-        }
-    }
+    Paging($armResource)
 
     # stepInfo placeholder
     $hasStepInfo = [bool]($armResource.properties.PSobject.Properties.name -match "stepInfo")
@@ -985,6 +978,31 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
             } else {
                 Write-Host "Warning: Step ID $stepId not found in stepCollectorConfigs."
             }
+        }
+    }
+}
+
+function Paging($armResource) {
+    $hasPaging = [bool]($armResource.properties.PSobject.Properties.name -match "paging")
+    if ($hasPaging) 
+    {
+        $pagingProperties = $armResource.properties.paging.PSobject.Properties.name
+
+        # Iterate over each property of the paging object
+        foreach ($propertyName in $pagingProperties) {
+            ProcessPropertyPlaceholders -armResource $armResource `
+                -templateContentConnections $templateContentConnections `
+                -isOnlyObjectCheck $false `
+                -propertyObject $armResource.properties.paging `
+                -propertyName $propertyName `
+                -isInnerObject $true `
+                -innerObjectName 'paging' `
+                -kindType $kindType `
+                -isSecret $false `
+                -isRequired $false `
+                -fileType $fileType `
+                -minLength 4 `
+                -isCreateArray $false
         }
     }
 }
