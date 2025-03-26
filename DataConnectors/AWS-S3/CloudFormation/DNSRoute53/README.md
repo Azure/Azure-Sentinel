@@ -60,7 +60,7 @@ AWS CloudWatch logs can be exported to an S3 bucket using lambda function. To in
 
 ## 3. Ingesting Route 53 audit logs (via Microsoft Sentinel CloudTrail connector)
 
-Route 53 audit logs i.e. the logs related to actions taken by user, role or AWS service in Route 53 can be exported to an S3 bucket via AWS CloudTrail service. We can use 'Amazon Web Services S3' connector to ingest ClouTrail logs from AWS to Microsoft Sentinel.
+Route 53 audit logs i.e. the logs related to actions taken by user, role or AWS service in Route 53 can be exported to an S3 bucket via AWS CloudTrail service. We can use 'Amazon Web Services S3' connector to ingest CloudTrail logs from AWS to Microsoft Sentinel.
 
 ### Step 1: Configure logging for AWS Route 53 Audit logs:
 
@@ -75,4 +75,4 @@ Route 53 audit logs i.e. the logs related to actions taken by user, role or AWS 
 9. Review the settings and click 'Create trail'.
 
 ### Step 2: Configure Amazon Web Services S3 data connector for AWS CloudTrail
-To ingest audit and management logs from  `AWS Cloudtrail` to Microsoft Sentinel, follow the instructions provided in the [Amazon Web Services S3 connector](https://learn.microsoft.com/en-us/azure/sentinel/connect-aws?tabs=s3)
+To ingest audit and management logs from  `AWS CloudTrail` to Microsoft Sentinel, follow the instructions provided in the [Amazon Web Services S3 connector](https://learn.microsoft.com/en-us/azure/sentinel/connect-aws?tabs=s3)
