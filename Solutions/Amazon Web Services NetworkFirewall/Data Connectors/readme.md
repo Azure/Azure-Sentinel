@@ -1,3 +1,4 @@
+
 ## Overview
 This guide explains how to integrate AWS Network Firewall logs with Microsoft Sentinel using an AWS CloudFormation template. The template automates the deployment of necessary resources to collect, process, and forward logs to Sentinel.
 
@@ -9,7 +10,7 @@ Before deploying, ensure you have:
 - Required IAM permissions to configure AWS services.
 
 ## CloudFormation Templates
- Download the CloudFormation templates from the GitHub and deploy in your AWS environment.
+ Download the CloudFormation templates from the [GitHub](https://github.com/v-sreddyt/AWS_Networkfirewall/tree/main/CloudFormationTemplates) and deploy in your AWS environment.
   
 1. OIDC Web Identity Provider
 
