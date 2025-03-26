@@ -1,0 +1,872 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass the arm-ttk test, 'Location-Should-Not-Be-Hardcoded'. Instead the `workspace-location` derived from the log analytics workspace is used."
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "subscription": {
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "type": "string",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is configured"
+      }
+    },
+    "resourceGroupName": {
+      "defaultValue": "[resourceGroup().name]",
+      "type": "string",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is configured"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "the log analytics workspace enabled for Microsoft Sentinel"
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_solutionName": "Check Point Cyberint Sentinel Connector", // Enter your solution name
+    "_solutionVersion": "3.0.0", // must be 3.0.0 or above
+    "_solutionAuthor": "Cyberint", // Enter the name of the author
+    "_packageIcon": "<img src=\"https://media.licdn.com/dms/image/v2/D4D0BAQGYCmgplrYIIg/company-logo_200_200/company-logo_200_200/0/1737287252695/cyberint_logo?e=2147483647&v=beta&t=nG4YjVVbWQhvvIVu1rc0eGxAVb0lCAXoarTix69ONuI\" width=\"75px\" height=\"75px\">", // Enter the http link for the logo. NOTE: This field is only recommended for Azure Global Cloud.
+    "_solutionId": "azuresentinel.azure-sentinel-solution-azuresentinel.azure-sentinel-CheckPointCyberintAlerts", // Enter a name for your solution with this format but exchange the 'MySolution' portion
+    "dataConnectorVersionConnectorDefinition": "1.0.0",
+    "dataConnectorVersionConnections": "1.0.0",
+    "_solutionTier": "Community", // This designates the appropriate support - all custom data connectors are "Community"
+    "_dataConnectorContentIdConnectorDefinition": "CheckPointCyberintSentinelConnectorDefinition", // Enter a name for the connector
+    "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+    "_dataConnectorContentIdConnections": "CheckPointCyberintSentinelConnections", // Enter a name for the connections this connector makes
+    "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+    "_logAnalyticsTableId1": "argsentdc_CL" // Enter the custom table name - not needed if you are ingesting data into standard tables
+    // Enter more variables as needed "":""
+  },
+  "resources": [
+    // resource section 1 - contentTemplates
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+        "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('_solutionAuthor')]",
+                  "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorVersionConnections')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "arg-sent-dc", // Enter your DCR name
+              "apiVersion": "2021-09-01-preview",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+                "streamDeclarations": {
+                  "Custom-argsentdc_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "environment",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ref_id",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "confidence",
+                        "type": "int"
+                      },
+                      {
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created_date",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "created_by",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "source_category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "source",
+                        "type": "string"
+                      },
+                      {
+                        "name": "targeted_vectors",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "targeted_brands",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "related_entities",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "impacts",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "acknowledged_date",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "acknowledged_by",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "publish_date",
+                        "type": "string"
+                      },
+                      {
+                        "name": "title",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_data",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "iocs",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "indicators",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "ticket_id",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "threat_actor",
+                        "type": "string"
+                      },
+                      {
+                        "name": "modification_date",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "closure_date",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "closed_by",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "closure_reason",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "closure_reason_description",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "recommendation",
+                        "type": "string"
+                      },
+                      {
+                        "name": "tags",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "analysis_report",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "attachments",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "mitre",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "related_assets",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "update_date",
+                        "type": "datetime"
+                      }
+                    ]
+                  }
+                },
+                "dataSources": {},
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "ciws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": ["Custom-argsentdc_CL"],
+                    "destinations": ["ciws1"],
+                    "transformKql": "source\n| extend TimeGenerated = update_date\n| extend event_type = type\n| extend event_title = ['title']\n| project-away update_date, type, ['title']\n",
+                    "outputStream": "Custom-argsentdc_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "[variables('_logAnalyticsTableId1')]",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "totalRetentionInDays": 30,
+                "archiveRetentionInDays": 0,
+                "plan": "Analytics",
+                "retentionInDaysAsDefault": true,
+                "totalRetentionInDaysAsDefault": true,
+                "schema": {
+                  "tableSubType": "DataCollectionRuleBased",
+                  "name": "argsentdc_CL",
+                  "tableType": "CustomLog",
+                  "columns": [
+                    {
+                      "name": "acknowledged_by",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "acknowledged_date",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "alert_data",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "analysis_report",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "attachments",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "category",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "closed_by",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "closure_date",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "closure_reason",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "closure_reason_description",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "confidence",
+                      "type": "int",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "created_by",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "created_date",
+                      "type": "datetime",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "description",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "environment",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "id",
+                      "type": "int",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "impacts",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "indicators",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "iocs",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "mitre",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "modification_date",
+                      "type": "datetime",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "publish_date",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "recommendation",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ref_id",
+                      "type": "datetime",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "related_assets",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "related_entities",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "source",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "source_category",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "status",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "tags",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "targeted_brands",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "targeted_vectors",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "threat_actor",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ticket_id",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "event_type",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "event_title",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    }
+                  ],
+                  "standardColumns": [
+                    {
+                      "name": "TenantId",
+                      "type": "guid",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    }
+                  ],
+                  "solutions": ["LogManagement"],
+                  "isTroubleshootingAllowed": true
+                },
+                "retentionInDays": 30
+              }
+            }
+            // Enter more tables if needed.
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('_solutionVersion')]"
+      }
+    },
+    // resource section 2 - dataConnectorDefinitions
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Check Point Cyberint Alerts Data Connector",
+          "publisher": "Cyberint",
+          "descriptionMarkdown": "This is data connector for Check Point Cyberint alerts.",
+          "graphQueriesTableName": "[variables('_logAnalyticsTableId1')]",
+          "graphQueries": [
+            {
+              "metricName": "Alerts received",
+              "legend": "My data connector alerts",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All alert logs",
+              "query": "{{graphQueriesTableName}} \n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Check Point Cyberint API Key and Domain Name",
+                "description": "The connector API key and domain is required"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect Check Point Cyberint Alerts to Microsoft Sentinel",
+              "description": "To enable the connector provide the required information below and click on Connect.\n>",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Domain name",
+                    "placeholder": "Domain name",
+                    "type": "text",
+                    "name": "domainname"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API key",
+                    "placeholder": "API key",
+                    "type": "text",
+                    "name": "apikey"
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "name": "Connect"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    // resource section 3 - metadata
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('_solutionAuthor')]",
+          "tier": "[variables('_solutionTier')]"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorVersionConnections')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    // resource section 4 - contentTemplates
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections')]",
+        "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnections')]",
+          "parameters":
+            // These parameters are used by the data connector primarily as properties for the administrator to enter in the UI when configuring the connector
+            {
+              "connectorDefinitionName": {
+                "defaultValue": "connectorDefinitionName",
+                "type": "string",
+                "minLength": 1
+              },
+              "workspace": {
+                "defaultValue": "[parameters('workspace')]",
+                "type": "string"
+              },
+              "dcrConfig": {
+                "defaultValue": {
+                  "dataCollectionEndpoint": "data collection Endpoint",
+                  "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                },
+                "type": "object"
+              },
+              // Enter additional parameters, for example:
+              "domainname": {
+                "defaultValue": "domain name",
+                "type": "string",
+                "minLength": 1
+              },
+              "apikey": {
+                "defaultValue": "",
+                "type": "securestring",
+                "minLength": 1
+              }
+            },
+          "variables": {
+            "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorVersionConnections')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('_solutionAuthor')]",
+                  "tier": "[variables('_solutionTier')]"
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'MyDataConnector')]", // Replace the last part of the name with your data connector name
+              //  To create several connections using this template, make the name dynamic. For example, use the 'concat' function to add the connector name with a GUID using the 'guid' function.
+              "apiVersion": "2022-12-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                "dcrConfig": {
+                  "streamName": "Custom-argsentdc_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "dataType": "argsentdc_CL",
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "Cookie",
+                  "ApiKeyIdentifier": "access_token="
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://',parameters('domainname'),'.cyberint.io/alert/api/v1/alerts')]",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 5,
+                  "httpMethod": "POST",
+                  "queryTimeFormat": "UnixTimestamp",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba",
+                    "X-Sender-Id": "0",
+                    "X-Integration-Type": "Azure Sentinel",
+                    "X-Integration-Instance-Name": "Default",
+                    "X-Integration-Instance-Id": "0",
+                    "X-Integration-Customer-Name": "Integration",
+                    "X-Integration-Version": "1.0"
+                  },
+                  "isPostPayloadJson": true,
+                  "queryParametersTemplate": "{ 'filters': { 'created_date': { 'from': '{_QueryWindowStartTime}', 'to': '{_QueryWindowEndTime}' } } }"
+                },
+                "response": {
+                  "eventsJsonPaths": ["$.alerts"]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('_solutionVersion')]"
+      }
+    },
+    // resource section 5 - contentPackages
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+      "location": "[parameters('workspace-location')]",
+      "apiVersion": "2023-04-01-preview",
+      "properties": {
+        "version": "[variables('_solutionVersion')]",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "[variables('_solutionName')]",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+              "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-12-05",
+        "providers": ["[variables('_solutionAuthor')]"],
+        "contentKind": "Solution",
+        "packageId": "[variables('_solutionId')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+        "displayName": "[variables('_solutionName')]",
+        "publisherDisplayName": "[variables('_solutionId')]",
+        "descriptionHtml": "test",
+        "icon": "[variables('_packageIcon')]"
+      }
+    }
+    // that's the end!
+  ]
+}
