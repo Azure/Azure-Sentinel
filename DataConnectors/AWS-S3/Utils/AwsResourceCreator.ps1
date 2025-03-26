@@ -103,7 +103,21 @@ function New-ArnRole
             # $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
             
             Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1" -LogFileName $LogFileName -Severity Verbose
-            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1
+            $tagsObject = Get-SentinelTagInJsonFormat | ConvertFrom-Json
+                # Convert to JSON properly for both versions
+            if ($PSVersionTable.PSVersion.Major -lt 7) {
+                    # PowerShell 5 requires manual array formatting
+                    $tagsJson = $tagsObject | ConvertTo-Json -Depth 99 | ForEach-Object { $_ -replace "\s+", "" }
+                    # Ensure proper escaping of quotes for AWS CLI
+                    $tagsJson = $tagsJson -replace '"', '\"'
+					$rolePolicyupdated = $rolePolicy -replace '"', '\"'
+                }
+            else {
+                    $tagsJson = $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress)
+					$rolePolicyupdated = $rolePolicy
+                }
+                
+            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicyupdated --tags $tagsJson 2>&1
             Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
             
             # If the role was retrieved then the role was created successfully
