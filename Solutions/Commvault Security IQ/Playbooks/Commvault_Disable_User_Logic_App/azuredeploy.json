@@ -76,82 +76,116 @@
                             }
                         }
                     },
-                    "actions":  {
-                        "Access_Token":  {
-                            "runAfter":  {
-                            },
-                            "type":  "ApiConnection",
-                            "inputs":  {
-                                "host":  {
-                                    "connection":  {
-                                        "name":  "@parameters('$connections')['keyvault']['connectionId']"
+                    "actions": {
+                        "Access_Token": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
                                     }
                                 },
-                                "method":  "get",
-                                "path":  "/secrets/@{encodeURIComponent('access-token')}/value"
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('access-token')}/value"
                             }
                         },
-                        "Disable_User":  {
-                            "actions":  {
-                                "Disable_User_Job":  {
-                                    "runAfter":  {
-                                    },
-                                    "type":  "ApiConnection",
-                                    "inputs":  {
-                                        "body":  {
-                                            "properties":  {
-                                                "parameters":  {
-                                                    "EnvironmentEndpointURL":  "@body('Environment_Endpoint_URL')?['value']",
-                                                    "UserIdentity":  "@variables('da_user_name')",
-                                                    "apiAccessToken":  "@body('Access_Token')?['value']"
+                        "Disable_User": {
+                            "actions": {
+                                "For_each": {
+                                    "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                                    "actions": {
+                                        "Parse_JSON": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('For_each')?['properties']?['additionalData']?['Custom Details']",
+                                                "schema": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "User": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         },
-                                        "host":  {
-                                            "connection":  {
-                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
-                                            }
-                                        },
-                                        "method":  "put",
-                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
-                                        "queries":  {
-                                            "runbookName":  "Commvault_Disable_User",
-                                            "wait":  true,
-                                            "x-ms-api-version":  "2015-10-31"
+                                        "For_each_user": {
+                                            "foreach": "@body('Parse_JSON')?['User']",
+                                            "actions": {
+                                                "Disable_User_Job": {
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureautomation']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "body": {
+                                                            "properties": {
+                                                                "parameters": {
+                                                                    "EnvironmentEndpointURL": "@body('Environment_Endpoint_URL')?['value']",
+                                                                    "UserIdentity": "@items('For_each_user')",
+                                                                    "apiAccessToken": "@body('Access_Token')?['value']"
+                                                                }
+                                                            }
+                                                        },
+                                                        "path": "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
+                                                        "queries": {
+                                                            "x-ms-api-version": "2015-10-31",
+                                                            "runbookName": "Commvault_Disable_User",
+                                                            "wait": true
+                                                        }
+                                                    }
+                                                },
+                                                "Disable_User_Job_Output": {
+                                                    "runAfter": {
+                                                        "Disable_User_Job": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureautomation']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_User_Job')?['properties']?['jobId'])}/output",
+                                                        "queries": {
+                                                            "x-ms-api-version": "2015-10-31"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
                                         }
-                                    }
-                                },
-                                "Disable_User_Job_Output":  {
-                                    "runAfter":  {
-                                        "Disable_User_Job":  [
-                                            "Succeeded"
-                                        ]
                                     },
-                                    "type":  "ApiConnection",
-                                    "inputs":  {
-                                        "host":  {
-                                            "connection":  {
-                                                "name":  "@parameters('$connections')['azureautomation']['connectionId']"
-                                            }
-                                        },
-                                        "method":  "get",
-                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_User_Job')?['properties']?['jobId'])}/output",
-                                        "queries":  {
-                                            "x-ms-api-version":  "2015-10-31"
-                                        }
-                                    }
+                                    "type": "Foreach"
                                 }
                             },
-                            "runAfter":  {
-                                "For_each":  [
+                            "runAfter": {
+                                "Environment_Endpoint_URL": [
                                     "Succeeded"
                                 ]
                             },
-                            "expression":  {
-                                "and":  [
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
                                     {
-                                        "not":  {
-                                            "startsWith":  [
+                                        "not": {
+                                            "startsWith": [
                                                 "@triggerBody()?['object']?['properties']?['description']",
                                                 "User"
                                             ]
@@ -159,128 +193,23 @@
                                     }
                                 ]
                             },
-                            "type":  "If"
+                            "type": "If"
                         },
-                        "Environment_Endpoint_URL":  {
-                            "runAfter":  {
-                                "Access_Token":  [
+                        "Environment_Endpoint_URL": {
+                            "runAfter": {
+                                "Access_Token": [
                                     "Succeeded"
                                 ]
                             },
-                            "type":  "ApiConnection",
-                            "inputs":  {
-                                "host":  {
-                                    "connection":  {
-                                        "name":  "@parameters('$connections')['keyvault']['connectionId']"
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
                                     }
                                 },
-                                "method":  "get",
-                                "path":  "/secrets/@{encodeURIComponent('environment-endpoint-url')}/value"
-                            }
-                        },
-                        "For_each":  {
-                            "foreach":  "@body('Parse_JSON')",
-                            "actions":  {
-                                "Set_variable":  {
-                                    "runAfter":  {
-                                    },
-                                    "type":  "SetVariable",
-                                    "inputs":  {
-                                        "name":  "da_user_name",
-                                        "value":  "@items('For_each')?['properties']?['hostName']"
-                                    }
-                                }
-                            },
-                            "runAfter":  {
-                                "Parse_JSON":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "Foreach"
-                        },
-                        "Initialize_variable":  {
-                            "runAfter":  {
-                                "Environment_Endpoint_URL":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
-                                    {
-                                        "name":  "entities",
-                                        "type":  "array",
-                                        "value":  "@triggerBody()?['object']?['properties']?['relatedEntities']"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_2":  {
-                            "runAfter":  {
-                                "Initialize_variable":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
-                                    {
-                                        "name":  "da_user_name",
-                                        "type":  "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "Parse_JSON":  {
-                            "runAfter":  {
-                                "Initialize_variable_2":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "ParseJson",
-                            "inputs":  {
-                                "content":  "@variables('entities')",
-                                "schema":  {
-                                    "items":  {
-                                        "properties":  {
-                                            "id":  {
-                                                "type":  "string"
-                                            },
-                                            "kind":  {
-                                                "type":  "string"
-                                            },
-                                            "name":  {
-                                                "type":  "string"
-                                            },
-                                            "properties":  {
-                                                "properties":  {
-                                                    "friendlyName":  {
-                                                        "type":  "string"
-                                                    },
-                                                    "hostName":  {
-                                                        "type":  "string"
-                                                    },
-                                                    "netBiosName":  {
-                                                        "type":  "string"
-                                                    }
-                                                },
-                                                "type":  "object"
-                                            },
-                                            "type":  {
-                                                "type":  "string"
-                                            }
-                                        },
-                                        "required":  [
-                                            "id",
-                                            "name",
-                                            "type",
-                                            "kind",
-                                            "properties"
-                                        ],
-                                        "type":  "object"
-                                    },
-                                    "type":  "array"
-                                }
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('environment-endpoint-url')}/value"
                             }
                         }
                     },
@@ -329,7 +258,7 @@
             "location":  "[resourceGroup().location]",
             "tags":  {
                 "hidden-SentinelTemplateName":  "logic-app-disable-user",
-                "hidden-SentinelTemplateVersion":  "1.0"
+                "hidden-SentinelTemplateVersion":  "1.1"
             },
             "identity":  {
                 "type":  "SystemAssigned"
