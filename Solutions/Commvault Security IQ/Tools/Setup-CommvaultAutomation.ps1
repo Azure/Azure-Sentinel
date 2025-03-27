@@ -237,8 +237,14 @@ if (-not $selectedKeyVault) {
     exit
 }
 
-# Use the obtained principalId
-Set-AzKeyVaultAccessPolicy -VaultName $selectedKeyVault.VaultName -ObjectId $principalId -PermissionsToSecrets get -Verbose
+$isRbacEnabled = (Get-AzKeyVault -VaultName $selectedKeyVault.VaultName).EnableRbacAuthorization
+if($isRbacEnabled) {
+    $keyVaultId = (Get-AzKeyVault -VaultName $selectedKeyVault.VaultName).ResourceId
+    New-AzRoleAssignment -ObjectId $logicAppResource.Identity.PrincipalId -RoleDefinitionName "Key Vault Secrets User" -Scope $keyVaultId
+}
+else{
+    Set-AzKeyVaultAccessPolicy -VaultName $selectedKeyVault.VaultName -ObjectId $principalId -PermissionsToSecrets get
+}
 # Get the storage account name from the function app settings
 $storageAccountName = (az functionapp config appsettings list --name $selectedFunctionApp.Name --resource-group $selectedFunctionApp.ResourceGroup --subscription $selectedFunctionApp.subscriptionId | ConvertFrom-Json | Where-Object { $_.name -eq "AzureWebJobsStorage" }).value -replace ".*AccountName=([^;]+);.*", '$1'
 
