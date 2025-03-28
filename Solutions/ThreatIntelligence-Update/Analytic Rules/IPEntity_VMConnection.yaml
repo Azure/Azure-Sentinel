@@ -1,0 +1,81 @@
+id: aed70d71-adb2-4f73-becd-02150b13950b
+name: TI Map IP Entity to VMConnection
+description: |
+  This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in VMConnection.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h; // Look back 1 hour for VMConnection events
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  // Fetch threat intelligence indicators related to IP addresses
+  let IP_Indicators = ThreatIntelIndicators
+  //extract key part of kv pair
+       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | extend NetworkSourceIP = toupper(ObservableValue)
+       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | where isnotempty(NetworkSourceIP)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+    //| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and ValidUntil > now();
+  // Perform a join between IP indicators and VMConnection events
+  IP_Indicators
+     | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
+    // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
+    | join kind=innerunique (
+        VMConnection
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend VMConnection_TimeGenerated = TimeGenerated
+    )
+    on $left.TI_ipEntity == $right.RemoteIp
+    // Filter out VMConnection events that occurred after the expiration of the corresponding indicator
+    | where VMConnection_TimeGenerated < ValidUntil
+    // Group the results by IndicatorId and keep the VMConnection event with the latest timestamp
+    | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated, *) by Id, RemoteIp
+    // Select the desired output fields
+    | extend Description = tostring(parse_json(Data).description)
+    | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+    | project VMConnection_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
+      TI_ipEntity, Computer, Direction, ProcessName, SourceIp, DestinationIp, RemoteIp, Protocol, DestinationPort, NetworkSourceIP, Type//, ThreatType, Url, NetworkIP, NetworkDestinationIP, EmailSourceIpAddress,
+    | extend timestamp = VMConnection_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.4.2
+kind: Scheduled

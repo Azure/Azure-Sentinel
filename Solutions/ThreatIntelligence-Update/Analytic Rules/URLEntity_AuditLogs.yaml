@@ -1,0 +1,85 @@
+id: 9991c277-e0a1-4079-8c40-fbfca2705615
+name: TI Map URL Entity to AuditLogs
+description: |
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in AuditLogs.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let AuditEvents = materialize(AuditLogs
+    | where TimeGenerated >= ago(dt_lookBack)
+    // Extract the URL that is contained within the JSON data
+    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,tostring(TargetResources))
+    | where isnotempty(Url)
+    | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName)
+    | extend Audit_TimeGenerated = TimeGenerated);
+  let AuditUrls = AuditEvents | distinct Url = tolower(Url) | summarize make_list(Url);
+  ThreatIntelIndicators
+  //extract key part of kv pair
+       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+       | where isnotempty(IndicatorType) and IndicatorType == "url"
+       | extend Url = toupper(ObservableValue)
+       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | where isnotempty(Url)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | where tolower(Url) in (AuditUrls)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | extend Description = tostring(parse_json(Data).description)
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (AuditEvents) on Url
+  | where Audit_TimeGenerated < ValidUntil
+  | summarize Audit_TimeGenerated = arg_max(Audit_TimeGenerated, *) by Id, Url
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project Audit_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence,
+  OperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url
+  | extend AccountName = tostring(split(userPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(userPrincipalName, "@")[1])
+  | extend HostName = tostring(split(TargetResourceDisplayName, ".")[0]), DomainIndex = toint(indexof(TargetResourceDisplayName, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(TargetResourceDisplayName, DomainIndex + 1), TargetResourceDisplayName)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: userPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetResourceDisplayName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.2.8
+kind: Scheduled

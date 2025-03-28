@@ -1,0 +1,79 @@
+id: 32b437c4-dddb-45b3-9aae-5188e80624b0
+name: TI Map URL Entity to PaloAlto Data
+description: |
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in PaloAlto Data.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelIndicators
+  //extract key part of kv pair
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where IndicatorType == "url"
+  | extend Url = ObservableValue
+  | where isnotempty(Url)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(Url)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+     | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+    CommonSecurityLog
+    | extend IngestionTime = ingestion_time()
+    | where IngestionTime > ago(dt_lookBack)
+    // Select on Palo Alto logs
+    | where DeviceVendor =~ "Palo Alto Networks"
+    | where DeviceEventClassID =~ 'url'
+    //Uncomment the line below to only alert on allowed connections
+    //| where DeviceAction !~ "block-url"
+    //Select logs where URL data is populated
+    | extend PA_Url = column_ifexists("RequestURL", "None")
+    | extend PA_Url = iif(isempty(PA_Url), extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', PA_Url))
+    | extend PA_Url = iif(PA_Url !startswith "http://" and ApplicationProtocol !~ "ssl", strcat('http://', PA_Url), iif(PA_Url !startswith "https://" and ApplicationProtocol =~ "ssl", strcat('https://', PA_Url), PA_Url))
+    | where isnotempty(PA_Url)
+    | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  ) on $left.Url == $right.PA_Url
+  | where CommonSecurityLog_TimeGenerated < ValidUntil
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, PA_Url
+  | project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, DeviceAction, SourceIP, PA_Url, DeviceName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: PA_Url
+version: 1.2.5
+kind: Scheduled

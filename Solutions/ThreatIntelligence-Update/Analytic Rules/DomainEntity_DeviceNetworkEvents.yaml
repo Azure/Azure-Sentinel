@@ -1,0 +1,83 @@
+id: 1546f3b3-de8a-4e62-bfea-815422154981
+name: TI Map Domain Entity to DeviceNetworkEvents
+description: |
+  'This query identifies any Domain indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in DeviceNetworkEvents.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let DeviceNetworkEvents_ = DeviceNetworkEvents
+    | where isnotempty(RemoteUrl)
+    | where TimeGenerated >= ago(dt_lookBack)
+    | where ActionType !has "ConnectionFailed"
+    | extend Domain = tostring(parse_url(tolower(RemoteUrl)).Host)
+    | extend TI_Domain = Domain
+    | where isnotempty(Domain)
+    | project-rename DeviceNetworkEvents_TimeGenerated = TimeGenerated;
+  let DeviceNetworkEventDomains = DeviceNetworkEvents_
+    | distinct Domain
+    | summarize make_list(Domain);
+  ThreatIntelIndicators
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+  | extend DomainName = tolower(ObservableValue)
+  | extend TI_DomainEntity = DomainName
+  | where isnotempty(DomainName)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | extend TI_Domain = tolower(DomainName)
+  | extend IndicatorId = tostring(split(Id, "--")[2])
+  // | where TI_Domain in (DeviceNetworkEventDomains)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | extend Description = tostring(parse_json(Data).description)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type, TI_Domain
+  | join kind=innerunique (DeviceNetworkEvents_) on $left.TI_Domain == $right.Domain
+  | where DeviceNetworkEvents_TimeGenerated < ValidUntil
+  | summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated, *) by IndicatorId, TI_Domain
+  | project DeviceNetworkEvents_TimeGenerated, IndicatorId, TI_Domain, Url = RemoteUrl, Confidence, Description, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, RemoteIP, RemotePort
+  | extend Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])
+  | extend timestamp = DeviceNetworkEvents_TimeGenerated, UserPrincipalName = InitiatingProcessAccountUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+version: 1.0.1
+kind: Scheduled

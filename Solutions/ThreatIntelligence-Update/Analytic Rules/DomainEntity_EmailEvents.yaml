@@ -1,0 +1,67 @@
+id: bc3bb047-70b8-4a4b-ac21-e3b1172881a4
+name: TI map Domain entity to EmailEvents
+description: |
+  Identifies a match in EmailEvents table from any Domain IOC from TI
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - EmailEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let EmailEvents_ = materialize(EmailEvents | where isnotempty(RecipientEmailAddress) and isnotempty(SenderFromAddress) and TimeGenerated >= ago(dt_lookBack) and DeliveryAction !has "Blocked" | project-rename  EmailEvents_TimeGenerated = TimeGenerated | extend SenderFromDomain = tolower(SenderFromDomain) | extend RecipientEmailDomain = tolower(tostring(split(RecipientEmailAddress, '@', 1))));
+  let SenderDomains = EmailEvents_ | distinct  SenderFromDomain | summarize make_list(SenderFromDomain);
+  let RecipientDomains = EmailEvents_ | distinct  RecipientEmailDomain | summarize make_list(RecipientEmailDomain);
+  let TI = materialize(ThreatIntelIndicators
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+  | extend DomainName = tolower(ObservableValue)
+  | extend TI_DomainEntity = DomainName
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend IndicatorId = tostring(split(Id, "--")[2])
+  | where isnotempty(DomainName)
+  | extend TI_Domain = tolower(DomainName)
+  | where TI_Domain in (SenderDomains) or TI_Domain in (RecipientDomains)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | extend Description = tostring(parse_json(Data).description)
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;");
+  (union
+    (TI | join kind=innerunique (EmailEvents_) on $left.TI_Domain == $right.SenderFromDomain),
+    (TI | join kind=innerunique (EmailEvents_) on $left.TI_Domain == $right.RecipientEmailDomain))
+  | where EmailEvents_TimeGenerated < ValidUntil
+  | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
+  | summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by Id, RecipientEmailAddress
+  | project EmailEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, DomainName, RecipientEmailAddress, SenderFromAddress, Subject, ConfidenceLevel, Type, TI_Domain, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation, EmailDirection
+  | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])
+  | extend timestamp = EmailEvents_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: RecipientEmailAddress
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.2
+kind: Scheduled

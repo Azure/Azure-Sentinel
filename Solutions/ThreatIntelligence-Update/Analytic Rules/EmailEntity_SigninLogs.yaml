@@ -1,0 +1,87 @@
+id: 4b5a7f32-899d-4d22-8de2-0ec90b911a72
+name: TI map Email entity to SigninLogs
+description: |
+  'Identifies a match in SigninLogs table from any Email IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  let Signins = materialize(union isfuzzy=true
+  ( SigninLogs | where TimeGenerated >= ago(dt_lookBack)),
+  ( AADNonInteractiveUserSignInLogs | where TimeGenerated >= ago(dt_lookBack)
+      | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails))
+  | where isnotempty(UserPrincipalName) and UserPrincipalName matches regex emailregex
+  | extend UserPrincipalName = tolower(UserPrincipalName)
+  | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)
+  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
+  | extend SigninLogs_TimeGenerated = TimeGenerated);
+  let SigninUPNs = Signins | distinct UserPrincipalName | summarize make_list(UserPrincipalName);
+  ThreatIntelIndicators
+  //Filtering the table for Email related IOCs
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where isnotempty(IndicatorType) and IndicatorType == "email-addr"
+  | extend EmailSenderAddress = ObservableValue
+  | extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, "@") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, "@") - 1)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend Id = tostring(split(Id, "--")[2])
+  | where isnotempty(EmailSenderAddress)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  // | where EmailSenderAddress in (SigninUPNs)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | extend Description = tostring(parse_json(Data).description)
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+    | project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type
+  | join kind=innerunique (Signins) on $left.EmailSenderAddress == $right.UserPrincipalName
+  | where SigninLogs_TimeGenerated < ValidUntil
+  | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by Id, UserPrincipalName
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkLocationDetails, Type//, Url, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, NetworkIP, NetworkDestinationIP, NetworkSourceIP
+  | extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  | extend timestamp = SigninLogs_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.2.7
+kind: Scheduled
