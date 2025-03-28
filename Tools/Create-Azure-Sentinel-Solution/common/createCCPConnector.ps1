@@ -87,6 +87,15 @@ function New-ParametersForConnectorInstuctions($instructions) {
         elseif ($instruction.type -eq "ContextPane") {
             New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
         }
+        elseif ($instruction.type -eq "Dropdown") {
+            $newParameter = [PSCustomObject]@{
+                defaultValue = $instruction.parameters.name;
+                type         = "array";
+                minLength    = 1;
+            }
+
+            $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+        }
         else {
             $instructionType = $instruction.type;
             Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"
@@ -980,6 +989,8 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
             }
         }
     }
+
+    QueryParameters($armResource)
 }
 
 function Paging($armResource) {
@@ -1003,6 +1014,34 @@ function Paging($armResource) {
                 -fileType $fileType `
                 -minLength 4 `
                 -isCreateArray $false
+        }
+    }
+}
+
+function QueryParameters($armResource) {
+    $hasQueryParameters = [bool]($armResource.properties.request.PSobject.Properties.name -match "queryParameters")
+    if ($hasQueryParameters) {
+        $queryParameterProperties = $armResource.properties.request.queryParameters.PSobject.Properties.name
+        $objectPattern = '{{.*?}}\[\d*\]' # check pattern {{queryType}}[0]
+        foreach ($propertyName in $queryParameterProperties) {
+            $propValue = $armResource.properties.request.queryParameters.$propertyName
+            if ($propValue -match $objectPattern) {
+                $armResource.properties.request.queryParameters.$propertyName = $propValue -replace '{{(.*?)}}(\[\d*\])', '[[parameters(''$1'')$2]'
+            } else {
+                ProcessPropertyPlaceholders -armResource $armResource `
+                    -templateContentConnections $templateContentConnections `
+                    -isOnlyObjectCheck $false `
+                    -propertyObject $armResource.properties.request.queryParameters `
+                    -propertyName $propertyName `
+                    -isInnerObject $true `
+                    -innerObjectName 'queryParameters' `
+                    -kindType $kindType `
+                    -isSecret $false `
+                    -isRequired $false `
+                    -fileType $fileType `
+                    -minLength 4 `
+                    -isCreateArray $false
+            }
         }
     }
 }
