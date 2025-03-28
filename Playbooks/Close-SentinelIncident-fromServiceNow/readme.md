@@ -1,4 +1,4 @@
-#  Close-SentinelIncident-From-Snow
+#  Close-SentinelIncident-From-ServiceNow
 
 Author: Yaniv Shasha
 This Logic App  act as listener for a incident close event in ServiceNow and will close the incident in Sentinel.
@@ -30,7 +30,7 @@ This flow assume that customer use the above logic app [found here](https://gith
 
 The incident properties that exported from Azure sentinel into ServiceNow incident page looks:
 
-![Picture1](./Graphics/SNOW-Incident-View_visual.GIF)
+![Picture1](./Graphics/ServiceNow-Incident-View_visual.GIF)
 
 1.	Copy the HTTP endpoint URL from the Logic App trigger part.
 
@@ -42,5 +42,5 @@ The incident properties that exported from Azure sentinel into ServiceNow incide
 5.	On “add comment to incident” (5) use a user that has an Azure Sentinel Contributor account.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FClose-SentinelIncident-fromSNOW%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FClose-SentinelIncident-fromSNOW%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FClose-SentinelIncident-fromServiceNow%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FClose-SentinelIncident-fromServiceNow%2Fazuredeploy.json)
