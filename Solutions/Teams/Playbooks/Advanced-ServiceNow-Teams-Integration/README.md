@@ -46,9 +46,9 @@ The group ID and Channel ID can be obtained by going to Teams and getting the li
 4. Manually trigger an Microsoft Sentinel alert to test. 
 
 ## Deploy the ARM template
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTeams%2FPlaybooks%2FAdvanced-SNOW-Teams-Integration%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a> <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Teams/Playbooks/Advanced-SNOW-Teams-Integration/azuredeploy.json" target="_blank"><img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/></a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTeams%2FPlaybooks%2FAdvanced-ServiceNow-Teams-Integration%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a> <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Teams/Playbooks/Advanced-ServiceNow-Teams-Integration/azuredeploy.json" target="_blank"><img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/></a>
 
 ## Thanks!
 **Thank you to the following people for contributing to my efforts in building this playbook!**
