@@ -1,0 +1,65 @@
+id: 7950cddf-e280-423c-a2cd-a790ec54c085
+Function:
+  Title: Parser for Jamf Protect Security Cloud Threat Events
+  Version: '3.2.4'
+  LastUpdated: '2025-03-25'
+Category: Microsoft Sentinel Parser
+FunctionName: JamfProtectThreatEvents
+FunctionAlias: JamfProtectThreatEvents
+FunctionQuery: |
+    jamfprotect_CL
+    | where event_metadata_product_s == "Threat Events Stream"
+    // ASIM - Common Fields
+    | extend EventVendor = 'Jamf'
+    | extend EventProduct = 'Jamf Protect - Threat Events Stream'
+    | project-rename
+    | extend
+        // Jamf Protect - Common Fields
+        EventStartTime = column_ifexists("event_timestamp_t", ""),
+        EventResult=case(event_action_s == "Blocked", "Blocked", event_action_s == "Detected", "Detected", ''),
+        EventReportUrl = column_ifexists("event_eventUrl_s", ""),
+        // Jamf Protect - Alert Details
+        EventSeverity = case(event_severity_d == 2, "Informational", event_severity_d == 4, "Low", event_severity_d == 6, "Medium", event_severity_d == 8, "High", event_severity_d == 10, "High", "Informational"),
+        // Jamf Protect - Source User
+        SrcUsermail=column_ifexists('event_user_email_s', ''),
+        SrcUsername=column_ifexists('event_user_name_s', ''),
+        // Jamf Protect - Source Device Hostnames
+        DvcHostname = column_ifexists("event_device_userDeviceName_s", ""),
+        DvcIpAddr = column_ifexists("event_source_ip_s", ""),
+        DvcId = column_ifexists("event_device_externalId_g", ""),
+        DvcOs=case(event_device_os_s has "MAC_OS", "macOS", event_device_os_s has "IOS", "iOS", event_device_os_s has "ANDROID", "Android", "Other"),
+        SrcDeviceType=case(event_device_os_s has "MAC_OS", "Computer", event_device_os_s has "IOS", "Mobile Device", event_device_os_s has "ANDROID", "Mobile Device", "Other"),
+        // Jamf Protect - DNS Specific
+        DnsQuery=column_ifexists('event_hostName_s', ''),
+        DvcAction=case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Blocked", ''),
+        DnsQueryName=column_ifexists('event_destination_name_s', ''),
+        DstIpAddr=column_ifexists('event_destination_ip_s', ''),
+        ThreatCategory=column_ifexists('event_eventType_description_s', ''),
+        ThreatOriginalRiskLevel=column_ifexists('event_threat_result_s', ''),
+        // Jamf Protect - App Specific
+        TargetFileName = column_ifexists("event_app_name_s", ""),
+        TargetFileSHA1 = column_ifexists("event_app_sha1_s", ""),
+        TargetFileSHA256 = column_ifexists("event_app_sha256_s", "")
+    | project-keep
+        TimeGenerated,
+        EventVendor,
+        EventProduct,
+        EventStartTime,
+        EventResult,
+        EventReportUrl,
+        EventSeverity,
+        DvcHostname,
+        DvcIpAddr,
+        DvcId,
+        SrcDeviceType,
+        SrcUsermail,
+        SrcUsername,
+        DnsQuery,
+        DnsQueryName,
+        DstIpAddr,
+        ThreatCategory,
+        DvcAction,
+        ThreatOriginalRiskLevel,
+        TargetFileName,
+        TargetFileSHA1,
+        TargetFileSHA256

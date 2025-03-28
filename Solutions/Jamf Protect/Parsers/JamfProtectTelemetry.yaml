@@ -1,39 +1,12 @@
 id: d941b837-88fa-4c77-a4d8-76af0044cac0
 Function:
-  Title: Parser for JamfProtect
-  Version: '3.2.2'
-  LastUpdated: '2025-02-24'
+  Title: Parser for Jamf Protect Telemetry Events
+  Version: '3.2.4'
+  LastUpdated: '2025-03-25'
 Category: Microsoft Sentinel Parser
-FunctionName: JamfProtect
-FunctionAlias: JamfProtect
+FunctionName: JamfProtectTelemetry
+FunctionAlias: JamfProtectTelemetry
 FunctionQuery: |
-    let JamfProtectAlerts_view  = view () {
-    jamfprotectalerts_CL
-    | extend
-        ActingProcessCreationTime = unixtime_seconds_todatetime(tolong(input.related.processes[array_length(input.related.processes) - 1].startTimestamp)),
-        ParentProcessCreationTime = iff(
-                                    array_length(input.related.processes) > 1, 
-                                    unixtime_seconds_todatetime(tolong(input.related.processes[0].startTimestamp)), 
-                                    datetime(null)
-                                ),
-        TargetProcessCreationTime = unixtime_seconds_todatetime(todouble(input.related.processes[0].startTimestamp)),
-        TargetUserId = coalesce(input.related.users[1].uid, input.related.users[0].uid),
-        TargetUsername = coalesce(input.related.users[1].name, input.related.users[0].name)
-        };
-    let JamfProtectUnifiedLog_view  = view () {
-    jamfprotectunifiedlogs_CL
-    | extend EventStartTime = unixtime_seconds_todatetime(tolong(input.match.event.timestamp))
-    };
-    //
-    // Jamf Protect - Endpoint Telemetry
-    //
-    let JamfProtectTelemetryv1_view  = view () {
-    jamfprotecttelemetryv1_CL
-    | extend
-        EventStartTime = unixtime_seconds_todatetime(todouble(header.time_seconds_epoch)),
-        EventResult = coalesce(return.description, texts)
-    };
-    let JamfProtectTelemetryv2_view  = view () {
     jamfprotecttelemetryv2_CL
     // Generic Fields
     | extend
@@ -116,9 +89,9 @@ FunctionQuery: |
                     "A configuration profile is removed from the system",
                     eventTypeHuman == "remount",
                     "A file system has been mounted",
-                    eventTypeHuman == "screenscharing_attach",
+                    eventTypeHuman == "screensharing_attach",
                     "A screensharing session has attached to a graphical session",
-                    eventTypeHuman == "screenscharing_detach",
+                    eventTypeHuman == "screensharing_detach",
                     "A screensharing session has detached from a graphical session",
                     eventTypeHuman == "settime",
                     "The system time was attempted to be set",
@@ -765,123 +738,3 @@ FunctionQuery: |
     action,
     event,
     process
-    };
-    //
-    // Jamf Protect - Network Traffic
-    //
-    let JamfProtectNetworkTraffic_view  = view () {
-        jamfprotect_CL
-        | where event_metadata_product_s == "Network Traffic Stream"
-        // ASIM - Common Fields
-        | extend EventVendor = 'Jamf'
-        | extend EventProduct = 'Jamf Protect - Network Traffic Stream'
-        | project-rename
-        | extend
-            // Jamf Protect - Common Fields
-            EventType = "query",
-            EventSubType = "request",
-            EventStartTime = unixtime_milliseconds_todatetime(tolong(event_receiptTime_d)),
-            EventResult = case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Prevented", ''),
-            // Jamf Protect - Source User
-            SrcUsermail=column_ifexists('event_user_email_s', ''),
-            SrcUsername =  column_ifexists('event_user_name_s', ''),
-            // Jamf Protect - Source Device Hostnames
-            DvcHostname = case(isnotempty(input_host_hostname_s), input_host_hostname_s, isnotempty(host_info_host_name_s), host_info_host_name_s, event_device_userDeviceName_s),
-            DvcIpAddr = column_ifexists("event_source_ip_s", ""),
-            DvcId = column_ifexists("event_device_externalId_g", ""),
-            DvcOs = case(event_device_osType_s == "MAC_OS", "macOS", event_device_osType_s == "IOS", "iOS", event_device_osType_s == "ANDROID", "Android", "Other"),
-            SrcDeviceType = case(event_device_osType_s == "MAC_OS", "Computer", event_device_osType_s == "IOS", "Mobile Device", event_device_osType_s == "ANDROID", "Mobile Device", "Other"),
-            // Jamf Protect - DNS Specific
-            DnsQuery = column_ifexists('event_hostName_s', ''),
-            DvcAction = case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Blocked", ''),
-            DnsQueryName = column_ifexists('event_domain_s', ''),
-            DstIpAddr = column_ifexists('event_destination_ips_s', ''),
-            ThreatCategory = column_ifexists('event_eventType_description_s', ''),
-            DnsQueryTypeName = column_ifexists('event_dns_recordType_s', ''),
-            DnsResponseName = column_ifexists('event_dns_responseStatus_s', ''),
-            ThreatOriginalRiskLevel = column_ifexists('event_threat_result_s', '')
-        | project-keep
-            TimeGenerated,
-            EventVendor,
-            EventProduct,
-            EventType,
-            EventSubType,
-            EventStartTime,
-            EventResult,
-            DvcHostname,
-            DvcIpAddr,
-            DvcId,
-            DvcOs,
-            SrcDeviceType,
-            SrcUsermail,
-            SrcUsername,
-            DnsQuery,
-            DnsQueryName,
-            DstIpAddr,
-            DnsQueryTypeName,
-            DvcAction,
-            DnsResponseName,
-            ThreatOriginalRiskLevel
-    };
-    // //
-    // // Jamf Protect - Threat Events
-    // //
-    let JamfProtectThreatEvents_view  = view () {
-        jamfprotect_CL
-        | where event_metadata_product_s == "Threat Events Stream"
-        // ASIM - Common Fields
-        | extend EventVendor = 'Jamf'
-        | extend EventProduct = 'Jamf Protect - Threat Events Stream'
-        | project-rename
-        | extend
-            // Jamf Protect - Common Fields
-            EventStartTime = column_ifexists("event_timestamp_t", ""),
-            EventResult=case(event_action_s == "Blocked", "Blocked", event_action_s == "Detected", "Detected", ''),
-            EventReportUrl = column_ifexists("event_eventUrl_s", ""),
-            // Jamf Protect - Alert Details
-            EventSeverity = case(event_severity_d == 2, "Informational", event_severity_d == 4, "Low", event_severity_d == 6, "Medium", event_severity_d == 8, "High", event_severity_d == 10, "High", "Informational"),
-            // Jamf Protect - Source User
-            SrcUsermail=column_ifexists('event_user_email_s', ''),
-            SrcUsername=column_ifexists('event_user_name_s', ''),
-            // Jamf Protect - Source Device Hostnames
-            DvcHostname = column_ifexists("event_device_userDeviceName_s", ""),
-            DvcIpAddr = column_ifexists("event_source_ip_s", ""),
-            DvcId = column_ifexists("event_device_externalId_g", ""),
-            DvcOs=case(event_device_os_s has "MAC_OS", "macOS", event_device_os_s has "IOS", "iOS", event_device_os_s has "ANDROID", "Android", "Other"),
-            SrcDeviceType=case(event_device_os_s has "MAC_OS", "Computer", event_device_os_s has "IOS", "Mobile Device", event_device_os_s has "ANDROID", "Mobile Device", "Other"),
-            // Jamf Protect - DNS Specific
-            DnsQuery=column_ifexists('event_hostName_s', ''),
-            DvcAction=case(event_blocked_b == "false", "Allowed", event_blocked_b == "true", "Blocked", ''),
-            DnsQueryName=column_ifexists('event_destination_name_s', ''),
-            DstIpAddr=column_ifexists('event_destination_ip_s', ''),
-            ThreatCategory=column_ifexists('event_eventType_description_s', ''),
-            ThreatOriginalRiskLevel=column_ifexists('event_threat_result_s', ''),
-            // Jamf Protect - App Specific
-            TargetFileName = column_ifexists("event_app_name_s", ""),
-            TargetFileSHA1 = column_ifexists("event_app_sha1_s", ""),
-            TargetFileSHA256 = column_ifexists("event_app_sha256_s", "")
-        | project-keep
-            TimeGenerated,
-            EventVendor,
-            EventProduct,
-            EventStartTime,
-            EventResult,
-            EventReportUrl,
-            EventSeverity,
-            DvcHostname,
-            DvcIpAddr,
-            DvcId,
-            SrcDeviceType,
-            SrcUsermail,
-            SrcUsername,
-            DnsQuery,
-            DnsQueryName,
-            DstIpAddr,
-            ThreatCategory,
-            DvcAction,
-            ThreatOriginalRiskLevel,
-            TargetFileName,
-            TargetFileSHA1,
-            TargetFileSHA256
-    };
-    union isfuzzy=true JamfProtectAlerts_view, JamfProtectUnifiedLog_view, JamfProtectTelemetryv1_view, JamfProtectTelemetryv2_view, JamfProtectNetworkTraffic_view, JamfProtectThreatEvents_view
