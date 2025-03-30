@@ -421,7 +421,7 @@ elif [ "$os" == '"sles"' ]; then
 		if which az >/dev/null 2>&1; then
 			#AZ is installed, check if it is out-of date version with compatibility issues
 			azver=$(az version | jq '."azure-cli"')
-			if verlte "2.33.1" "$azver"; then
+			if verlte "$azver" "2.33.1"; then
 				echo "Installed version $azver is out of date, removing older version"
 				sudo zypper rm -y --clean-deps azure-cli >/dev/null
 				echo "Installing Azure CLI"
@@ -498,9 +498,35 @@ elif [ "$MODE" == "kvsi" ]; then
 	validateKeyVault
 fi
 
+# If $HTTPPROXY is set, configure the Docker Daemon to explicitly use it;
+# otherwise, Docker commands (e.g., 'docker pull') will ignore any proxy settings defined at the OS level.
+if [ -n "$HTTPPROXY" ]; then
+	# https://docs.docker.com/engine/daemon/proxy/#systemd-unit-file
+	if ! sudo mkdir -p /etc/systemd/system/docker.service.d; then
+			echo "Error: Failed to create directory /etc/systemd/system/docker.service.d"
+			exit 1
+	fi
+
+		if ! sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf > /dev/null <<EOF
+[Service]
+Environment="HTTP_PROXY=${HTTPPROXY}"
+Environment="HTTPS_PROXY=${HTTPPROXY}"
+Environment="NO_PROXY=localhost,127.0.0.1"
+EOF
+	then
+			echo "Error: Failed to write /etc/systemd/system/docker.service.d/http-proxy.conf"
+			exit 1
+	fi
+
+	echo "Proxy $HTTPPROXY successfully configured, restarting Docker Daemon..."
+	sudo systemctl daemon-reload
+	sudo systemctl restart docker
+fi 
+
 echo 'Deploying Azure Sentinel SAP data connector.'
 
 echo 'Starting Docker image pull'
+
 # pull only if LOCALIMG is not set
 if [ -z $LOCALIMG ]; then
 	sudo docker pull $dockerimage$tagver
@@ -587,7 +613,7 @@ if [ $? -eq 0 ]; then
 fi
 
 if [ -n "$HTTPPROXY" ]; then
-	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
+	httpproxyline="-e HTTP_PROXY=$HTTPPROXY -e HTTPS_PROXY=$HTTPPROXY -e NO_PROXY=169.254.169.254"
 fi
 cmdparams=" --label Cloud=$CLOUD"
 # Generating SENTINEL_AGENT_GUID
