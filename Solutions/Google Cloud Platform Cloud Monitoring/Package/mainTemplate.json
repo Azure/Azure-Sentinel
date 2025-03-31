@@ -317,8 +317,8 @@
                             "required": true,
                             "options": [
                               {
-                                "key": "compute.googleapis.com/instance/cpu/utilization",
-                                "text": "Compute Instance CPU Utilization"
+                                "key": "compute.googleapis.com/instance/disk/write_bytes_count",
+                                "text": "Compute Instance Disk Write Bytes Count"
                               },
                               {
                                 "key": "compute.googleapis.com/instance/network/received_bytes_count",
@@ -415,23 +415,7 @@
                   "Custom-GCPMonitor": {
                     "columns": [
                       {
-                        "name": "resource",
-                        "type": "dynamic"
-                      },
-                      {
                         "name": "metric",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "metricKind",
-                        "type": "string"
-                      },
-                      {
-                        "name": "valueType",
-                        "type": "string"
-                      },
-                      {
-                        "name": "points",
                         "type": "dynamic"
                       }
                     ]
@@ -453,7 +437,7 @@
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | extend TimeGenerated = now() | extend resourceDynamic = parse_json(timeSeries[0].resource)| extend resource_type = tostring(resourceDynamic['type'])| extend resource_labels_zone = tostring(resourceDynamic['labels']['zone'])| extend resource_labels_project_id = tostring(resourceDynamic['labels']['project_id'])| extend resource_labels_instance_id = tostring(resourceDynamic['labels']['instance_id'])| extend metricDynamic = parse_json(timeSeries[0].metric)| extend metric_type = tostring(metricDynamic['type'])| extend metric_labels_device_name = tostring(metricDynamic['labels']['device_name'])| extend metric_labels_instance_name = tostring(metricDynamic['labels']['instance_name'])| extend metric_labels_storage_type = tostring(metricDynamic['labels']['storage_type'])| extend metric_labels_device_type = tostring(metricDynamic['labels']['device_type'])| extend value_int64Value = tolong(timeSeries[0].points[0].value.int64Value)| project TimeGenerated, resource_type, resource_labels_zone, resource_labels_project_id, resource_labels_instance_id, metric_type, metric_labels_device_name, metric_labels_instance_name, metric_labels_storage_type, metric_labels_device_type, value_int64Value",
+                    "transformKql": "source | extend TimeGenerated = now()",
                     "outputStream": "Custom-GCP_MONITORINGV2_CL"
                   }
                 ]
@@ -470,72 +454,12 @@
                   "name": "GCP_MONITORINGV2_CL",
                   "columns": [
                     {
+                      "name": "metric",
+                      "type": "dynamic"
+                    },
+                    {
                       "name": "TimeGenerated",
                       "type": "datetime"
-                    },
-                    {
-                      "name": "resource_type",
-                      "type": "string"
-                    },
-                    {
-                      "name": "resource_labels_zone",
-                      "type": "string"
-                    },
-                    {
-                      "name": "resource_labels_instance_id",
-                      "type": "string"
-                    },
-                    {
-                      "name": "resource_labels_project_id",
-                      "type": "string"
-                    },
-                    {
-                      "name": "metric_type",
-                      "type": "string"
-                    },
-                    {
-                      "name": "value_int64Value",
-                      "type": "real"
-                    },
-                    {
-                      "name": "metric_labels_instance_name",
-                      "type": "string"
-                    },
-                    {
-                      "name": "metric_labels_storage_type",
-                      "type": "string"
-                    },
-                    {
-                      "name": "metric_labels_device_name",
-                      "type": "string"
-                    },
-                    {
-                      "name": "metric_labels_device_type",
-                      "type": "string"
-                    },
-                    {
-                      "name": "interval_startTime",
-                      "type": "datetime"
-                    },
-                    {
-                      "name": "interval_endTime",
-                      "type": "datetime"
-                    },
-                    {
-                      "name": "metricKind",
-                      "type": "string"
-                    },
-                    {
-                      "name": "valueType",
-                      "type": "string"
-                    },
-                    {
-                      "name": "metric_labels_loadbalanced",
-                      "type": "string"
-                    },
-                    {
-                      "name": "value_doubleValue",
-                      "type": "real"
                     }
                   ]
                 }
@@ -642,8 +566,8 @@
                     "required": true,
                     "options": [
                       {
-                        "key": "compute.googleapis.com/instance/cpu/utilization",
-                        "text": "Compute Instance CPU Utilization"
+                        "key": "compute.googleapis.com/instance/disk/write_bytes_count",
+                        "text": "Compute Instance Disk Write Bytes Count"
                       },
                       {
                         "key": "compute.googleapis.com/instance/network/received_bytes_count",
@@ -787,6 +711,9 @@
               "defaultValue": "project_id",
               "type": "string",
               "minLength": 1
+            },
+            "metric_type": {
+              "type": "array"
             }
           },
           "variables": {
@@ -848,6 +775,8 @@
                 },
                 "auth": {
                   "type": "OAuth2",
+                  "IsClientSecretInHeader": "true",
+                  "IsCredentialsInHeaders": "true",
                   "ClientSecret": "[[parameters('clientSecret')]",
                   "ClientId": "[[parameters('clientId')]",
                   "AuthorizationCode": "[[parameters('authorizationCode')]",
@@ -859,29 +788,31 @@
                   },
                   "authorizationEndpoint": "https://accounts.google.com/o/oauth2/auth",
                   "authorizationEndpointQueryParameters": {
-                    "scope": "https://www.googleapis.com/auth/monitoring.read",
-                    "redirect": "n"
+                    "prompt": "consent",
+                    "access_type": "offline"
                   },
+                  "scope": "https://www.googleapis.com/auth/monitoring.read",
                   "redirectUri": "https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights"
                 },
                 "request": {
                   "apiEndpoint": "[[concat('https://monitoring.googleapis.com/v3/projects/', parameters('project_id'), '/timeSeries')]",
-                  "rateLimitQPS": 10,
-                  "queryWindowInMin": 10,
                   "httpMethod": "GET",
-                  "retryCount": 3,
-                  "timeoutInSeconds": 60,
-                  "headers": {
-                    "Accept": "application/json"
-                  },
-                  "StartTimeAttributeName": "interval.startTime",
-                  "EndTimeAttributeName": "interval.endTime",
                   "queryParameters": {
-                    "filter": "metric.type=\"{{metric_type}}\"",
+                    "filter": "[[concat('metric.type=\"', parameters('metric_type'), '\"')]",
                     "interval.startTime": "{_QueryWindowStartTime}",
                     "interval.endTime": "{_QueryWindowEndTime}",
                     "pageSize": "100",
                     "pageToken": "{_NextPageToken}"
+                  },
+                  "queryWindowInMin": 10,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.Z",
+                  "StartTimeAttributeName": "interval.startTime",
+                  "EndTimeAttributeName": "interval.endTime",
+                  "rateLimitQPS": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json"
                   }
                 },
                 "isActive": true
