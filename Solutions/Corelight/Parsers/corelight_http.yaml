@@ -1,8 +1,8 @@
-id: 974718ae-c0a5-4d4a-bb42-63a0f394d66f
+id: c59e2153-f622-4655-9b3e-3630520a127b
 Function:
   Title: Corelight HTTP Events
-  Version: '1.1.0'
-  LastUpdated: '2024-08-09'
+  Version: '1.1.1'
+  LastUpdated: '2024-12-09'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_http
 FunctionAlias: corelight_http
@@ -77,7 +77,9 @@ FunctionQuery: |
             resp_mime_types = column_ifexists("resp_mime_types_s", ""),
             push = column_ifexists("push_b", ""),
             encoding = column_ifexists("encoding_s", ""),
-            stream_id = column_ifexists("stream_id_d", real(null))
+            stream_id = column_ifexists("stream_id_d", real(null)),
+            server_headers = column_ifexists("server_headers_s", ""),
+            client_headers = column_ifexists("client_headers_s", "")
         | extend status_code = tostring(toint(status_code))
         | lookup StatusLookup on $left.status_code == $right.status
         | extend
@@ -115,7 +117,8 @@ FunctionQuery: |
             is_src_internal_ip = iff(local_orig == true, "true", "false"),
             host_header=dest_host,
             referrer_domain_domain=parse_url(referrer).Host,
-            referrer_domain_ip=strcat(parse_url(referrer).Host, ":", parse_url(referrer).Port)
+            referrer_domain_ip=strcat(parse_url(referrer).Host, ":", parse_url(referrer).Port),
+            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
         | extend 
             url = strcat("http://",host_header,uri),
             url_domain = host_header
@@ -158,6 +161,8 @@ FunctionQuery: |
             push,
             encoding,
             stream_id,
+            server_headers,
+            client_headers,
             EventVendor,
             EventProduct,
             EventType,
@@ -192,6 +197,7 @@ FunctionQuery: |
             host_header,
             referrer_domain_domain,
             referrer_domain_ip,
+            direction,
             url,
             url_domain,
             action
