@@ -378,6 +378,16 @@ To see Log Analytics Custom Logs:
 ## Customization
 Recorded Future Identity Solution is a baseline solution, there are ways to customize it to your preferred workflow.
 
+#### Automatic remediation
+The default configuration for this playbook provides remediation in the form of placing a user in a security group and confirming a user as risky (requires Microsoft Entra ID P1 or P2 license). Based on this there is other remediation actions that can be done, either manual or automatic.
+
+There are various ways to configure automatic remediation, based on organizational rules and knowledge of the Azure environment a appropriate solution can be configured. By default Recorded Future does not provide any other remediation than placing a user in a security group and confirming a user as risky (requires Microsoft Entra ID P1 or P2 license).
+
+Depending of Entra ID licensing levels, some solutions available are:
+ - Conditional Access Policies (requires Microsoft Entra ID P1 or P2 license) - More information <a href="https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview" target="_blank">here<a>
+ - Microsoft Entra ID Protection (requires Microsoft Entra ID P1 or P2 license) - More information <a href="https://learn.microsoft.com/en-us/entra/id-protection/overview-identity-protection" target="_blank"> here<a>
+ - Microsoft Graph API - Powerful, no license requirements but requires extensive configuration - More information <a href="https://learn.microsoft.com/en-us/graph/identity-network-access-overview" target="_blank"> here</a>. For advanced guidance, please contact your Recorded Future Customer Success Manager.
+
 #### Recorded Future Playbook Alert Onward Actions
 Onward Actions is a way to keep the Recorded Future Playbook Alert up to date with actions taken in regards to a specific alert, to get a overview of actions taken on alerts.
 By default the Playbook Alert Update steps have been configured with `added_actions_taken` set to `identity_novel_exposures.placed_in_risky_group`, if the solution is extended with actions such as blocking users or forcing password resets, you can submit this information to Recorded Future. Currently the following actions are supported:
