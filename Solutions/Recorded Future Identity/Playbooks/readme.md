@@ -378,10 +378,9 @@ To see Log Analytics Custom Logs:
 ## Customization
 Recorded Future Identity Solution is a baseline solution, there are ways to customize it to your preferred workflow.
 
-#### Automatic remediation
-The default configuration for this playbook provides remediation in the form of placing a user in a security group and confirming a user as risky (requires Microsoft Entra ID P1 or P2 license). Based on this there is other remediation actions that can be done, either manual or automatic.
+#### Automatic remediation of identity exposures
+The default configuration for this playbook provides remediation in the form of placing a user in a security group and confirming a user as risky (requires Microsoft Entra ID P1 or P2 license). Based on this there is other remediation actions that can be done, either manual or automatic. The various ways to configure automatic remediation are based on organizational needs and knowledge of the Azure environment to find a appropriate remediation path.
 
-There are various ways to configure automatic remediation, based on organizational rules and knowledge of the Azure environment a appropriate solution can be configured. By default Recorded Future does not provide any other remediation than placing a user in a security group and confirming a user as risky (requires Microsoft Entra ID P1 or P2 license).
 
 Depending of Entra ID licensing levels, some solutions available are:
  - Conditional Access Policies (requires Microsoft Entra ID P1 or P2 license) - More information <a href="https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview" target="_blank">here<a>
