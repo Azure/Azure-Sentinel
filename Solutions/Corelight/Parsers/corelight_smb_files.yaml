@@ -1,42 +1,126 @@
-id: e1b018b3-cc53-5ef4-a716-e46bb4f03dac
+
+id: 6dcc46a5-e942-47c9-8621-e7bec6447208
 Function:
-  Title: corelight_smb_files parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight Smb Files
+  Version: 1.1.0
+  LastUpdated: '2025-02-07'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_smb_files
 FunctionAlias: corelight_smb_files
-FunctionQuery: |+
+FunctionQuery: |
+  let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
   let corelight_smb_files = view () {
-      Corelight_v2_smb_files_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          uid=uid_s,
-          id_orig_h=id_orig_h_s,
-          id_orig_p=id_orig_p_d,
-          id_resp_h=id_resp_h_s,
-          id_resp_p=id_resp_p_d,
-          fuid=fuid_s,
-          action=action_s,
-          path=path_s,
-          name=name_s,
-          size=size_d,
-          prev_name=prev_name_s,
-          times_modified=times_modified_t,
-          times_accessed=times_accessed_t,
-          times_created=times_created_t,
-          times_changed=times_changed_t,
-          data_offset_req=data_offset_req_d,
-          data_len_req=data_len_req_d,
-          data_len_rsp=data_len_rsp_d
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="smb_files",
-          ts=TimeGenerated
-  };
+        union isfuzzy=true Corelight_v2_smb_files_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+          | join kind=leftouter 
+          ( corelight_conn
+          | project uid, local_orig, local_resp
+          ) on $left.uid_s == $right.uid
+          | project-away uid
+        | extend 
+              timestamp = column_ifexists("_timestamp_t", ""),
+              _timestamp = column_ifexists("_timestamp_s", ""),
+              _path = column_ifexists("_path_s", ""),
+              path = column_ifexists("path_s", ""),
+              version = column_ifexists("_version_s", ""),
+              system_name = column_ifexists("_system_name_s", ""),
+              write_ts = column_ifexists("_write_ts_t", ""),
+              uid = column_ifexists("uid_s", ""),
+              id_orig_h = column_ifexists("id_orig_h_s", ""),
+              id_orig_p = column_ifexists("id_orig_p_d", real(null)),
+              id_resp_h = column_ifexists("id_resp_h_s", ""),
+              id_resp_p = column_ifexists("id_resp_p_d", real(null)),
+              fuid = column_ifexists("fuid_s", ""),
+              action = column_ifexists("action_s", ""),
+              name = column_ifexists("name_s", ""),
+              size = column_ifexists("size_d", real(null)),
+              prev_name = column_ifexists("prev_name_s", ""),
+              times_modified = column_ifexists("times_modified_t", datetime(null)),
+              times_accessed = column_ifexists("times_accessed_t", datetime(null)),
+              times_created = column_ifexists("times_created_t", datetime(null)),
+              times_changed = column_ifexists("times_changed_t", datetime(null)),
+              data_offset_req = column_ifexists("data_offset_req_d", real(null)),
+              data_len_req = column_ifexists("data_len_req_d", real(null)),
+              data_len_rsp = column_ifexists("data_len_rsp_d", real(null)),
+              id_resp_l2_vendor = column_ifexists("id_resp_l2_vendor_s", ""),
+              id_resp_l2_addr = column_ifexists("id_resp_l2_addr_s", ""),
+              id_orig_l2_vendor = column_ifexists("id_orig_l2_vendor_s", ""),
+              id_orig_l2_addr = column_ifexists("id_orig_l2_addr_s", "")
+        | extend
+            EventVendor="Corelight",
+            EventProduct="CorelightSensor",
+            EventType="smb_files",
+            ts=TimeGenerated,
+            timestamp = coalesce(tostring(timestamp), _timestamp),
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            sensor_name = coalesce(system_name, "unknown"),
+            file_size = size,
+            file_access_time = times_accessed,
+            file_change_time = times_changed,
+            file_create_time = times_created,
+            file_modify_time = times_modified,
+            file_name = name,
+            file_path_root = path
+        | extend
+              is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+              is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+              is_src_internal_ip = iff(local_orig == true, "true", "false"),
+              direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+        | project
+              TimeGenerated,
+              _path,
+              path,
+              version,
+              system_name,
+              write_ts,
+              uid,
+              id_orig_h,
+              id_orig_p,
+              id_resp_h,
+              id_resp_p,
+              fuid,
+              action,
+              name,
+              size,
+              prev_name,
+              times_modified,
+              times_accessed,
+              times_created,
+              times_changed,
+              data_offset_req,
+              data_len_req,
+              data_len_rsp,
+              id_resp_l2_vendor,
+              id_resp_l2_addr,
+              id_orig_l2_vendor,
+              id_orig_l2_addr,
+              EventVendor,
+              EventProduct,
+              EventType,
+              ts,
+              timestamp,
+              src,
+              src_ip,
+              src_port,
+              dest,
+              dest_ip,
+              dest_port,
+              sensor_name,
+              file_size = size,
+              file_access_time,
+              file_change_time,
+              file_create_time,
+              file_modify_time,
+              file_name,
+              file_path_root,
+              is_broadcast,
+              is_dest_internal_ip,
+              is_src_internal_ip,
+              direction
+    };
   corelight_smb_files
-
-...

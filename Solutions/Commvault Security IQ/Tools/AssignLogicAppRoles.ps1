@@ -76,6 +76,13 @@ foreach ($logicAppName in $logicAppNames) {
 
     New-AzRoleAssignment -ObjectId $logicAppResource.Identity.PrincipalId -RoleDefinitionId $roleDefinition.Id -Scope "/subscriptions/$($selectedSubscription.Id)/resourceGroups/$resourceGroupName/providers/Microsoft.Automation/automationAccounts/$automationAccountName"
 
-    Set-AzKeyVaultAccessPolicy -VaultName $keyVaultName -ObjectId $logicAppResource.Identity.PrincipalId -PermissionsToSecrets get
+    $isRbacEnabled = (Get-AzKeyVault -VaultName $selectedKeyVault.VaultName).EnableRbacAuthorization
+    if($isRbacEnabled) {
+        $keyVaultId = (Get-AzKeyVault -VaultName $selectedKeyVault.VaultName).ResourceId
+        New-AzRoleAssignment -ObjectId $logicAppResource.Identity.PrincipalId -RoleDefinitionName "Key Vault Secrets User" -Scope $keyVaultId
+    }
+    else{
+        Set-AzKeyVaultAccessPolicy -VaultName $keyVaultName -ObjectId $logicAppResource.Identity.PrincipalId -PermissionsToSecrets get
+    }
 
 }
