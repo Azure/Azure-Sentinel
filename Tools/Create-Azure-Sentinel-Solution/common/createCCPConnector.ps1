@@ -942,7 +942,7 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
             $headerPropName = $headerProps.Name
             $headerPropValue = $headerProps.Value
 
-            if ($headerPropValue.contains("{{")) 
+            if ($headerPropValue.ToString().contains("{{")) 
             {
                 $placeHoldersMatched = $headerPropValue | Select-String $placeHolderPatternMatches -AllMatches
                 if ($placeHoldersMatched.Matches.Value.Count -gt 0) 
