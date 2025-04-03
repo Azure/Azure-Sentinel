@@ -1,6 +1,6 @@
 # Recorded Future Identity Installation Guide
 
-### This is a readme for the old version of Recorded Future Identity, for the new version based on Playbook Alerts, see [readme](readme.md)
+### This is a readme for the old version of Recorded Future Identity, for the new version based on Playbook Alerts, see [readme](../readme.md)
 
 ## Table of Contents
 
