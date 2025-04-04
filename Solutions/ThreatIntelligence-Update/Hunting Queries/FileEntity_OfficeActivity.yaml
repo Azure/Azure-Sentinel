@@ -1,0 +1,69 @@
+id: bbdb951c-9aba-4d66-85df-f564a1f86881
+name: TI Map File Entity to OfficeActivity Event
+description: |
+  'This query finds matches in OfficeActivity Event data for known FileName Indicators of Compromise from Threat Intelligence sources. FileName matches may produce false positives, so use this for hunting rather than real-time detection.'
+description-detailed: |
+  'This query identifies any matches in the OfficeActivity Event data that correspond to any known FileName Indicators of Compromise (IOC) from Threat Intelligence (TI) sources. 
+  Since file name matches may produce a significant amount of false positives, it is recommended to use this query for hunting purposes rather than for real-time detection.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+tactics:
+  - Impact
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let ioc_lookBack = 14d;
+  ThreatIntelIndicators
+  | where TimeGenerated >= ago(ioc_lookBack) and ValidUntil > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true
+  //extract key part of kv pair
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where IndicatorType == "file"
+  | extend FileName = ObservableValue
+  | where isnotempty(FileName)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+    OfficeActivity
+    | where TimeGenerated between(starttime..endtime)
+    | where isnotempty(SourceFileName)
+    | extend OfficeActivity_TimeGenerated = TimeGenerated
+  )
+  on $left.FileName == $right.SourceFileName
+  | where OfficeActivity_TimeGenerated < ValidUntil
+  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by Id, SourceFileName
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, FileName, UserId, ClientIP, OfficeObjectId//, Url
+  | extend timestamp = OfficeActivity_TimeGenerated, Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = ClientIP
+  //| extend URL_0_Url = Url
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.3
