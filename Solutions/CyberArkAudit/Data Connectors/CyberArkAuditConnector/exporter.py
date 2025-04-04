@@ -14,6 +14,7 @@ def _transform_schema(audit_events: list) -> list:
             'applicationCode': audit.get('applicationCode') or '',
             'auditCode': audit.get('auditCode') or '',
             'auditType': audit.get('auditType') or '',
+            'correlationId': audit.get('correlationId') or '',
             'cloudAssets': audit.get('cloudAssets') or '',
             'cloudIdentities': audit.get('cloudIdentities') or '',
             'cloudProvider': audit.get('cloudProvider') or '',
