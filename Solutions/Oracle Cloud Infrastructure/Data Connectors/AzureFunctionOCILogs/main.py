@@ -69,7 +69,17 @@ def determine_log_type(event):
         return "OCI_ComputeApiLogsV3"
     if event["type"] == "com.oraclecloud.sch.serviceconnector.runlog":
         return "OCI_ServiceConnector_LogsV3"
-    if "com.oraclecloud.DatabaseService" in event["type"]:
+    if "com.oraclecloud.waf." in event["type"]:
+        return "OCI_WAFLogsV3"
+    if "core.v1." in event["type"]:
+        return "OCI_coreLogsV3"
+    if ".post" in event["type"]:
+        return "OCI_postLogsV3"
+    if "com.oraclecloud.objectstorage." in event["type"]:
+        return "OCI_ObjectStorageLogsV3"
+    if "com.oraclecloud.networkFirewallService." in event["type"]:
+        return "OCI_NetworkFirewallServiceLogsV3"
+    if "com.oraclecloud.DatabaseService" in event["type"] or "com.oraclecloud.databaseservice" in event["type"]:
         return "OCI_DatabaseService_LogsV3"
     if "com.oraclecloud.KeyManagementService" in event["type"]:
         return "OCI_KeyManagementService_LogsV3"
