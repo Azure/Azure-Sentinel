@@ -91,8 +91,7 @@
         <td>
             <img src='https://leaderboardstorageacc.blob.core.windows.net/badgeimages/New25.png' alt='Check Point 25 Badge'>
         </td>
-    </tr>
-    
+    </tr>    
 </table> | <table>
     <tr>
         <th>Rank</th>
@@ -184,6 +183,5 @@
             <img src='https://leaderboardstorageacc.blob.core.windows.net/badgeimages/New25.png' alt='Check Point 25 Badge'>
             <img src='https://leaderboardstorageacc.blob.core.windows.net/badgeimages/FinalBugBasher.png' alt='Bug Basher Badge'>
         </td>
-    </tr>
-    
+    </tr>    
 </table> |
