@@ -154,7 +154,7 @@ class ImpervaFilesHandler:
             self.sentinel.post_data(json.dumps(chunk), len(chunk), file_name)
     
     def parse_cef(self,cef_raw):
-        rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
+        rx = r'([^=\s\|]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
         parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
         header_array = cef_raw.split('|')
         parsed_cef["Device Version"]=header_array[3]
