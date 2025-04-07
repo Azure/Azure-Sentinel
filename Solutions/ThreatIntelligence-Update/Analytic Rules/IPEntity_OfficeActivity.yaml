@@ -1,0 +1,84 @@
+id: f50280e5-5eb1-4e95-99fd-9d584a987bdd
+name: TI map IP entity to OfficeActivity
+description: |
+  This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in OfficeActivity.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h; // Look back 1 hour for OfficeActivity events
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  let OfficeActivity_ = materialize(OfficeActivity
+    | where isnotempty(ClientIP)
+    | where TimeGenerated >= ago(dt_lookBack)
+    | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]%]+)(%\d+)?\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
+    | extend IPAddress = iff(array_length(ClientIPValues) > 0, tostring(ClientIPValues[0]), '')
+    | project-rename OfficeActivity_TimeGenerated = TimeGenerated);
+  let ActivityIPs = OfficeActivity_ | summarize IPs = make_list(IPAddress);
+  // Fetch threat intelligence indicators related to IP addresses
+  let IP_Indicators = materialize(ThreatIntelIndicators
+  //extract key part of kv pair
+       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | extend NetworkSourceIP = toupper(ObservableValue)
+       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | where isnotempty(NetworkSourceIP)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | extend TI_ipEntity = NetworkSourceIP
+    | where TI_ipEntity in (ActivityIPs)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where  IsActive == true and ValidUntil > now()
+    | extend Description = tostring(parse_json(Data).description)
+    | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;");
+  IP_Indicators
+     | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
+  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
+  | join kind=innerunique (OfficeActivity_)
+    on $left.TI_ipEntity == $right.IPAddress
+  // Filter out OfficeActivity events that occurred after the expiration of the corresponding indicator
+  | where OfficeActivity_TimeGenerated < ValidUntil
+  // Group the results by IndicatorId and keep the OfficeActivity event with the latest timestamp
+  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by Id
+  // Select the desired output fields
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkSourceIP, Type//, ThreatType, Url, NetworkIP, NetworkDestinationIP, EmailSourceIpAddress
+  | extend timestamp = OfficeActivity_TimeGenerated, Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TI_ipEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.4.3
+kind: Scheduled
