@@ -165,7 +165,7 @@ class ImpervaFilesHandler:
             if val.startswith('"') and val.endswith('"'):
                 val = val[1:-1]
             parsed_cef[key]=val
-        cs_array = ['cs1','cs2','cs3','cs4','cs5','cs6','cs7','cs8']
+        cs_array = ['cs1','cs2','cs3','cs4','cs5','cs6','cs7','cs8','cs9']
         for elem in cs_array:
             try:
                 if parsed_cef[elem] is not None:
