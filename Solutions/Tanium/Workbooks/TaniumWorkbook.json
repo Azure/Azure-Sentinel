@@ -1033,7 +1033,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumPatchListApplicability_CL\n|distinct Title_s,Install_Status_s,Severity_s,Release_Date_s\n|where Install_Status_s has \"Not Installed\"\n|where Severity_s in (\"Critical\", \"Important\")\n|extend Year=(split(Release_Date_s,\"/\",2))\n|summarize count() by Year=tostring(Year[0])",
+              "query": "let getReleaseYear = (s:string){ split(s,'/',2)[0] };\n\nlet lastRunTime = toscalar(\nTaniumPatchListApplicability_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);  \n\nTaniumPatchListApplicability_CL\n| where TimeGenerated >= lastRunTime\n| extend PatchId = parse_json(Patch_List_Ids_s)\n| extend Title = parse_json(Title_s)\n| extend KbArticle = parse_json(KB_Articles_s)\n| extend InstallStatus = parse_json(Install_Status_s)\n| extend Severity = parse_json(Severity_s)\n| extend Superseded = parse_json(Superseded_s)\n| extend ReleaseDate = parse_json(Release_Date_s)\n| mv-expand PatchId, Title, KbArticle, InstallStatus, Severity, ReleaseDate, Superseded\n| where InstallStatus == 'Not Installed'\n    and (Severity == 'Critical' or Severity == 'Important')\n    and Superseded == 'False'\n| extend ReleaseYear = strcat('Year ', getReleaseYear(ReleaseDate))\n| where Title != ''\n| distinct tostring(Title), tostring(ReleaseYear), tostring(Severity)\n| summarize Patches = count() by ReleaseYear, Severity\n| order by ReleaseYear asc",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
