@@ -1,0 +1,77 @@
+id: 95e3caf9-6a7d-4445-8246-feaf1d3965b5
+name: Preview - TI map File Hash entity to Cloud App Events
+description: |
+    'Identifies compromises and attacks and detect malicious activities in one's file hash entity from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+    let ioc_lookBack = 14d;
+    ThreatIntelIndicators
+        | where TimeGenerated >= ago(ioc_lookBack)
+        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+        | where IsActive == true and ValidUntil > now()
+        //extract key part of kv pair
+        | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+        | where isnotempty(IndicatorType) and IndicatorType == "file"
+        | extend FileHashType = replace("'", "", substring(ObservableKey, indexof(ObservableKey, "hashes.") + 7, strlen(ObservableKey) - indexof(ObservableKey, "hashes.") - 7))
+        | extend FileHashValue = toupper(ObservableValue)
+        | extend IndicatorId = tostring(split(Id, "--")[2])
+        | where isnotempty(FileHashValue)
+        | project-reorder *, FileHashType, FileHashValue, Type
+        | join kind=innerunique (union isfuzzy=true
+        (CloudAppEvents
+            | join kind=innerunique (union isfuzzy=true(DeviceFileEvents
+            | extend CloudAppEvents_TimeGenerated = TimeGenerated, Event = ReportId, FileHash = toupper(MD5))) on $left.TenantId == $right.TenantId))
+        on $left.FileHashValue == $right.MD5
+    | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId, FileHash, FileHashType, FileHashValue
+    | extend //Description = max_CloudAppEvents_TimeGenerated_Description,
+    Description = tostring(parse_json(max_CloudAppEvents_TimeGenerated_Data).description),
+    ActivityGroupNames = column_ifexists("max_CloudAppEvents_TimeGenerated_ActivityGroupNames", ""),
+    ThreatType = column_ifexists("max_CloudAppEvents_TimeGenerated_ThreatType", ""),
+    ValidUntil = column_ifexists("max_CloudAppEvents_TimeGenerated_ValidUntil", ""),
+    ConfidenceScore = column_ifexists("max_CloudAppEvents_TimeGenerated_ConfidenceScore", ""),
+    SourceIP = column_ifexists("max_CloudAppEvents_TimeGenerated_NetworkSourceIP", ""),
+    SourcePort = column_ifexists("max_CloudAppEvents_TimeGenerated_NetworkSourcePort", ""),
+    DestinationIP = column_ifexists("max_CloudAppEvents_TimeGenerated_NetworkDestinationIP", ""),
+    DestinationPort = column_ifexists("max_CloudAppEvents_TimeGenerated_NetworkDestinationPort", ""),
+    DeviceName = column_ifexists("max_CloudAppEvents_TimeGenerated_DeviceName", "")
+    | project CloudAppEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ValidUntil, ConfidenceScore, SourceIP, SourcePort, DestinationIP, DestinationPort, DeviceName, FileHashType, FileHashValue, FileHash
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+  - entityType: IP
+    fieldMappings: 
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: FileHashType
+version: 1.0.3
+kind: Scheduled
