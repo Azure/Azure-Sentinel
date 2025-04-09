@@ -260,7 +260,7 @@ try {
                             $objectKeyLowercase = $objectProperties.Name.ToLower()
                             if ($objectKeyLowercase -eq "hunting queries") {
                                 GetHuntingDataMetadata -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
-                            } elseif ($objectKeyLowercase -eq "summary rules") {
+                            } elseif ($objectKeyLowercase -eq "summary rules" -or $objectKeyLowercase -eq "summaryrules") {
                                 $summaryRuleFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/summaryRules.ps1"
                                 . $summaryRuleFilePath
                                 GenerateSummaryRules -solutionName $solutionName -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
