@@ -300,48 +300,6 @@
                           }
                         },
                         {
-                          "type": "Textbox",
-                          "parameters": {
-                            "label": "GCP Project ID",
-                            "name": "project_id",
-                            "required": true,
-                            "description": "Enter your Google Cloud Project ID."
-                          }
-                        },
-                        {
-                          "type": "Dropdown",
-                          "parameters": {
-                            "label": "Metric Type",
-                            "type": "text",
-                            "name": "metric_type",
-                            "required": true,
-                            "options": [
-                              {
-                                "key": "compute.googleapis.com/instance/disk/write_bytes_count",
-                                "text": "Compute Instance Disk Write Bytes Count"
-                              },
-                              {
-                                "key": "compute.googleapis.com/instance/network/received_bytes_count",
-                                "text": "Network Received Bytes"
-                              },
-                              {
-                                "key": "compute.googleapis.com/instance/network/sent_bytes_count",
-                                "text": "Network Sent Bytes"
-                              }
-                            ],
-                            "description": "Select the metric type you want to collect logs for."
-                          }
-                        },
-                        {
-                          "type": "OAuthForm",
-                          "parameters": {
-                            "clientIdLabel": "Client ID",
-                            "clientSecretLabel": "Client Secret",
-                            "connectButtonLabel": "Connect",
-                            "disconnectButtonLabel": "Disconnect"
-                          }
-                        },
-                        {
                           "type": "Markdown",
                           "parameters": {
                             "content": "#### 2. Enable Monitoring API\n Ensure that **Cloud Monitoring API** is enabled in your GCP project. You can enable it from the [Google Cloud Console](https://console.cloud.google.com/apis/library/monitoring.googleapis.com).\n\nGrant required IAM roles to your service account to allow access to Cloud Monitoring data."
@@ -352,9 +310,71 @@
                           "parameters": {
                             "content": "#### 3. Connect to Sentinel\n Click on **Connect** to start pulling monitoring logs from Google Cloud into Microsoft Sentinel."
                           }
+                        },
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "MetricType",
+                                "columnValue": "Metric_type"
+                              },
+                              {
+                                "columnName": "Project ID",
+                                "columnValue": "project_id"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "isPrimary": true,
+                            "label": "Add Credentials",
+                            "title": "Add Credentials",
+                            "subtitle": "Add Credentials",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "GCP Project ID",
+                                      "name": "project_id",
+                                      "required": true,
+                                      "description": "Enter your Google Cloud Project ID."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Metric Type",
+                                      "type": "text",
+                                      "name": "metric_type",
+                                      "required": true,
+                                      "placeholder": "Provide the metric type you want to collect logs for"
+                                    }
+                                  },
+                                  {
+                                    "type": "OAuthForm",
+                                    "parameters": {
+                                      "clientIdLabel": "Client ID",
+                                      "clientSecretLabel": "Client Secret",
+                                      "connectButtonLabel": "Connect",
+                                      "disconnectButtonLabel": "Disconnect"
+                                    }
+                                  }
+                                ],
+                                "title": "Connect Google Cloud Platform Cloud Monitoring to Microsoft Sentinel"
+                              }
+                            ]
+                          }
                         }
-                      ],
-                      "title": "Connect Google Cloud Platform Cloud Monitoring to Microsoft Sentinel"
+                      ]
                     }
                   ]
                 }
@@ -409,6 +429,22 @@
                       {
                         "name": "metric",
                         "type": "dynamic"
+                      },
+                      {
+                        "name": "resource",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "metricKind",
+                        "type": "string"
+                      },
+                      {
+                        "name": "valueType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "points",
+                        "type": "dynamic"
                       }
                     ]
                   }
@@ -429,7 +465,7 @@
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | extend TimeGenerated = now()",
+                    "transformKql": "source | extend TimeGenerated = now() | extend Metric = metric | extend MetricLabelsStorageType = tostring(metric.labels.storage_type) | extend MetricLabelsInstanceName = tostring(metric.labels.instance_name) | extend MetricLabelsDeviceName = tostring(metric.labels.device_name) | extend MetricLabelsDeviceType = tostring(metric.labels.device_type) | extend MetricType = tostring(metric.type) | extend ResourceType = tostring(resource.type) | extend ResourceLabelsZone = tostring(resource.labels.zone) | extend ResourceLabelsProjectId = tostring(resource.labels.project_id) | extend ResourceLabelsInstanceId = tostring(resource.labels.instance_id) | extend MetricKind = tostring(metricKind) | extend ValueType = tostring(valueType) | extend FirstPoint = array_index(points, 0) | extend PointsIntervalStartTime = todatetime(FirstPoint['interval']['startTime']) | extend PointsIntervalEndTime = todatetime(FirstPoint['interval']['endTime']) | extend PointsValueInt64Value = tolong(FirstPoint['value']['int64Value'])| project-away metric, resource, points",
                     "outputStream": "Custom-GCP_MONITORINGV2_CL"
                   }
                 ]
@@ -446,12 +482,72 @@
                   "name": "GCP_MONITORINGV2_CL",
                   "columns": [
                     {
-                      "name": "metric",
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Metric",
                       "type": "dynamic"
                     },
                     {
-                      "name": "TimeGenerated",
+                      "name": "MetricLabelsStorageType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MetricLabelsInstanceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MetricLabelsDeviceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MetricLabelsDeviceType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MetricType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsZone",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsProjectId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsInstanceId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MetricKind",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ValueType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Points",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "PointsIntervalStartTime",
                       "type": "datetime"
+                    },
+                    {
+                      "name": "PointsIntervalEndTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "PointsValueInt64Value",
+                      "type": "long"
                     }
                   ]
                 }
@@ -541,48 +637,6 @@
                   }
                 },
                 {
-                  "type": "Textbox",
-                  "parameters": {
-                    "label": "GCP Project ID",
-                    "name": "project_id",
-                    "required": true,
-                    "description": "Enter your Google Cloud Project ID."
-                  }
-                },
-                {
-                  "type": "Dropdown",
-                  "parameters": {
-                    "label": "Metric Type",
-                    "type": "text",
-                    "name": "metric_type",
-                    "required": true,
-                    "options": [
-                      {
-                        "key": "compute.googleapis.com/instance/disk/write_bytes_count",
-                        "text": "Compute Instance Disk Write Bytes Count"
-                      },
-                      {
-                        "key": "compute.googleapis.com/instance/network/received_bytes_count",
-                        "text": "Network Received Bytes"
-                      },
-                      {
-                        "key": "compute.googleapis.com/instance/network/sent_bytes_count",
-                        "text": "Network Sent Bytes"
-                      }
-                    ],
-                    "description": "Select the metric type you want to collect logs for."
-                  }
-                },
-                {
-                  "type": "OAuthForm",
-                  "parameters": {
-                    "clientIdLabel": "Client ID",
-                    "clientSecretLabel": "Client Secret",
-                    "connectButtonLabel": "Connect",
-                    "disconnectButtonLabel": "Disconnect"
-                  }
-                },
-                {
                   "type": "Markdown",
                   "parameters": {
                     "content": "#### 2. Enable Monitoring API\n Ensure that **Cloud Monitoring API** is enabled in your GCP project. You can enable it from the [Google Cloud Console](https://console.cloud.google.com/apis/library/monitoring.googleapis.com).\n\nGrant required IAM roles to your service account to allow access to Cloud Monitoring data."
@@ -593,9 +647,71 @@
                   "parameters": {
                     "content": "#### 3. Connect to Sentinel\n Click on **Connect** to start pulling monitoring logs from Google Cloud into Microsoft Sentinel."
                   }
+                },
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "MetricType",
+                        "columnValue": "Metric_type"
+                      },
+                      {
+                        "columnName": "Project ID",
+                        "columnValue": "project_id"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "isPrimary": true,
+                    "label": "Add Credentials",
+                    "title": "Add Credentials",
+                    "subtitle": "Add Credentials",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "GCP Project ID",
+                              "name": "project_id",
+                              "required": true,
+                              "description": "Enter your Google Cloud Project ID."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Metric Type",
+                              "type": "text",
+                              "name": "metric_type",
+                              "required": true,
+                              "placeholder": "Provide the metric type you want to collect logs for"
+                            }
+                          },
+                          {
+                            "type": "OAuthForm",
+                            "parameters": {
+                              "clientIdLabel": "Client ID",
+                              "clientSecretLabel": "Client Secret",
+                              "connectButtonLabel": "Connect",
+                              "disconnectButtonLabel": "Disconnect"
+                            }
+                          }
+                        ],
+                        "title": "Connect Google Cloud Platform Cloud Monitoring to Microsoft Sentinel"
+                      }
+                    ]
+                  }
                 }
-              ],
-              "title": "Connect Google Cloud Platform Cloud Monitoring to Microsoft Sentinel"
+              ]
             }
           ]
         }
@@ -695,6 +811,11 @@
               "defaultValue": "project_id",
               "type": "string",
               "minLength": 1
+            },
+            "metric_type": {
+              "defaultValue": "metric_type",
+              "type": "string",
+              "minLength": 1
             }
           },
           "variables": {
@@ -780,9 +901,11 @@
                   "apiEndpoint": "https://monitoring.googleapis.com/v3/projects/{{project_id}}/timeSeries",
                   "httpMethod": "GET",
                   "queryParameters": {
-                    "filter": "metricType={{metric_type}}[0]",
+                    "filter": "metric.type={{metric_type}}",
                     "interval.startTime": "{_QueryWindowStartTime}",
                     "interval.endTime": "{_QueryWindowEndTime}",
+                    "aggregation.alignmentPeriod": "300s",
+                    "aggregation.perSeriesAligner": "ALIGN_MEAN",
                     "pageSize": "100"
                   },
                   "queryWindowInMin": 10,
