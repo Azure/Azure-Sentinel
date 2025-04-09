@@ -1,7 +1,16 @@
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 import requests
 import yaml
 import re
-import os
 import subprocess
 import csv
 import json
@@ -9,7 +18,6 @@ from azure.monitor.ingestion import LogsIngestionClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import HttpResponseError
 import time
-import sys
 
 def get_modified_files(current_directory):
     # Add upstream remote if not already present
@@ -259,12 +267,18 @@ def extract_event_vendor_product(parser_query,parser_file):
     match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
         event_vendor = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventVendor' as 'Microsoft'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_vendor = 'Microsoft'
     else:
         print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
 
     match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
         event_product = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventProduct' as SchemaName + 'NativeTable'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_product = 'NativeTable'
     else:
         print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
     return event_vendor, event_product ,schema_name   
@@ -332,6 +346,7 @@ for file in parser_yaml_files:
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
     schema = normalization.get('Schema')
+    equivalent_built_in_parser = asim_parser.get('EquivalentBuiltInParser')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
     SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'

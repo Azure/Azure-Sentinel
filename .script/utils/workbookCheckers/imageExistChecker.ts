@@ -1,6 +1,6 @@
 import fs from "fs";
-import { WorkbookValidationError } from "../validationError";
-import { WorkbookMetadata } from "../workbookMetadata";
+import { WorkbookValidationError } from "../validationError.js";
+import { WorkbookMetadata } from "../workbookMetadata.js";
 
 const logoImagesFolderPath: string = "Workbooks/Images/Logos";
 const previewImagesFolderPath: string = "Workbooks/Images/Preview";

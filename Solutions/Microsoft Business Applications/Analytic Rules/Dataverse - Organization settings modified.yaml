@@ -1,0 +1,68 @@
+id: a6f6b734-3db8-4259-a988-69e0b8eac0c2
+kind: Scheduled
+name: Dataverse - Organization settings modified
+description: Identifies changes made at organization level in the Dataverse environment.
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078
+query: |
+  let query_frequency = 1h;
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message == "Update" and EntityName == "organization"
+  | mv-expand Fields
+  | extend FieldName = tostring(Fields.Name)
+  | extend Value = tostring(Fields.Value)
+  | where FieldName != "organizationid"
+  | lookup MSBizAppsOrgSettings on FieldName
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      FieldName,
+      Value,
+      DisplayName,
+      Description,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - {{DisplayName}} changed in {{InstanceUrl}} '
+  alertDescriptionFormat: 'Organization setting {{DisplayName}} : {{Description}}
+    changed by {{UserId}}'
+version: 3.2.0

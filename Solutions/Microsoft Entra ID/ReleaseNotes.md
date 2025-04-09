@@ -1,5 +1,8 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.1       | 08-04-2025                     | Updated **Analytical Rule** [Anomalous sign-in location by user account and authenticating application]								   |
+| 3.3.0       | 28-01-2025                     | Added new **Analytic Rule** AzureRBAC to the Solution									|	    			
+| 3.2.10      | 19-12-2024                     | Updated **Analytical Rule** MFARejectedbyUser.yaml								|	    			
 | 3.2.9       | 27-08-2024                     | Updated **Analytical Rule** for missing TTP	    																																		|
 | 3.2.8       | 19-08-2024                     | Exclude Result Reason "RoleAssignmentExists"	from **Analytic Rule** [NRT PIM Elevation Request Rejected]                						                        |
 | 3.2.7       | 12-06-2024                     | Fixed the bugs from **Analytic Rules**        																																		|

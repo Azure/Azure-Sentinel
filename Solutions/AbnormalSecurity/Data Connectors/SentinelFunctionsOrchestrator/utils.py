@@ -17,7 +17,7 @@ def try_str_to_datetime(time: str) -> datetime:
         return datetime.strptime(time, TIME_FORMAT)
     except Exception as _:
         pass
-    return datetime.strptime(time, TIME_FORMAT_WITHMS)
+    return datetime.strptime((time[:26] + 'Z') if len(time) > 26 else time, TIME_FORMAT_WITHMS)
 
 
 class TimeRange(BaseModel):
@@ -55,6 +55,7 @@ class Context(BaseModel):
     LIMIT: timedelta
     NUM_CONCURRENCY: int
     MAX_PAGE_NUMBER: int
+    SINGLE_THREAT_PAGE_SIZE: int
     BASE_URL: str
     API_TOKEN: str
     TIME_RANGE: TimeRange
@@ -140,15 +141,16 @@ def get_context(stored_date_time: str) -> Context:
     BASE_URL = os.environ.get("API_HOST", "https://api.abnormalplatform.com/v1")
     API_TOKEN = os.environ["ABNORMAL_SECURITY_REST_API_TOKEN"]
     OUTAGE_TIME = timedelta(
-        minutes=int(os.environ.get("ABNORMAL_OUTAGE_TIME_MIN", "15"))
+        minutes=int(os.environ.get("ABNORMAL_OUTAGE_TIME_MIN", "45"))
     )
     LAG_ON_BACKEND = timedelta(
         seconds=int(os.environ.get("ABNORMAL_LAG_ON_BACKEND_SEC", "30"))
     )
     FREQUENCY = timedelta(minutes=int(os.environ.get("ABNORMAL_FREQUENCY_MIN", "5")))
     LIMIT = timedelta(minutes=int(os.environ.get("ABNORMAL_LIMIT_MIN", "6")))
-    NUM_CONCURRENCY = int(os.environ.get("ABNORMAL_NUM_CONCURRENCY", "5"))
-    MAX_PAGE_NUMBER = int(os.environ.get("ABNORMAL_MAX_PAGE_NUMBER", "3"))
+    NUM_CONCURRENCY = int(os.environ.get("ABNORMAL_NUM_CONCURRENCY", "2"))
+    MAX_PAGE_NUMBER = int(os.environ.get("ABNORMAL_MAX_PAGE_NUMBER", "6"))
+    SINGLE_THREAT_PAGE_SIZE = int(os.environ.get("ABNORMAL_SINGLE_THREAT_PAGE_SIZE", "40"))
 
     STORED_TIME = try_str_to_datetime(stored_date_time)
     CURRENT_TIME = try_str_to_datetime(datetime.now().strftime(TIME_FORMAT))
@@ -171,7 +173,8 @@ def get_context(stored_date_time: str) -> Context:
         CURRENT_TIME=CURRENT_TIME,
         LIMIT=LIMIT,
         TRACE_ID=uuid4(),
-        PYTHON_VERSION=sys.version
+        PYTHON_VERSION=sys.version,
+        SINGLE_THREAT_PAGE_SIZE=SINGLE_THREAT_PAGE_SIZE
     )
 
 

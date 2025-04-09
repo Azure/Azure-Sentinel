@@ -11,6 +11,7 @@ from SentinelFunctionsOrchestrator.utils import (
 )
 from pydantic import ValidationError
 from uuid import uuid4
+import random 
 
 
 class TestTryStrToDateTime(unittest.TestCase):
@@ -27,6 +28,29 @@ class TestTryStrToDateTime(unittest.TestCase):
         expected = datetime.strptime(time_str, TIME_FORMAT_WITHMS)
         result = try_str_to_datetime(time_str)
         self.assertEqual(result, expected)
+    
+    def test_format_with_ns(self):
+        # Test case for format with milliseconds
+        time_str_ns = "2024-10-01T12:34:56.123456789Z"
+        time_str_ms = "2024-10-01T12:34:56.123456Z"
+        expected = datetime.strptime(time_str_ms, TIME_FORMAT_WITHMS)
+        result = try_str_to_datetime(time_str_ns)
+        self.assertEqual(result, expected)
+
+    def test_format_with_ns_2(self):
+        # Test case for format with milliseconds
+        time_str_ns = "2024-10-01T12:34:56.12345678913Z"
+        result = try_str_to_datetime(time_str_ns)
+        self.assertIsNotNone(result)
+    
+    def test_format_with_ns_3(self):
+        # Test case for format with milliseconds
+        f = ""
+        for i in range(100):
+            f +=  random.choice("1234567890")
+            time_str_ns = f"2024-10-01T12:34:56.{f}Z"
+            result = try_str_to_datetime(time_str_ns)
+            self.assertIsNotNone(result)
 
     def test_invalid_format(self):
         # Test case for invalid format
@@ -144,7 +168,8 @@ class TestComputeIntervals(unittest.TestCase):
             STORED_TIME=datetime(2024, 10, 1, 12, 55),
             CURRENT_TIME=datetime(2024, 10, 1, 13, 0),
             TRACE_ID=uuid4(),
-            PYTHON_VERSION="3.11"
+            PYTHON_VERSION="3.11",
+            SINGLE_THREAT_PAGE_SIZE=40
         )
 
     def test_valid_intervals(self):

@@ -1,0 +1,135 @@
+id: 54f4ceb4-fd83-4633-b5b0-c0de9feb8890
+name: TI map IP entity to Network Session Events (ASIM Network Session schema)
+description: |
+  'This rule identifies a match Network Sessions for which the source or destination IP address is a known IoC. This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSVPCFlow
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight_CL
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: CiscoMeraki
+    dataTypes:
+      - Syslog
+      - CiscoMerakiNativePoller
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let IP_TI = materialize (
+    ThreatIntelIndicators
+    //extract key part of kv pair
+       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | extend NetworkSourceIP = toupper(ObservableValue)
+       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | extend TI_ipEntity = NetworkSourceIP
+    | where TI_ipEntity != "NO_IP"
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and ValidUntil > now()
+  );
+  IP_TI
+     | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
+    // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+   | join kind=innerunique 
+   (
+     _Im_NetworkSession (starttime=ago(dt_lookBack))
+     | where isnotempty(SrcIpAddr)
+     | summarize imNWS_mintime=min(TimeGenerated), imNWS_maxtime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, Dvc, EventProduct, EventVendor 
+     | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.SrcIpAddr == $right.TI_ipEntity
+     | project-rename SrcMatch = IsActive
+     | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.DstIpAddr == $right.TI_ipEntity
+     | project-rename DstMatch = IsActive
+     | where SrcMatch or DstMatch
+     | extend 
+         IoCIP = iff(SrcMatch, SrcIpAddr, DstIpAddr),
+         IoCDirection = iff(SrcMatch, "Source", "Destination")
+   )on $left.TI_ipEntity == $right.IoCIP
+   | where imNWS_mintime < ValidUntil
+   | extend Description = tostring(parse_json(Data).description)
+   | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+   | project imNWS_mintime, imNWS_maxtime, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, SrcIpAddr, DstIpAddr, IoCDirection, IoCIP, Dvc, EventVendor, EventProduct
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IoCIP
+
+customDetails:
+  EventStartTime: imNWS_mintime
+  EventEndTime: imNWS_maxtime
+  IoCDescription: Description
+  ActivityGroupNames: ActivityGroupNames
+  IndicatorId: IndicatorId
+  ThreatType: ThreatType
+  IoCExpirationTime: ExpirationDateTime
+  IoCConfidenceScore: ConfidenceScore
+  IoCIPDirection: IoCDirection
+
+alertDetailsOverride:
+  alertDisplayNameFormat: A network session {{IoCDirection}} address {{IoCIP}} matched an IoC. 
+  alertDescriptionFormat: The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blead for more information on the indicator.
+
+tags:
+  - Schema: ASIMNetworkSession
+    SchemaVersion: 0.2.4
+
+version: 1.2.6
+kind: Scheduled

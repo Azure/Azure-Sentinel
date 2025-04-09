@@ -1,0 +1,56 @@
+id: 90bcbd4e-e8b5-4a5d-9fe6-d0f9f0220b4a
+name: Dataverse - Generic client app used to access production environments
+description: This query detects the use of the built-in "Dynamics 365 Example Application"
+  to access production environments. This generic app can not be restricted by Azure
+  AD authorization controls and could be abused to gain unauthorized access via Web
+  API.
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - Execution
+relevantTechniques:
+  - T1106
+  - T0834
+query: |
+  SigninLogs
+  | where AppId == "51f81489-12ee-4a9e-aaae-a2591f45987d"
+  | where ResourceIdentity == "00000007-0000-0000-c000-000000000000"
+  | project-rename SigninTime = TimeGenerated
+  | where ResultType == 0
+  | join kind=inner(DataverseActivity
+      | where Message == "UserSignIn")
+      on $left.UserPrincipalName == $right.UserId
+  | where TimeGenerated between (SigninTime .. (SigninTime + 1h))
+  | summarize D365SigninTime = arg_min(TimeGenerated, *) by SigninTime, UserPrincipalName, IPAddress, UserAgent
+  | extend CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      SigninTime,
+      D365SigninTime,
+      UserPrincipalName,
+      IPAddress,
+      UserAgent,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - columnName: InstanceUrl
+        identifier: InstanceName
+      - columnName: CloudAppId
+        identifier: AppId
+  - entityType: Account
+    fieldMappings:
+      - columnName: UPNSuffix
+        identifier: UPNSuffix
+      - columnName: AccountName
+        identifier: Name
+version: 3.2.0

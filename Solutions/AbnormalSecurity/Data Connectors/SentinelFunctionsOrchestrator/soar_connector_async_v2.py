@@ -36,7 +36,7 @@ def get_headers(ctx: Context) -> Dict[str, str]:
         "X-Abnormal-Trace-Id": str(ctx.TRACE_ID),
         "Authorization": f"Bearer {ctx.API_TOKEN}",
         "Soar-Integration-Origin": "AZURE SENTINEL",
-        "Azure-Sentinel-Version": "2024-10-03 V2",
+        "Azure-Sentinel-Version": "2024-12-24 V2",
     }
 
 
@@ -50,7 +50,7 @@ def compute_url(base_url: str, pathname: str, params: Dict[str, str]) -> str:
     return endpoint
 
 
-async def fetch_with_retries(url, retries=3, backoff=4, timeout=10, headers=None):
+async def fetch_with_retries(url, retries=3, backoff=8, timeout=60, headers=None):
     logging.info(f"Fetching url: {url}")
     async def fetch(session, url):
         async with session.get(url, headers=headers, timeout=timeout) as response:
@@ -68,23 +68,27 @@ async def fetch_with_retries(url, retries=3, backoff=4, timeout=10, headers=None
             logging.info(f"API Response Status for URL: `{url}` is `{response.status}`")
             return json.loads(text)
 
-    async with aiohttp.ClientSession() as session:
-        for attempt in range(1, retries + 1):
+    for attempt in range(1, retries + 1):
+        async with aiohttp.ClientSession() as session:
             try:
+                logging.info(f"Fetch Attempt `{attempt}` for url: `{url}`")
                 response = await fetch(session, url)
                 return response
             except aiohttp.ClientResponseError as e:
                 if 500 <= e.status < 600:
-                    logging.error("Attempt {attempt} failed with error", exc_info=e)
+                    logging.error(f"Attempt {attempt} for {url} failed with error", exc_info=e)
                     if attempt == retries:
                         raise
                     else:
                         await asyncio.sleep(backoff**attempt)
                 else:
                     raise
-            except aiohttp.ClientError as e:
-                logging.error("Request failed with non-retryable error", exc_info=e)
-                raise
+            except Exception as e:
+                logging.error(f"Attempt {attempt} for {url} failed with error", exc_info=e)
+                if attempt == retries:
+                    raise
+                else:
+                    await asyncio.sleep(backoff**attempt)
 
 
 async def call_threat_campaigns_endpoint(
@@ -97,9 +101,9 @@ async def call_threat_campaigns_endpoint(
 
         threat_campaigns = set()
 
-        nextPageNumber = 1
-        while nextPageNumber:
-            params["pageNumber"] = nextPageNumber
+        pageNumber = 1
+        while pageNumber:
+            params["pageNumber"] = pageNumber
             endpoint = compute_url(ctx.BASE_URL, "/v1/threats", params)
             headers = get_headers(ctx)
 
@@ -112,9 +116,10 @@ async def call_threat_campaigns_endpoint(
             )
 
             nextPageNumber = response.get("nextPageNumber")
-            assert nextPageNumber is None or nextPageNumber > 0
+            assert nextPageNumber is None or nextPageNumber == pageNumber + 1
+            pageNumber = nextPageNumber
 
-            if nextPageNumber is None or nextPageNumber > ctx.MAX_PAGE_NUMBER:
+            if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
                 break
 
         return list(threat_campaigns)
@@ -130,9 +135,9 @@ async def call_cases_endpoint(
 
         case_ids = set()
 
-        nextPageNumber = 1
-        while nextPageNumber:
-            params["pageNumber"] = nextPageNumber
+        pageNumber = 1
+        while pageNumber:
+            params["pageNumber"] = pageNumber
             endpoint = compute_url(ctx.BASE_URL, "/v1/cases", params)
             headers = get_headers(ctx)
 
@@ -143,9 +148,10 @@ async def call_cases_endpoint(
             case_ids.update([case["caseId"] for case in response.get("cases", [])])
 
             nextPageNumber = response.get("nextPageNumber")
-            assert nextPageNumber is None or nextPageNumber > 0
+            assert nextPageNumber is None or nextPageNumber == pageNumber + 1
+            pageNumber = nextPageNumber
 
-            if nextPageNumber is None or nextPageNumber > ctx.MAX_PAGE_NUMBER:
+            if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
                 break
 
         return list(case_ids)
@@ -155,27 +161,43 @@ async def call_single_threat_endpoint(
     ctx: Context, threat_id: str, semaphore: asyncio.Semaphore
 ) -> List[str]:
     async with semaphore:
-        endpoint = compute_url(ctx.BASE_URL, f"/v1/threats/{threat_id}", params={})
-        headers = get_headers(ctx)
-
-        response = await fetch_with_retries(url=endpoint, headers=headers)
-
         filtered_messages = []
-        for message in response["messages"]:
-            message_id = message["abxMessageId"]
-            remediation_time_str = message["remediationTimestamp"]
 
-            remediation_time = try_str_to_datetime(remediation_time_str)
-            if (
-                remediation_time >= ctx.CLIENT_FILTER_TIME_RANGE.start
-                and remediation_time < ctx.CLIENT_FILTER_TIME_RANGE.end
-            ):
-                filtered_messages.append(json.dumps(message, sort_keys=True))
-                logging.info(f"Successfully processed v2 threat message: {message_id}")
-            else:
-                logging.warning(f"Skipped processing v2 threat message: {message_id}")
+        pageNumber = 1
+        params = {"pageSize": ctx.SINGLE_THREAT_PAGE_SIZE}
+        while pageNumber:
+            params["pageNumber"] = pageNumber
+            print("Single Threat Params:", params)
+            endpoint = compute_url(ctx.BASE_URL, f"/v1/threats/{threat_id}", params=params)
+            headers = get_headers(ctx)
 
-        return filtered_messages
+            response = await fetch_with_retries(url=endpoint, headers=headers)
+
+            for message in response["messages"]:
+                message_id = message["abxMessageId"]
+                remediation_time_str = message["remediationTimestamp"]
+
+                remediation_time = try_str_to_datetime(remediation_time_str)
+                if (
+                    remediation_time >= ctx.CLIENT_FILTER_TIME_RANGE.start
+                    and remediation_time < ctx.CLIENT_FILTER_TIME_RANGE.end
+                ):
+                    filtered_messages.append(json.dumps(message, sort_keys=True))
+                    logging.info(f"Successfully processed v2 threat message: {message_id}")
+                elif remediation_time < ctx.CLIENT_FILTER_TIME_RANGE.start:
+                    logging.info(f"Skipping further messages as remediationTime {remediation_time} of {message_id} < {ctx.CLIENT_FILTER_TIME_RANGE.start}")
+                    return list(set(filtered_messages))
+                else:
+                    logging.warning(f"Skipped processing v2 threat message: {message_id}")
+
+            nextPageNumber = response.get("nextPageNumber")
+            assert nextPageNumber is None or nextPageNumber == pageNumber + 1
+            pageNumber = nextPageNumber
+
+            if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
+                break
+        
+        return list(set(filtered_messages))
 
 
 async def call_single_case_endpoint(

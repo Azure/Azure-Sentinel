@@ -234,6 +234,17 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
                         new List<string>() { "Url" }
                     }
                 }
+            },
+            {
+                EntityType.SentinelEntities,
+                new EntityIdentifiers()
+                {
+                    Identifiers = new List<string>() { "Entities" },
+                    RequiredIdentifiers = new List<List<string>>()
+                    {
+                        new List<string>() { "Entities" }
+                    }
+                }
             }
         };
     }

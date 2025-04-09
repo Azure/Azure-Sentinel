@@ -12,10 +12,11 @@ For more information, see [Normalization and the Advanced Security Information M
 
 <br>
 
-To deploy a single schema use the buttons below:
+To deploy a single schema use the buttons below :
 
-| ASim Schema | Deploy | Deploy to Azure Gov | 
-|-------------|--------| ------------------- | 
+| ASim Schema | Deploy | Deploy to Azure Gov |
+| --------------- |-------------|--------|
+|[Alert Event](https://aka.ms/ASimAlertEventDoc)|[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAlertEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAlertEventARMgov) |
 | [Audit Event](https://aka.ms/ASimAuditEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuditEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuditEventARMgov) |
 | [Authentication](https://aka.ms/ASimAuthenticationDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuthenticationARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuthenticationARMgov) |
 | [Dhcp Event](https://aka.ms/ASimDhcpEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDhcpEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimDhcpEventARMgov) |
@@ -26,8 +27,3 @@ To deploy a single schema use the buttons below:
 | [Registry Event](https://aka.ms/ASimRegistryEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimRegistryEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimRegistryEventARMgov) |
 | [UserManagement](https://aka.ms/ASimUserManagementDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimUserManagementARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimUserManagementARMgov) |
 | [Web Session](https://aka.ms/ASimWebSessionDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimWebSessionARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimWebSessionARMgov)|
-
-
-
-
-
