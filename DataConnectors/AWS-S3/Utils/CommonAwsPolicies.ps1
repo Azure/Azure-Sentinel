@@ -66,7 +66,7 @@ function Get-OIDCRoleArnPolicy {
 				'Condition' = @{
 					'StringEquals' = @{
 						"sts.windows.net/$($SentinelTenantId)/:aud" = "$($SentinelClientId)";
-						'sts:RoleSessionName'                       = "MicrosoftDefenderForClouds_$($WorkspaceId)";
+						'sts:RoleSessionName'                       = "MicrosoftSentinel_$($WorkspaceId)";
 					};
 				};
 			}
