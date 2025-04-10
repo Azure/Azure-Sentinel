@@ -90,8 +90,7 @@ class PrismaCloudConnector:
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
   
-        logging.info('update last alert ts {}'.format(alert_start_ts_ms))
-        self.last_alert_ts = alert_start_ts_ms
+        self.last_alert_ts = last_alert_ts_ms
 
         conn = self.sentinel.get_log_type_connector(ALERT_LOG_TYPE)
         if conn:
