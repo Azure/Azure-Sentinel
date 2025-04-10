@@ -86,6 +86,7 @@ class PrismaCloudConnector:
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
             last_alert_ts_ms = alert['alertTime']
             alert = self.clear_alert(alert)
+            logging.info('No of alerts send to Sentinel {}'.format(alert))
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
 
@@ -172,7 +173,7 @@ class PrismaCloudConnector:
                 raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
             res = await response.text()
             res = json.loads(res)
-
+            logging.info('{} API Response'.format(res))
         for item in res['items']:
             yield item
 
