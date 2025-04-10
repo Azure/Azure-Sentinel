@@ -1,0 +1,25 @@
+id: dd4a480b-aa24-4b62-b1f3-f538d8abbdfb
+name: Hunt for email bombing attacks
+description: |
+  This query helps to hunt for possible email bombing attacks in Microsoft Defender for Office 365.
+description-detailed: |
+  In this type of attacks threat actors initiate link listing attacks - a type of email bombing attack, where threat actors sign up targeted emails to multiple email subscription services to flood email addresses indirectly with subscribed content.
+  More details: https://www.microsoft.com/en-us/security/blog/2024/05/15/threat-actors-misusing-quick-assist-in-social-engineering-attacks-leading-to-ransomware/ and https://www.hhs.gov/sites/default/files/email-bombing-sector-alert-tlpclear.pdf
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  EmailEvents
+  | where EmailDirection == "Inbound"
+  | make-series Emailcount = count()
+                on Timestamp step 1h by RecipientObjectId
+  | extend (Anomalies, AnomalyScore, ExpectedEmails) = series_decompose_anomalies(Emailcount)
+  | mv-expand Emailcount, Anomalies, AnomalyScore, ExpectedEmails to typeof(double), Timestamp
+  | where Anomalies != 0
+  | where AnomalyScore >= 10
+version: 1.0.0
