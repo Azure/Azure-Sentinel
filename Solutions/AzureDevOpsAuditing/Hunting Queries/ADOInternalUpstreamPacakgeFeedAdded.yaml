@@ -17,7 +17,7 @@ query: |
   let allowed_sources = dynamic([]);
   let allowed_locations = dynamic([]);
   let known_packages = (
-  AzureDevOpsAuditing
+  ADOAuditLogs
   | where TimeGenerated > ago(lookback) and TimeGenerated < starttime
   // Look for feeds created or modified at either the organization or project level
   | where OperationName matches regex "Artifacts.Feed.(Org|Project).Modify"
@@ -30,7 +30,7 @@ query: |
   | extend SourceLocation = tostring(UpstreamsAdded.Location)
   | summarize by SourceLocation);
   // Look for internal feeds being added from a new location
-  AzureDevOpsAuditing
+  ADOAuditLogs
   | where TimeGenerated between(starttime..endtime)
   | where OperationName matches regex "Artifacts.Feed.(Org|Project).Modify"
   | where Details has "UpstreamSources, added"
@@ -50,18 +50,18 @@ query: |
   | extend SourceStatus = tostring(UpstreamsAdded.Status)
   | project-reorder TimeGenerated, OperationName, ScopeDisplayName, ProjectName, FeedName, SourceName, SourceLocation, SourceProtocol, ActorUPN, UserAgent, IpAddress
   // See if there are details of who created this feed and when to add context
-  | join kind=leftouter (AzureDevOpsAuditing
+  | join kind=leftouter (ADOAuditLogs
   | where TimeGenerated > ago(lookback)
   | where OperationName matches regex "Artifacts.Feed.(Org|Project).Create"
   | extend FeedId = tostring(Data.FeedId)
   | project FeedId, FeedCreatedBy=ActorUPN, TimeCreated=TimeGenerated) on FeedId, $left.ActorUPN==$right.FeedCreatedBy
-  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: ActorUPN
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: IpAddress
+version: 1.0.0
