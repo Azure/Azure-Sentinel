@@ -3381,7 +3381,7 @@ $Script:SupportedConfigurationVersion = "2.4"
             # Verify the cache directory exists
             $scriptFolder = $Script:scriptFolder
             $ScriptAddonCachePath = $scriptFolder + '\Config\Add-Ons\OnlineCache\'
-            $GithubSourcePath = "https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/ESICollector-Addons"
+            $GithubSourcePath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Operations/ESICollector-Addons"
 
             if ($Beta)
             {
@@ -3527,7 +3527,7 @@ $Script:SupportedConfigurationVersion = "2.4"
 
         # Process in Memory without storage
         # Retrieve File Checksum list
-        $GithubSourcePath = "https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/ESICollector-Addons"
+        $GithubSourcePath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Operations/ESICollector-Addons"
         
         if ($Beta)
         {

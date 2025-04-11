@@ -16,7 +16,7 @@ The following Azure roles and permissions will be needed at various stages of in
 - Logic app contributor
 
 - Recorded Future Token
-The **RecordedFuture_IP_SCF_ImportToDefenderATP** logic app uses Graph API and permissions **ThreatIndicators.ReadWrite.OwnedBy** are described in [Microsoft Graph Security Permissions](https://learn.microsoft.com/en-us/graph/api/tiindicator-submittiindicators?view=graph-rest-beta&tabs=http#permissions).
+The **RecordedFuture_IP_SCF_ImportToDefenderEndpoint** logic app uses Graph API and permissions **ThreatIndicators.ReadWrite.OwnedBy** are described in [Microsoft Graph Security Permissions](https://learn.microsoft.com/en-us/graph/api/tiindicator-submittiindicators?view=graph-rest-beta&tabs=http#permissions).
 
 - [Microsoft Graph Security](https://learn.microsoft.com/en-us/graph/api/resources/tiindicator?view=graph-rest-beta)
 - [Microsoft Graph Security & Azure Logic Apps](https://learn.microsoft.com/en-us/azure/connectors/connectors-integrate-security-operations-create-api-microsoft-graph-security)
@@ -31,7 +31,7 @@ Playbooks takes a dependency on functionality like Azure Logic Apps, Azure Monit
 How to use cost analysis to monitor your costs:
 
 - https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/cost-analysis-common-uses
-  
+
 ## Adjust Cadence of pulling Risk Lists
 
 You can adjust the cadence in the Recurrence block of the IndicatorProcessor logic apps.
@@ -42,14 +42,14 @@ However, if you do so it is critical that you also adjust the expirationDateTime
 
 ## Installation order
 
-Due to internal Microsoft Logic Apps dependencies, please deploy first the **RecordedFuture_IP_SCF_ImportToDefenderATP** playbook before the **RecordedFuture_IP_SCF_IndicatorProcessor** one.
+Due to internal Microsoft Logic Apps dependencies, please deploy first the **RecordedFuture_IP_SCF_ImportToDefenderEndpoint** playbook before the **RecordedFuture_IP_SCF_IndicatorProcessor** one.
 
 ## Installation links
 
-Links to deploy the RecordedFuture_IP_SCF_ImportToDefenderATP playbook template:
+Links to deploy the RecordedFuture_IP_SCF_ImportToDefenderEndpoint playbook template:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_IP_SCF%2FRecordedFuture_IP_SCF_ImportToDefenderATP.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_IP_SCF%2FRecordedFuture_IP_SCF_ImportToDefenderATP.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_IP_SCF%2FRRecordedFuture_IP_SCF_ImportToDefenderEndpoint.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_IP_SCF%2FRecordedFuture_IP_SCF_ImportToDefenderEndpoint.json)
 
 Links to deploy the RecordedFuture_IP_SCF_IndicatorProcessor playbook template:
 
