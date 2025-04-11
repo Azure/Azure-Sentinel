@@ -2,12 +2,12 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Create SNOW record - Alert trigger",
+        "title": "Create ServiceNow record - Incident trigger",
         "description": "This playbook will open a Service Now incident when a new incident is opened in Microsoft Sentinel.",
-        "prerequisites": "We will need following data to make SNOW connector: 1. SNOW instance (ex. xyz.service-now.com); 2. Username; 3. Password.; After deployment assign Microsoft Sentinel Reader role to the Playbooks Managed Identity.",
+        "prerequisites": [ "1. Existing ServiceNow instance (ex. xyz.service-now.com)", "2. ServiceNow credentials: Username and Password" ],
         "lastUpdateTime": "2022-07-13T00:00:00.000Z",
         "tags": [ "Sync" ],
-        "entities": [],
+        "entities": [ ],
         "support": {
             "tier": "community"
         },
@@ -17,17 +17,17 @@
         "releaseNotes": [
             {
                 "version": "1.0.0",
-                "title": "Create SNOW record",
+                "title": "Create ServiceNow record",
                 "notes": [ "Initial version" ]
             }
         ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "CreateSNOWRecord",
+            "defaultValue": "CreateServiceNowRecord",
             "type": "string",
             "metadata": {
-                "description": "Alert trigger"
+                "description": "Incident trigger"
             }
         }
     },
@@ -69,7 +69,7 @@
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "tags": {
-                "hidden-SentinelTemplateName": "CreateSNOWRecord-Alert",
+                "hidden-SentinelTemplateName": "CreateSNOWRecord-Incident",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -91,7 +91,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_alert": {
+                        "Microsoft_Sentinel_incident": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -102,24 +102,11 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             }
                         }
                     },
                     "actions": {
-                        "Alert_-_Get_incident": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            }
-                        },
                         "Create_Record": {
                             "runAfter": {
                                 "Switch": [
@@ -129,11 +116,11 @@
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                    "comments": "@body('Alert_-_Get_incident')?['properties']?['incidentUrl']",
-                                    "description": "Incident description: @{body('Alert_-_Get_incident')?['properties']?['description']};\nSeverity: @{body('Alert_-_Get_incident')?['properties']?['severity']}",
+                                    "comments": "@triggerBody()?['object']?['properties']?['incidentUrl']",
+                                    "description": "Incident description: @{triggerBody()?['object']?['properties']?['description']};\nSeverity: @{triggerBody()?['object']?['properties']?['severity']}",
                                     "impact": "@variables('Severity')",
-                                    "number": "@body('Alert_-_Get_incident')?['name']",
-                                    "short_description": "@body('Alert_-_Get_incident')?['properties']?['title']",
+                                    "number": "@triggerBody()?['object']?['name']",
+                                    "short_description": "@triggerBody()?['object']?['properties']?['title']",
                                     "urgency": "@variables('Severity')"
                                 },
                                 "host": {
@@ -149,12 +136,8 @@
                                 }
                             }
                         },
-                        "Initialize_Severity_variable": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
+                        "Initialize_variable": {
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -168,7 +151,7 @@
                         },
                         "Switch": {
                             "runAfter": {
-                                "Initialize_Severity_variable": [
+                                "Initialize_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -203,7 +186,7 @@
                             "default": {
                                 "actions": {}
                             },
-                            "expression": "@body('Alert_-_Get_incident')?['properties']?['severity']",
+                            "expression": "@triggerBody()?['object']?['properties']?['severity']",
                             "type": "Switch"
                         }
                     },
