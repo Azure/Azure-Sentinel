@@ -1903,7 +1903,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $instructionArray = $templateSpecConnectorData.instructionSteps
                             ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
 
-                            $hasFunctionAppManualDeploymentText = $instructionArray | Where-Object { $_title -and $_.title.IndexOf('Manual Deployment of Azure Functions') -gt 0 }
+                            $hasFunctionAppManualDeploymentText = $instructionArray | Where-Object { $_.title -and $_.title.IndexOf('Manual Deployment of Azure Functions') -gt 0 }
 
                             if ($existingFunctionApp -eq $false)
                             {
