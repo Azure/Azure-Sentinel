@@ -1903,7 +1903,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $instructionArray = $templateSpecConnectorData.instructionSteps
                             ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
 
-                            $hasFunctionAppManualDeploymentText = $instructionArray | Where-Object { $_.description.IndexOf('Manual Deployment of Azure Functions') -gt 0 }
+                            $hasFunctionAppManualDeploymentText = $instructionArray | Where-Object { $_title -and $_.title.IndexOf('Manual Deployment of Azure Functions') -gt 0 }
 
                             if ($existingFunctionApp -eq $false)
                             {
@@ -1912,6 +1912,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 {
                                     if ($null -eq $item.description -and $item.instructions.Count -gt 0)
                                     {
+                                        $hasFunctionAppManualDeploymentText = $false
                                         foreach ($instructionItem in $item.instructions)
                                         {
                                             $parameterCount = $instructionItem.parameters.Count -gt 0
@@ -1928,7 +1929,14 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                                     }
                                                 }
 
-                                                $hasFunctionAppManualDeploymentText = $instructionItem.parameters.instructionSteps | Where-Object { $_.description.IndexOf('Manual Deployment of Azure Functions') -gt 0 }
+                                                foreach ($desc in $instructionItem.parameters.instructionSteps)
+                                                {
+                                                    if ($desc.title -and $desc.title.IndexOf('Manual Deployment of Azure Functions') -gt 0)
+                                                    {
+                                                        $hasFunctionAppManualDeploymentText = $true
+                                                        break
+                                                    }
+                                                }
                                             }
                                         }
                                     }
