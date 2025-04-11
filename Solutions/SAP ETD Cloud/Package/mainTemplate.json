@@ -99,7 +99,7 @@
                 "description": "Synch alerts coming in from SAP Enterprise Threat Detection into Microsoft Sentinel (one way)",
                 "displayName": "SAP ETD - Synch alerts",
                 "enabled": false,
-                "query": "let minThreshold= 1;\nlet minScore= 50;\nlet lookBack= 70d;\nSAPETDAlerts_CL\n| mv-expand TriggeringEvents\n| extend sapOriginalEvent = tostring(TriggeringEvents.OriginalEvent)\n| where PatternName <> \"Logon from external with SAP standard users\"\n| summarize arg_max(TimeGenerated, *) by AlertId\n| where Threshold >= minThreshold and Score >= minScore\n| extend NewEvent= split(sapOriginalEvent, \"\\n\")\n| mv-expand NewEvent to typeof(string)\n| parse NewEvent with Key: string \":\" Value: string\n| extend Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value), Key= iff(isempty(Key) and isnotempty(NewEvent), TriggeringEvents.EventLogType, Key)\n| extend KV= bag_pack(Key, Value)\n| summarize KeyValues= make_bag(KV), take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, TriggeringEvents.EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, TriggeringEvents.OriginalEvent) by AlertId\n| extend SystemId= KeyValues.sid, ClienId= KeyValues.client, Host= KeyValues.instance_host, Instance= KeyValues.instance_name, User= KeyValues.user_name, IP= KeyValues.user_ip\n",
+                "query": "let minThreshold= 1;\nlet minScore= 50;\nlet lookBack= 70d;\nSAPETDAlerts_CL\n| mv-expand NormalizedTriggeringEvents\n| extend sapOriginalEvent = tostring(NormalizedTriggeringEvents.OriginalEvent)\n| where PatternName <> \"Logon from external with SAP standard users\"\n| summarize arg_max(TimeGenerated, *) by AlertId\n| where Threshold >= minThreshold and Score >= minScore\n| extend NewEvent= split(sapOriginalEvent, \"\\n\")\n| mv-expand NewEvent to typeof(string)\n| parse NewEvent with Key: string \":\" Value: string\n| extend Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value), Key= iff(isempty(Key) and isnotempty(NewEvent), NormalizedTriggeringEvents.EventLogType, Key)\n| extend KV= bag_pack(Key, Value)\n| summarize KeyValues= make_bag(KV), take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, NormalizedTriggeringEvents.EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, NormalizedTriggeringEvents.OriginalEvent) by AlertId\n| extend SystemId= KeyValues.sid, ClienId= KeyValues.client, Host= KeyValues.instance_host, Instance= KeyValues.instance_name, User= KeyValues.user_name, IP= KeyValues.user_ip\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P2D",
                 "severity": "Medium",
@@ -232,7 +232,7 @@
                 "description": "Identifies logons from an unexpected network.\nSource Action: Logon to the backend system from an IP address which is not assigned to one of the networks.\nnetworks can be maintained in the \"SAP - Networks\" watchlist of the Microsoft Sentinel Solution for SAP package.\n\n*Data Sources: SAP Enterprise Thread Detection Solution -  Alerts*",
                 "displayName": "SAP ETD - Login from unexpected network",
                 "enabled": false,
-                "query": "let regex_ip = @\"user_ip:(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\";\nlet regex_user = @\"user_name:(\\w+)\";\nlet regex_sid = @\"sid:(\\w{3})\";\nlet regex_client = @\"client:(\\d{3})\";\nlet regex_instance_name = @\"instance_name:(\\w+)\";\nlet regex_instance_host = @\"instance_host:([\\w-]+)\";\nlet SAPNetworks = _GetWatchlist('SAP - Networks');\nSAPETDAlerts_CL\n| mv-expand TriggeringEvents\n| extend sapOriginalEvent = tostring(TriggeringEvents.OriginalEvent)\n| extend Id_ = TriggeringEvents.Id\n| extend extracted_user_ip = extract(regex_ip, 1, sapOriginalEvent)\n| extend extracted_sap_user = extract(regex_user, 1, sapOriginalEvent)\n| extend extracted_sid = extract(regex_sid, 1, sapOriginalEvent)\n| extend extracted_client = extract(regex_client, 1, sapOriginalEvent)\n| extend extracted_instance_name = extract(regex_instance_name, 1, sapOriginalEvent)\n| extend extracted_instance_host = extract(regex_instance_host, 1, sapOriginalEvent)\n| evaluate ipv4_lookup(SAPNetworks, extracted_user_ip, Network, return_unmatched = true)\n| where isempty(Network)\n| project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status\n| extend GeoLocation= iff(ipv4_is_private( extracted_user_ip), dynamic({\"IsPrivate\": true}), geo_info_from_ip_address(extracted_user_ip))\n",
+                "query": "let regex_ip = @\"user_ip:(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\";\nlet regex_user = @\"user_name:(\\w+)\";\nlet regex_sid = @\"sid:(\\w{3})\";\nlet regex_client = @\"client:(\\d{3})\";\nlet regex_instance_name = @\"instance_name:(\\w+)\";\nlet regex_instance_host = @\"instance_host:([\\w-]+)\";\nlet SAPNetworks = _GetWatchlist('SAP - Networks');\nSAPETDAlerts_CL\n| mv-expand NormalizedTriggeringEvents\n| extend sapOriginalEvent = tostring(NormalizedTriggeringEvents.OriginalEvent)\n| extend Id_ = NormalizedTriggeringEvents.Id\n| extend extracted_user_ip = extract(regex_ip, 1, sapOriginalEvent)\n| extend extracted_sap_user = extract(regex_user, 1, sapOriginalEvent)\n| extend extracted_sid = extract(regex_sid, 1, sapOriginalEvent)\n| extend extracted_client = extract(regex_client, 1, sapOriginalEvent)\n| extend extracted_instance_name = extract(regex_instance_name, 1, sapOriginalEvent)\n| extend extracted_instance_host = extract(regex_instance_host, 1, sapOriginalEvent)\n| evaluate ipv4_lookup(SAPNetworks, extracted_user_ip, Network, return_unmatched = true)\n| where isempty(Network)\n| project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status\n| extend GeoLocation= iff(ipv4_is_private( extracted_user_ip), dynamic({\"IsPrivate\": true}), geo_info_from_ip_address(extracted_user_ip))\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P2D",
                 "severity": "Medium",
@@ -599,7 +599,7 @@
                         "type": "int"
                       },
                       {
-                        "name": "TriggeringEvents",
+                        "name": "NormalizedTriggeringEvents",
                         "type": "dynamic"
                       }
                     ]
@@ -686,7 +686,7 @@
                       "type": "int"
                     },
                     {
-                      "name": "TriggeringEvents",
+                      "name": "NormalizedTriggeringEvents",
                       "type": "dynamic"
                     }
                   ]
@@ -1018,7 +1018,7 @@
                   "timeoutInSeconds": 60,
                   "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
                   "queryParameters": {
-                    "$expand": "TriggeringEvents",
+                    "$expand": "NormalizedTriggeringEvents",
                     "$filter": "CreationTimestamp gt {_QueryWindowStartTime} and CreationTimestamp le {_QueryWindowEndTime}"
                   },
                   "headers": {
