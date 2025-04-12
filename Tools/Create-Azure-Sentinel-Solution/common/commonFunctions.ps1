@@ -1903,6 +1903,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $instructionArray = $templateSpecConnectorData.instructionSteps
                             ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
 
+                            $hasFunctionAppManualDeploymentText = $instructionArray | Where-Object { $_.description.IndexOf('Manual Deployment of Azure Functions') -gt 0 }
+
                             if ($existingFunctionApp -eq $false)
                             {
                                 # check if only instructions object is present without any description
@@ -1925,6 +1927,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                                         break
                                                     }
                                                 }
+
+                                                $hasFunctionAppManualDeploymentText = $instructionItem.parameters.instructionSteps | Where-Object { $_.description.IndexOf('Manual Deployment of Azure Functions') -gt 0 }
                                             }
                                         }
                                     }
@@ -1933,7 +1937,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                             if($existingFunctionApp)
                             {
-                                $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
+                                $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $hasFunctionAppManualDeploymentText ? $templateSpecConnectorData.title + " (using Azure Functions)" : $templateSpecConnectorData.title;
                             }
                         }
 
