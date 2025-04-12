@@ -3,7 +3,6 @@ package bloodhound
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -35,28 +34,41 @@ func InitializeBloodhoundClient(apiKey string, apikeyId string, bloodhoundServer
 	return client, nil
 }
 
-func GetTierZeroPrincipal(client *sdk.ClientWithResponses) (*sdk.ModelUnifiedGraphGraph, error) {
-	query := "match (n) where n.system_tags contains(\"admin_tier_0\") return n"
-	x := true
-	queryBody := sdk.RunCypherQueryJSONRequestBody{
-		IncludeProperties: &x,
-		Query:             &query,
+func GetTierZeroGroup(client *sdk.ClientWithResponses) (int32, error) {
+	tier0_tag := "eq:admin_tier_0"
+	params := sdk.ListAssetGroupsParams {
+		Tag: &tier0_tag,
 	}
-	const TIER_ZERO_ASSET_GROUP int64 = 1
-
-//	assetgrouprspones, err := client.GetAssetGroupWithResponse((context.TODO(), TIERint32(TIER_ZERO_ASSET_GROUP), nil))
-	response, err := client.RunCypherQueryWithResponse(context.TODO(), nil, queryBody)
+	response, err := client.ListAssetGroupsWithResponse(context.TODO(), &params)
 	if err != nil {
-		return nil, err
+		return 0, fmt.Errorf("Error getting tier zero group %v", err)
 	}
-	if response.StatusCode() != 200 {
-		return nil, errors.New(response.Status())
+	if response.StatusCode() != http.StatusOK {
+		return 0, fmt.Errorf("Error getting tier zero group %s", response.Status())
 	}
-	return response.JSON200.Data, nil
+	if len(*response.JSON200.Data.AssetGroups) == 1 && (*response.JSON200.Data.AssetGroups)[0].Id != nil {
+		return  *((*response.JSON200.Data.AssetGroups)[0].Id), nil
+	}
+	return 0, fmt.Errorf("Error getting tier zero group. Expected 1 group, got %d", len(*response.JSON200.Data.AssetGroups))
+}
+
+func GetTierZeroPrincipals(client *sdk.ClientWithResponses, tierZeroGroup int32) ([]sdk.ModelAssetGroupMember, error) {
+	limit := 10000
+	params := &sdk.ListAssetGroupMembersParams{
+		Limit: &limit,
+	}
+	response, err := client.ListAssetGroupMembersWithResponse(context.TODO(), tierZeroGroup, params)
+	if err != nil {
+		return []sdk.ModelAssetGroupMember{}, fmt.Errorf("Error getting tier zero principals in group %d %v", tierZeroGroup, err)
+	}
+	if response.StatusCode() != http.StatusOK {
+		return []sdk.ModelAssetGroupMember{}, fmt.Errorf("Error getting tier zero principals in group %d %s", tierZeroGroup, response.Status())
+	}
+	return *response.JSON200.Data.Members, nil
 }
 
 func GetLastAnalysisTime(client *sdk.ClientWithResponses) (*time.Time, error) {
-	response, err := client.GetDatapipeStatusWithResponse(context.TODO(),nil )
+	response, err := client.GetDatapipeStatusWithResponse(context.TODO(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error getting last analysis run time %v", err)
 	}
@@ -105,7 +117,6 @@ func GetPostureData(client *sdk.ClientWithResponses, currentState *time.Time) (*
 
 	return response.JSON200.Data, nil
 }
-
 
 // Note: there is no last time
 func GetAttackPathTypesForDomain(client *sdk.ClientWithResponses, domain_ids []string) (map[string][]string, error) {
@@ -220,7 +231,6 @@ func GetAuditLog(client *sdk.ClientWithResponses, lastRunTime *time.Time) ([]sdk
 	}
 
 	for _, logEntry := range *response.JSON200.Data.Logs {
-		log.Printf("%v", logEntry)
 		// TODO SCRUB LOG
 		scrubedLogs = append(scrubedLogs, logEntry)
 	}

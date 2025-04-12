@@ -106,12 +106,12 @@ func transformPostureData(domainMap *map[string]sdk.ModelDomainSelector, posture
 
 	bhe_sentinel_data := BloodhoundEnterpriseData{
 		DataType:      "posture",
-		TimeGenerated: *postureStat.CreatedAt,
 		DomainSID:     *postureStat.DomainSid,
 		DomainName:    *selector.Name,
 		DomainType:    *selector.Type,
 		DomainID:      *selector.Id,
 		ExposureIndex: math.Round(*postureStat.ExposureIndex * 100),
+		Exposure:	   *postureStat.ExposureIndex,
 		FindingCount:  float64(*postureStat.CriticalRiskCount), // TODO: wrong
 		TierZeroCount: float64(*postureStat.TierZeroCount),     // TODO: wrong
 		UpdatedAt:     *postureStat.UpdatedAt,
@@ -155,8 +155,8 @@ func transformConfigurationFinding(domainMap *map[string]sdk.ModelDomainSelector
 		Principal:         *findingProps.Name,
 		TierZeroPrincipal: *findingProps.Name,
 		PathType:          pathType,
-		PathTitle:		   pathTitle,
-		EventDetails: 	   pathTitle, 
+		PathTitle:         pathTitle,
+		EventDetails:      pathTitle,
 		ID:                int64(*finding.Id),
 	}
 	return bhe_sentinel_data, nil
@@ -177,8 +177,8 @@ func transformRelationshipFinding(domainMap *map[string]sdk.ModelDomainSelector,
 		TierZeroPrincipal:    toProps.Name,
 		NonTierZeroPrincipal: fromProps.Name,
 		PathType:             pathType,
-		PathTitle: 			  pathTitle,
-		EventDetails:		  pathTitle,
+		PathTitle:            pathTitle,
+		EventDetails:         pathTitle,
 		// DeletedAt: finding.DeletedAt,
 		DeletedAtV: *finding.DeletedAt.Valid,
 		// DeletedAtV: finding.DeletedAt != nil,
@@ -195,8 +195,6 @@ func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data
 			if !ok {
 				pathTitle = "Unknown"
 				log.Printf("Error path title not found for %s", pathType)
-			} else {
-				log.Printf("Found path title for %s", pathTitle)
 			}
 			for _, attackPathJson := range attackPathDataArray {
 				x := AttackFindingProperties{}
@@ -250,12 +248,17 @@ func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data
 	return bhd, nil
 }
 
-func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, data map[string]map[string][]sdk.ModelRiskCounts) ([]BloodhoundEnterpriseData, error) {
+func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, data map[string]map[string][]sdk.ModelRiskCounts, pathTypeMap *map[string]string) ([]BloodhoundEnterpriseData, error) {
 	bhd := make([]BloodhoundEnterpriseData, 0)
 	for domainId, pathMap := range data {
 		for pathType, riskArray := range pathMap {
 			for _, risk := range riskArray {
-				data, err := transformModelRiskCountr(domainMap, domainId, pathType, risk)
+				pathTitle, ok := (*pathTypeMap)[pathType]
+				if !ok || pathTitle == "" {
+					pathTitle = "Unknown"
+					log.Printf("Error path title not found for %s", pathType)
+				} 
+				data, err := transformModelRiskCountr(domainMap, domainId, pathType, pathTitle, risk)
 				if err != nil {
 					log.Printf("Error transforming risk counter, skipping record: %v", err)
 					continue
@@ -267,7 +270,7 @@ func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, da
 	return bhd, nil
 }
 
-func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ string, path_type string, data sdk.ModelRiskCounts) (BloodhoundEnterpriseData, error) {
+func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ string, path_type string, path_title string, data sdk.ModelRiskCounts) (BloodhoundEnterpriseData, error) {
 
 	selector := (*domainMap)[*data.DomainSID]
 	bhe_sentinel_data := BloodhoundEnterpriseData{
@@ -277,7 +280,6 @@ func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ s
 		DomainName:        *selector.Name,
 		DomainType:        *selector.Type,
 		DomainID:          *selector.Id,
-		ExposureIndex:     math.Round(*data.CompositeRisk * 100),
 		Exposure:          *data.CompositeRisk,
 		FindingCount:      float64(*data.FindingCount),
 		DomainImpactValue: float64(*data.ImpactedAssetCount),
@@ -287,6 +289,8 @@ func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ s
 		DeletedAtV:        *data.DeletedAt.Valid,
 		ID:                *data.Id,
 		PathType:          path_type,
+		PathTitle:         path_title,
+		EventDetails:      path_title,
 	}
 	return bhe_sentinel_data, nil
 
@@ -348,107 +352,111 @@ func transformAudiLogs(logs []sdk.ModelAuditLog) ([]BloodhoundEnterpriseData, er
 	return records, nil
 }
 
-func transformTierZeroPrincipal(graph *sdk.ModelUnifiedGraphGraph, domainMap *map[string]sdk.ModelDomainSelector) ([]BloodhoundEnterpriseData, error) {
+func memberOf(elem *string, set map[string]bool) bool {
+	_, ok := set[string(*elem)]
+	return ok
+}
+
+func in(elem string, set map[string]bool) bool {
+	_, ok := set[elem]
+	return ok
+}
+
+func transformTierZeroPrincipal(tierZeroGroupmembers []sdk.ModelAssetGroupMember, domainMap map[string]sdk.ModelDomainSelector) ([]BloodhoundEnterpriseData, error) {
+	ENVIRONMENT_KINDS := map[string]bool{"Domain": true, "AZTenant": true}
 	records := make([]BloodhoundEnterpriseData, 0)
-	nodes := graph.Nodes
-	for _, node := range *nodes {
-		if *node.IsTierZero == false {
-			continue
+	for _, groupMember := range tierZeroGroupmembers {
+		var environment_sid = groupMember.EnvironmentId
+		if groupMember.PrimaryKind != nil && memberOf(groupMember.PrimaryKind, ENVIRONMENT_KINDS) {
+			environment_sid = groupMember.ObjectId		
 		}
-		props := (*node.Properties)
-		var selector *sdk.ModelDomainSelector = nil
-
-		if *node.Kind == "Meta" {
-			continue
-		}
-		if *node.Kind == "Base" {
+		if environment_sid == nil || *environment_sid == "" {
+			log.Printf("Error tier zero principal missing environment sid skipping %s", *groupMember.Name)
 			continue
 		}
 
-		sid, ok := props["domainsid"].(string)
-		if ok == true {
-			s, ok := (*domainMap)[sid]
-			if ok == true {
-				selector = &s
-			}
-		}
-
-		if selector == nil {
-			sid, ok := props["tenantid"].(string)
-			if ok == true {
-				s, ok := (*domainMap)[sid]
-				if ok == true {
-					selector = &s
-				}
-			}
-		}
-		if selector == nil {
-			s, ok := (*domainMap)[*node.ObjectId]
-			if ok == true {
-				selector = &s
-			}
-		}
-		if selector == nil {
+		// Use the SID to lookup the name, id and type
+		selector, ok := domainMap[*environment_sid]
+		if !ok {
+			log.Printf("Error tier zero principal could not find domain record for sid %s skipping %s", *environment_sid, *groupMember.Name)
 			continue
 		}
+		environment_name := *selector.Name
+		environment_id := selector.Id
+		environment_kind := selector.Type
 
-		var domainType = selector.Name
-		if strings.HasPrefix(*domainType, "AZ") {
-			s := strings.ReplaceAll(*domainType, "AZ", "")
-			domainType = &s
-		}
-		bheRecord := BloodhoundEnterpriseData{
+		record := BloodhoundEnterpriseData{
+			TierZeroPrincipal: *groupMember.Name,
+			FindingID:         *groupMember.ObjectId,    // TODO: move this to a new field called ObjectID (backfill required for other data_types??)
+			EventDetails:      *groupMember.PrimaryKind, // TODO: move this to a new field called ObjectKind (backfill required for other data_types??)
+			DomainSID:         *environment_sid,
+			DomainID:		  *environment_id,			// TODO: DomainSID and DomainID seem redundant
+			DomainType:        *environment_kind,
+			DomainName:        environment_name,
 			DataType:          "t0_export",
 			TimeGenerated:     time.Now(),
-			DomainSID:         *node.ObjectId,
-			DomainName:        *selector.Name,
-			DomainType:        *selector.Type,
-			DomainID:          *selector.Id,
-			CreatedAt:         time.Now(),
-			EventDetails:      *node.Kind,
-			TierZeroPrincipal: *node.Label,
-			// TODO update updated time
 		}
-		records = append(records, bheRecord)
+		records = append(records, record)
 	}
 	return records, nil
 }
 
-func CreateBatches(records []BloodhoundEnterpriseData, maxUploadSize int64) ([][]BloodhoundEnterpriseData, error) {
+func CreateJsonBatches(records []BloodhoundEnterpriseData, maxUploadSize int64) ([][]byte, error) {
 	if len(records) == 0 {
-		return make([][]BloodhoundEnterpriseData, 0), nil
+		return make([][]byte, 0), nil
 	}
 
-	// We test a single record for size
-	// Get size of record list
-	singleRecordJson, err := json.Marshal(records[0])
-	if err != nil {
-		return nil, fmt.Errorf("Error marshaling the data %v", err)
-	}
-	n := int64(len(singleRecordJson))
-
-	if n >= maxUploadSize {
-		return nil, fmt.Errorf("Error marshalling the data.  A single record[bytes] %d is too large to upload. maxUploadSize[bytes] %d. ", n, maxUploadSize)
-	}
-
-	// We limit ourselves to maxUploadSize and then we are conservative and reduce the number of records per batch
-	recordsPerBatch := int(maxUploadSize / n)
-	if recordsPerBatch > 2 {
-		recordsPerBatch -= 2
-	}
-
-	var batchedRecords = make([][]BloodhoundEnterpriseData, 0)
-
-	for i := 0; i < len(records); i += recordsPerBatch {
-		end := i + recordsPerBatch
-
-		if end > len(records) {
-			end = len(records)
+	var jsonRecords = make([][]byte, len(records))
+	for i, record := range records {
+		jsonRecord, err := json.Marshal(record)
+		if err != nil {
+			// TODO maybe skip
+			return nil, fmt.Errorf("Error marshaling the data %v", err)			
 		}
-		batchedRecords = append(batchedRecords, records[i:end])
+		jsonRecords[i] = jsonRecord
 	}
 
-	return batchedRecords, nil
+	batches := make([][]byte, 1)
+	batches = batches[:0]
+
+	batchRecordCounts := make([]int, 0)
+
+	batch := make([]byte, maxUploadSize)
+	batch = batch[:0]
+	batch = append(batch, "["...)
+	joinSeparator := []byte("")
+	batchRecordCount := 0
+	i := 0
+	for i < len(jsonRecords) {
+		jsonRecord := jsonRecords[i]
+		bytesToAppend := len(joinSeparator) + len(jsonRecord) + len("]")
+		recordFits := len(batch) + bytesToAppend + len("]") < cap(batch)
+		lastRecord := i == len(jsonRecords)-1
+		if recordFits {
+			batch = append(batch, joinSeparator...)
+			batch = append(batch, jsonRecord...)
+			batchRecordCount++
+			joinSeparator = []byte(",")
+		} else if batchRecordCount == 0 {
+			// Error case, a single record is too large to fit in a batch
+			return nil, fmt.Errorf("Error marshaling the data.  A single record is too large to upload. maxUploadSize[bytes] %d. ", maxUploadSize)
+		}
+		if !recordFits || lastRecord {
+			// cap it off
+			batch = append(batch, "]"...)
+			batches = append(batches, batch)
+			batchRecordCounts = append(batchRecordCounts, batchRecordCount)
+			batch = make([]byte, maxUploadSize)
+			batch = batch[:0]
+			batch = append(batch, "["...)
+			joinSeparator = []byte("")
+			batchRecordCount = 0
+		}
+		if recordFits {
+			i ++
+		}
+	}
+	return batches, nil
 }
 
 func printSlice(s [][]BloodhoundEnterpriseData) {
@@ -459,60 +467,75 @@ func printSlice(s [][]BloodhoundEnterpriseData) {
 	fmt.Printf("ptr=%p len=%d cap=%d \n", ptr, len(s), cap(s))
 }
 
-// Create batches of marshaled json records and gaurantee that they will fix the maxUploadSize
-// We take approximate batches generated by CreateBatches and then individually test size and rebatch with
-// maxUploadSize reduced by half
-func CreateBatchesGauranteedToFit(records []BloodhoundEnterpriseData, maxUploadSize int64) ([][]byte, error) {
-
-	var batchesToMarshal, err = CreateBatches(records, maxUploadSize)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Printf("Original batch size %d", len(batchesToMarshal))
-	var jsonBatches = make([][]byte, 0)
-	for len(batchesToMarshal) > 0 {
-		// POP of a batch, marshal it and then check if it fits
-		batch := batchesToMarshal[len(batchesToMarshal)-1]
-		batchesToMarshal = batchesToMarshal[:len(batchesToMarshal)-1]
-		batchJSON, err := json.Marshal(batch)
-		if err != nil {
-			return nil, err
-		}
-
-		// if a single marshaled JSON is still too big,
-		// reduce the maxUploadSize rebatch, adding them back to batchesToMarshal so they will be tested again
-		if int64(len(batchJSON)) > maxUploadSize {
-			log.Printf("Warning needing redo a large batch %d", len(batchJSON))
-			maxUploadSize := maxUploadSize - (int64(len(batchJSON)) - maxUploadSize)
-			smallBatches, err := CreateBatches(batch, maxUploadSize)
-			if err != nil {
-				return nil, err
-			}
-			batchesToMarshal = append(batchesToMarshal, smallBatches...)
-		} else {
-			jsonBatches = append(jsonBatches, batchJSON)
-		}
-	}
-	return jsonBatches, nil
-}
-
 func ApplyEditors(ctx context.Context, c *sdk.Client, req *http.Request, additionalEditors []sdk.RequestEditorFn) error {
-	for _, r := range c.RequestEditors {
-		if err := r(ctx, req); err != nil {
+	for _, editor := range c.RequestEditors {
+		if err := editor(ctx, req); err != nil {
 			return err
 		}
 	}
-	for _, r := range additionalEditors {
-		if err := r(ctx, req); err != nil {
+	for _, editor := range additionalEditors {
+		if err := editor(ctx, req); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func getAssetData(bloodhoundServer string, bloodhoundClient *sdk.ClientWithResponses, uri string) (*http.Response, error) {
+	// TODO Better error / retry handling
+	if !strings.HasPrefix(bloodhoundServer, "https") {
+		bloodhoundServer = "https://" + bloodhoundServer
+	}
+	var client = bloodhoundClient.ClientInterface.(*sdk.Client)
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/%s", bloodhoundServer, uri), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request %v", err)
+	}
+
+	err = ApplyEditors(context.TODO(), client, req, client.RequestEditors)
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply request editors %v", err)
+	}
+	response, err := client.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request %v", err)
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed request with status %v", response.Status)
+	}
+
+	return response, nil
+}
+
+func getAttackPathTitles(bloodhoundServer string, bloodhoundClient *sdk.ClientWithResponses, responseLogs []string) (map[string]string, error) {
+	pathTypes, err := bloodhoundClient.ListAttackPathTypesWithResponse(context.TODO(), nil)
+	var pathMap = make(map[string]string)
+	if err != nil {
+		responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path types %v", err))
+		return pathMap, err
+	}
+
+	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path types", len(*pathTypes.JSON200.Data)))
+	for _, pathType := range *pathTypes.JSON200.Data {
+		// I'm going to get these one at a time TOOD: check if there is a better way
+		uri := fmt.Sprintf("api/v2/assets/findings/%s/title.md", pathType)
+		response, err := getAssetData(bloodhoundServer, bloodhoundClient, uri)
+		if err != nil {
+			log.Printf("Error getting attack path title for path type %s so skipping %v", pathType, err)
+			continue
+		}
+
+		var responseBytes = make([]byte, 1024) // TODO check if this is a good size or will expand
+		count, err := response.Body.Read(responseBytes)
+		pathMap[pathType] = string(responseBytes[:count])
+	}
+	return pathMap, nil
+}
+
 // UploadLogsCallback returns a curried function that can be used as a callback
-func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time.Time, azLogsClient *azlogs.Client, ruleId string, maxUploadSize int64) ([]string, error) {
+// hack passing the bh domain / config.  Wont be needed when bloodhoundClient handles assset retrieval.  Need to modify the sdk.
+func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundServer string, lastRun *time.Time, azLogsClient *azlogs.Client, ruleId string, maxUploadSize int64) ([]string, error) {
 	// TODO is there a generic sdk client type
 
 	if lastRun == nil {
@@ -523,41 +546,6 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	var responseLogs = make([]string, 0)
 
 	bloodhoundRecordData := make(map[string][]BloodhoundEnterpriseData)
-
-	// Get attack path type to attack path title mapping
-	// TODO: lift this and it really should be defined in the API
-	// TODO: Retry?  Handle 429?
-	var client = bloodhoundClient.ClientInterface.(*sdk.Client)	
-	pathTypes, err := bloodhoundClient.ListAttackPathTypesWithResponse(context.TODO(), nil)
-	if err != nil {
-		responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path types %v", err))
-		return responseLogs, err
-	}
-	var pathMap = make(map[string]string)
-
-	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path types", len(*pathTypes.JSON200.Data)))
-	for _, pathType := range *pathTypes.JSON200.Data {
-		// I'm going to get these one at a time TOOD: check if there is a better way
-		req, err := http.NewRequest("GET",fmt.Sprintf("https://demo.bloodhoundenterprise.io/api/v2/assets/findings/%s/title.md", pathType), nil)
-		if (err != nil) {
-			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", err))
-			return responseLogs, err
-		}
-
-		ApplyEditors(context.TODO(), client, req, client.RequestEditors)
-		response, err := client.Client.Do(req)
-		if (err != nil) {
-			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", err))
-			return responseLogs, err
-		}
-		if (response.StatusCode != http.StatusOK) {
-			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", response.Status))
-			return responseLogs, err
-		}
-		var responseBytes = make([]byte, 1024)
-		count, err := response.Body.Read(responseBytes) 
-		pathMap[pathType] = string(responseBytes[:count])
-	}
 
 	lastAnalysisTime, err := bloodhound.GetLastAnalysisTime(bloodhoundClient)
 	if err != nil {
@@ -572,8 +560,6 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 		} else {
 			responseLogs = append(responseLogs, fmt.Sprintf("last ingest time %v before last analysis time %v.  We will continue", lastRun, lastAnalysisTime))
 		}
-	} else {
-		log.Printf("UploadLogsCallback lastRun is nil, not doing compare")
 	}
 
 	mapping, err := bloodhound.GetDomainMapping(bloodhoundClient)
@@ -582,6 +568,13 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 		return responseLogs, err
 	}
 	responseLogs = append(responseLogs, fmt.Sprintf("got %d domain mappings", len(*mapping)))
+
+	pathMap, err := getAttackPathTitles(bloodhoundServer, bloodhoundClient, responseLogs)
+	if err != nil {
+		responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path titles %v", err))
+		// We will continue without the path titles
+	}
+	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path titles", len(pathMap)))
 
 	domainIds := make([]string, 0, len(*mapping))
 	for k, _ := range *mapping {
@@ -655,21 +648,36 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	}
 	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path aggregator records", len(aggregatorData)))
 
-	attackPathAggregateBHERecords, err := transformAttackAggregator(mapping, aggregatorData)
+	attackPathAggregateBHERecords, err := transformAttackAggregator(mapping, aggregatorData, &pathMap)
 	if err != nil {
 		responseLogs = append(responseLogs, fmt.Sprintf("Error transforming attack path aggregator data %v", err))
 		return responseLogs, err
 	}
+
+	if len(attackPathAggregateBHERecords) > 0 {
+		responseLogs = append(responseLogs, fmt.Sprintf("Got %d attack path aggregator records PathTitle of first is %s", len(attackPathAggregateBHERecords), attackPathAggregateBHERecords[0].PathTitle))
+	} else {
+		responseLogs = append(responseLogs, fmt.Sprintf("Got 0 attack path aggregator records"))
+	}
+
 	bloodhoundRecordData["attackPathAggregateData"] = attackPathAggregateBHERecords
 
-	tierZeroData, err := bloodhound.GetTierZeroPrincipal(bloodhoundClient)
-	if err != nil {
-		responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero principals %v", err))
-		return responseLogs, err
-	}
-	responseLogs = append(responseLogs, fmt.Sprintf("Got %d cypher query graph nodes", len(*tierZeroData.Nodes)))
+	var tierZeroData []sdk.ModelAssetGroupMember = make([]sdk.ModelAssetGroupMember, 0)
 
-	tier0BHERecords, err := transformTierZeroPrincipal(tierZeroData, mapping)
+	// Get Tier Zero asset group and then its members
+	tierZeroGroup, err := bloodhound.GetTierZeroGroup(bloodhoundClient)
+	if err != nil {
+		responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero group skipping %v", err))
+	} else {
+		tierZeroData, err = bloodhound.GetTierZeroPrincipals(bloodhoundClient, tierZeroGroup)
+		if err != nil {
+			responseLogs = append(responseLogs, fmt.Sprintf("Error getting tier zero principals skipping %v", err))
+		}
+		responseLogs = append(responseLogs, fmt.Sprintf("Got %d cypher query graph nodes", len(tierZeroData)))	
+	}
+
+
+	tier0BHERecords, err := transformTierZeroPrincipal(tierZeroData, *mapping)
 	if err != nil {
 		responseLogs = append(responseLogs, fmt.Sprintf("Error transforming tier zero principal data %v", err))
 		return responseLogs, err
@@ -682,7 +690,7 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	for kind, recordList := range bloodhoundRecordData {
 		log.Printf("About to upload %s data %d records ", kind, len(recordList))
 
-		recordsJSON, err := CreateBatchesGauranteedToFit(recordList, maxUploadSize)
+		recordsJSON, err := CreateJsonBatches(recordList, maxUploadSize)
 		if err != nil {
 			responseLogs = append(responseLogs, fmt.Sprintf("failed to generate batched json for %s data Error: %v", kind, err))
 			lastError = err
@@ -700,4 +708,3 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	}
 	return responseLogs, lastError
 }
-

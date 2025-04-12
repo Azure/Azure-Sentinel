@@ -17,7 +17,7 @@ def try_str_to_datetime(time: str) -> datetime:
         return datetime.strptime(time, TIME_FORMAT)
     except Exception as _:
         pass
-    return datetime.strptime(time, TIME_FORMAT_WITHMS)
+    return datetime.strptime((time[:26] + 'Z') if len(time) > 26 else time, TIME_FORMAT_WITHMS)
 
 
 class TimeRange(BaseModel):
