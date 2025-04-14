@@ -1,0 +1,1 @@
+### This is a placeholder readme.md file to create Analytic Rule folder. Delete it once rule added to this folder.
