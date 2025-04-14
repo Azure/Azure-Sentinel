@@ -1,0 +1,134 @@
+id: a4fddd3e-9993-4c86-b5e8-8e36d8ce1197
+Function:
+  Title: Parser for ExtraHopDetections
+  Version: '1.0.0'
+  LastUpdated: '2024-12-10'
+Category: Microsoft Sentinel Parser
+FunctionName: ExtraHopDetections
+FunctionAlias: ExtraHopDetections
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime, Title: string, DetectionType: string, SourceType: string, SourceHostname: string, SourceUsername: string, SourceIpAddress: string, SourceRole: string, SourceEndpoint: string, SourceDeviceObjectId: real, SourceDeviceName: string, SourceDeviceIpAddress: string, SourceDeviceMacAddress: string, SourceDeviceRole: string, DestinationType: string, DestinationHostname: string, DestinationUsername: string, DestinationIpAddress: string, DestinationRole: string, DestinationEndpoint: string, DestinationDeviceObjectId: real, DestinationDeviceName: string, DestinationDeviceIpAddress: string, DestinationDeviceMacAddress: string, DestinationDeviceRole:string, AdditionalParticipants: string, PropertiesRandomness: real, Description: string, CategoriesIds: string , MitreTechniques: string , IsRecommended: bool, RecommendedFactors: string, Url: string, RiskScore: real, Time: real, Id: real, IsUserCreated: bool, ModificationTime: real, Status: string, TicketId: real, Assignee: string, Categories: string, CategoriesString: string, MitreTechniquesString: string, MitreTacticsString: string, TechniqueIds: dynamic, TechniqueNames: dynamic, DateTime: datetime, Severity: string, EventVendor: string, EventModule: string, TacticIds: dynamic, TacticNames: dynamic) [];
+    let ExtraHopDetections_view = view() {
+        ExtraHop_Detections_CL
+        | summarize arg_max(TimeGenerated, *) by id_d
+        | extend 
+            MitreTechniques = column_ifexists('mitre_techniques_s', ''),
+            MitreTactics = column_ifexists('mitre_tactics_string_s', ''),
+            RiskScore = column_ifexists('risk_score_d', int(null)),
+            Time = column_ifexists('time_d', long(null))
+        | extend ParsedMitreTechniques = parse_json(MitreTechniques)
+        | mv-apply ParsedMitreTechniques on (summarize TechniqueIds = make_list(ParsedMitreTechniques.id), TechniqueNames = make_list(ParsedMitreTechniques.name))
+        | extend ParsedMitreTactics = split(mitre_tactics_string_s, ", ")
+        | mv-apply tactic = ParsedMitreTactics on 
+            (summarize TacticNames = make_list(replace_string(replace(@"TA\d{4}: ", "", tostring(tactic)), " ", "")),
+            TacticIds=make_list(extract(@"(TA\d{4})", 1, tostring(tactic))))
+        | extend
+            DateTime = unixtime_milliseconds_todatetime(time_d),
+            Severity = case(risk_score_d >=1 and risk_score_d <=30, "Low",
+                            risk_score_d >=31 and risk_score_d <= 79, "Medium",
+                            risk_score_d >= 80 and risk_score_d <=99, "High",
+                            "Informational")
+        | extend
+            Title = column_ifexists('title_s', ''),
+            DetectionType = column_ifexists('type_s', ''),
+            SourceType = column_ifexists('src_type_s', ''),
+            SourceHostname = column_ifexists('src_hostname_s', ''),
+            SourceUsername = column_ifexists('src_username_s', ''),
+            SourceIpAddress = column_ifexists('src_ipaddr_s', ''),
+            SourceRole = column_ifexists('src_role_s', ''),
+            SourceEndpoint = column_ifexists('src_endpoint_s', ''),
+            SourceDeviceObjectId = column_ifexists('src_device_oid_d', int(null)),
+            SourceDeviceName = column_ifexists('src_device_name_s', ''),
+            SourceDeviceIpAddress = column_ifexists('src_device_ipaddrs_s', ''),
+            SourceDeviceMacAddress = column_ifexists('src_device_macaddr_s', ''),
+            SourceDeviceRole = column_ifexists('src_device_role_s', ''),
+            DestinationType = column_ifexists('dst_type_s', ''),
+            DestinationHostname = column_ifexists('dst_hostname_s', ''),
+            DestinationUsername = column_ifexists('dst_username_s', ''),
+            DestinationIpAddress = column_ifexists('dst_ipaddr_s', ''),
+            DestinationRole = column_ifexists('dst_role_s', ''),
+            DestinationEndpoint = column_ifexists('dst_endpoint_s', ''),
+            DestinationDeviceObjectId = column_ifexists('dst_device_oid_d', int(null)),
+            DestinationDeviceName = column_ifexists('dst_device_name_s', ''),
+            DestinationDeviceIpAddress = column_ifexists('dst_device_ipaddrs_s', ''),
+            DestinationDeviceMacAddress = column_ifexists('dst_device_macaddr_s', ''),
+            DestinationDeviceRole = column_ifexists('dst_device_role_s', ''),
+            AdditionalParticipants = column_ifexists('additional_participants_s', ''),
+            PropertiesRandomness = column_ifexists('properties_randomness_d', int(null)),
+            Description = column_ifexists('description_s', ''),
+            CategoriesIds = column_ifexists('categories_ids_s', ''),
+            IsRecommended = column_ifexists('recommended_b', ''),
+            RecommendedFactors = column_ifexists('recommended_factors_s', ''),
+            Url = column_ifexists('url_s', ''),
+            Id = column_ifexists('id_d', int(null)),
+            IsUserCreated = column_ifexists('is_user_created_b', ''),
+            ModificationTime = column_ifexists('mod_time_d', long(null)),
+            Status = column_ifexists('status_s', ''),
+            TicketId = column_ifexists('ticket_id_d', ''),
+            Assignee = column_ifexists('assignee_s', ''),
+            Categories = column_ifexists('categories_array_s', ''),
+            CategoriesString = column_ifexists('categories_string_s', ''),
+            MitreTacticsString = column_ifexists('mitre_tactics_string_s', ''),
+            MitreTechniquesString = column_ifexists('mitre_techniques_string_s', '')
+        | extend
+            SourceHostname = coalesce(SourceHostname, SourceIpAddress, SourceDeviceName),
+            DestinationHostname = coalesce(DestinationHostname, DestinationIpAddress, DestinationDeviceName),
+            EventVendor = "ExtraHop",
+            EventModule = "extrahop-rx360-detection"
+        | project 
+                TimeGenerated,
+                EventVendor,
+                EventModule,
+                Title,
+                DetectionType,
+                SourceType,
+                SourceHostname,
+                SourceUsername,
+                SourceIpAddress,
+                SourceRole,
+                SourceEndpoint,
+                SourceDeviceObjectId,
+                SourceDeviceName,
+                SourceDeviceIpAddress,
+                SourceDeviceMacAddress,
+                SourceDeviceRole,
+                DestinationType,
+                DestinationHostname,
+                DestinationUsername,
+                DestinationIpAddress,
+                DestinationRole,
+                DestinationEndpoint,
+                DestinationDeviceObjectId,
+                DestinationDeviceName,
+                DestinationDeviceIpAddress,
+                DestinationDeviceMacAddress,
+                DestinationDeviceRole,
+                AdditionalParticipants,
+                PropertiesRandomness,
+                Description,
+                CategoriesIds,
+                MitreTechniques,
+                IsRecommended,
+                RecommendedFactors,
+                Url,
+                RiskScore,
+                Time,
+                Id,
+                IsUserCreated,
+                ModificationTime,
+                Status,
+                TicketId,
+                Assignee,
+                Categories,
+                CategoriesString,
+                MitreTechniquesString,
+                MitreTacticsString,
+                TechniqueIds,
+                TechniqueNames,
+                DateTime,
+                Severity,
+                TacticIds,
+                TacticNames
+    };
+    union isfuzzy=true dummy_table,
+    ExtraHopDetections_view
