@@ -51,6 +51,7 @@ $TotalRecordCount = 0
 # variables needed for the Okta API request
 $apiToken = $env:apiToken
 $uri = $env:uri
+Write-Output "Environment variable $uri"
 $StartDate = [System.DateTime]::UtcNow.ToString("yyyy-MM-ddT00:00:00.000Z") # set default fallback start time to 0:00 UTC today
 $logAnalyticsUri = $env:logAnalyticsUri
 
@@ -81,7 +82,9 @@ if($null -eq $StorageTable.Name){
     $result = New-AzStorageTable -Name $Tablename -Context $storage
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
     $uri = "$uri$($StartDate)&limit=1000"
+    Write-Output "Uri at storagetable name  $uri"
     $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
+    Write-Output "Result at storagetable name  $result"
 }
 Else {
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
@@ -90,10 +93,14 @@ Else {
 $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
 if($null -eq $row.uri){
     $uri = "$uri$($StartDate)&limit=1000"
+    Write-Output "Uri at row uri  $uri"
     $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
+    Write-Output "Result at row uri  $result"
     $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
+    Write-Output "Row at row uri  $row"
 }
 $uri = $row.uri
+Write-Output "Uri at after row uri  $uri"
 
 #Setup uri Headers for requests to OKta
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -109,11 +116,14 @@ do {
     $uriself = $uri
     if($uri.length -gt 0){
         $response = Invoke-WebRequest -uri $uri  -Method 'GET' -Headers $headers -Body $body
+        Write-Output "Uri at api call $uri"
+        Write-Output "Response  $response"
     }
     if($response.headers.Keys -contains "link"){
         $uritemp = $response.headers.link.split(",;")
         $uritemp = $uritemp.split(";")
         $uri = $uritemp[2] -replace "<|>", ""
+        Write-Output "Uri contains link $uri"
     }
     ELSE{
         $exitDoUntil = $true
