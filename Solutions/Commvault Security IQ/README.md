@@ -54,9 +54,9 @@ These secrets are stored in your KeyVault. Their initial values need manual retr
 ### Upload and Run PowerShell Script Setup-CommvaultAutomation
 
 - Azure Cloud Shell -> Click on **Manage files** -> Upload `Tools\Setup-CommvaultAutomation.ps1` -> Run:
-  ```powershell
-  ./Setup-CommvaultAutomation.ps1
-    ```
+  ```powershell
+  ./Setup-CommvaultAutomation.ps1
+    ```
 
 ### Create the Analytic Rules
 
@@ -72,9 +72,9 @@ These secrets are stored in your KeyVault. Their initial values need manual retr
 ### Upload and Run PowerShell Script AssignLogicAppRoles
 
 - Azure Cloud Shell -> Click on **Manage files** -> Upload `Tools\AssignLogicAppRoles.ps1` -> Run:
-  ```powershell
-  ./AssignLogicAppRoles.ps1
-    ```
+  ```powershell
+  ./AssignLogicAppRoles.ps1
+    ```
 
 ## Playbooks
 
