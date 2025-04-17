@@ -21,13 +21,20 @@
         "author": {
             "name": "Tanium"
         },
-        "parameterTemplateVersion": "2.0.1"
+        "parameterTemplateVersion": "3.0.0"
     },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "Tanium-SCCMClientHealth",
             "type": "string"
         },
+        "AzureSentinelConnectionName": {
+             "defaultValue": "Tanium-MSDefenderHealth-Sentinel-WebConn",
+             "type": "string",
+             "metadata": {
+                 "description": "The name to use for the Sentinel Connector in the Logic App . (This will exist as an API Connection in your subscription)"
+             }
+         },
         "IntegrationAccountName": {
             "defaultValue": "",
             "type": "string",
@@ -57,21 +64,21 @@
         }
     },
     "variables": {
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
         "TaniumApiGatewayApi": "[uri(concat('https://',parameters('TaniumServerHostname')),'/plugin/products/gateway/graphql')]"
     },
     "resources": [
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2018-07-01-preview",
-            "name": "[variables('AzureSentinelConnectionName')]",
+            "name": "[parameters('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "displayName": "[parameters('AzureSentinelConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                }
+                },
+                "parameterValueType": "Alternative"
             }
         },
         {
@@ -79,12 +86,15 @@
             "apiVersion": "2019-05-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
+            "identity": {
+                 "type": "SystemAssigned"
+            },
             "tags": {
                 "hidden-SentinelTemplateName": "Tanium-SCCMClientHealth",
                 "hidden-SentinelTemplateVersion": "2.0"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]"
             ],
             "properties": {
                 "state": "Enabled",
@@ -816,9 +826,14 @@
                     "$connections": {
                         "value": {
                             "azuresentinel": {
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                                "connectionName": "[parameters('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                     "authentication": {
+                                         "type": "ManagedServiceIdentity"
+                                     }
+                                 }
                             }
                         }
                     },
