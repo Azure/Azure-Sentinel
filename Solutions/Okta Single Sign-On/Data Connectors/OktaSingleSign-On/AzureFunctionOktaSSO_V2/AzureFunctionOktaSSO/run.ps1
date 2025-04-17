@@ -118,7 +118,6 @@ do {
     if ($uri.length -gt 0) {
         $response = Invoke-WebRequest -uri $uri  -Method 'GET' -Headers $headers -Body $body
         Write-Output "Uri at api call $uri"
-        Write-Output "Response  $response"
     }
     if ($response.headers.Keys -contains "link") {
         $uritemp = $response.headers.link.split(",;")
