@@ -1,0 +1,147 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logAnalyticsWorkspaceName": {
+            "defaultValue": "<Enter Log Analytics Workspace name>",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Sentinel is setup"
+            }
+        },
+        "connectorResourceName": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Resource name for connector"
+            }
+        }
+    },
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/',parameters('connectorResourceName'))]",
+            "apiVersion": "2021-03-01-preview",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "kind": "APIPolling",
+            "properties": {
+              "connectorUiConfig": {
+                "id": "AtlassianConfluence",
+                "title": "Atlassian Confluence",
+                "publisher": "Atlassian",
+                "descriptionMarkdown": "The Atlassian Confluence data connector provides the capability to ingest [Atlassian Confluence audit logs](https://developer.atlassian.com/cloud/confluence/rest/api-group-audit/) into Microsoft Sentinel.",
+                "graphQueriesTableName": "AtlassianConfluenceNativePoller_CL",
+                "graphQueries": [
+                  {
+                    "metricName": "Total data received",
+                    "legend": "Atlassian Confluence audit logs",
+                    "baseQuery": "{{graphQueriesTableName}}"
+                  }
+                ],
+                "sampleQueries": [
+                  {
+                    "description": "All Atlassian Confluence audit logs",
+                    "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                  }
+                ],
+                "dataTypes": [
+                  {
+                    "name": "{{graphQueriesTableName}}",
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                  }
+                ],
+                "connectivityCriteria": [
+                  {
+                    "type": "SentinelKindsV2",
+                    "value": []
+                  }
+                ],
+                "availability": {
+                  "status": 1,
+                  "isPreview": true
+                },
+                "permissions": {
+                  "resourceProvider": [
+                    {
+                      "provider": "Microsoft.OperationalInsights/workspaces",
+                      "permissionsDisplayText": "read and write permissions are required.",
+                      "providerDisplayName": "Workspace",
+                      "scope": "Workspace",
+                      "requiredPermissions": {
+                        "write": true,
+                        "read": true,
+                        "delete": true
+                      }
+                    },
+                    {
+                      "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                      "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                      "providerDisplayName": "Keys",
+                      "scope": "Workspace",
+                      "requiredPermissions": {
+                        "action": true
+                      }
+                    }
+                  ],
+                  "customs": [
+                    {
+                      "name": "Atlassian Confluence API credentials",
+                      "description": "Confluence Username and Confluence Access Token are required. [See the documentation to learn more about Atlassian Confluence API](https://developer.atlassian.com/cloud/confluence/rest/intro/). Confluence domain must be provided as well."
+                    }
+                  ]
+                },
+                "instructionSteps": [
+                  {
+                    "title": "Connect Atlassian Confluence",
+                    "description": "Please insert your credentials",
+                    "instructions": [
+                      {
+                        "parameters": {
+                          "enable": "true",
+                          "userRequestPlaceHoldersInput": [
+                            {
+                              "displayText": "Domain Name",
+                              "requestObjectKey": "apiEndpoint",
+                              "placeHolderName": "{{domain}}",
+                              "placeHolderValue": ""
+                            }
+                          ]
+                        },
+                        "type": "BasicAuth"
+                      }
+                    ]
+                  }
+                ]
+              },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "Basic"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://{{domain}}/wiki/rest/api/audit",
+                        "httpMethod": "Get",
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                        "startTimeAttributeName": "startDate",
+                        "endTimeAttributeName": "endDate",
+                        "queryWindowInMin": 5
+                    },
+                    "paging": {
+                        "pagingType": "Offset",
+                        "offsetParaName": "start",
+                        "pageSizeParaName": "limit",
+                        "pageSize": 1000
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$..results"
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
