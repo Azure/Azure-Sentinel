@@ -80,7 +80,7 @@ class PrismaCloudConnector:
             alert_start_ts_ms = max_period
             logging.info('Last alert was too long ago or there is no info about last alert timestamp.')
         else:
-            alert_start_ts_ms = int(last_alert_ts_ms) + 1
+            alert_start_ts_ms = int(last_alert_ts_ms) 
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
@@ -90,7 +90,7 @@ class PrismaCloudConnector:
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
   
-        self.last_alert_ts = last_alert_ts_ms
+        self.last_alert_ts = last_alert_ts_ms + 1
 
         conn = self.sentinel.get_log_type_connector(ALERT_LOG_TYPE)
         if conn:
