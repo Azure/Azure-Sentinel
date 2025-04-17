@@ -12,7 +12,12 @@ function Test-AwsConfiguration
 
      if ($lastExitCode -ne 0 )
      {
-        Write-Log -Message $error[0] -LogFileName $LogFileName -Severity Error
+        if ($error[0] -ne $null) {
+			Write-Log -Message $error[0] -LogFileName $LogFileName -Severity "Error"
+		} else {
+			Write-Log -Message "No error details available." -LogFileName $LogFileName -Severity "Error"
+		}
+		
         Write-Log -Message "Please execute again 'aws configure' and verify that AWS configuration is correct." -LogFileName $LogFileName -Severity Error
         Write-Log -Message "For more details please see AWS doc https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html" -LogFileName $LogFileName -Severity Error               
         exit
@@ -71,7 +76,11 @@ function Set-RetryAction
 
             if ($lastExitCode -ne 0)
             {
-                Write-Log -Message $error[0] -LogFileName $LogFileName -Severity Error
+                if ($error[0] -ne $null) {
+					Write-Log -Message $error[0] -LogFileName $LogFileName -Severity "Error"
+				} else {
+					Write-Log -Message "No error details available." -LogFileName $LogFileName -Severity "Error"
+				}
 				if ($retryCount -lt $maxRetries)
 				{
 					Start-Sleep 5

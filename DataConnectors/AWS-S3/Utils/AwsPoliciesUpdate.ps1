@@ -1,5 +1,45 @@
-function Update-SQSPolicy
-{
+function Update-SQSPolicy {
+    <#
+    .SYNOPSIS 
+       Update the SQS policy 
+    #>
+
+    # Load the helper file
+    ". .\SqsPolicyHelper.ps1"
+	". .\HelperFunctions.ps1"
+
+    Write-Log -Message "Updating the SQS policy to allow S3 notifications, and ARN to read/delete/change visibility of SQS messages and get queue url" -LogFileName $LogFileName -LinePadding 2
+    Write-Log -Message "Changes S3: SQS SendMessage permission to '${bucketName}' s3 bucket" -LogFileName $LogFileName -Indent 2
+    Write-Log -Message "Changes Role ARN: SQS ChangeMessageVisibility, DeleteMessage, ReceiveMessage and GetQueueUrl permissions to '${roleName}' rule" -LogFileName $LogFileName -Indent 2
+
+    $sqsRequiredPolicies = Get-S3AndRuleSQSPolicies -RoleArn $roleArn -SqsArn $sqsArn -BucketName $bucketName
+    Write-Log -Message "Executing: aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy" -LogFileName $LogFileName -Severity Verbose
+    $currentSqsPolicy = aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy
+
+    if ($null -ne $currentSqsPolicy) {
+        Write-Log -Message $currentSqsPolicy -LogFileName $LogFileName -Severity Verbose
+
+        $sqsRequiredPoliciesObject = $sqsRequiredPolicies | ConvertFrom-Json 
+        $currentSqsPolicyObject = $currentSqsPolicy | ConvertFrom-Json 	
+        $currentSqsPolicies = ($currentSqsPolicyObject.Attributes.Policy) | ConvertFrom-Json 
+
+        $sqsRequiredPoliciesThatNotExistInCurrentPolicy = Get-MissingPolicyStatements `
+            -Required $sqsRequiredPoliciesObject.Statement `
+            -Current $currentSqsPolicies.Statement
+
+        if ($null -ne $sqsRequiredPoliciesThatNotExistInCurrentPolicy) {
+            $currentSqsPolicies.Statement += $sqsRequiredPoliciesThatNotExistInCurrentPolicy
+            $UpdatedSqsPolicy = Build-PolicyJsonForAws -Policy $currentSqsPolicies
+            aws sqs set-queue-attributes --queue-url $sqsUrl --attributes $UpdatedSqsPolicy | Out-Null
+        }
+    }
+    else {
+        Write-Log -Message "No results returned from: aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy " -LogFileName $LogFileName -Severity Verbose
+        $newSqsPolicyObject = Build-PolicyJsonForAws -Policy ($sqsRequiredPolicies | ConvertFrom-Json)
+        aws sqs set-queue-attributes --queue-url $sqsUrl --attributes $newSqsPolicyObject | Out-Null
+    }
+
+
     <#
     .SYNOPSIS 
        Update the SQS policy 
