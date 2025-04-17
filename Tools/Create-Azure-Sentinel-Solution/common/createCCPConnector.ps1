@@ -550,6 +550,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     {
                         CreateAwsResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
                     }
+                    elseif ($armResource.kind.ToLower() -eq 'storageaccountblobcontainer')
+                    {
+                        . "$PSScriptRoot/storageAccountDeploymentTemplate.ps1" # load storage resource creator
+                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
+                    }
                     else 
                     {
                         Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', 'GCP', 'AmazonWebServicesS3' or 'Push'." -BackgroundColor Red
