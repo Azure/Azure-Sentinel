@@ -1,5 +1,7 @@
-# Microsoft Azure Sentinel SAP Continuous Threat Monitoring - Preview
+# Microsoft Sentinel Solution for SAP - Continuous Threat Monitoring
 
-Please visit: [https://docs.microsoft.com/azure/sentinel/sap-deploy-solution](https://docs.microsoft.com/azure/sentinel/sap-deploy-solution)
+Please visit [Microsoft Learn for more details](https://learn.microsoft.com/azure/sentinel/sap/deployment-overview)
 
-See our playbooks built on Logic Apps (Standard) [here](./Playbooks/README.md).
+Find additional info on how to protect SAP Business Technology Platform (BTP) [here](https://learn.microsoft.com/azure/sentinel/sap/sap-btp-solution-overview).
+
+See our SAP SOAR playbooks built on Logic Apps (Standard) [here](./Playbooks/README.md).
