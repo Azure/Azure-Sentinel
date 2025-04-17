@@ -39,12 +39,12 @@ $currentUTCtime = (Get-Date).ToUniversalTime()
 if ($Timer.IsPastDue) {
     Write-Host "OKTASSO: Azure Function triggered at: $currentUTCtime - timer is running late!"
 }
-else{
+else {
     Write-Host "OKTASSO: Azure Function triggered at: $currentUTCtime - timer is ontime!"
 
 }
 #Azure Function State management between Executions
-$AzureWebJobsStorage =$env:AzureWebJobsStorage  #Storage Account to use for table to maintain state for log queries between executions
+$AzureWebJobsStorage = $env:AzureWebJobsStorage  #Storage Account to use for table to maintain state for log queries between executions
 $Tablename = "OKTA"                             #Tablename which will hold datetime record between executions
 $TotalRecordCount = 0
 
@@ -57,33 +57,31 @@ $logAnalyticsUri = $env:logAnalyticsUri
 
 # Define the Log Analytics Workspace ID and Key and Custom Table Name
 $customerId = $env:workspaceId
-$sharedKey =  $env:workspaceKey
+$sharedKey = $env:workspaceKey
 $LogType = "Okta"
 $TimeStampField = "published"
 
-if ([string]::IsNullOrEmpty($logAnalyticsUri))
-{
+if ([string]::IsNullOrEmpty($logAnalyticsUri)) {
     $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
 }
 
 # Returning if the Log Analytics Uri is in incorrect format.
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
-if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
-{
+if ($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$') {
     throw "OKTASSO: Invalid Log Analytics Uri."
 }
 $resource = "/api/logs"
 $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 # Retrieve Timestamp from last records received from Okta 
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
-$storage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
+$storage = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 $StorageTable = Get-AzStorageTable -Name $Tablename -Context $Storage -ErrorAction Ignore
-if($null -eq $StorageTable.Name){  
+if ($null -eq $StorageTable.Name) {  
     $result = New-AzStorageTable -Name $Tablename -Context $storage
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
     $uri = "$uri$($StartDate)&limit=1000"
     Write-Output "Uri at storagetable name  $uri"
-    $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
+    $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri" = $uri } -UpdateExisting
     Write-Output "Result at storagetable name  $result"
 }
 Else {
@@ -94,30 +92,16 @@ Else {
 $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
 Write-Output "Value of Table is  $Table"
 Write-Output "Value of row is  $row"
-if($null -eq $row.uri){
+if ($null -eq $row.uri -or $row.uri -notlike "*/api/v1/logs?since=*") {
     $uri = "$uri$($StartDate)&limit=1000"
     Write-Output "Uri at row uri with change  $uri"
-    $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
+    $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri" = $uri } -UpdateExisting
     Write-Output "Result at row uri  $result"
     $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
     Write-Output "Row at row uri  $row"
 }
 $uri = $row.uri
 Write-Output "Uri at after row uri change  $uri"
-
-if ($uri -notlike "*/api/v1/logs?since=*") {
-    Write-Output "Missing '/api/v1/logs?since=' in URI. Attempting to fix..."
-    if ($uri -match "^https:\/\/[\w\.-]+") {
-        $baseUri = $matches[0]  # Captured base URL
-    }
-    else {
-        # Fallback to env var if even base is broken
-        $baseUri = $env:uri
-    }
-    # Rebuild the URI correctly
-    $uri = "$baseUri/api/v1/logs?since=$StartDate&limit=1000"
-}
-Write-Output "Final URI after validation: $uri"
 
 #Setup uri Headers for requests to OKta
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -131,24 +115,24 @@ $exitDoUntil = $false
 do {
     $body = $null
     $uriself = $uri
-    if($uri.length -gt 0){
+    if ($uri.length -gt 0) {
         $response = Invoke-WebRequest -uri $uri  -Method 'GET' -Headers $headers -Body $body
         Write-Output "Uri at api call $uri"
         Write-Output "Response  $response"
     }
-    if($response.headers.Keys -contains "link"){
+    if ($response.headers.Keys -contains "link") {
         $uritemp = $response.headers.link.split(",;")
         $uritemp = $uritemp.split(";")
         $uri = $uritemp[2] -replace "<|>", ""
         Write-Output "Uri contains link $uri"
     }
-    ELSE{
+    ELSE {
         $exitDoUntil = $true
     }
-    if($uri -ne $uriself){
+    if ($uri -ne $uriself) {
         $responseObj = (ConvertFrom-Json $response.content)
         $responseCount = $responseObj.count
-        $TotalRecordCount= $TotalRecordCount + $responseCount
+        $TotalRecordCount = $TotalRecordCount + $responseCount
         
         #ACN_CD_OktaIssue925
         $domain = [regex]::matches($uri, 'https:\/\/([\w\.\-]+)\/').captures.groups[1].value
@@ -156,8 +140,7 @@ do {
         $responseObj | Add-Member -MemberType NoteProperty -Name "domain" -Value $domain
         $json = $responseObj | ConvertTo-Json -Depth 5
          
-        Function new-BuildSignature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
-        {
+        Function new-BuildSignature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource) {
             $xHeaders = "x-ms-date:" + $date
             $stringToHash = $method + "`n" + $contentLength + "`n" + $contentType + "`n" + $xHeaders + "`n" + $resource
             $bytesToHash = [Text.Encoding]::UTF8.GetBytes($stringToHash)
@@ -166,10 +149,10 @@ do {
             $sha256.Key = $keyBytes
             $calculatedHash = $sha256.ComputeHash($bytesToHash)
             $encodedHash = [Convert]::ToBase64String($calculatedHash)
-            $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
+            $authorization = 'SharedKey {0}:{1}' -f $customerId, $encodedHash
             return $authorization
         }
-        $method="POST"
+        $method = "POST"
         $contentType = "application/json"
         
         $rfc1123date = [DateTime]::UtcNow.ToString("r")
@@ -187,24 +170,24 @@ do {
 
         
         $LAheaders = @{
-            "Authorization" = $signature;
-            "Log-Type" = $logType;
-            "x-ms-date" = $rfc1123date;
+            "Authorization"        = $signature;
+            "Log-Type"             = $logType;
+            "x-ms-date"            = $rfc1123date;
             "time-generated-field" = $TimeStampField
         }
         $result = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $LAheaders -Body $body -UseBasicParsing
         #update State table for next time we execute function
         #store details in function storage table to retrieve next time function runs 
-        $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
+        $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri" = $uri } -UpdateExisting
     }
-    else{
+    else {
         $exitDoUntil = $true
     }
     #check on time running, Azure Function default timeout is 5 minutes, if we are getting close exit function cleanly now and get more records next execution
-    IF((new-timespan -Start $currentUTCtime -end ((Get-Date).ToUniversalTime())).TotalSeconds -gt 500){$exitDoUntil = $true} 
+    IF ((new-timespan -Start $currentUTCtime -end ((Get-Date).ToUniversalTime())).TotalSeconds -gt 500) { $exitDoUntil = $true } 
 }until($exitDoUntil) 
 
-if($TotalRecordCount -lt 1){
+if ($TotalRecordCount -lt 1) {
     Write-Output "OKTASSO: No new Okta logs since $StartDate are available as of $currentUTCtime"
 }
 # Write an information log with the current time.
