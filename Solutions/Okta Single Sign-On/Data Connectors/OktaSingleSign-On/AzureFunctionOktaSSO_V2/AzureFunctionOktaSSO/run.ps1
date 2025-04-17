@@ -92,7 +92,7 @@ Else {
 # retrieve the row
 $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
 if($null -eq $row.uri){
-    $uri = "$uri$StartDate&limit=1000"
+    $uri = "$uri$($StartDate)&limit=1000"
     Write-Output "Uri at row uri with change  $uri"
     $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
     Write-Output "Result at row uri  $result"
@@ -100,7 +100,13 @@ if($null -eq $row.uri){
     Write-Output "Row at row uri  $row"
 }
 $uri = $row.uri
-Write-Output "Uri at after row uri  $uri"
+Write-Output "Uri at after row uri change  $uri"
+
+if ($uri -notlike "*/api/v1/logs?since=*") {
+    Write-Output "Missing '/api/v1/logs?since=' in URI. Attempting to fix..."
+    $uri = "$uri/api/v1/logs?since=$StartDate&limit=1000"
+}
+Write-Output "Final URI after validation: $uri"
 
 #Setup uri Headers for requests to OKta
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
