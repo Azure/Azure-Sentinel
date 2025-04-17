@@ -88,9 +88,12 @@ if($null -eq $StorageTable.Name){
 }
 Else {
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
+    Write-Output "Value of Table in else con  $Table"
 }
 # retrieve the row
 $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
+Write-Output "Value of Table is  $Table"
+Write-Output "Value of row is  $row"
 if($null -eq $row.uri){
     $uri = "$uri$($StartDate)&limit=1000"
     Write-Output "Uri at row uri with change  $uri"
@@ -104,7 +107,15 @@ Write-Output "Uri at after row uri change  $uri"
 
 if ($uri -notlike "*/api/v1/logs?since=*") {
     Write-Output "Missing '/api/v1/logs?since=' in URI. Attempting to fix..."
-    $uri = "$uri/api/v1/logs?since=$StartDate&limit=1000"
+    if ($uri -match "^https:\/\/[\w\.-]+") {
+        $baseUri = $matches[0]  # Captured base URL
+    }
+    else {
+        # Fallback to env var if even base is broken
+        $baseUri = $env:uri
+    }
+    # Rebuild the URI correctly
+    $uri = "$baseUri/api/v1/logs?since=$StartDate&limit=1000"
 }
 Write-Output "Final URI after validation: $uri"
 
