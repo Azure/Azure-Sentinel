@@ -33,10 +33,10 @@ query: |
   let ioc_lookBack = 14d;
   let IP_TI = ThreatIntelIndicators
   //extract key part of kv pair
-       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
-       | extend NetworkSourceIP = toupper(ObservableValue)
-       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+  | extend NetworkSourceIP = toupper(ObservableValue)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | where TimeGenerated >= ago(ioc_lookBack)
     // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
     // Taking the first non-empty value based on potential IOC match availability
@@ -60,10 +60,12 @@ query: |
       | extend imNWS_TimeGenerated = TimeGenerated
     )
     on $left.TI_ipEntity == $right.SrcIpAddr
-  | where imNWS_TimeGenerated < ExpirationDateTime
-  | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated, *) by IndicatorId, DstIpAddr
-  | project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
-    TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Url, Type
+  | where imNWS_TimeGenerated < ValidUntil
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated, *) by Id, DstIpAddr
+  | project imNWS_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
+    TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Type
 entityMappings:
   - entityType: IP
     fieldMappings:
