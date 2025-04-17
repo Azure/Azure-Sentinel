@@ -92,7 +92,7 @@ Else {
 # retrieve the row
 $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
 if($null -eq $row.uri){
-    $uri = "$uri$($StartDate)&limit=1000"
+    $uri = "$uri$StartDate&limit=1000"
     Write-Output "Uri at row uri  $uri"
     $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
     Write-Output "Result at row uri  $result"
