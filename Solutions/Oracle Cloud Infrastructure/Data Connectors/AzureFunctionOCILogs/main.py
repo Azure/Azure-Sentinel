@@ -17,7 +17,7 @@ MessageEndpoint = os.environ['MessageEndpoint']
 StreamOcid = os.environ['StreamOcid'] 
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
-LOG_TYPE = 'OCI_LogsV3'
+LOG_TYPE = 'OCI_LogsV3_01'
 CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition',"0")
@@ -59,6 +59,9 @@ def determine_log_type(event):
     Determine the Azure Sentinel log type based on the event type.
     """
     # event_type = event.get("type", "default")
+
+    if "com.oraclecloud.waf." in event["type"] or "com.oraclecloud.loadbalancer.waf" in event["type"]:
+        return "OCI_WAFLogsV3"
     if "com.oraclecloud.loadbalancer." in event["type"]:
         return "OCI_LoadBalancerLogsV3"
     # elif event_type == "com.oraclecloud.loadbalancer.error":
@@ -69,9 +72,7 @@ def determine_log_type(event):
         return "OCI_ComputeApiLogsV3"
     if event["type"] == "com.oraclecloud.sch.serviceconnector.runlog":
         return "OCI_ServiceConnector_LogsV3"
-    if "com.oraclecloud.waf." in event["type"]:
-        return "OCI_WAFLogsV3"
-    if "core.v1." in event["type"]:
+    if "core.v1." in event["type"] or "com.coreos.monitoring." in event["type"]:
         return "OCI_coreLogsV3"
     if ".post" in event["type"]:
         return "OCI_postLogsV3"
@@ -86,7 +87,7 @@ def determine_log_type(event):
     if "com.oraclecloud.vcn." in event["type"] or "com.oraclecloud.virtualNetwork." in event["type"]:
         return "OCI_VirtualNetworkLogsV3"
     else:
-        return "OCI_LogsV3"  # Default log type
+        return "OCI_LogsV3_01"  # Default log type
 
 def parse_key(key_input):
     try:
