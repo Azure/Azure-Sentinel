@@ -72,8 +72,6 @@ def determine_log_type(event):
         return "OCI_ComputeApiLogsV3"
     if event["type"] == "com.oraclecloud.sch.serviceconnector.runlog":
         return "OCI_ServiceConnector_LogsV3"
-    if "core.v1." in event["type"] or "com.coreos.monitoring." in event["type"]:
-        return "OCI_coreLogsV3"
     if ".post" in event["type"]:
         return "OCI_postLogsV3"
     if "com.oraclecloud.objectstorage." in event["type"]:
@@ -86,6 +84,10 @@ def determine_log_type(event):
         return "OCI_KeyManagementService_LogsV3"
     if "com.oraclecloud.vcn." in event["type"] or "com.oraclecloud.virtualNetwork." in event["type"]:
         return "OCI_VirtualNetworkLogsV3"
+    if "core.v1." in event["type"] or "com.coreos.monitoring." in event["type"] or event["type"].endswith(".put") or event["type"].endswith(".update") or event["type"].endswith(".patch") or event["type"].endswith(".delete") or event["type"].endswith(".create") or event["type"].endswith(".head") or event["type"].endswith(".deletecollection"):
+        return "OCI_coreLogsV3"
+    if "com.oraclecloud." in event["type"]:
+        return "OCI_CloudLogsV3"
     else:
         return "OCI_LogsV3_01"  # Default log type
 
