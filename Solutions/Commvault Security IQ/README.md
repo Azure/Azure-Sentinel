@@ -1,91 +1,60 @@
-# Commvault - Sentinel Integration
+Commvault - Sentinel Integration
+================================
 
-Integrate Commvault with Sentinel to ingest alerts and data for automated incident creation via Analytic Rules.
+Integrate Commvault with Sentinel for automated alert/data ingestion and incident creation via Analytic Rules.
 
-## Key Features
+Prerequisites
+-------------
 
-- Automate actions (disable IDP, users, data aging) within your Commvault/Metallic environment from Sentinel.
+*   Commvault/Metallic admin access.
+*   Azure RG/Subscription admin access.
+*   Azure Cloud Shell access.
+*   Microsoft Sentinel instance (in Azure RG).
+*   Azure Log Analytic Workspace (in Azure RG).
 
-## Prerequisites
+Required Assets
+---------------
 
-- Commvault/Metallic admin access.
-- Azure Resource Group/Subscription admin access.
-- Azure Cloud Shell access.
-- Microsoft Sentinel instance in your Azure Resource Group.
-- Azure Log Analytic Workspace in your Azure Resource Group.
+*   **KeyVault:** Stores credentials as secrets (access policy enabled).
+    *   **Secrets:**
+        *   access-token : Commvault/Metallic access token.
+        *   environment-endpoint-url : Commvault/Metallic endpoint URL (e.g., https://<hostname>/commandcenter/api or http://<hostname>:<port>/SearchSvc/CVWebService.svc).
 
-## Inventory of Required Assets
+Installation
+------------
 
-The following Azure assets are required for this integration. Ensure proper permissions are granted. Use consistent asset names during installation.
+**1\. Create KeyVault:**
 
-### KeyVault
+*   Azure Portal -> KeyVault -> Create -> Basics (select subscription, RG).
 
-- A KeyVault to securely store credentials as secrets. **KeyVault permission model should be set to Access Policy.**
+**2\. Create KeyVault Secrets:**
 
-### KeyVault Secrets
+*   Azure Portal -> KeyVault -> Secrets -> Generate/Import -> Manual:
+    *   Name: access-token, Value: (Your Commvault/Metallic access token), Enabled: Yes -> Create.
+    *   Name: environment-endpoint-url, Value: (Your Commvault/Metallic endpoint's URL), Enabled: Yes -> Create.
 
-These secrets are stored in your KeyVault. Their initial values need manual retrieval.
+**3\. Install Commvault Cloud Solution:**
 
-- **access-token:** The access token for Commvault/Metallic.
-- **environment-endpoint-url:** The URL of your Commvault/Metallic endpoint, in the format:
-  - Command center url: `https://<hostname>/commandcenter/api`
-  - WebService url: `http://<hostname>:<port>/SearchSvc/CVWebService.svc`
+*   Sentinel -> Content hub -> Search "Commvault Cloud" -> Install.
 
-## Installation
+**4\. Configure Data Connector:**
 
-### Create The KeyVault
+*   Commvault Cloud -> Commvault Cloud Alert (Azure Functions) -> Open connector page -> Deploy to Azure -> Fill details -> Create.
 
-- Azure Portal -> KeyVault -> Create -> Basics (select subscription, resource group, provide a KeyVault name).
+**5\. Upload and Run Setup Script:**
 
-### Create the KeyVault Secrets
+*   Azure Cloud Shell -> Manage files -> [Setup-CommvaultAutomation.ps1](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Commvault%20Security%20IQ/Tools/Setup-CommvaultAutomation.ps1) -> Run: ./Setup-CommvaultAutomation.ps1
 
-- Azure Portal -> Your KeyVault -> Secrets (Under "Objects") -> "Generate/Import" -> Manual:
-  - Name: `access-token`, Secret Value: (Your Commvault/Metallic access token), Enabled: Yes -> Create.
-  - Name: `environment-endpoint-url`, Secret Value: (Your Commvault/Metallic endpoint's URL), Enabled: Yes -> Create.
+**6\. Create Analytic Rules:**
 
-### Install Commvault Cloud Solution
+*   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> "Commvault Cloud Alert" -> Create Rule -> Next -> Save.
+*   Repeat for other Analytic Rules.
 
-- Sentinel -> Content hub (under “Configuration”) -> Search for "Commvault Cloud" -> Install.
+**7\. Create Playbooks:**
 
-### Configure Data Connector
+*   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> "logic-app-disable-data-aging" -> Configuration -> "Commvault Disable Data Aging Logic App Playbook" -> Create Playbook -> Next -> Enter keyvaultName -> Create Playbook.
+*   Repeat for other playbooks.
 
-- Sentinel -> Data connectors -> Search for "CommvaultSecurityIQ (using Azure Functions)" -> Open connector page -> Deploy to Azure -> Fill up the required details -> Create.
+**8\. Upload and Run Role Assignment Script:**
 
-### Upload and Run PowerShell Script Setup-CommvaultAutomation
-
-- Azure Cloud Shell -> Click on **Manage files** -> Upload `Tools\Setup-CommvaultAutomation.ps1` -> Run:
-  ```powershell
-  ./Setup-CommvaultAutomation.ps1
-    ```
-
-### Create the Analytic Rules
-
-- Sentinel -> Content hub (under “Configuration”) -> Click on "Commvault Cloud" -> Click on "Manage" -> Click on "Commvault Cloud Alert" -> Click on "Create Rule" -> Follow the steps by clicking "Next" -> Click on "Save".
-- Repeat for other Analytic rules in the solution.
-
-### Create the Playbooks
-
-- Sentinel -> Content hub (under “Configuration”) -> Click on "Commvault Cloud" -> Click on "Manage":
-  - Click on "logic-app-disable-data-aging" -> Click on "Configuration" -> Select "Commvault Disable Data Aging Logic App Playbook" -> Click on "Create Playbook" -> Finish steps -> Enter your KeyVault name in the "keyvaultName" parameter -> Click on "Create Playbook".
-  - Repeat the above steps for other playbooks in the solution.
-
-### Upload and Run PowerShell Script AssignLogicAppRoles
-
-- Azure Cloud Shell -> Click on **Manage files** -> Upload `Tools\AssignLogicAppRoles.ps1` -> Run:
-  ```powershell
-  ./AssignLogicAppRoles.ps1
-    ```
-
-## Playbooks
-
-### logic-app-disable-data-aging
-
-Disables Archive Pruning for specified Commvault clients (by name or hostname).
-
-### logic-app-disable-saml-provider
-
-Disables SAML Identity Providers in the Commvault environment.
-
-### logic-app-disable-user
-
-Disables a specific user within the Commvault environment (by username).
+*   Azure Cloud Shell -> Manage files -> [AssignLogicAppRoles.ps1](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Commvault%20Security%20IQ/Tools/AssignLogicAppRoles.ps1) -> Run: ./AssignLogicAppRoles.ps1
