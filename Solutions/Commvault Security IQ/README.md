@@ -15,7 +15,7 @@ Prerequisites
 Required Assets
 ---------------
 
-*   **KeyVault:** Stores credentials as secrets (access policy enabled).
+*   **KeyVault:** Stores credentials as secrets.
     *   **Secrets:**
         *   access-token : Commvault/Metallic access token.
         *   environment-endpoint-url : Commvault/Metallic endpoint URL (e.g., https://<hostname>/commandcenter/api or http://<hostname>:<port>/SearchSvc/CVWebService.svc).
