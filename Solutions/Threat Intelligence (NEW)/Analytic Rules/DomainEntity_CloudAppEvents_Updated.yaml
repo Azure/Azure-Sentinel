@@ -1,0 +1,85 @@
+id: a7d2b1e4-dd9c-40fd-9651-1a136eb8f0df
+name: Preview - TI map Domain entity to Cloud App Events
+description: |
+    'Identifies compromises and attacks and detect malicious activities in one's domain entity from TI.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d; 
+  let list_tlds =
+    ThreatIntelIndicators
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+      | where IsActive == true and ValidUntil > now()
+      //extract key part of kv pair
+      | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+      | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+      | extend DomainName = tolower(IndicatorType)
+      | extend parts = split(DomainName, '.')
+      | extend tld = parts[(array_length(parts) - 1)]
+      | extend IndicatorId = tostring(split(Id, "--")[2])
+      | summarize count() by tostring(tld)
+      | summarize make_set(tld);
+  let Domain_Indicators =
+    ThreatIntelIndicators
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+      | where IsActive == true and ValidUntil > now()
+      | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+      | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+      | extend TI_DomainEntity = tolower(ObservableValue)
+      | extend DomainName = TI_DomainEntity
+      | extend IndicatorId = tostring(split(Id, "--")[2])
+      | where isnotempty(TI_DomainEntity)
+      | project-reorder *, IndicatorType, DomainName, Type, TI_DomainEntity;
+    Domain_Indicators
+      | join kind=innerunique (
+    CloudAppEvents
+      | extend IngestionTime = ingestion_time()
+      | where IngestionTime > ago(dt_lookBack)
+      | extend PAUrl = columnifexists("RequestURL", "None")
+      | extend Domain = trim('"', tostring(parseurl(PAUrl).Host))
+      | extend Domain = tolower(Domain)
+      | extend parts = split(Domain, '.')
+      | extend tld = parts[(array_length(parts) - 1)]
+      | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.TI_DomainEntity == $right.Domain
+      | where CloudAppEvents_TimeGenerated < ValidUntil
+      | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId
+      | extend 
+            //Description = column_ifexists("max_CloudAppEvents_TimeGenerated_Description", ""),
+            Description = tostring(parse_json(max_CloudAppEvents_TimeGenerated_Data).description),
+            ActivityGroupNames = column_ifexists("max_CloudAppEvents_TimeGenerated_ActivityGroupNames", ""),
+            ThreatType = column_ifexists("max_CloudAppEvents_TimeGenerated_ThreatType", ""),
+            ExpirationDateTime = column_ifexists("max_CloudAppEvents_TimeGenerated_ExpirationDateTime", ""),
+            ConfidenceScore = column_ifexists("max_CloudAppEvents_TimeGenerated_ConfidenceScore", ""),
+            DomainName = column_ifexists("max_CloudAppEvents_TimeGenerated_DomainName", ""),
+            ProviderName = column_ifexists("max_CloudAppEvents_TimeGenerated_IndicatorProvider", ""),
+            AlertSeverity = column_ifexists("max_CloudAppEvents_TimeGenerated_ThreatSeverity", ""),
+            IPAddress = column_ifexists("max_CloudAppEvents_TimeGenerated_IPAddress", "")
+      | project CloudAppEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, ProviderName, AlertSeverity, IPAddress
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.3
+kind: Scheduled

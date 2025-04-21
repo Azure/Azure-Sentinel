@@ -1,0 +1,79 @@
+id: 795d43a3-6edc-4c99-971f-00d05841e5ac
+name: TI map Email entity to OfficeActivity
+description: |
+  'Identifies a match in OfficeActivity table from any Email IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  let OfficeEvents = materialize(
+    OfficeActivity
+    | where isnotempty(UserId)
+    | where TimeGenerated >= ago(dt_lookBack)
+    | where UserId matches regex emailregex
+    | project-rename  OfficeActivity_TimeGenerated = TimeGenerated);
+  let OfficeActivityUPNs = OfficeEvents | distinct UserId = tolower(UserId) | summarize make_list(UserId);
+  ThreatIntelIndicators
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where isnotempty(IndicatorType) and IndicatorType == "email-addr"
+  | extend EmailSenderAddress = ObservableValue
+  | extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, "@") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, "@") - 1)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | where isnotempty(EmailSenderAddress)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  // | where tolower(EmailSenderAddress) in (OfficeActivityUPNs)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | extend Description = tostring(parse_json(Data).description)
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (OfficeEvents) on $left.EmailSenderAddress == $right.UserId
+  | where OfficeActivity_TimeGenerated < ValidUntil
+  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by Id, UserId
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, EmailSourceDomain, UserId, ClientIP, Operation, UserType, RecordType, OfficeWorkload, Parameters//, Url, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType
+  | extend Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
+  | extend timestamp = OfficeActivity_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.2.7
+kind: Scheduled
