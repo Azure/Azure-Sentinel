@@ -96,6 +96,15 @@ function New-ParametersForConnectorInstuctions($instructions) {
 
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
         }
+        elseif ($instruction.type -eq "ServicePrincipalIDTextBox_test") {
+            $newParameter = [PSCustomObject]@{
+                defaultValue = $instruction.parameters.name;
+                type         = "securestring";
+                minLength    = 1;
+            }
+
+            $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+        }
         else {
             $instructionType = $instruction.type;
             Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"

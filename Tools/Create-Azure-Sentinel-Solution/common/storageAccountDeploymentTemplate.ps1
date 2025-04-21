@@ -28,53 +28,63 @@ function Set-ArmVariable {
 }
 
 function CreateStorageAccountBlobContainerResourceProperties($armResource, $templateContentConnections, $fileType) {
-    $kindType = 'StorageAccountBlobContainer'
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    try {
+        $kindType = 'StorageAccountBlobContainer'
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'auth' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'auth' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'type' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'type' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    $hasDependsOn = [bool]($armResource.PSobject.Properties.name -match "dependsOn")
-    if (!$hasDependsOn) {
-        $armResource | Add-Member -NotePropertyName "dependsOn" -NotePropertyValue @( "[[variables('nestedDeploymentId')]")
+        $hasDependsOn = [bool]($armResource.PSobject.Properties.name -match "dependsOn")
+        if (!$hasDependsOn) {
+            $armResource | Add-Member -NotePropertyName "dependsOn" -NotePropertyValue @( "[[variables('nestedDeploymentId')]")
+        }
+
+        Set-UriProperty -propertyName "QueueUri" -queueVarName "queueName"
+        Set-UriProperty -propertyName "DlqUri" -queueVarName "dlqName"
+
+        $hasVariables = [bool]($templateContentConnections.properties.PSobject.Properties.name -match "variables")
+        if (!$hasVariables) {
+            $templateContentConnections.properties | Add-Member -NotePropertyName "variables" -NotePropertyValue @{}
+        }
+
+        $templateContentConnections.properties.mainTemplate.variables = Set-ResourceVariables 
+        $templateContentConnections.properties.mainTemplate.resources += Get-StorageAccountDeploymentTemplate
     }
-
-    Set-UriProperty -propertyName "QueueUri" -queueVarName "queueName"
-    Set-UriProperty -propertyName "DlqUri" -queueVarName "dlqName"
-
-    $templateContentConnections.properties.variables = Set-ResourceVariables 
+    catch {
+        Write-Host "Error in CreateStorageAccountBlobContainerResourceProperties function. Error Details $_"
+    }
 }
 
 function Get-StorageAccountDeploymentTemplate {
-    try {
-        return @{
+        return [ordered]@{
             type           = "Microsoft.Resources/deployments"
             apiVersion     = "2021-04-01"
             name           = "[[variables('nestedDeploymentName')]"
-            properties     = @{
+            properties     = [ordered]@{
                 mode     = "Incremental"
-                template = @{
+                template = [ordered]@{
                     '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
                     contentVersion = "1.0.0.0"
                     resources      = @(
-                        @{
+                        [ordered]@{
                             type       = "Microsoft.Storage/storageAccounts/queueServices/queues"
                             apiVersion = "2021-04-01"
                             name       = "[[concat(variables('storageAccountName'), '/default/', variables('queueName'))]"
                             dependsOn  = @()
                             properties = @{}
                         },
-                        @{
+                        [ordered]@{
                             type       = "Microsoft.Storage/storageAccounts/queueServices/queues"
                             apiVersion = "2021-04-01"
                             name       = "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'))]"
                             dependsOn  = @()
                             properties = @{}
                         },
-                        @{
+                        [ordered]@{
                             type       = "Microsoft.EventGrid/systemTopics"
                             apiVersion = "2022-06-15"
                             name       = "[[variables('EGSystemTopicName')]"
@@ -87,7 +97,7 @@ function Get-StorageAccountDeploymentTemplate {
                             }
                             condition  = "[[empty(parameters('EGSystemTopicName'))]"
                         },
-                        @{
+                        [ordered]@{
                             type       = "Microsoft.EventGrid/systemTopics/eventSubscriptions"
                             apiVersion = "2023-12-15-preview"
                             name       = "[[format('{0}/{1}', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]"
@@ -109,7 +119,7 @@ function Get-StorageAccountDeploymentTemplate {
                                 }
                             }
                         },
-                        @{
+                        [ordered]@{
                             type       = "Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments"
                             apiVersion = "2018-01-01-preview"
                             name       = "[[concat(variables('storageAccountName'), '/default/', variables('blobContainerName'), '/Microsoft.Authorization/', variables('blobRaGuid'))]"
@@ -118,7 +128,7 @@ function Get-StorageAccountDeploymentTemplate {
                                 principalId      = "[[parameters('principalId')]"
                             }
                         },
-                        @{
+                        [ordered]@{
                             type       = "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments"
                             apiVersion = "2018-01-01-preview"
                             name       = "[[concat(variables('storageAccountName'), '/default/', variables('queueName'), '/Microsoft.Authorization/',  variables('notificationQueueRaGuid'))]"
@@ -130,7 +140,7 @@ function Get-StorageAccountDeploymentTemplate {
                                 principalId      = "[[parameters('principalId')]"
                             }
                         },
-                        @{
+                        [ordered]@{
                             type       = "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments"
                             apiVersion = "2018-01-01-preview"
                             name       = "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'), '/Microsoft.Authorization/', variables('dlqRaGuid'))]"
@@ -148,11 +158,6 @@ function Get-StorageAccountDeploymentTemplate {
             subscriptionId = "[[parameters('StorageAccountSubscription')]"
             resourceGroup  = "[[parameters('StorageAccountResourceGroupName')]"
         }
-    }
-    catch {
-        Write-Error "Error in Get-StorageAccountBlobContainerDeploymentTemplate function: $_"
-        exit 1
-    }
 }
 
 function Set-ResourceVariables {
@@ -160,8 +165,9 @@ function Set-ResourceVariables {
         # Initialize variables hashtable if not already done
         if (-not $variables) { $variables = @{} }
 
-        Set-ArmVariable $variables "_dataConnectorContentIdConnections$global:connectorCounter" "[variables('_dataConnectorContentIdConnections')]"
-        Set-ArmVariable $variables "connectorName" "blob-example-26-12"
+        $connectorName = "blob-example-26-12"
+        Set-ArmVariable $variables "_dataConnectorContentIdConnections$global:connectorCounter" "[variables('_dataConnectorContentIdConnections$global:connectorCounter')]"
+        Set-ArmVariable $variables "connectorName" "$connectorName"
         Set-ArmVariable $variables "storageAccountName" "[[split(split(parameters('blobContainerUri'), 'https://')[1], '.blob.core.windows.net')[0]]"
         Set-ArmVariable $variables "blobContainerName" "[[split(split(parameters('blobContainerUri'), '.blob.core.windows.net/')[1], '/')[0]]"
         Set-ArmVariable $variables "queueName" "[[concat(variables('connectorName'), '-notification')]]"
