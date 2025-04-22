@@ -84,11 +84,14 @@ class PrismaCloudConnector:
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
-            last_alert_ts_ms = alert['alertTime']
-            alert = self.clear_alert(alert)
-            logging.info('No of alerts send to Sentinel {}'.format(alert))
-            await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
-            self.sent_alerts += 1
+            if alert['alertTime'] >=alert_start_ts_ms:
+                last_alert_ts_ms = alert['alertTime']
+                alert = self.clear_alert(alert)
+                logging.info('No of alerts send to Sentinel {}'.format(alert))
+                await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
+                self.sent_alerts += 1
+            else:
+                logging.info(f"Skipping alert with alertTime: {alert['alertTime']} (less than start time {alert_start_ts_ms})")
   
         self.last_alert_ts = int(last_alert_ts_ms) + 1
         logging.info('Updated last alert ts {}'.format(self.last_alert_ts))
@@ -168,6 +171,10 @@ class PrismaCloudConnector:
             "sortBy": ["alertTime:asc"],
             "detailed": True
         }
+        
+        logging.info('{} StartTimeinGetAlert-'.format(start_time))
+        logging.info('{} EndTimeinGetAlert-'.format(unix_ts_now))
+        
         data = json.dumps(data)
         async with self.session.post(uri, headers=headers, data=data) as response:
             if response.status != 200:
