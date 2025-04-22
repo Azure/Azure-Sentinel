@@ -1,0 +1,75 @@
+id: 4988c238-a118-442c-80bd-6c689a1b2e97
+name: TI Map IP Entity to Duo Security
+description: |
+  'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DuoSecurity.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelIndicators
+  //extract key part of kv pair
+       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | extend NetworkSourceIP = toupper(ObservableValue)
+       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(NetworkSourceIP)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+  // Taking the first non-empty value based on potential IOC match availability
+  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+   | join (
+       DuoSecurityAuthentication_CL
+       | where TimeGenerated >= ago(dt_lookBack)
+       | where isnotempty(access_device_ip_s)
+       // renaming time column so it is clear the log this came from
+       | extend Duo_TimeGenerated = isotimestamp_t
+   )
+   on $left.TI_ipEntity == $right.access_device_ip_s
+   | where TimeGenerated >= ago(ioc_lookBack)
+   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+   | where IsActive == true and ValidUntil > now()
+   | extend Description = tostring(parse_json(Data).description)
+   | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+   | project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Duo_TimeGenerated,
+   TI_ipEntity, user_name_s, factor_s, result_s, application_name_s, event_type_s, txid_g, user_key_s, access_device_ip_s, access_device_location_city_s, access_device_location_state_s, access_device_location_country_s//, ThreatType, Url
+   | extend timestamp = Duo_TimeGenerated, Name = tostring(split(user_name_s, '@', 0)[0]), UPNSuffix = tostring(split(user_name_s, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: user_name_s
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: access_device_ip_s
+version: 1.0.6
+kind: Scheduled
