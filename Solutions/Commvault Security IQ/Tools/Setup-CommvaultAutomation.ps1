@@ -28,8 +28,10 @@ if (-not $selectedSubscription) {
 
 Set-AzContext -SubscriptionId $selectedSubscription.Id
 
+$LogAnalyticsResourceGroupName = Get-ResourceGroupName -promptMessage "Enter the resource group name for the Log Analytics workspace"
 
-$automationResourceGroupName = Get-ResourceGroupName -promptMessage "Enter the resource group name for the Automation Account"
+# Using the same resource group for automation account , as the log analytics workspace
+$automationResourceGroupName = $LogAnalyticsResourceGroupName
 
 
 $automationAccountName = "Commvault-Automation-Account"
@@ -80,11 +82,6 @@ function New-AndPublish-Runbook {
 New-AndPublish-Runbook -runbookName "Commvault_Disable_IDP" -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_IDP.py"
 New-AndPublish-Runbook -runbookName "Commvault_Disable_User" -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_User.py"
 New-AndPublish-Runbook -runbookName "Commvault_Disable_Data_Aging" -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_Data_Aging.py"
-
-
-
-$LogAnalyticsResourceGroupName = Get-ResourceGroupName -promptMessage "Enter the resource group name for the Log Analytics workspace"
-
 
 
 $workspaces = Get-AzOperationalInsightsWorkspace -ResourceGroupName $LogAnalyticsResourceGroupName
