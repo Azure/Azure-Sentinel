@@ -34,7 +34,7 @@ if (-not $selectedKeyVault) {
     exit
 }
 
-$automationResourceGroupName = Get-ResourceGroupName -promptMessage "Enter the resource group name for the Automation Account"
+$automationResourceGroupName = Get-ResourceGroupName -promptMessage "Enter the resource group name for the Log Analytics workspace"
 
 foreach ($logicAppName in $logicAppNames) {
     $AllLogicApps = (Get-AzResource -ResourceType "Microsoft.Logic/workflows" | Where-Object { $_.Name -eq $logicAppName })
@@ -42,20 +42,19 @@ foreach ($logicAppName in $logicAppNames) {
         try {
             $roleDefinition = Get-AzRoleDefinition -Name "Automation Job Operator"
 
-            $logicAppResource = Get-AzResource -ResourceId $selectedLogicApp.ResourceId
-
             $automationAccountName = "Commvault-Automation-Account"
             
-            New-AzRoleAssignment -ObjectId $logicAppResource.Identity.PrincipalId -RoleDefinitionId $roleDefinition.Id -Scope "/subscriptions/$($selectedSubscription.Id)/resourceGroups/$automationResourceGroupName/providers/Microsoft.Automation/automationAccounts/$automationAccountName"
+            New-AzRoleAssignment -ObjectId $selectedLogicApp.Identity.PrincipalId -RoleDefinitionId $roleDefinition.Id -Scope "/subscriptions/$($selectedSubscription.Id)/resourceGroups/$automationResourceGroupName/providers/Microsoft.Automation/automationAccounts/$automationAccountName"
 
             $isRbacEnabled = (Get-AzKeyVault -VaultName $selectedKeyVault.VaultName).EnableRbacAuthorization
             if($isRbacEnabled) {
                 $keyVaultId = (Get-AzKeyVault -VaultName $selectedKeyVault.VaultName).ResourceId
-                New-AzRoleAssignment -ObjectId $logicAppResource.Identity.PrincipalId -RoleDefinitionName "Key Vault Secrets User" -Scope $keyVaultId
+                New-AzRoleAssignment -ObjectId $selectedLogicApp.Identity.PrincipalId -RoleDefinitionName "Key Vault Secrets User" -Scope $keyVaultId
             }
             else {
-                Set-AzKeyVaultAccessPolicy -VaultName $keyVaultName -ObjectId $logicAppResource.Identity.PrincipalId -PermissionsToSecrets get
+                Set-AzKeyVaultAccessPolicy -VaultName $keyVaultName -ObjectId $selectedLogicApp.Identity.PrincipalId -PermissionsToSecrets get
             }
+
         }
         catch {
             Write-Host "An error occurred: $($_.Exception.Message)" -ForegroundColor Red
