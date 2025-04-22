@@ -51,7 +51,7 @@ ParserQuery: |
     | where not(disabled)
     | where DeviceVendor  == "Fortinet" 
         and DeviceProduct startswith "Fortigate"
-        and Activity has_all ('webfilter', 'utm')
+        and Activity has_all ('webfilter', 'utm') or Activity has_all ('ips', 'utm')
     | extend 
         EventResultDetails = "NA"
     | lookup EventLookup on DeviceAction 
@@ -84,37 +84,74 @@ ParserQuery: |
         , SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
     | project-rename DvcOriginalAction = DeviceAction
     | parse-kv AdditionalExtensions as (
-            FortinetFortiGatestart:datetime,
-            FortinetFortiGatesrcintfrole:string,
-            FortinetFortiGatedstintfrole:string,
-            FortinetFortiGateexternalID:string,
-            FortinetFortiGatepolicyid:int,
-            FortinetFortiGatedstcountry:string,
-            FortinetFortiGatesrccountry:string,
-            FortinetFortiGatecrscore:string,
-            FortinetFortiGateduration:int,
-            FortinetFortiGatesentpkt:long,
-            FortinetFortiGatercvdpkt:long,
-            ['ad.referralurl']:string,
-            ['ad.httpmethod']:string,
-            ['ad.agent']:string
-        ) with (pair_delimiter=';', kv_delimiter='=')
+          start:datetime,
+          srcintfrole:string,
+          dstintfrole:string,
+          externalID:string,
+          policyid:int,
+          dstcountry:string,
+          srccountry:string,
+          crscore:string,
+          duration:int,
+          sentpkt:long,
+          rcvdpkt:long,
+          ['ad.referralurl']:string,
+          ['ad.httpmethod']:string,
+          ['ad.agent']:string
+      ) with (pair_delimiter=';', kv_delimiter='=')
     | parse AdditionalExtensions with * "x-forwarded-for=" HttpRequestXff:string ";" *
+    | project-rename 
+      HttpReferrer              =  ['ad.referralurl'],
+      HttpRequestMethod         = ['ad.httpmethod'],
+      HttpUserAgent             = ['ad.agent'],
+      t1EventStartTime          = start,
+      t1SrcZone                 = srcintfrole,
+      t1DstZone                 = dstintfrole,
+      t1NetworkSessionId        = externalID,
+      t1RuleNumber              = policyid,
+      t1NetworkDuration         = duration,
+      t1DstGeoCountry           = dstcountry,
+      t1SrcGeoCountry           = srccountry,
+      t1ThreatOriginalRiskLevel = crscore,
+      t1SrcPackets              = sentpkt,
+      t1DstPackets              = rcvdpkt
+    | parse-kv AdditionalExtensions as (
+          FTNTFGTstart:datetime,
+          FTNTFGTsrcintfrole:string,
+          FTNTFGTdstintfrole:string,
+          FTNTFGTexternalID:string,
+          FTNTFGTpolicyid:int,
+          FTNTFGTdstcountry:string,
+          FTNTFGTsrccountry:string,
+          FTNTFGTcrscore:string,
+          FTNTFGTduration:int,
+          FTNTFGTsentpkt:long,
+          FTNTFGTrcvdpkt:long
+      ) with (pair_delimiter=';', kv_delimiter='=')
     | project-rename
-        HttpReferrer            = ['ad.referralurl'],
-        HttpRequestMethod       = ['ad.httpmethod'],
-        HttpUserAgent           = ['ad.agent'],
-        EventStartTime          = FortinetFortiGatestart,
-        SrcZone                 = FortinetFortiGatesrcintfrole,
-        DstZone                 = FortinetFortiGatedstintfrole,
-        NetworkSessionId        = FortinetFortiGateexternalID,
-        RuleNumber              = FortinetFortiGatepolicyid,
-        NetworkDuration         = FortinetFortiGateduration,
-        DstGeoCountry           = FortinetFortiGatedstcountry,
-        SrcGeoCountry           = FortinetFortiGatesrccountry,
-        ThreatOriginalRiskLevel = FortinetFortiGatecrscore,
-        SrcPackets              = FortinetFortiGatesentpkt,
-        DstPackets              = FortinetFortiGatercvdpkt
+      t2EventStartTime          = FTNTFGTstart,
+      t2SrcZone                 = FTNTFGTsrcintfrole,
+      t2DstZone                 = FTNTFGTdstintfrole,
+      t2NetworkSessionId        = FTNTFGTexternalID,
+      t2RuleNumber              = FTNTFGTpolicyid,
+      t2NetworkDuration         = FTNTFGTduration,
+      t2DstGeoCountry           = FTNTFGTdstcountry,
+      t2SrcGeoCountry           = FTNTFGTsrccountry,
+      t2ThreatOriginalRiskLevel = FTNTFGTcrscore,
+      t2SrcPackets              = FTNTFGTsentpkt,
+      t2DstPackets              = FTNTFGTrcvdpkt
+    | extend EventStartTime = coalesce(t1EventStartTime,t2EventStartTime),
+           SrcZone = coalesce(t1SrcZone,t2SrcZone),
+           DstZone = coalesce(t1DstZone,t2DstZone),
+           NetworkSessionId = coalesce(t1NetworkSessionId,t2NetworkSessionId),
+           RuleNumber = coalesce(t1RuleNumber,t2RuleNumber),
+           NetworkDuration = coalesce(t1NetworkDuration,t2NetworkDuration),
+           DstGeoCountry = coalesce(t1DstGeoCountry,t2DstGeoCountry),
+           SrcGeoCountry = coalesce(t1SrcGeoCountry,t2SrcGeoCountry),
+           ThreatOriginalRiskLevel = coalesce(t1ThreatOriginalRiskLevel,t2ThreatOriginalRiskLevel),
+           SrcPackets = coalesce(t1SrcPackets,t2SrcPackets),
+           DstPackets = coalesce(t1DstPackets,t2DstPackets)
+     | project-away t1SrcZone,t2SrcZone, t1DstZone,t2DstZone, t1NetworkSessionId,t2NetworkSessionId,t1RuleNumber,t2RuleNumber,   t1NetworkDuration,t2NetworkDuration, t1DstGeoCountry,t2DstGeoCountry, t1SrcGeoCountry,t2SrcGeoCountry, t1ThreatOriginalRiskLevel,t2ThreatOriginalRiskLevel, t1SrcPackets,t2SrcPackets, t1DstPackets,t2DstPackets
     | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
     | extend 
         HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
