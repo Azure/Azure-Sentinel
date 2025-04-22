@@ -53,33 +53,69 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string)
-  [
-    "passthrough","Allow","Success"
-    , "blocked","Deny","Failure"
-  ];
-  // -- See https://docs.fortinet.com/document/fortigate/7.2.4/fortios-log-message-reference/671442/cef-priority-levels
-  let SeverityLookup = datatable (EventOriginalSeverity:string, EventSeverity:string)
-  [
-    "1", "Informational", // Debug
-    "2", "Informational", // Information
-    "3", "Informational", // Notification
-    "4", "Low", // Warning
-    "5", "Low", // Error
-    "6", "High", // Critical
-    "7", "Medium", // Alert
-    "8", "High" // Emergency
-  ];
-  let parser=(disabled:bool=false){
+  let parser=(
+    starttime:datetime               = datetime(null), 
+    endtime:datetime                 = datetime(null),
+    srcipaddr_has_any_prefix:dynamic = dynamic([]),
+    ipaddr_has_any_prefix:dynamic    = dynamic([]), 
+    url_has_any:dynamic              = dynamic([]),
+    httpuseragent_has_any:dynamic    = dynamic([]),
+    eventresultdetails_in:dynamic    = dynamic([]),
+    eventresult:string               = '*',
+    disabled:bool                    = false
+  ){
+    let src_or_any                = set_union(
+      srcipaddr_has_any_prefix,
+      ipaddr_has_any_prefix
+    ); 
+    let remove_protocol_from_list = (list:dynamic)
+    {
+        print list
+        | mv-apply l = print_0 to typeof(string) on
+          ( extend l = substring(l,indexof(l,@'//')+2))
+        | project l
+    };
+    let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string)
+    [
+        "passthrough","Allow","Success"
+        , "blocked","Deny","Failure"
+    ];
+    // -- See https://docs.fortinet.com/document/fortigate/7.2.4/fortios-log-message-reference/671442/cef-priority-levels
+    let SeverityLookup = datatable (EventOriginalSeverity:string, EventSeverity:string)
+    [
+      "1", "Informational", // Debug
+      "2", "Informational", // Information
+      "3", "Informational", // Notification
+      "4", "Low", // Warning
+      "5", "Low", // Error
+      "6", "High", // Critical
+      "7", "Medium", // Alert
+      "8", "High" // Emergency
+    ];     
     CommonSecurityLog
     | where not(disabled)
-    | where DeviceVendor  == "Fortinet" 
-        and DeviceProduct startswith "Fortigate"
-        and Activity has_all ('webfilter', 'utm') or Activity has_all ('ips', 'utm')
+    | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime)
+    | where DeviceVendor == "Fortinet" 
+      and DeviceProduct  startswith "Fortigate"
+      and Activity has_all ('webfilter', 'utm') or Activity has_all ('ips', 'utm')
+    | where (array_length(url_has_any) == 0 or RequestURL has_any (remove_protocol_from_list(url_has_any)))
+    | where (array_length(httpuseragent_has_any) == 0 or AdditionalExtensions has_any(httpuseragent_has_any))
+    | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any)
+    | extend temp_DstMatch = has_any_ipv4_prefix(DestinationIP,ipaddr_has_any_prefix)
+    | extend ASimMatchingIpAddr = case(
+        array_length(src_or_any) == 0, "-",
+        temp_DstMatch and temp_SrcMatch, "Both",
+        temp_SrcMatch , "SrcIpAddr",
+        temp_DstMatch, "DstIpAddr",
+        "No match") 
+    | where ASimMatchingIpAddr != "No match" 
+    | project-away temp_*
     | extend 
         EventResultDetails = "NA"
+    | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) has_any(eventresultdetails_in)) 
     | lookup EventLookup on DeviceAction 
-    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName
+    | where (eventresult == '*' or EventResult =~ eventresult)
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName, ASimMatchingIpAddr
     | project-rename 
       Url                     = RequestURL
       , UrlCategory           = RequestContext
@@ -104,8 +140,8 @@ ParserQuery: |
       , DstUsername           = DestinationUserName
     | invoke _ASIM_ResolveNetworkProtocol ('Protocol')
     | extend 
-        DstUsernameType = _ASIM_GetUsernameType(DstUsername)
-        , SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
+        DstUsernameType = _ASIM_GetUsernameType(DstUsername),
+        SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
     | project-rename DvcOriginalAction = DeviceAction
     | parse-kv AdditionalExtensions as (
           start:datetime,
@@ -181,24 +217,25 @@ ParserQuery: |
         HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
         HttpUserAgent = coalesce(temp_HttpUserAgent,HttpUserAgent)
     | project-away temp_*
+    | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any(httpuseragent_has_any))
     | extend 
-      EventCount               = int(1)
-      , EventSchema            = "WebSession"
-      , EventSchemaVersion     = "0.2.6"
-      , EventType              = "HTTPsession"
-      , EventVendor            = "Fortinet"
-      , DvcIdType              = "Other"
-      , NetworkBytes           = DstBytes + SrcBytes
-      , EventEndTime           = TimeGenerated
-      , EventStartTime         = coalesce(EventStartTime, TimeGenerated)
-      , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
-          , DstIpAddr contains ":", "IPv6"
-          , "")
-      , NetworkPackets         = DstPackets + SrcPackets
-      , UserAgent              = HttpUserAgent
-      , Dvc                    = DvcHostname
-      , User                   = SrcUsername
-      , Hostname               = DstHostname
+        EventCount               = int(1)
+        , EventSchema            = "WebSession"
+        , EventSchemaVersion     = "0.2.6"
+        , EventType              = "HTTPsession"
+        , EventVendor            = "Fortinet"
+        , DvcIdType              = "Other"
+        , NetworkBytes           = DstBytes + SrcBytes
+        , EventEndTime           = TimeGenerated
+        , EventStartTime         = coalesce(EventStartTime, TimeGenerated)
+        , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
+            , DstIpAddr contains ":", "IPv6"
+            , "")
+        , NetworkPackets         = DstPackets + SrcPackets
+        , UserAgent              = HttpUserAgent
+        , Dvc                    = DvcHostname
+        , User                   = SrcUsername
+        , Hostname               = DstHostname
     | lookup SeverityLookup on EventOriginalSeverity
     | extend 
         Src       = SrcIpAddr,
@@ -209,4 +246,4 @@ ParserQuery: |
         Rule      = tostring(RuleNumber)
     | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber
   };
-  parser (disabled=disabled)
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
