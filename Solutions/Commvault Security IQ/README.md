@@ -77,9 +77,17 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
 
 - Go to Sentinel -> Content hub (located under “Configuration”) -> Search for "Commvault Cloud" -> Install
 
+### Configure Data Connector
+
+- Go to Commvault Cloud -> select CommvaultSecurityIQ (using Azure Functions)
+- Click on **Open connector page**
+- Click on **Deploy to Azure**
+- Fill up the required details and click on create
+
 ### Upload and Run PowerShell Script Setup-CommvaultAutomation
 
 - Open Azure Cloud Shell
+- Click on **Manage files**
 - Upload the file `Tools\Setup-CommvaultAutomation.ps1` to Azure Cloud Shell
 - Run the PowerShell script, before the step `Create the Analytic Rules`:
 
@@ -90,7 +98,7 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
 ### Create the Analytic Rules
 
 - Go to Sentinel -> Content hub (located under “Configuration”) -> Click on "Commvault Cloud" -> Click on "Manage"
-- Click on "CommvaultSecurityIQ Alert" -> Click on "Create Rule" -> Follow the steps by clicking "Next" -> Click on "Save" in the last step
+- Click on "Commvault Cloud Alert" -> Click on "Create Rule" -> Follow the steps by clicking "Next" -> Click on "Save" in the last step
 - Repeat the above steps for the other Analytic rules in the solution
 
 ### Create the Playbooks
@@ -105,6 +113,7 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
 ### Upload and Run PowerShell Script AssignLogicAppRoles
 
 - Open Azure Cloud Shell
+- Click on **Manage files**
 - Upload the file `Tools\AssignLogicAppRoles.ps1` to Azure Cloud Shell
 - Run the PowerShell script, after the step `Create the Playbooks`:
 
