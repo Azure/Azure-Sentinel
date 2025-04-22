@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                           |
 |-------------|--------------------------------|--------------------------------------------------------------|
+| 3.0.6       | 04-04-2025                     | New **CCP Connector** added Proofpoint TAP (via Codeless Connector Platform)  		  | 
 | 3.0.5       | 12-01-2025                     | Updated **Analytic Rule** MalwareLinkClicked.yaml  		  | 
 | 3.0.4       | 26-04-2024                     | Repackaged for fix on parser in maintemplate to have old parsername and parentid        |
 | 3.0.3       | 16-04-2024                     | Repackaged for parser issue in maintemplate  				  |
