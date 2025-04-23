@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.2       | 15-04-2025                     | Updated **Analytical Rule** UseraddedtoPrivilgedGroups.yaml [Added support for GCC-High PIM]							   |
 | 3.3.1       | 08-04-2025                     | Updated **Analytical Rule** [Anomalous sign-in location by user account and authenticating application]								   |
 | 3.3.0       | 28-01-2025                     | Added new **Analytic Rule** AzureRBAC to the Solution									|	    			
 | 3.2.10      | 19-12-2024                     | Updated **Analytical Rule** MFARejectedbyUser.yaml								|	    			
