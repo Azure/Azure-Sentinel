@@ -11,13 +11,15 @@ tactics: []
 relevantTechniques: []
 query:
   ForescoutHostProperties_CL
-  | where HostProperties_DnsniffEvent_s matches regex "DNS Query Type:.A;DNS Query/Response:.Query"
-  | extend ipaddress = iif(isnotempty(HostProperties_Ipv4Addr_s), HostProperties_Ipv4Addr_s, (iif(isnotempty(HostProperties_Ipv6Addr_s), HostProperties_Ipv6Addr_s, HostProperties_IpAddr_s)))
-  | summarize NumEvents_d =count() by ipaddress, HostProperties_DnsniffEvent_s, HostProperties_EmIpAddr_s
+  | extend  d = parse_json(HostProperties)
+  | where d.DnsniffEvent matches regex "DNS Query Type:.A;DNS Query/Response:.Query"
+  | extend ipaddress = iif(isnotempty(Ipv4Addr), Ipv4Addr, (iif(isnotempty(Ipv6Addr), Ipv6Addr, "")))
+  | where isnotempty(ipaddress) and isnotempty(EmIpAddr)
+  | summarize NumEvents_d =count() by ipaddress, EmIpAddr
   | where NumEvents_d > 2
-  | where isnotempty(ipaddress) and isnotempty(HostProperties_EmIpAddr_s)
   | sort by NumEvents_d asc
-  | project NumEvents_d, ipaddress, HostProperties_EmIpAddr_s
+  | project NumEvents_d, ipaddress, EmIpAddr
+
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -30,5 +32,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: Dnsniff-Address-Check
   alertDescriptionFormat: Dnsniff-Address-Check alert
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
