@@ -118,6 +118,7 @@ def pull_log_files():
 
 def get_file_raw_lines(file_url, file_in_tmp_path):
     url = f'{instance_url}{file_url}'
+    logging.info('url {}'.format(url))
     try:
         with requests.get(url, stream=True, headers=headers) as r:
             if r.status_code == 200:
@@ -130,6 +131,8 @@ def get_file_raw_lines(file_url, file_in_tmp_path):
                 print('File downloading failed. {r.status_code} {r.text} {file_url}')
     except Exception as err:
         print('File downloading failed. {err} {file_url}')
+        
+        
 
 
 def gen_chunks_to_object(file_in_tmp_path, chunksize=100):
@@ -258,8 +261,11 @@ def main(mytimer: func.TimerRequest) -> None:
     for line in pull_log_files():
         logging.info('Started downloading {}'.format(line["LogFile"]))
         local_filename = line["LogFile"].replace('/', '_').replace(':', '_')
+        logging.info('local_filename {}'.format(local_filename))
         file_in_tmp_path = "{}/{}".format(temp_dir.name, local_filename)
+        logging.info('file in tmp path {}'.format(file_in_tmp_path))
         get_file_raw_lines(line["LogFile"],file_in_tmp_path)
+        logging.info('get_file_raw_lines execution completed')
         if os.path.isfile(file_in_tmp_path):
             file_size = os.path.getsize(file_in_tmp_path)
             if file_size > 0:
