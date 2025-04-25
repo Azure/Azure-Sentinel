@@ -19,9 +19,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 response["User"]["CreateDate"] = response["User"][
                     "CreateDate"
                 ].isoformat()
+                response["User"]["PasswordLastUsed"] = response["User"]["PasswordLastUsed"].isoformat() if "PasswordLastUsed" in response["User"] else None
             except iam.exceptions.NoSuchEntityException as err:
                 return func.HttpResponse(str(err), status_code=404)
-            return func.HttpResponse(json.dumps(response["User"]), status_code=200)
+            return func.HttpResponse(json.dumps(str(response["User"])), status_code=200)
         except ClientError as err:
             return func.HttpResponse(str(err), status_code=401)
     else:
