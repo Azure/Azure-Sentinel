@@ -104,6 +104,22 @@ function New-ParametersForConnectorInstuctions($instructions) {
             }
 
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+
+            $blobContainerDomainParameter = [PSCustomObject]@{
+                defaultValue = "[concat('.blob.core.', 'windows.net')]";
+                type         = "securestring";
+                minLength    = 1;
+            }
+
+            $templateParameter | Add-Member -MemberType NoteProperty -Name "blobContainerDomain" -Value $blobContainerDomainParameter
+
+            $blobContainerUriDomainParameter = [PSCustomObject]@{
+                defaultValue = "[concat('.queue.core.', 'windows.net')]";
+                type         = "securestring";
+                minLength    = 1;
+            }
+
+            $templateParameter | Add-Member -MemberType NoteProperty -Name "blobContainerUriDomain" -Value $blobContainerUriDomainParameter
         }
         else {
             $instructionType = $instruction.type;

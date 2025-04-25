@@ -5,7 +5,7 @@ function Set-UriProperty {
         [string]$queueVarName
     )
 
-    $uriValue = "[[concat('https://', variables('storageAccountName'), '.queue.core.windows.net/', variables('$queueVarName'))]"
+    $uriValue = "[[uri(concat('https://', variables('storageAccountName'), parameters('blobContainerUriDomain'), '/', variables('$queueVarName')))]"
     $props = $armResource.properties.request.PSObject.Properties
 
     if ($props.Name -contains $propertyName) {
@@ -46,9 +46,9 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
         Set-UriProperty -propertyName "QueueUri" -queueVarName "queueName"
         Set-UriProperty -propertyName "DlqUri" -queueVarName "dlqName"
 
-        $hasVariables = [bool]($templateContentConnections.properties.PSobject.Properties.name -match "variables")
+        $hasVariables = [bool]($templateContentConnections.properties.mainTemplate.PSobject.Properties.name -match "variables")
         if (!$hasVariables) {
-            $templateContentConnections.properties | Add-Member -NotePropertyName "variables" -NotePropertyValue @{}
+            $templateContentConnections.properties.mainTemplate | Add-Member -NotePropertyName "variables" -NotePropertyValue @{}
         }
 
         $templateContentConnections.properties.mainTemplate.variables = Set-ResourceVariables 
@@ -167,9 +167,9 @@ function Set-ResourceVariables {
 
         $connectorName = "blob-example-26-12"
         Set-ArmVariable $variables "_dataConnectorContentIdConnections$global:connectorCounter" "[variables('_dataConnectorContentIdConnections$global:connectorCounter')]"
-        Set-ArmVariable $variables "connectorName" "$connectorName"
-        Set-ArmVariable $variables "storageAccountName" "[[split(split(parameters('blobContainerUri'), 'https://')[1], '.blob.core.windows.net')[0]]"
-        Set-ArmVariable $variables "blobContainerName" "[[split(split(parameters('blobContainerUri'), '.blob.core.windows.net/')[1], '/')[0]]"
+        Set-ArmVariable $variables "connectorName" "$connectorName",
+        Set-ArmVariable $variables "storageAccountName" "[[split(split(parameters('blobContainerUri'), 'https://')[1], parameters('blobContainerDomain'))[0]]"
+        Set-ArmVariable $variables "blobContainerName" "[[split(split(parameters('blobContainerUri'), parameters('blobContainerDomain'), '/')[1], '/')[0]]",
         Set-ArmVariable $variables "queueName" "[[concat(variables('connectorName'), '-notification')]]"
         Set-ArmVariable $variables "dlqName" "[[concat(variables('connectorName'), '-dlq')]]"
         Set-ArmVariable $variables "ResourcesIdPrefix" "[[format('/subscriptions/{0}/resourceGroups/{1}/providers', parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'))]]"
