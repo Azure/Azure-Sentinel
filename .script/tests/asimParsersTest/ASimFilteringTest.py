@@ -1,8 +1,16 @@
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules. 
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 __unittest = True #prevents stacktrace during most assertions
 
 import unittest
-import os
-import sys
 import yaml
 import re
 import subprocess
@@ -18,7 +26,7 @@ MAX_FILTERING_PARAMETERS = 2
 # Workspace ID for the Log Analytics workspace where the ASim filtering tests will be performed.
 WORKSPACE_ID = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
 # Timespan for the parser query
-TIME_SPAN_IN_DAYS = 7
+TIME_SPAN_IN_DAYS = 2
 
 # exclusion_file_path refers to the CSV file path containing a list of parsers. Despite failing tests, these parsers will not cause the overall workflow to fail
 exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
@@ -309,6 +317,7 @@ def main():
                 if parser_file['EquivalentBuiltInParser'] in read_exclusion_list_from_csv():
                     print(f"{YELLOW}The parser {parser_file_path} is listed in the exclusions file. Therefore, this workflow run will not fail because of it. To allow this parser to cause the workflow to fail, please remove its name from the exclusions list file located at: {exclusion_file_path}{RESET}")
                     sys.stdout.flush()
+                    continue
                 # Check for exception cases where the failure can be ignored
                 # Check if the failure message and schema match the exception cases
                 if len(result.failures) == 1:

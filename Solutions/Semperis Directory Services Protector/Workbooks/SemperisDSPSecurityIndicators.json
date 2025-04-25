@@ -29,7 +29,7 @@
             "description": " Specify the time range on which to query the data",
             "isRequired": true,
             "value": {
-              "durationMs": 604800000
+              "durationMs": 1209600000
             },
             "typeSettings": {
               "selectableValues": [
@@ -94,7 +94,7 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "dsp_parser\r\n| where isnotempty(SecurityFrameworkTags)\r\n| mv-expand bagexpansion=array parse_csv(SecurityFrameworkTagsCsv) to typeof(string)\r\n| summarize Count = count() by SecurityFrameworkTagsCsv\r\n| order by Count desc, SecurityFrameworkTagsCsv asc\r\n| project Value = SecurityFrameworkTagsCsv, Label = strcat(SecurityFrameworkTagsCsv)",
+            "query": "(dsp_parser\r\n| where isnotempty(SecurityFrameworkTags))\r\n| union (CommonSecurityLog\r\n| extend p1Array = split(AdditionalExtensions,\"|\")\r\n| mv-expand bagexpansion=array p1Array\r\n| evaluate bag_unpack(p1Array)\r\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\r\n| extend Value=replace_string(Value, \";\", \" \")\r\n| evaluate pivot(Name, any(Value), TimeGenerated, LogSeverity)\r\n| extend SecurityIndicatorName = column_ifexists('Name', '')\r\n| where isnotempty(SecurityIndicatorName)\r\n| extend SecurityFrameworkTags = column_ifexists('SecurityFrameworkTags', '')\r\n| extend SecurityFrameworkTagsCsv = replace(@' Mitre:', @'', tostring(SecurityFrameworkTags)))| mv-expand bagexpansion=array parse_csv(SecurityFrameworkTagsCsv) to typeof(string)\r\n| summarize Count = count() by SecurityFrameworkTagsCsv\r\n| order by Count desc, SecurityFrameworkTagsCsv asc\r\n| project Value = SecurityFrameworkTagsCsv, Label = strcat(SecurityFrameworkTagsCsv)",
             "typeSettings": {
               "additionalResourceOptions": [
                 "value::all"
@@ -108,7 +108,10 @@
             "timeContextFromParameter": "TimeRange",
             "defaultValue": "value::all",
             "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces"
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "value::all"
+            ]
           },
           {
             "id": "cf84c455-c1b9-4785-a592-54834be54097",
@@ -119,7 +122,7 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "dsp_parser\r\n| where isnotempty(Result)\r\n| summarize Count = count() by tostring(Result)\r\n| order by Count desc, Result asc\r\n| project Value = Result, Label = strcat(Result)",
+            "query": "(dsp_parser\r\n| where isnotempty(Result))\r\n| union (CommonSecurityLog | extend p1Array = split(AdditionalExtensions,\"|\")| mv-expand bagexpansion=array p1Array| evaluate bag_unpack(p1Array)| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)| evaluate pivot(Name, any(Value))| extend SecurityIndicatorName = column_ifexists('Name', '')| where isnotempty(SecurityIndicatorName)| extend Result = \"Attack detected\")| summarize Count = count() by tostring(Result)\r\n| order by Count desc, Result asc\r\n| project Value = Result, Label = strcat(Result)",
             "value": [
               "value::all"
             ],
@@ -144,62 +147,78 @@
       "name": "parameters - 3"
     },
     {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "dsp_parser\r\n| where isnotempty(SecurityFrameworkTags) \r\n| where Result in ({Status})\r\n| extend SecurityFrameworkTagList = parse_csv(SecurityFrameworkTagsCsv)\r\n| mv-expand bagexpansion=array SecurityFrameworkTagList to typeof(string)\r\n| where SecurityFrameworkTagList in ({MitreFramework})\r\n| summarize event_count=count() by SecurityFrameworkTagList\r\n",
-        "size": 0,
-        "title": "Amount of Generated Events per Category",
-        "timeContextFromParameter": "TimeRange",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "barchart",
-        "graphSettings": {
-          "type": 0,
-          "topContent": {
-            "columnMatch": "securityFrameworkTags",
-            "formatter": 1
-          },
-          "centerContent": {
-            "columnMatch": "event_count",
-            "formatter": 1,
-            "numberFormat": {
-              "unit": 17,
-              "options": {
-                "maximumSignificantDigits": 3,
-                "maximumFractionDigits": 2
-              }
-            }
-          }
-        },
-        "chartSettings": {
-          "createOtherGroup": null
-        },
-        "mapSettings": {
-          "locInfo": "LatLong",
-          "sizeSettings": "event_count",
-          "sizeAggregation": "Sum",
-          "legendMetric": "event_count",
-          "legendAggregation": "Sum",
-          "itemColorSettings": {
-            "type": "heatmap",
-            "colorAggregation": "Sum",
-            "nodeColorField": "event_count",
-            "heatmapPalette": "greenRed"
-          }
-        }
-      },
-      "name": "query - 5",
-      "styleSettings": {
-        "showBorder": true
-      }
-    },
-    {
       "type": 12,
       "content": {
         "version": "NotebookGroup/1.0",
         "groupType": "editable",
         "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "(dsp_parser\r\n| where isnotempty(SecurityFrameworkTags) \r\n| extend Result = Result\r\n| extend SecurityFrameworkTagList = parse_csv(SecurityFrameworkTagsCsv)\r\n| extend Targets = iff(isempty(Targets), 'AD', Targets))\r\n| union \r\n(CommonSecurityLog \r\n| extend p1Array = split(AdditionalExtensions,\"|\")\r\n| mv-expand bagexpansion=array p1Array\r\n| evaluate bag_unpack(p1Array)\r\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\r\n| extend Value=replace_string(Value, \";\", \" \")\r\n| evaluate pivot(Name, any(Value), TimeGenerated, LogSeverity)\r\n| extend SecurityIndicatorName = column_ifexists('Name', '')\r\n| where isnotempty(SecurityIndicatorName)\r\n| extend Targets = \"AD\"\r\n| extend Severity = column_ifexists('LogSeverity', '')\r\n| extend Score = column_ifexists('PercentageScore', '0')\r\n| extend FirstFound = column_ifexists('Timestamp', '')\r\n| extend Result = \"Attack detected\"\r\n| extend SecurityFrameworkTags = column_ifexists('SecurityFrameworkTags', '')\r\n| extend SecurityFrameworkTagsCsv = replace(@' Mitre:', @'', tostring(SecurityFrameworkTags))\r\n| extend SecurityFrameworkTagList = parse_csv(SecurityFrameworkTagsCsv)) \r\n| where Result in ({Status})\r\n| extend MitreFramework = pack_array({MitreFramework})\r\n| extend FilterIntersection = set_intersect(SecurityFrameworkTagList, MitreFramework)\r\n| extend FilterIntersectionCount = array_length(FilterIntersection)\r\n| where FilterIntersectionCount > 0\r\n| summarize Count = count() by tostring(SecurityIndicatorName), tostring(Targets), tostring(Severity), tostring(Score), tostring(FirstFound), tostring(Result), tostring(SecurityFrameworkTags)\r\n| order by Count",
+              "size": 0,
+              "title": "Indicators Details:",
+              "timeContextFromParameter": "TimeRange",
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "Severity",
+                    "sortOrder": 1
+                  }
+                ],
+                "labelSettings": [
+                  {
+                    "columnId": "FirstFound",
+                    "label": "Latest alert"
+                  },
+                  {
+                    "columnId": "SecurityFrameworkTags",
+                    "label": "Security framework tags"
+                  },
+                  {
+                    "columnId": "SecurityIndicatorName",
+                    "label": "Security Indicator"
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "Severity",
+                  "sortOrder": 1
+                }
+              ],
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "securityIndicatorName",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Count",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              }
+            },
+            "name": "query - 1",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
           {
             "type": 3,
             "content": {
@@ -250,85 +269,58 @@
             "styleSettings": {
               "showBorder": true
             }
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "dsp_parser\r\n| where isnotempty(SecurityFrameworkTags) \r\n| where Result in ({Status})\r\n| extend SecurityFrameworkTagList = parse_csv(SecurityFrameworkTagsCsv)\r\n| extend MitreFramework = pack_array({MitreFramework})\r\n| extend FilterIntersection = set_intersect(SecurityFrameworkTagList, MitreFramework)\r\n| extend FilterIntersectionCount = array_length(FilterIntersection)\r\n| where FilterIntersectionCount > 0\r\n| summarize Count = count() by tostring(SecurityFrameworkTags), tostring(SecurityIndicatorName), tostring(SecurityIndicatorDescription), tostring(LikelihoodOfCompromise), tostring(Remediation), tostring(Result), tostring(FirstFound), tostring(Score)\r\n| order by Count\r\n",
-              "size": 0,
-              "title": "Indicators of Exposure (IoEs) Details:",
-              "timeContextFromParameter": "TimeRange",
-              "showExportToExcel": true,
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "table",
-              "gridSettings": {
-                "sortBy": [
-                  {
-                    "itemKey": "SecurityFrameworkTags",
-                    "sortOrder": 1
-                  }
-                ],
-                "labelSettings": [
-                  {
-                    "columnId": "SecurityFrameworkTags",
-                    "label": "MITRE ATT&CK Framework"
-                  },
-                  {
-                    "columnId": "SecurityIndicatorName",
-                    "label": "Indicator of Exposure"
-                  },
-                  {
-                    "columnId": "SecurityIndicatorDescription",
-                    "label": "Description"
-                  },
-                  {
-                    "columnId": "LikelihoodOfCompromise",
-                    "label": "Likelihood of Compromise"
-                  },
-                  {
-                    "columnId": "FirstFound",
-                    "label": "First Time Found"
-                  }
-                ]
-              },
-              "sortBy": [
-                {
-                  "itemKey": "SecurityFrameworkTags",
-                  "sortOrder": 1
-                }
-              ],
-              "tileSettings": {
-                "showBorder": false,
-                "titleContent": {
-                  "columnMatch": "securityIndicatorName",
-                  "formatter": 1
-                },
-                "leftContent": {
-                  "columnMatch": "Count",
-                  "formatter": 12,
-                  "formatOptions": {
-                    "palette": "auto"
-                  },
-                  "numberFormat": {
-                    "unit": 17,
-                    "options": {
-                      "maximumSignificantDigits": 3,
-                      "maximumFractionDigits": 2
-                    }
-                  }
-                }
-              }
-            },
-            "name": "query - 1",
-            "styleSettings": {
-              "showBorder": true
-            }
           }
         ]
       },
       "name": "group - 6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "dsp_parser\r\n| where isnotempty(SecurityFrameworkTags) \r\n| where Result in ({Status})\r\n| extend SecurityFrameworkTagList = parse_csv(SecurityFrameworkTagsCsv)\r\n| mv-expand bagexpansion=array SecurityFrameworkTagList to typeof(string)\r\n| where SecurityFrameworkTagList in ({MitreFramework})\r\n| summarize event_count=count() by SecurityFrameworkTagList\r\n",
+        "size": 0,
+        "title": "Amount of Generated Events per Category",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "securityFrameworkTags",
+            "formatter": 1
+          },
+          "centerContent": {
+            "columnMatch": "event_count",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "mapSettings": {
+          "locInfo": "LatLong",
+          "sizeSettings": "event_count",
+          "sizeAggregation": "Sum",
+          "legendMetric": "event_count",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "type": "heatmap",
+            "colorAggregation": "Sum",
+            "nodeColorField": "event_count",
+            "heatmapPalette": "greenRed"
+          }
+        }
+      },
+      "name": "query - 5",
+      "styleSettings": {
+        "showBorder": true
+      }
     },
     {
       "type": 12,
@@ -347,7 +339,6 @@
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "piechart",
-              "sortBy": [],
               "chartSettings": {
                 "group": "SecurityIndicatorName",
                 "createOtherGroup": 10,
@@ -374,7 +365,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "dsp_parser\r\n| where isnotempty(SecurityFrameworkTags) \r\n| where Result in ({Status})\r\n| extend SecurityFrameworkTagList = parse_csv(SecurityFrameworkTagsCsv)\r\n| extend MitreFramework = pack_array({MitreFramework})\r\n| extend FilterIntersection = set_intersect(SecurityFrameworkTagList, MitreFramework)\r\n| extend FilterIntersectionCount = array_length(FilterIntersection)\r\n| where FilterIntersectionCount > 0\r\n| summarize Count = count() by tostring(SecurityFrameworkTags), tostring(SecurityIndicatorName), tostring(FirstFound), tostring(Remediation)\r\n| top 10 by Count desc\r\n| project-away Count",
+              "query": "dsp_parser\r\n| where isnotempty(SecurityFrameworkTags) \r\n| where Result in ({Status})\r\n| extend SecurityFrameworkTagList = parse_csv(SecurityFrameworkTagsCsv)\r\n| extend MitreFramework = pack_array({MitreFramework})\r\n| extend FilterIntersection = set_intersect(SecurityFrameworkTagList, MitreFramework)\r\n| extend FilterIntersectionCount = array_length(FilterIntersection)\r\n| where FilterIntersectionCount > 0\r\n| summarize Count = count() by tostring(SecurityFrameworkTags), tostring(SecurityIndicatorName), tostring(Remediation)\r\n| top 10 by Count desc\r\n| project-away Count",
               "size": 0,
               "title": "Top 10 Indicators of Exposure (IoEs) Details:",
               "timeContextFromParameter": "TimeRange",

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                        |
 |-------------|--------------------------------|-----------------------------------------------------------|
+| 3.0.5       | 22-01-2025                     | Removed Custom Entity mappings from **Analytic rules**	   |
 | 3.0.4       | 19-11-2024                     | Modified TransformKQL queries of CCP **Data Connector**   |
 | 3.0.3       | 28-10-2024                     | Added Sample Queries to the CCP **Data Connector** template   |
 | 3.0.2       | 15-10-2024                     | Added new CCP **Data Connector** to the Solution   |

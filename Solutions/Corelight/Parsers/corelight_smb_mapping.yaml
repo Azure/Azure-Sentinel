@@ -1,33 +1,98 @@
-id: 07f7dae7-ead3-597c-90b0-48260ad1ce07
+
+id: aa7abc13-e833-4d18-930b-d14bec7183be
 Function:
-  Title: corelight_smb_mapping parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight Smb Mapping
+  Version: 1.1.0
+  LastUpdated: '2025-01-28'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_smb_mapping
 FunctionAlias: corelight_smb_mapping
-FunctionQuery: |+
+FunctionQuery: |
+  let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
   let corelight_smb_mapping = view () {
-      Corelight_v2_smb_mapping_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          uid=uid_s,
-          id_orig_h=id_orig_h_s,
-          id_orig_p=id_orig_p_d,
-          id_resp_h=id_resp_h_s,
-          id_resp_p=id_resp_p_d,
-          path=path_s,
-          service=service_s,
-          native_file_system=native_file_system_s,
-          share_type=share_type_s
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="smb_mapping",
-          ts=TimeGenerated
-  };
-  corelight_smb_mapping
-
-...
+        union isfuzzy=true Corelight_v2_smb_mapping_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+          | join kind=leftouter 
+          ( corelight_conn
+          | project uid, local_orig, local_resp
+          ) on $left.uid_s == $right.uid
+          | project-away uid
+        | extend
+              timestamp = column_ifexists("_timestamp_t", ""),
+              _timestamp = column_ifexists("_timestamp_s", ""), 
+              _path = column_ifexists("_path_s", ""),
+              path = column_ifexists("path_s", ""),
+              version = column_ifexists("_version_s", ""),
+              system_name = column_ifexists("_system_name_s", ""),
+              write_ts = column_ifexists("_write_ts_t", ""),
+              uid = column_ifexists("uid_s", ""),
+              id_orig_h = column_ifexists("id_orig_h_s", ""),
+              id_orig_p = column_ifexists("id_orig_p_d", real(null)),
+              id_resp_h = column_ifexists("id_resp_h_s", ""),
+              id_resp_p = column_ifexists("id_resp_p_d", real(null)),
+              service = column_ifexists("service_s", ""),
+              native_file_system = column_ifexists("native_file_system_s", ""),
+              share_type = column_ifexists("share_type_s", ""),
+              id_resp_l2_vendor = column_ifexists("id_resp_l2_vendor_s", ""),
+              id_resp_l2_addr = column_ifexists("id_resp_l2_addr_s", ""),
+              id_orig_l2_vendor = column_ifexists("id_orig_l2_vendor_s", ""),
+              id_orig_l2_addr = column_ifexists("id_orig_l2_addr_s", "")
+        | extend
+            EventVendor="Corelight",
+            EventProduct="CorelightSensor",
+            EventType="smb_mapping",
+            ts=TimeGenerated,
+            timestamp = coalesce(tostring(timestamp), _timestamp),
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            sensor_name = coalesce(system_name, "unknown"),
+            file_share_type = share_type,
+            file_path_root = path
+        | extend
+              is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+              is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+              is_src_internal_ip = iff(local_orig == true, "true", "false"),
+              direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+        | project
+              TimeGenerated,
+              _path,
+              path,
+              version,
+              system_name,
+              write_ts,
+              uid,
+              id_orig_h,
+              id_orig_p,
+              id_resp_h,
+              id_resp_p,
+              service,
+              native_file_system,
+              share_type,
+              id_resp_l2_vendor,
+              id_resp_l2_addr,
+              id_orig_l2_vendor,
+              id_orig_l2_addr,
+              EventVendor,
+              EventProduct,
+              EventType,
+              ts,
+              timestamp,
+              src,
+              src_ip,
+              src_port,
+              dest,
+              dest_ip,
+              dest_port,
+              sensor_name,
+              file_share_type,
+              file_path_root,
+              is_broadcast,
+              is_dest_internal_ip,
+              is_src_internal_ip,
+              direction
+    };
+    corelight_smb_mapping
