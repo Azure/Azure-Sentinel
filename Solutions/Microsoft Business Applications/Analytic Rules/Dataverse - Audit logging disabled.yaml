@@ -19,12 +19,14 @@ relevantTechniques:
   - T1562
 query: |
   let query_frequency = 1h;
+  let audit_properties = dynamic(['isauditenabled', 'isuseraccessauditenabled','isreadauditenabled']);
   DataverseActivity
   | where TimeGenerated >= ago(query_frequency)
-  | where Message =~ 'UpdateAuditSettings'
+  | where Message in~ ("Update", "UpdateAuditSettings")
+  | where Fields has_any (audit_properties)
   | mv-expand Fields
   | extend AuditValue = Fields.Name, AuditEnabled = tobool(Fields.Value)
-  | where not (AuditEnabled)
+  | where AuditValue in~ (audit_properties) and not (AuditEnabled)
   | extend
       CloudAppId = int(32780),
       AccountName = tostring(split(UserId, '@')[0]),
@@ -63,4 +65,4 @@ alertDetailsOverride:
   alertDisplayNameFormat: 'Dataverse - Audit logging was disabled in {{InstanceUrl}} '
   alertDescriptionFormat: 'Audit settings changes were detected in {{InstanceUrl}}.
     {{AuditValue}} enabled: was set to {{AuditEnabled}}.'
-version: 3.2.0
+version: 3.2.1

@@ -106,7 +106,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SecurityEvent\r\n| where EventSourceName == 'Semperis-DSP-Notifications' \r\n| extend p1Xml = parse_xml(EventData).EventData.Data\r\n| mv-expand bagexpansion=array p1Xml\r\n| evaluate bag_unpack(p1Xml)\r\n| extend Name=tostring(['@Name']), Value=['#text']\r\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\r\n| order by TimeGenerated desc\r\n| project ruleName, severity, fullOperation, attributeName, attributeValue, changedBy, originatingServerName\r\n",
+        "query": "(SecurityEvent\r\n| where EventSourceName == 'Semperis-DSP-Notifications' \r\n| extend p1Xml = parse_xml(EventData).EventData.Data\r\n| mv-expand bagexpansion=array p1Xml\r\n| evaluate bag_unpack(p1Xml)\r\n| extend Name=column_ifexists(tostring('@Name'), ''), columnValue=column_ifexists('#text', '')\r\n| evaluate pivot(Name, any(columnValue), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\r\n| extend RuleName=tostring(column_ifexists('ruleName', '')), Severity=tostring(column_ifexists('severity', '')), DataSource=tostring(column_ifexists('dataSource', '')), ObjectDN=tostring(column_ifexists('objectDN', '')), TimeCreated=tostring(column_ifexists('timeCreated', '')), Operation=tostring(column_ifexists('fullOperation', '')), Attribute=tostring(column_ifexists('attributeName', '')), Value=tostring(column_ifexists('attributeValue', '')), ChangedBy=tostring(column_ifexists('changedBy', '')), Source=tostring(column_ifexists('Computer', '')))\r\n| union\r\n(CommonSecurityLog \r\n| extend Activity=column_ifexists('Activity', ''), DeviceProduct=column_ifexists('DeviceProduct', '')\r\n| where DeviceProduct == 'Core Directory'\r\n| where Activity == 'rule-alert'\r\n| extend p1Array = split(AdditionalExtensions,\"|\")\r\n| mv-expand bagexpansion=array p1Array\r\n| evaluate bag_unpack(p1Array)\r\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\r\n| extend Value=replace_string(Value, \";\", \" \")\r\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\r\n| extend RuleName=column_ifexists('ruleName', ''), Severity=column_ifexists('severity', ''), DataSource=column_ifexists('dataSources', ''), ObjectDN=column_ifexists('subjectId', ''), TimeCreated=column_ifexists('alertCreated', ''), Operation=column_ifexists('operation', ''), Attribute=column_ifexists('attribute', ''), Value=column_ifexists('value', ''), ChangedBy=column_ifexists('changedBy', ''), Source=column_ifexists('alertSource', '')\r\n| extend Severity = case(toint(Severity) == 1 or toint(Severity) == 2, \"Informational\", toint(Severity)==3 or toint(Severity)==4, \"Low\", toint(Severity)==5 or toint(Severity)==6, \"Medium\", toint(Severity)==7 or toint(Severity)==8, \"High\", toint(Severity)==9 or toint(Severity)==10, \"Critical\", \"\"))\r\n| order by TimeGenerated desc\r\n| project RuleName, Severity, Operation, Attribute, Value, ChangedBy, Source\r\n",
         "size": 0,
         "title": "Notifications",
         "queryType": 0,
@@ -116,12 +116,12 @@
           "rowLimit": 10000,
           "labelSettings": [
             {
-              "columnId": "ruleName",
+              "columnId": "RuleName",
               "label": "Rule Name"
             },
             {
-              "columnId": "fullOperation",
-              "label": "Operation"
+              "columnId": "ChangedBy",
+              "label": "Changed By"
             }
           ]
         }
@@ -312,7 +312,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-DSP-Notifications' \n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Key1=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Key1, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| summarize Count=count() by tostring(fullOperation)\n\n",
+        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-DSP-Notifications' \n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Key1=tostring(column_ifexists('@Name', '')), Value=column_ifexists('#text', '')\n| evaluate pivot(Key1, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend fullOperation=column_ifexists('fullOperation', '')\n| summarize Count=count() by tostring(fullOperation)\n\n",
         "size": 1,
         "title": "AD Change Types",
         "queryType": 0,
@@ -412,7 +412,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-DSP-Notifications' \n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend result=column_ifexists(tostring('result'), ''), numberOfResults=column_ifexists(tostring('numberOfResults'), ''), securityIndicatorName=column_ifexists(tostring('securityIndicatorName'), '')\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| order by tostring(securityIndicatorName)\n| summarize Count=count() by tostring(securityIndicatorName)\n| top 5 by Count\n\n",
+        "query": "SecurityEvent\n| where EventSourceName == \"Semperis-DSP-Security\"\n| where EventID in (\"9211\", \"9212\", \"9208\")\n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend result=column_ifexists(tostring('result'), ''), numberOfResults=column_ifexists(tostring('numberOfResults'), ''), securityIndicatorName=column_ifexists(tostring('securityIndicatorName'), '')\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| order by tostring(securityIndicatorName)\n| summarize Count=count() by tostring(securityIndicatorName)\n| top 5 by Count\n\n",
         "size": 1,
         "title": "Top 5 Failed Security Indicators",
         "queryType": 0,
@@ -438,33 +438,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-DSP-Notifications' \n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend result=column_ifexists(tostring('result'), ''), numberOfResults=column_ifexists(tostring('numberOfResults'), ''), securityIndicatorName=column_ifexists(tostring('securityIndicatorName'), '')\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| order by tostring(securityIndicatorName)\n| summarize Count=count() by tostring(securityIndicatorName)\n| top 5 by Count\n\n",
-        "size": 1,
-        "title": "Top 5 Failed Security Indicators",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "piechart",
-        "gridSettings": {
-          "rowLimit": 10000
-        },
-        "chartSettings": {
-          "yAxis": [
-            "Count"
-          ],
-          "showLegend": true
-        }
-      },
-      "customWidth": "50",
-      "name": "query - 2",
-      "styleSettings": {
-        "showBorder": true
-      }
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-DSP-Notifications' \n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend result=column_ifexists(tostring('result'), ''), numberOfResults=column_ifexists(tostring('numberOfResults'), ''), securityFrameworkTags=column_ifexists(tostring('securityFrameworkTags'), '')\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| summarize Count=count() by tostring(securityFrameworkTags)\n\n",
+        "query": "SecurityEvent\n| where EventSourceName == \"Semperis-DSP-Security\"\n| where EventID in (\"9211\", \"9212\", \"9208\")\n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend result=column_ifexists(tostring('result'), ''), numberOfResults=column_ifexists(tostring('numberOfResults'), ''), securityFrameworkTags=column_ifexists(tostring('securityFrameworkTags'), '')\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| summarize Count=count() by tostring(securityFrameworkTags)\n\n",
         "size": 0,
         "title": "Amount of Generated Events per Category",
         "timeContext": {

@@ -1,0 +1,663 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        }
+    },
+    "variables": {
+        "DCRName": "StyxViewEndpointDCR",
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "_solutionName": "StyxView Alerts Endpoint solution",
+        "_solutionVersion": "3.0.0",
+        "_solutionAuthor": "Styx Intelligence",
+        "_packageIcon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/styx-logo-black.svg\" width=\"75px\" height=\"75px\">",
+        "_solutionId": "azuresentinel.azure-sentinel-solution-StyxViewEndpoint",
+        "dataConnectorVersionConnectorDefinition": "1.0.0",
+        "dataConnectorVersionConnections": "1.0.0",
+        "_solutionTier": "Microsoft",
+        "_dataConnectorContentIdConnectorDefinition": "StyxViewEndpointTemplateConnectorDefinition",
+        "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+        "_dataConnectorContentIdConnections": "StyxViewEndpointTemplateConnections",
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "location": "[resourceGroup().location]",
+        "subscriptionId": "[last(split(subscription().id, '/'))]",
+        "alertsApiEndpoint": "https://integration.styxview.com/v1/alerts",
+        "styxViewAlertsTableName": "StyxViewAlerts_CL"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('styxViewAlertsTableName')]",
+                            "type": "Microsoft.OperationalInsights/workspaces",
+                            "apiVersion": "2021-03-01-privatepreview",
+                            "location": "[variables('location')]",
+                            "tags": {},
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('styxViewAlertsTableName')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "datetime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "AlertIdOriginal",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertAccountId",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertAccountName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertSolutionId",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertSolutionName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertProjectId",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertProjectName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertClientId",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertClientName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertDateTime",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "AlertTicketNumber",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertEntityId",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertEntityName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertEntityCategoryId",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertEntityCategoryName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertAlertStatusId",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertStatusValue",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertSeverity",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertEntityDescription",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertEntityDetails",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertEntityImpact",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertUuid",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertTimestampOriginal",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "AlertNotificationSent",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertRead",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "AlertContent",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertL3PageLink",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "AlertId",
+                                            "type": "int"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('DCRName')]",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[variables('location')]",
+                            "properties": {
+                                "dataCollectionEndpointId": "[concat('/subscriptions/',variables('subscriptionID'),'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+                                "streamDeclarations": {
+                                    "[concat('Custom-', variables('styxViewAlertsTableName'))]": {
+                                        "columns": [
+                                            {
+                                                "name": "alert_id_original",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_account_id",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_account_name",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_solution_id",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_solution_name",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_project_id",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_project_name",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_client_id",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_client_name",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_datetime",
+                                                "type": "datetime"
+                                            },
+                                            {
+                                                "name": "alert_ticket_number",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_entity_id",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_entity_name",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_entity_category_id",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_entity_category_name",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_alert_status_id",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_status_value",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_severity",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_entity_description",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_entity_details",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_entity_impact",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_uuid",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_timestamp_original",
+                                                "type": "datetime"
+                                            },
+                                            {
+                                                "name": "alert_notification_sent",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_read",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "alert_content",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_l3_page_link",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "alert_id",
+                                                "type": "int"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                            "name": "clv2ws1"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": [
+                                            "[concat('Custom-', variables('styxViewAlertsTableName'))]"
+                                        ],
+                                        "destinations": [
+                                            "clv2ws1"
+                                        ],
+                                        "transformKql": "source | extend TimeGenerated = now(), AlertIdOriginal = alert_id_original, AlertAccountId = alert_account_id, AlertAccountName = alert_account_name, AlertSolutionId = alert_solution_id, AlertSolutionName = alert_solution_name, AlertProjectId = alert_project_id, AlertProjectName = alert_project_name, AlertClientId = alert_client_id, AlertClientName = alert_client_name, AlertTicketNumber = alert_ticket_number, AlertEntityId = alert_entity_id, AlertEntityName = alert_entity_name, AlertEntityCategoryId = alert_entity_category_id, AlertEntityCategoryName = alert_entity_category_name, AlertAlertStatusId = alert_alert_status_id, AlertStatusValue = alert_status_value, AlertSeverity = alert_severity, AlertEntityDescription = alert_entity_description, AlertEntityDetails = alert_entity_details, AlertEntityImpact = alert_entity_impact, AlertUuid = alert_uuid, AlertTimestampOriginal = alert_timestamp_original, AlertNotificationSent = alert_notification_sent, AlertRead = alert_read, AlertContent = alert_content, AlertL3PageLink = alert_l3_page_link, AlertId = alert_id",
+                                        "outputStream": "[concat('Custom-', variables('styxViewAlertsTableName'))]"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+            "apiVersion": "2022-09-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "location": "[variables('location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "title": "StyxView Alerts (using REST API)",
+                    "publisher": "Styx Intelligence",
+                    "descriptionMarkdown": "The [StyxView Alerts](https://styxintel.com/) data connector enables seamless integration between the StyxView Alerts platform and Microsoft Sentinel. This connector ingests alert data from the StyxView Alerts API, allowing organizations to centralize and correlate actionable threat intelligence directly within their Sentinel workspace.",
+                    "graphQueriesTableName": "[variables('styxViewAlertsTableName')]", 
+                    "graphQueries": [
+                        {
+                            "metricName": "Total alerts received",
+                            "legend": "StyxView Alert logs",
+                            "baseQuery": "StyxViewAlerts_CL"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Get a sample of StyxView Alert logs",
+                            "query": "StyxViewAlerts_CL\n| take 10"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "StyxViewAlerts_CL",
+                            "lastDataReceivedQuery": "StyxViewAlerts_CL\n|summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors"
+                        }
+                    ],
+                    "availability": {
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "StyxView Alert API access",
+                                "description": "Access to the StyxView Alerts API through an API key is required."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "description": "Contact Styx Intelligence Support (support.team@styxintel.com) to get access to an API key.",
+                            "instructions": [
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "API Token",
+                                        "placeholder": "API Token",
+                                        "type": "password",
+                                        "name": "APIKey"
+                                    }
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "toggle",
+                                        "name": "toggle"
+                                    },
+                                    "type": "ConnectionToggleButton"
+                                }
+                            ],
+                            "title": "Connect to StyxView Alerts API to start collecting alert logs in Microsoft Sentinel"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+            "apiVersion": "2022-01-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                    "sourceId": "[variables('_solutionId')]",
+                    "name": "[variables('_solutionName')]",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "version": "[variables('dataConnectorVersionConnections')]",
+                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                            "kind": "ResourcesDataConnector"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters": {
+                        "connectorDefinitionName": {
+                            "defaultValue": "",
+                            "type": "string",
+                            "minLength": 1,
+                            "metadata": {
+                                "description": "connectorDefinitionName"
+                            }
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "type": "object",
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection Endpoint",
+                                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                            }
+                        }, 
+                        "APIKey": {
+                            "type": "securestring", 
+                            "defaultValue": ""
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]",
+                        "alertsApiEndpoint": "https://integration.styxview.com/v1/alerts"
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'StyxViewAlerts')]",
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[variables('location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+                                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                                "dataType": "[variables('styxViewAlertsTableName')]",
+                                "dcrConfig": {
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                                    "streamName": "[concat('Custom-',variables('styxViewAlertsTableName'))]"
+                                },
+                                "auth": {
+                                    "type": "APIKey",
+                                    "ApiKey": "[[parameters('APIKey')]",
+                                    "ApiKeyName": "x-api-key"
+                                },
+                                "request": {
+                                    "apiEndpoint": "https://integration.styxview.com/v1/alerts",
+                                    "rateLimitQPS": 10,
+                                    "queryTimeFormat": "yyyy-MM-dd",
+                                    "queryWindowInMin": 5,
+                                    "httpMethod": "GET",
+                                    "retryCount": 3,
+                                    "timeoutInSeconds": 60,
+                                    "headers": {
+                                        "Accept": "application/json"
+                                    },
+                                    "StartTimeAttributeName": "start-date",
+                                    "EndTimeAttributeName": "end-date"
+                                },
+                                "paging": {
+                                    "pagingType": "NextPageToken",
+                                    "nextPageTokenJsonPath": "$.next_cursor",
+                                    "hasNextFlagJsonPath": "$.has_more",
+                                    "nextPageParaName": "cursor"
+                                },
+                                "response": {
+                                    "eventsJsonPaths": [
+                                        "$.items[*]"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "location": "[variables('location')]",
+            "apiVersion": "2023-04-01-preview",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "[variables('_solutionName')]",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+                            "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2025-01-31",
+                "providers": [
+                    "[variables('_solutionAuthor')]"
+                ],
+                "contentKind": "Solution",
+                "packageId": "[variables('_solutionId')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+                "displayName": "[variables('_solutionName')]",
+                "publisherDisplayName": "[variables('_solutionId')]",
+                "descriptionHtml": "test",
+                "icon": "[variables('_packageIcon')]"
+            }
+        }
+    ]
+}
