@@ -79,18 +79,100 @@
             ],
             "type": "Int"
         },
-        "packageUri": {
-            "type": "String",
-            "metadata": {
-                "description": "The zip content url."
-            }
-        },
         "roleNameGuid": {
             "defaultValue": "[newGuid()]",
             "type": "String",
             "metadata": {
                 "description": "A new GUID used to identify the role assignment"
             }
+        },
+        "WorkspaceId": {
+            "type": "string",
+            "defaultValue": "<WorkspaceId>"
+        },
+        "WorkspaceKey": {
+            "type": "securestring",
+            "defaultValue": "<workspaceKey>"
+        },
+        "AwsAccessKeyId": {
+            "type": "string",
+            "defaultValue": "<AwsAccessKeyId>"
+        },
+        "AwsSecretAccessKey": {
+            "type": "securestring",
+            "defaultValue": "<AwsSecretAccessKey>"
+        },
+        "FncAccountCode": {
+            "type": "string",
+            "defaultValue": "<enter the FortiNDR Cloud account code here>"
+        },
+        "FncEvents": {
+            "type": "string",
+            "defaultValue": "observation,detections"
+        },
+        "FncTerminateApp": {
+            "type": "bool",
+            "defaultValue": false
+        },
+        "FncDaysToCollectEvents": {
+            "type": "int",
+            "defaultValue": 7
+        },
+        "FncIntervalMinutes": {
+            "type": "int",
+            "defaultValue": 5
+        },
+        "FncBucketName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "FncApiToken": {
+            "type": "securestring",
+            "defaultValue": ""
+        },
+        "FncAccountUuid": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "FncApiDomain": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "IncludeEvents": {
+            "type": "bool",
+            "defaultValue": false
+        },
+        "IncludeDescription": {
+            "type": "bool",
+            "defaultValue": true
+        },
+        "IncludeSignature": {
+            "type": "bool",
+            "defaultValue": true
+        },
+        "PullMuted": {
+            "type": "string",
+            "defaultValue": "all"
+        },
+        "DetectionStatus": {
+            "type": "string",
+            "defaultValue": "all"
+        },
+        "FncDaysToCollectDetections": {
+            "type": "int",
+            "defaultValue": 0
+        },
+        "PollingDelay": {
+            "type": "int",
+            "defaultValue": 10
+        },
+        "LogLevel": {
+            "type": "string",
+            "defaultValue": "INFO"
+        },
+        "PostingLimit": {
+            "type": "int",
+            "defaultValue": 3000
         }
     },
     "variables": {
@@ -99,7 +181,8 @@
         "storageAccountName": "[format('{0}azfunctions', uniqueString(resourceGroup().id))]",
         "resourceToken": "[toLower(uniqueString(subscription().id, resourceGroup().name, parameters('location')))]",
         "deploymentStorageContainerName": "[concat('app-package-', take(parameters('functionAppName'), 32),'-', take(variables('resourceToken'), 7))]",
-        "storageBlobContributorRoleId": "[concat(subscription().Id, '/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe')]" //Storage Blob Data Contributor role
+        "storageBlobContributorRoleId": "[concat(subscription().Id, '/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe')]", //Storage Blob Data Contributor role
+        "LogAnalyticsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceId')), '.ods.opinsights'))]"
     },
     "resources": [
         {
@@ -204,9 +287,117 @@
                             "value": "[variables('storageAccountName')]"
                         },
                         {
+                            "name": "AzureWebJobsStorage__authentication",
+                            "value": "ManagedIdentity"
+                        },
+                        {
+                            "name": "AzureFunctionsJobHost__extensions__durableTask__storageProvider__type",
+                            "value": "azureStorage"
+                        },
+                        {
                             "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
                             "value": "[reference(resourceId('Microsoft.Insights/components', parameters('functionAppName')), '2020-02-02').InstrumentationKey]"
-                        }
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02').ConnectionString]"
+                        },
+                        {
+                            "name": "WorkspaceId",
+                            "value": "[parameters('WorkspaceID')]"
+                        },
+                        {
+                            "name": "WorkspaceKey",
+                            "value": "[parameters('WorkspaceKey')]"
+                        },
+                        {
+                            "name": "AwsAccessKeyId",
+                            "value": "[parameters('AwsAccessKeyId')]"
+                        },
+                        {
+                            "name": "AwsSecretAccessKey",
+                            "value": "[parameters('AwsSecretAccessKey')]"
+                        },
+                        {
+                            "name": "FncAccountCode",
+                            "value": "[parameters('FncAccountCode')]"
+                        },
+                        {
+                            "name": "FncEvents",
+                            "value": "[parameters('FncEvents')]"
+                        },
+                        {
+                            "name": "FncTerminateApp",
+                            "value": "[parameters('FncTerminateApp')]"
+                        },
+                        {
+                            "name": "FncDaysToCollectEvents",
+                            "value": "[parameters('FncDaysToCollectEvents')]"
+                        },
+                        {
+                            "name": "FncIntervalMinutes",
+                            "value": "[parameters('FncIntervalMinutes')]"
+                        },
+                        {
+                            "name": "FncBucketName",
+                            "value": "[parameters('FncBucketName')]"
+                        },
+                        {
+                            "name": "FncApiToken",
+                            "value": "[parameters('FncApiToken')]"
+                        },
+                        {
+                            "name": "FncAccountUuid",
+                            "value": "[parameters('FncAccountUuid')]"
+                        },
+                        {
+                            "name": "FncApiDomain",
+                            "value": "[parameters('FncApiDomain')]"
+                        },
+                        {
+                            "name": "IncludeEvents",
+                            "value": "[parameters('IncludeEvents')]"
+                        },
+                        {
+                            "name": "IncludeDescription",
+                            "value": "[parameters('IncludeDescription')]"
+                        },
+                        {
+                            "name": "IncludeSignature",
+                            "value": "[parameters('IncludeSignature')]"
+                        },
+                        {
+                            "name": "PullMuted",
+                            "value": "[parameters('PullMuted')]"
+                        },
+                        {
+                            "name": "DetectionStatus",
+                            "value": "[parameters('DetectionStatus')]"
+                        },
+                        {
+                            "name": "FncDaysToCollectDetections",
+                            "value": "[parameters('FncDaysToCollectDetections')]"
+                        },
+                        {
+                            "name": "PollingDelay",
+                            "value": "[parameters('PollingDelay')]"
+                        },
+                        {
+                            "name": "LogLevel",
+                            "value": "[parameters('LogLevel')]"
+                        },
+                        {
+                            "name": "PostingLimit",
+                            "value": "[parameters('PostingLimit')]"
+                        },
+                        {
+                            "name": "logAnalyticsUri",
+                            "value": "[variables('LogAnalyticsUri')]"
+                        } 
                     ]
                 }
             }
@@ -236,7 +427,7 @@
             "kind": "AzurePowerShell",
             "properties": {
                 "azPowerShellVersion": "7.0",
-                "scriptContent": "start-sleep -Seconds 30",
+                "scriptContent": "start-sleep -Seconds 60",
                 "cleanupPreference": "Always",
                 "retentionInterval": "PT1H"
             }
@@ -249,7 +440,7 @@
                 "WaitSection"
             ],
             "properties": {
-                "packageUri": "[parameters('packageUri')]",
+                "packageUri": "https://aka.ms/sentinel-FortinetFortiNDR-functionapp",
                 "remoteBuild": true
             }
         }
