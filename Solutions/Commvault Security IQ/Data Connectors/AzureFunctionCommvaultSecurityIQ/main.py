@@ -7,7 +7,7 @@ import logging
 import re
 import azure.functions as func
 import json
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
+from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -20,16 +20,27 @@ container_name = "sentinelcontainer"
 blob_name = "timestamp"
 
 cs = os.environ.get('AzureWebJobsStorage')
+if not cs:
+    raise ValueError("AzureWebJobsStorage environment variable is not set.")
+
 backfill_days = int(os.environ.get('NumberOfDaysToBackfill', "2")) # this is just for testing
 
-customer_id = os.environ.get('AzureSentinelWorkspaceId','')
+customer_id = os.environ.get('AzureSentinelWorkspaceId', '')
+if not customer_id:
+    raise ValueError("AzureSentinelWorkspaceId environment variable is not set.")
+
 shared_key = os.environ.get('AzureSentinelSharedKey')
+if not shared_key:
+    raise ValueError("AzureSentinelSharedKey environment variable is not set.")
 
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 key_vault_name = os.environ.get("KeyVaultName","Commvault-Integration-KV")
 url = None
-qsdk_token = None
+access_token = None
+refresh_token = None
+access_token_expiry = None
+secret_client = None
 headers = {
     "Content-Type": "application/json",
     "Accept": "application/json"
@@ -94,7 +105,7 @@ job_details_body = {
 
 
 def main(mytimer: func.TimerRequest) -> None:
-    global qsdk_token, url
+    global access_token, url, headers, secret_client, access_token_expiry, refresh_token
     if mytimer.past_due:
         logging.info('The timer is past due!')
 
@@ -102,78 +113,105 @@ def main(mytimer: func.TimerRequest) -> None:
 
     pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
     match = re.match(pattern, str(logAnalyticsUri))
-    if (not match):
+    if not match:
         logging.info(f"Invalid url : {logAnalyticsUri}")
         raise Exception("Lookout: Invalid Log Analytics Uri.")
     try:
+        logging.debug("Initializing Azure credentials and secret client.")
         credential = DefaultAzureCredential()
-        client = SecretClient(vault_url=f"https://{key_vault_name}.vault.azure.net", credential=credential)
+        secret_client = SecretClient(vault_url=f"https://{key_vault_name}.vault.azure.net", credential=credential)
         secret_name = "environment-endpoint-url"
-        url = client.get_secret(secret_name).value
+        url = secret_client.get_secret(secret_name).value
+        logging.debug(f"Fetched environment endpoint URL: {url}")
+
         secret_name = "access-token"
-        qsdk_token = client.get_secret(secret_name).value
-        headers["authtoken"] = "QSDK " + qsdk_token
-        
+        headers["authtoken"] = access_token = secret_client.get_secret(secret_name).value
+        logging.debug("Fetched access token.")
+
+        access_token_expiry = int(os.environ.get("RefreshTokenExpiry", "-1"))
+        secret_name = "refresh-token"
+        try:
+            refresh_token = secret_client.get_secret(secret_name).value
+            logging.debug("Fetched refresh token.")
+        except Exception as e:
+            logging.error(f"Failed to fetch refresh token: {e}")
+            refresh_token = None
+            raise
+        headers["authtoken"] = get_access_token()
+        logging.debug("Set authorization token in headers.")
+
         companyId_url = f"{url}/v2/WhoAmI"
-        
+        logging.debug(f"Fetching company ID from URL: {companyId_url}")
+
         company_response = requests.get(companyId_url, headers=headers)
         if company_response.status_code == 200:
             company_data_json = company_response.json()
-            logging.info(f"Company Response : {company_data_json}")
+            logging.info(f"Company Response: {company_data_json}")
             company_data = company_data_json.get("company", {})
             companyId = company_data.get("id")
+            logging.debug(f"Fetched company ID: {companyId}")
+
             audit_url = f"{url}/V4/Company/{companyId}/SecurityPartners/Register/6"
-            logging.info(f"Company Id : {companyId}")            
+            logging.debug(f"Sending audit log request to URL: {audit_url}")
+
             audit_response = requests.put(audit_url, headers=headers)
             if audit_response.status_code == 200:
-                logging.info(f"Audit Log request sent Successfully. Audit Response : {audit_response.json()}" )
+                logging.info(f"Audit Log request sent successfully. Response: {audit_response.json()}")
             else:
-                logging.error(f"Failed to send Audit Log request with status code : {audit_response.status_code}")
+                logging.error(f"Failed to send Audit Log request. Status code: {audit_response.status_code}")
         else:
-            logging.error(f"Failed to get Company Id with status code : {company_response.status_code}")
+            logging.error(f"Failed to get Company ID. Status code: {company_response.status_code}")
+
         ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=true&showAnomalous=true"
         f_url = url + ustring
+        logging.debug(f"Constructed events URL: {f_url}")
+
         current_date = datetime.now(timezone.utc)
         to_time = int(current_date.timestamp())
         fromtime = read_blob(cs, container_name, blob_name)
+        logging.debug(f"Read from time from blob: {fromtime}")
+
         if fromtime is None:
             fromtime = int((current_date - timedelta(days=backfill_days)).timestamp())
-            logging.info("From Time : [{}] , since the time read from blob is None".format(fromtime))
+            logging.info(f"From Time: [{fromtime}], since the time read from blob is None.")
         else:
             fromtime_dt = datetime.fromtimestamp(fromtime, tz=timezone.utc)
             time_diff = current_date - fromtime_dt
             if time_diff > timedelta(days=backfill_days):
                 updatedfromtime = int((current_date - timedelta(days=backfill_days)).timestamp())
-                logging.info("From Time : [{}] , since the time read from blob : [{}] is older than 2 days".format(updatedfromtime,fromtime))
+                logging.info(f"From Time: [{updatedfromtime}], since the time read from blob: [{fromtime}] is older than {backfill_days} days.")
                 fromtime = updatedfromtime
-            elif time_diff < timedelta(minutes = 5):
+            elif time_diff < timedelta(minutes=5):
                 updatedfromtime = int((current_date - timedelta(minutes=5)).timestamp())
-                logging.info("From Time : [{}] , since the time read from blob : [{}] is less than 5 minutes".format(updatedfromtime,fromtime))
+                logging.info(f"From Time: [{updatedfromtime}], since the time read from blob: [{fromtime}] is less than 5 minutes.")
                 fromtime = updatedfromtime
+
         max_fetch = 1000
         headers["pagingInfo"] = f"0,{max_fetch}"
-        logging.info("Starts at: [{}]".format(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")))
+        logging.debug(f"Set paging info in headers: {headers['pagingInfo']}")
+
+        logging.info(f"Starts at: [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}]")
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
-        logging.info("Event endpoint : [{}]".format(event_endpoint))
+        logging.debug(f"Event endpoint: {event_endpoint}")
+
         response = requests.get(event_endpoint, headers=headers)
-        logging.info("Response Status Code : " + str(response.status_code))
-        
+        logging.info(f"Response Status Code: {response.status_code}")
+
         if response.status_code == 200:
             events = response.json()
-            logging.info("Events Data")
-            logging.info(events)
+            logging.info("Events Data count : {}".format(len(events.get("commservEvents",[]))))
             data = events.get("commservEvents")
             data = [event for event in data if
                     event.get("eventCodeString") in "7:211|7:212|7:293|7:269|14:337|14:338|69:59|7:333|69:60|35:5575"]
             post_data = []
             if data:
                 for event in data:
-                    try :
+                    try:
                         temp = get_incident_details(event["description"])
                         if temp:
                             post_data.append(temp)
                     except Exception as e:
-                        logging.error("Error while processing event : "+str(e))
+                        logging.error(f"Error while processing event: {e}")
                 logging.info("Trying Post Data")
                 gen_chunks(post_data)
                 logging.info("Job Succeeded")
@@ -181,11 +219,12 @@ def main(mytimer: func.TimerRequest) -> None:
                 logging.info("Function App Executed")
             else:
                 print("No new events found.")
-            upload_timestamp_blob(cs, container_name, blob_name, to_time+1)
+            upload_timestamp_blob(cs, container_name, blob_name, to_time + 1)
         else:
-            logging.error("Failed to get events with status code : "+str(response.status_code))
+            logging.error(f"Failed to get events. Status code: {response.status_code}")
     except Exception as e:
-        logging.info("HTTP request error: %s", str(e))
+        logging.error(f"HTTP request error: {e}")
+        raise
 
 
 class Constants:
@@ -206,6 +245,126 @@ class Constants:
     path_key: str = "path"
     description: str = "description"
 
+
+def is_access_token_expired_or_is_empty(expiry_time: str) -> bool:
+    if expiry_time is None or expiry_time == "" or access_token_expiry ==-1:
+        return True
+    current_time = datetime.now(timezone.utc).timestamp()
+    if int(expiry_time) <= current_time:
+        return True
+    return False
+
+
+def get_current_sp() -> str:
+    global url, headers, secret_client
+    try:
+        commserv_url = f"{url}/CommServ"
+        response = requests.get(commserv_url, headers=headers)
+        if response.status_code == 200:
+            commserv_data = response.json()
+            if "errorCode" in commserv_data:
+                error_code = commserv_data["errorCode"]
+                error_message = commserv_data.get("errorMessage")
+                if error_message is not None and len(error_message) > 0 and error_code is not None and error_code != 0: 
+                    logging.error(f"Error getting current service point: {error_code} - {error_message}")
+                    raise Exception(f"Error getting current service point: {error_code} - {error_message}")
+            return commserv_data.get("currentSPVersion")
+    except Exception as e:
+        logging.error(f"Error getting current service point: {e}")
+        raise e
+
+
+def get_access_token() -> str:
+    global access_token_expiry, access_token, refresh_token
+    try:
+        spStr = get_current_sp()
+        if spStr is not None and int(spStr) > 0:
+            sp = int(spStr)
+            if sp<38:
+                return access_token    
+            if access_token is None or access_token == "":
+                raise Exception("Access token is None or empty")
+            elif refresh_token is None or refresh_token == "":
+                logging.error("Refresh token is None or empty, creating new access token, and refresh token")
+                access_token = create_access_token()
+            elif is_access_token_expired_or_is_empty(access_token_expiry):
+                logging.error("Access token is expired or empty, refreshing access token")
+                access_token = refresh_access_token()
+            return access_token
+        else:
+            logging.error("Couldnt get service pack details")
+            raise Exception("Couldnt get service pack details")
+    except Exception as e:
+        logging.error(f"Error getting refresh token: {e}")
+        raise
+
+
+def create_access_token() -> str:
+    global access_token, url, headers, refresh_token, access_token_expiry, secret_client
+    try:
+        renew_token_url = f"{url}/V4/AccessToken"
+        logging.error(f"Create Token URL: {renew_token_url}")
+        token_name = f"{os.environ.get('WEBSITE_HOSTNAME')}-token"
+        renewable_until = datetime.now(timezone.utc).timestamp() + (365*24*60*60)
+        token_body = {
+            "renewableUntilTimestamp": renewable_until,
+            "tokenName": token_name
+        }
+        response = requests.post(renew_token_url, headers=headers, json=token_body)
+                
+        if response.status_code == 200:
+            response_data = response.json()
+            if "error" in response_data:
+                error_code = response_data["error"]["errorCode"]
+                error_message = response_data["error"]["errorMessage"]
+                if error_message is not None and len(error_message) > 0 and error_code is not None and error_code != 0: 
+                    logging.error(f"Error creating access token: {error_code} - {error_message}")
+                    raise Exception(f"Error creating access token: {error_code} - {error_message}")
+            token_data = response_data.get("tokenInfo")
+            access_token = token_data.get("accessToken")
+            refresh_token = token_data.get("refreshToken")
+            access_token_expiry = token_data.get("renewableUntilTimestamp")
+            secret_client.set_secret("access-token", access_token)
+            secret_client.set_secret("refresh-token", refresh_token)
+            os.environ["RefreshTokenExpiry"] = str(access_token_expiry)
+            return access_token
+        else:
+            logging.error(f"Failed to create access token with status code: {response.status_code}")
+            raise Exception(f"Failed to create access token with status code: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Error creating access token: {e}")
+        raise e
+
+
+def refresh_access_token() -> str:
+    global access_token, url, headers, refresh_token, access_token_expiry, secret_client
+    try:
+        renew_token_url = f"{url}/V4/AccessToken/Renew"
+        token_body = {
+            "accessToken": access_token,
+            "refreshToken": refresh_token
+        }
+        response = requests.post(renew_token_url, headers=headers, json=token_body)
+                
+        if response.status_code == 200:
+            response_data = response.json()
+            if "error" in response_data:
+                error_code = response_data["error"]["errorCode"]
+                error_message = response_data["error"]["errorMessage"]
+                if error_message is not None and len(error_message) > 0:
+                    logging.error(f"Error renewing access token: {error_code} - {error_message}")
+                    raise Exception(f"Error renewing access token: {error_code} - {error_message}")
+            access_token = response_data.get("accessToken")
+            access_token_expiry = response_data.get("renewableUntilTimestamp")
+            secret_client.set_secret("access-token", access_token)
+            os.environ["RefreshTokenExpiry"] = str(access_token_expiry)
+            return access_token
+        else:
+            logging.error(f"Failed to renew access token with status code: {response.status_code}")
+            raise Exception(f"Failed to renew access token with status code: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Error renewing access token: {e}")
+        raise e
 
 def get_backup_anomaly(anomaly_id: int) -> str:
     """
@@ -299,20 +458,10 @@ def format_alert_description(msg: str) -> str:
 
 
 def get_files_list(job_id) -> list:
-    """
-    Get file list from analysis job
-    
-    Args:
-        job_id: Job Id
-        
-    Returns:
-        list: List of files
-    """
-
     job_details_body["advOptions"] = {
         "advConfig": {"browseAdvancedConfigBrowseByJob": {"jobId": int(job_id)}}
     }
-    f_url = url+"/DoBrowse"
+    f_url = url + "/DoBrowse"
     response = requests.post(f_url, headers=headers, json=job_details_body)
     resp = response.json()
     browse_responses = resp.get("browseResponses", [])
@@ -332,16 +481,6 @@ def get_files_list(job_id) -> list:
 
 
 def get_subclient_content_list(subclient_id) -> dict:
-    """
-    Get content from subclient
-    
-    Args:
-        subclient_id: subclient Id
-        
-    Returns:
-        dict: Content from subclient
-    """
-
     f_url = url + "/Subclient/" + str(subclient_id)
     resp = requests.get(f_url, headers=headers).json()
     resp = resp.get("subClientProperties", [{}])[0].get("content")
@@ -372,18 +511,6 @@ def fetch_file_details(job_id, subclient_id) -> tuple[list, list]:
 
 
 def get_job_details(job_id, url, headers):
-    """
-    Function to get job details
-    
-    Args:
-        job_id: Job Id
-        url: URL
-        headers: Request headers
-        
-    Returns:
-        dict | None: Job details or None if not found
-    """
-
     f_url = f"{url}/Job/{job_id}"
     response = requests.get(f_url, headers=headers)
     data = response.json()
@@ -400,20 +527,10 @@ def get_job_details(job_id, url, headers):
 
 
 def get_user_details(client_name):
-    """
-    Retrieves the user ID and user name associated with a given client name.
-
-    Args:
-        client_name (str): The name of the client.
-
-    Returns:
-        int | None: The user ID and username associated with the client, or None if not found.
-    """
-
     f_url = f"{url}/Client/byName(clientName='{client_name}')"
     response = requests.get(f_url, headers=headers).json()
-    user_id = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userId',None)
-    user_name = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userName',None)
+    user_id = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userId', None)
+    user_name = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userName', None)
     return user_id, user_name
 
 
@@ -517,10 +634,10 @@ def get_incident_details(message: str) -> dict | None:
                     ),
                 )
             ),
-            "job_start_time": datetime.utcfromtimestamp(job_start_time).strftime(
+            "job_start_time": datetime.fromtimestamp(job_start_time, tz=timezone.utc).strftime(
                 "%Y-%m-%d %H:%M:%S"
             ),
-            "job_end_time": datetime.utcfromtimestamp(job_end_time).strftime(
+            "job_end_time": datetime.fromtimestamp(job_end_time, tz=timezone.utc).strftime(
                 "%Y-%m-%d %H:%M:%S"
             ),
             "job_id": job_id,
@@ -576,7 +693,7 @@ def post_data(body, chunk_count):
     content_type = 'application/json'
     resource = '/api/logs'
     logging.info("Inside Post Data")
-    rfc1123date = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+    rfc1123date = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
     logging.info(f"Date :- {rfc1123date}")
     content_length = len(body)
     signature = build_signature(rfc1123date, content_length, method, content_type,

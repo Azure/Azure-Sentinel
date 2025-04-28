@@ -1,4 +1,3 @@
-
 Connect-AzAccount -UseDeviceAuthentication 
 
 
@@ -8,6 +7,106 @@ function Get-ResourceGroupName {
     )
     $automationResourceGroupName = Read-Host -Prompt $promptMessage
     return $automationResourceGroupName.Trim()
+}
+
+
+function Get-CurrentSP {
+    param (
+        [string]$keyVaultName
+    )
+
+    # Authenticate to Azure
+    Connect-AzAccount -UseDeviceAuthentication
+
+    # Get the Key Vault
+    $keyVault = Get-AzKeyVault -VaultName $keyVaultName -ErrorAction SilentlyContinue
+    if (-not $keyVault) {
+        Write-Host "Key Vault $keyVaultName not found. Exiting."
+        return
+    }
+
+    # Fetch the environment-endpoint-url secret
+    $environmentEndpointUrlSecret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name "environment-endpoint-url"
+    $environmentEndpointUrl = $environmentEndpointUrlSecret.SecretValueText
+    Write-Host "Fetched environment endpoint URL: $environmentEndpointUrl"
+
+    # Fetch the access-token secret
+    $accessTokenSecret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name "access-token"
+    $accessToken = $accessTokenSecret.SecretValueText
+    Write-Host "Fetched access token."
+
+    # Set headers
+    $headers = @{ "Authorization" = "Bearer $accessToken" }
+
+    # Make the GET request to fetch the current service point
+    $commservUrl = "$environmentEndpointUrl/CommServ"
+    try {
+        $response = Invoke-RestMethod -Uri $commservUrl -Headers $headers -Method Get
+        if ($response -and $response.currentSPVersion) {
+            Write-Host "Current Service Point Version: $($response.currentSPVersion)"
+            return $response.currentSPVersion
+        } else {
+            Write-Host "Failed to fetch current service point version."
+        }
+    } catch {
+        Write-Host "Error fetching current service point: $_"
+    }
+}
+
+
+function New-AccessToken {
+    param (
+        [string]$keyVaultName
+    )
+
+    # Authenticate to Azure
+    Connect-AzAccount -UseDeviceAuthentication
+
+    # Get the Key Vault
+    $keyVault = Get-AzKeyVault -VaultName $keyVaultName -ErrorAction SilentlyContinue
+    if (-not $keyVault) {
+        Write-Host "Key Vault $keyVaultName not found. Exiting."
+        return
+    }
+
+    # Fetch the environment-endpoint-url secret
+    $environmentEndpointUrlSecret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name "environment-endpoint-url"
+    $environmentEndpointUrl = $environmentEndpointUrlSecret.SecretValueText
+    Write-Host "Fetched environment endpoint URL: $environmentEndpointUrl"
+
+    # Fetch the access-token secret
+    $accessTokenSecret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name "access-token"
+    $accessToken = $accessTokenSecret.SecretValueText
+    Write-Host "Fetched access token."
+
+    # Fetch the current service point (SP)
+    $currentSP = Get-CurrentSP -keyVaultName $keyVaultName
+    if (-not $currentSP) {
+        Write-Host "Failed to fetch current service point version."
+        return
+    }
+
+    if ($currentSP -ge 38) {
+        # Create a new access token
+        $createTokenUrl = "$environmentEndpointUrl/V4/AccessToken"
+        $tokenName = "$($keyVaultName)-token"
+        $renewableUntil = [int]((Get-Date).AddYears(1).ToUniversalTime() -as [DateTime]).ToFileTimeUtc()
+        $tokenBody = @{ "renewableUntilTimestamp" = $renewableUntil; "tokenName" = $tokenName } | ConvertTo-Json -Depth 10
+
+        $headers = @{ "Authorization" = "Bearer $accessToken" }
+        $tokenResponse = Invoke-RestMethod -Uri $createTokenUrl -Headers $headers -Method Post -Body $tokenBody -ContentType "application/json"
+        if ($tokenResponse -and $tokenResponse.tokenInfo) {
+            $newAccessToken = $tokenResponse.tokenInfo.accessToken
+            $newRefreshToken = $tokenResponse.tokenInfo.refreshToken            
+            Set-AzKeyVaultSecret -VaultName $keyVaultName -Name "access-token" -SecretValue (ConvertTo-SecureString $newAccessToken -AsPlainText -Force)
+            Set-AzKeyVaultSecret -VaultName $keyVaultName -Name "refresh-token" -SecretValue (ConvertTo-SecureString $newRefreshToken -AsPlainText -Force)
+            Write-Host "New access token created and stored in Key Vault."
+        } else {
+            Write-Host "Failed to create a new access token."
+        }
+    } else {
+        Write-Host "Service Point version is less than 38. No ne access token created."
+    }
 }
 
 
@@ -32,7 +131,6 @@ $LogAnalyticsResourceGroupName = Get-ResourceGroupName -promptMessage "Enter the
 
 # Using the same resource group for automation account , as the log analytics workspace
 $automationResourceGroupName = $LogAnalyticsResourceGroupName
-
 
 $automationAccountName = "Commvault-Automation-Account"
 $automationAccount = Get-AzAutomationAccount -ResourceGroupName $automationResourceGroupName -Name $automationAccountName -ErrorAction SilentlyContinue
@@ -88,7 +186,7 @@ $workspaces = Get-AzOperationalInsightsWorkspace -ResourceGroupName $LogAnalytic
 $workspaces | ForEach-Object -Begin { $script:i = 0 } -Process { Write-Host "$($script:i): $($_.Name)"; $script:i++ }
 
 
-$workspaceIndex = Read-Host -Prompt "Enter the number of the Log Analytics workspace you want to use, for Commvault Cloud sentinel solution"
+$workspaceIndex = Read-Host -Prompt "Enter the number of the Log Analytics workspace used, for Commvault Cloud sentinel solution"
 $workspace = $workspaces[$workspaceIndex]
 
 if (-not $workspace) {
@@ -108,6 +206,26 @@ $workspaceKey = (Get-AzOperationalInsightsWorkspaceSharedKey -ResourceGroupName 
 
 Write-Output "Workspace ID: $workspaceId"
 Write-Output "Workspace key retrieved successfully."
+
+$keyVaultName = Read-Host -Prompt "Enter the Key Vault name, that is used to setup Commvault sentinel data connector"
+$selectedKeyVault = Get-AzKeyVault -VaultName $keyVaultName -ErrorAction SilentlyContinue
+
+if (-not $selectedKeyVault) {
+    Write-Host "Key Vault $keyVaultName not found."
+    $keyVaultSubscriptionId = Read-Host -Prompt "Enter the subscription ID of the Key Vault"
+    $keyVaultResourceGroupName = Read-Host -Prompt "Enter the resource group name of the Key Vault"
+
+    $selectedKeyVault = Get-AzKeyVault -VaultName $keyVaultName -SubscriptionId $keyVaultSubscriptionId -ResourceGroupName $keyVaultResourceGroupName -ErrorAction SilentlyContinue
+
+    if (-not $selectedKeyVault) {
+        Write-Host "Key Vault $keyVaultName does not exist in the provided subscription and resource group. Exiting."
+        exit
+    }
+}
+
+Write-Host "Key Vault $keyVaultName found."
+
+New-AccessToken -keyVaultName $keyVaultName
 
 try {
    $sampleData = @(
@@ -133,8 +251,8 @@ try {
             external_link         = ""
             description           = ""
             _ResourceId             = ""
-        }
-    )
+            }
+        )
 
     $jsonData = ConvertTo-Json -InputObject $sampleData -Compress
 
@@ -169,92 +287,6 @@ catch {
     Write-Output "Using alternative method to create table..."
 }
 
-
-
-$FunctionAppResourceGroupName = Get-ResourceGroupName -promptMessage "Enter the resource group name for the Function App"
-
 Write-Host "Table creation process completed." -ForegroundColor Cyan
 
 
-$functionApps = Get-AzFunctionApp -ResourceGroupName $FunctionAppResourceGroupName
-$functionApps | ForEach-Object -Begin { $script:i = 0 } -Process { Write-Host "$($script:i): $($_.Name)"; $script:i++ }
-
-
-$functionAppIndex = Read-Host -Prompt "Enter the number of the function app created when installing the Commvault solution in Sentinel"
-$selectedFunctionApp = $functionApps[$functionAppIndex]
-
-if (-not $selectedFunctionApp) {
-    Write-Host "Invalid function app number. Please run the script again and enter a valid function app number."
-    exit
-}
-
-$principalId = (Get-AzADUser -UserPrincipalName (Get-AzContext).Account.Id).Id
-
-$roleDefinitionId = (Get-AzRoleDefinition -Name "Reader").Id
-
-$existingRoleAssignment = Get-AzRoleAssignment -ObjectId $principalId -Scope "/subscriptions/$($selectedSubscription.Id)/resourceGroups/$($selectedFunctionApp.ResourceGroup)/providers/Microsoft.Web/sites/$($selectedFunctionApp.Name)" -ErrorAction SilentlyContinue
-
-if (-not $existingRoleAssignment) {
-    New-AzRoleAssignment -ObjectId $principalId -RoleDefinitionId $roleDefinitionId -Scope "/subscriptions/$($selectedSubscription.Id)/resourceGroups/$($selectedFunctionApp.ResourceGroup)/providers/Microsoft.Web/sites/$($selectedFunctionApp.Name)" -Verbose
-}
-
-
-$scope = "/subscriptions/$($selectedSubscription.Id)/resourceGroups/$($selectedFunctionApp.ResourceGroup)/providers/Microsoft.Web/sites/$($selectedFunctionApp.Name)/config/appsettings"
-$existingScopeRoleAssignment = Get-AzRoleAssignment -ObjectId $principalId -Scope $scope -ErrorAction SilentlyContinue
-
-if (-not $existingScopeRoleAssignment) {
-    New-AzRoleAssignment -ObjectId $principalId -RoleDefinitionId $roleDefinitionId -Scope $scope -Verbose
-}
-
-az functionapp identity assign --name $selectedFunctionApp.Name --resource-group $selectedFunctionApp.ResourceGroup --subscription $selectedFunctionApp.subscriptionId --verbose
-
-
-$principalId = (az functionapp identity show --name $selectedFunctionApp.Name --resource-group $selectedFunctionApp.ResourceGroup --subscription $selectedFunctionApp.subscriptionId | ConvertFrom-Json).principalId
-
-
-$keyVaultName = (az functionapp config appsettings list --name $selectedFunctionApp.Name --resource-group $selectedFunctionApp.ResourceGroup --subscription $selectedFunctionApp.subscriptionId | ConvertFrom-Json | Where-Object { $_.name -eq "KeyVaultName" }).value
-
-if (-not $keyVaultName) {
-    Write-Host "Key Vault name not found in function app settings. Please ensure the setting 'KeyVaultName' exists."
-    exit
-}
-
-
-$selectedKeyVault = Get-AzKeyVault -VaultName $keyVaultName 
-
-if (-not $selectedKeyVault) {
-    Write-Host "Key Vault $keyVaultName not found ."
-    exit
-}
-
-$isRbacEnabled = (Get-AzKeyVault -VaultName $selectedKeyVault.VaultName).EnableRbacAuthorization
-if($isRbacEnabled) {
-    $keyVaultId = (Get-AzKeyVault -VaultName $selectedKeyVault.VaultName).ResourceId
-    New-AzRoleAssignment -ObjectId $principalId -RoleDefinitionName "Key Vault Secrets User" -Scope $keyVaultId
-}
-else{
-    Set-AzKeyVaultAccessPolicy -VaultName $selectedKeyVault.VaultName -ObjectId $principalId -PermissionsToSecrets get
-}
-
-$storageAccountName = (az functionapp config appsettings list --name $selectedFunctionApp.Name --resource-group $selectedFunctionApp.ResourceGroup --subscription $selectedFunctionApp.subscriptionId | ConvertFrom-Json | Where-Object { $_.name -eq "AzureWebJobsStorage" }).value -replace ".*AccountName=([^;]+);.*", '$1'
-
-if (-not $storageAccountName) {
-    Write-Host "Storage account name not found in function app settings. Please ensure the setting 'AzureWebJobsStorage' exists."
-    exit
-}
-
-
-$storageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $FunctionAppResourceGroupName -Name $storageAccountName)[0].Value
-
-
-$storageContext = New-AzStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $storageAccountKey
-
-
-$containerName = "sentinelcontainer"
-New-AzStorageContainer -Name $containerName -Context $storageContext -ErrorAction SilentlyContinue -Verbose
-
-if ($?) {
-    Write-Host "Container '$containerName' created successfully in storage account '$storageAccountName'."
-} else {
-    Write-Host "Failed to create container '$containerName' in storage account '$storageAccountName'."
-}
