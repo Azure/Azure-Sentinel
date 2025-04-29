@@ -93,7 +93,7 @@ class PrismaCloudConnector:
                 await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
                 self.sent_alerts += 1
             else:
-                logging.info(f"Skipping alert with alertTime: {alert['alertTime']} (less than start time {alert_start_ts_ms})")
+                logging.info(f"Skipping alert with lastUpdated: {alert['lastUpdated']} (less than start time {alert_start_ts_ms})")
   
         self.last_alert_ts = int(last_alert_ts_ms) + 1
         logging.info('Updated last alert ts {}'.format(self.last_alert_ts))
