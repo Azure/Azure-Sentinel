@@ -167,16 +167,15 @@ class PrismaCloudConnector:
                     "name": "timeRange.type",
                     "operator": "=",
                     "value": "ALERT_STATUS_UPDATED"
-                },
-                {
-                    "name": "alertTime",
-                    "operator": "between",
-                    "value": {
-                        "startTime": start_time,
-                        "endTime": unix_ts_now
-                    }
                 }
             ],
+            "timeRange": {
+                "type": "absolute",
+                "value": {
+                    "endTime": 1745921587000,
+                    "startTime": 1745901572000
+                }
+            },
             "sortBy": ["alertTime:asc"],
             "detailed": True
         }
