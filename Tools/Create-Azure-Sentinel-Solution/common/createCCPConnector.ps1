@@ -49,20 +49,12 @@ function Get-ConnectionsTemplateParameters($activeResource, $ccpItem) {
 function New-ParametersForConnectorInstuctions($instructions) {
     foreach ($instruction in $instructions) {
         if ($instruction.type -eq "Textbox") {
-            if ($instruction.parameters.name.ToLower().contains("secure") -or $instruction.parameters.name.ToLower().contains("password")) {
-                $newParameter = [PSCustomObject]@{
-                    defaultValue = $instruction.parameters.name;
-                    type         = "securestring";
-                    minLength    = 1;
-                }
+            $newParameter = [PSCustomObject]@{
+                defaultValue = $instruction.parameters.name;
+                type         = "securestring";
+                minLength    = 1;
             }
-            else {
-                $newParameter = [PSCustomObject]@{
-                    defaultValue = $instruction.parameters.name;
-                    type         = "string";
-                    minLength    = 1;
-                }
-            }
+
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
         }
         elseif ($instruction.type -eq "OAuthForm") {
@@ -259,7 +251,7 @@ function addNewParameter($templateResourceObj, $parameterName, $isSecret = $fals
     if (!$hasParameter) {
         $templateResourceObj.parameters | Add-Member -NotePropertyName "$parameterName" -NotePropertyValue ([PSCustomObject] @{
                 defaultValue = $isSecret ? "-NA-" : "Enter $parameterName value";
-                type         = $isSecret ? "securestring" : "string";
+                type         = "securestring";
                 minLength    = $minLength;
             })
     }

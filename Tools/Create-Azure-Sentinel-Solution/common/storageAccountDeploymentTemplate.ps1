@@ -4,15 +4,21 @@ function Set-UriProperty {
         [string]$propertyName,
         [string]$queueVarName
     )
-
     $uriValue = "[[uri(concat('https://', variables('storageAccountName'), parameters('blobContainerUriDomain'), '/', variables('$queueVarName')))]"
-    $props = $armResource.properties.request.PSObject.Properties
 
-    if ($props.Name -contains $propertyName) {
-        $props.Remove($propertyName)
+    # Ensure 'request' object exists inside 'properties'
+    if (-not ($armResource.properties.PSObject.Properties.Name -contains 'request')) {
+        $armResource.properties | Add-Member -MemberType NoteProperty -Name 'request' -Value ([PSCustomObject]@{})
+    }
+    
+    $request = $armResource.properties.request
+
+    # If the property already exists, remove it
+    if ($request.PSObject.Properties.Name -contains $propertyName) {
+        $request.PSObject.Properties.Remove($propertyName)
     }
 
-    $armResource.properties.request | Add-Member -NotePropertyName $propertyName -NotePropertyValue $uriValue -Force
+    $request | Add-Member -NotePropertyName $propertyName -NotePropertyValue $uriValue -Force
 }
 
 function Set-ArmVariable {
@@ -24,6 +30,7 @@ function Set-ArmVariable {
 
     if (-not $variables.ContainsKey($name)) {
         $variables[$name] = $value
+        Write-Host "name: $name , value: $value"
     }
 }
 
@@ -165,32 +172,35 @@ function Set-ResourceVariables {
         # Initialize variables hashtable if not already done
         if (-not $variables) { $variables = @{} }
 
-        $connectorName = "blob-example-26-12"
+        $dayAndMonth = Get-Date -Format 'dd-MM'
+        $connectorName = "sentinel-connector-$dayAndMonth"
+        $blobContainerUriPart = "[concat('.blob.core', '.windows.net')]"
         Set-ArmVariable $variables "_dataConnectorContentIdConnections$global:connectorCounter" "[variables('_dataConnectorContentIdConnections$global:connectorCounter')]"
-        Set-ArmVariable $variables "connectorName" "$connectorName",
-        Set-ArmVariable $variables "storageAccountName" "[[split(split(parameters('blobContainerUri'), 'https://')[1], parameters('blobContainerDomain'))[0]]"
-        Set-ArmVariable $variables "blobContainerName" "[[split(split(parameters('blobContainerUri'), parameters('blobContainerDomain'), '/')[1], '/')[0]]",
-        Set-ArmVariable $variables "queueName" "[[concat(variables('connectorName'), '-notification')]]"
-        Set-ArmVariable $variables "dlqName" "[[concat(variables('connectorName'), '-dlq')]]"
-        Set-ArmVariable $variables "ResourcesIdPrefix" "[[format('/subscriptions/{0}/resourceGroups/{1}/providers', parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'))]]"
-        Set-ArmVariable $variables "storageAccountId" "[[format('{0}/Microsoft.Storage/storageAccounts/{1}', variables('ResourcesIdPrefix'), variables('storageAccountName'))]]"
-        Set-ArmVariable $variables "notificationQueueResourceId" "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/queueServices//default/queues/{2}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('queueName'))]]"
-        Set-ArmVariable $variables "dlqResourceId" "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/queueServices//default/queues/{2}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('dlqName'))]]"
-        Set-ArmVariable $variables "EGSystemTopicDefaultName" "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('workspaceName'))]]"
-        Set-ArmVariable $variables "EGSystemTopicName" "[[if(empty(parameters('EGSystemTopicName')), variables('EGSystemTopicDefaultName'), parameters('EGSystemTopicName'))]]"
-        Set-ArmVariable $variables "EGTopicResourceId" "[[format('{0}/Microsoft.EventGrid/systemTopics/{1}', variables('ResourcesIdPrefix'), variables('EGSystemTopicName'))]]"
-        Set-ArmVariable $variables "EgSubscriptionName" "[[format('{0}-{1}', variables('connectorName'), 'blobcreatedevents')]]"
-        Set-ArmVariable $variables "EgSubscriptionResourceId" "[[format('{0}/Microsoft.EventGrid/systemTopics/{1}/eventSubscriptions/{2}', variables('ResourcesIdPrefix'), variables('EGSystemTopicName'), variables('EgSubscriptionName'))]]"
-        Set-ArmVariable $variables "storageBlobContributorRoleId" "[[format('/subscriptions/{0}/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe', parameters('StorageAccountSubscription'))]]"
-        Set-ArmVariable $variables "storageQueueContributorRoleId" "[[format('/subscriptions/{0}/providers/Microsoft.Authorization/roleDefinitions/974c5e8b-45b9-4653-ba55-5f855dd0fb88', parameters('StorageAccountSubscription'))]]"
-        Set-ArmVariable $variables "blobRaGuid" "[[guid(variables('storageAccountName'), variables('blobContainerName'))]]"
-        Set-ArmVariable $variables "notificationQueueRaGuid" "[[guid(variables('storageAccountName'), variables('queueName'))]]"
-        Set-ArmVariable $variables "dlqRaGuid" "[[guid(variables('storageAccountName'), variables('dlqName'))]]"
-        Set-ArmVariable $variables "blobRoleAssignmentResourceId" "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/blobServices/default/containers/{2}/providers/Microsoft.Authorization/roleAssignments/{3}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('blobContainerName'),variables('blobRaGuid'))]]"
-        Set-ArmVariable $variables "notificationQueueRoleAssignmentResourceId" "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/queueServices/default/queues/{2}/providers/Microsoft.Authorization/roleAssignments/{3}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('queueName'),variables('notificationQueueRaGuid'))]]"
-        Set-ArmVariable $variables "dlqRoleAssignmentResourceId" "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/queueServices/default/queues/{2}/providers/Microsoft.Authorization/roleAssignments/{3}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('dlqName'),variables('dlqRaGuid'))]]"
+        Set-ArmVariable $variables "connectorName" "$connectorName"
+        Set-ArmVariable $variables "blobContainerUriPart" "$blobContainerUriPart"
+        Set-ArmVariable $variables "storageAccountName" "[[split(split(parameters('blobContainerUri'), 'https://')[1], variables('blobContainerUriPart'))[0]]"
+        Set-ArmVariable $variables "blobContainerName" "[[split(split(parameters('blobContainerUri'), variables('blobContainerUriPart'), '/')[1], '/')[0]]"
+        Set-ArmVariable $variables "queueName" "[[concat(variables('connectorName'), '-notification')]"
+        Set-ArmVariable $variables "dlqName" "[[concat(variables('connectorName'), '-dlq')]"
+        Set-ArmVariable $variables "ResourcesIdPrefix" "[[format('/subscriptions/{0}/resourceGroups/{1}/providers', parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'))]"
+        Set-ArmVariable $variables "storageAccountId" "[[subscriptionResourceId(parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+        Set-ArmVariable $variables "notificationQueueResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/storageAccounts/', variables('storageAccountName'), '/queueServices/default/queues/', variables('queueName')))]"
+        Set-ArmVariable $variables "dlqResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.Storage/storageAccounts/', variables('storageAccountName'), '/queueServices/default/queues/', variables('dlqName')))]"
+        Set-ArmVariable $variables "EGSystemTopicDefaultName" "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('workspaceName'))]"
+        Set-ArmVariable $variables "EGSystemTopicName" "[[if(empty(parameters('EGSystemTopicName')), variables('EGSystemTopicDefaultName'), parameters('EGSystemTopicName'))]"
+        Set-ArmVariable $variables "EGTopicResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.EventGrid/systemTopics/', variables('EGSystemTopicName')))]"
+        Set-ArmVariable $variables "EgSubscriptionName" "[[format('{0}-{1}', variables('connectorName'), 'blobcreatedevents')]"
+        Set-ArmVariable $variables "EgSubscriptionResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.EventGrid/systemTopics/', variables('EGSystemTopicName'), '/eventSubscriptions/', variables('EgSubscriptionName')))]"
+        Set-ArmVariable $variables "storageBlobContributorRoleId" "[[subscriptionResourceId(parameters('StorageAccountSubscription'), '', 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+        Set-ArmVariable $variables "storageQueueContributorRoleId" "[[subscriptionResourceId(parameters('StorageAccountSubscription'), '', 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]"
+        Set-ArmVariable $variables "blobRaGuid" "[[guid(variables('storageAccountName'), variables('blobContainerName'))]"
+        Set-ArmVariable $variables "notificationQueueRaGuid" "[[guid(variables('storageAccountName'), variables('queueName'))]"
+        Set-ArmVariable $variables "dlqRaGuid" "[[guid(variables('storageAccountName'), variables('dlqName'))]"
+        Set-ArmVariable $variables "blobRoleAssignmentResourceId" "[[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers/providers/Microsoft.Authorization/roleAssignments', variables('storageAccountName'), 'default', variables('blobContainerName'), variables('blobRaGuid'))]"
+        Set-ArmVariable $variables "notificationQueueRoleAssignmentResourceId" "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues/providers/Microsoft.Authorization/roleAssignments', variables('storageAccountName'), 'default', variables('queueName'), variables('notificationQueueRaGuid'))]"
+        Set-ArmVariable $variables "dlqRoleAssignmentResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.Storage/storageAccounts/', variables('storageAccountName'), '/queueServices/default/queues/', variables('dlqName'), '/providers/Microsoft.Authorization/roleAssignments/', variables('dlqRaGuid')))]"
         Set-ArmVariable $variables "nestedDeploymentName" "CreateDataFlowResources"
-        Set-ArmVariable $variables "nestedDeploymentId" "[[format('{0}/Microsoft.Resources/deployments/{1}', variables('ResourcesIdPrefix'), variables('nestedDeploymentName'))]]"
+        Set-ArmVariable $variables "nestedDeploymentId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.Resources/deployments/', variables('nestedDeploymentName')))]"
 
         return $variables
     }
