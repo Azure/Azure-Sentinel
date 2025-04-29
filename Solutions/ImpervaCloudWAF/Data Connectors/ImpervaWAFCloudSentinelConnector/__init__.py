@@ -154,7 +154,7 @@ class ImpervaFilesHandler:
             self.sentinel.post_data(json.dumps(chunk), len(chunk), file_name)
     
     def parse_cef(self,cef_raw):
-        rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
+        rx = r'([^=\s\|]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
         parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
         header_array = cef_raw.split('|')
         parsed_cef["Device Version"]=header_array[3]
@@ -165,7 +165,7 @@ class ImpervaFilesHandler:
             if val.startswith('"') and val.endswith('"'):
                 val = val[1:-1]
             parsed_cef[key]=val
-        cs_array = ['cs1','cs2','cs3','cs4','cs5','cs6','cs7','cs8']
+        cs_array = ['cs1','cs2','cs3','cs4','cs5','cs6','cs7','cs8','cs9']
         for elem in cs_array:
             try:
                 if parsed_cef[elem] is not None:
