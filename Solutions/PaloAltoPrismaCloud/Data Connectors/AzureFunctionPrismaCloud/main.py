@@ -84,8 +84,8 @@ class PrismaCloudConnector:
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
-            if alert['alertTime'] >=alert_start_ts_ms:
-                last_alert_ts_ms = alert['alertTime']
+            if alert['lastUpdated'] >=alert_start_ts_ms:
+                last_alert_ts_ms = alert['lastUpdated']
                 alert = self.clear_alert(alert)
                 logging.info('No of alerts send to Sentinel {}'.format(alert))
                 await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
@@ -172,8 +172,8 @@ class PrismaCloudConnector:
             "timeRange": {
                 "type": "absolute",
                 "value": {
-                    "endTime": 1745921587000,
-                    "startTime": 1745901572000
+                    "endTime": unix_ts_now,
+                    "startTime": start_time
                 }
             },
             "sortBy": ["alertTime:asc"],
