@@ -181,7 +181,7 @@
         "storageAccountName": "[format('{0}azfunctions', uniqueString(resourceGroup().id))]",
         "resourceToken": "[toLower(uniqueString(subscription().id, resourceGroup().name, parameters('location')))]",
         "deploymentStorageContainerName": "[concat('app-package-', take(parameters('functionAppName'), 32),'-', take(variables('resourceToken'), 7))]",
-        "storageBlobContributorRoleId": "[concat(subscription().Id, '/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe')]", //Storage Blob Data Contributor role
+        "storageBlobContributorRoleId": "[concat(subscription().Id, '/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
         "LogAnalyticsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceId')), '.ods.opinsights'))]"
     },
     "resources": [
@@ -402,19 +402,33 @@
                 }
             }
         },
-        { //Gives the function app access to the storage account using system assigned managed identity
+        {
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[parameters('roleNameGuid')]",
+            "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'blob-contributor')]",
+            "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
-                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
             ],
             "properties": {
-                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2016-08-01', 'Full').identity.principalId]",
-                "roleDefinitionId": "[variables('storageBlobContributorRoleId')]"
-            },
-            "scope": "[concat('Microsoft.Storage/storageAccounts', '/', variables('storageAccountName'))]"
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]", 
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2016-08-01', 'Full').identity.principalId]"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'table-contributor')]",
+            "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '17d1049b-9a84-46fb-8f53-869881c3d3ab')]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2016-08-01', 'Full').identity.principalId]"
+            }
         },
         { //Wait for 30 seconds before starting OneDeploy to complete role assignment before deployment
             "type": "Microsoft.Resources/deploymentScripts",
@@ -440,7 +454,7 @@
                 "WaitSection"
             ],
             "properties": {
-                "packageUri": "https://github.com/FortiNDR-Integration/FNC-Azure-Sentinel/blob/FortiNDR-Cloud-Sentinel-allow-customer-to-select-hosting-plan/Solutions/Fortinet%20FortiNDR%20Cloud/Data%20Connectors/Archive.zip",
+                "packageUri": "https://aka.ms/sentinel-FortinetFortiNDR-functionapp",
                 "remoteBuild": true
             }
         }
