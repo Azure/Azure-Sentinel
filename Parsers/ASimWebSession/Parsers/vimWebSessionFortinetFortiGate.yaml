@@ -158,7 +158,24 @@ ParserQuery: |
           ['ad.referralurl']:string,
           ['ad.httpmethod']:string,
           ['ad.agent']:string,
+          deviceSeverity:string,
+          ref:string,
+          msg:string,
+          profile:string,
+          incidentserialno:string,
+          policytype:string,
+          attack:string,
+          attackid:string,
+          logid:string,
+          direction:string,
+          subtype:string,
+          severity: string,
           vd:string,
+          FTNTFGTattack:string,
+          FTNTFGTattackid:string,
+          FTNTFGTlogid:string,
+          FTNTFGTdirection:string,
+          FTNTFGTsubtype:string,
           FTNTFGTvd:string,
           FTNTFGTstart:datetime,
           FTNTFGTsrcintfrole:string,
@@ -177,6 +194,11 @@ ParserQuery: |
       HttpReferrer              =  ['ad.referralurl'],
       HttpRequestMethod         = ['ad.httpmethod'],
       HttpUserAgent             = ['ad.agent'],
+      t1ThreatName              = attack,
+      t1ThreatId                = attackid,
+      t1EventOriginalUid        = logid,
+      t1NetworkDirection        = direction,
+      t1EventOriginalSubType    = subtype,
       t1EventStartTime          = start,
       t1SrcZone                 = srcintfrole,
       t1DstZone                 = dstintfrole,
@@ -188,6 +210,11 @@ ParserQuery: |
       t1ThreatOriginalRiskLevel = crscore,
       t1SrcPackets              = sentpkt,
       t1DstPackets              = rcvdpkt,
+      t2ThreatName              = FTNTFGTattack,
+      t2ThreatId                = FTNTFGTattackid,
+      t2EventOriginalUid        = FTNTFGTlogid,
+      t2NetworkDirection        = FTNTFGTdirection,
+      t2EventOriginalSubType    = FTNTFGTsubtype,
       t2EventStartTime          = FTNTFGTstart,
       t2SrcZone                 = FTNTFGTsrcintfrole,
       t2DstZone                 = FTNTFGTdstintfrole,
@@ -209,33 +236,46 @@ ParserQuery: |
            SrcGeoCountry = coalesce(t1SrcGeoCountry,t2SrcGeoCountry),
            ThreatOriginalRiskLevel = coalesce(t1ThreatOriginalRiskLevel,t2ThreatOriginalRiskLevel),
            SrcPackets = coalesce(t1SrcPackets,t2SrcPackets),
-           DstPackets = coalesce(t1DstPackets,t2DstPackets)
-     | project-away t1SrcZone,t2SrcZone, t1DstZone,t2DstZone, t1NetworkSessionId,t2NetworkSessionId,t1RuleNumber,t2RuleNumber,   t1NetworkDuration,t2NetworkDuration, t1DstGeoCountry,t2DstGeoCountry, t1SrcGeoCountry,t2SrcGeoCountry, t1ThreatOriginalRiskLevel,t2ThreatOriginalRiskLevel, t1SrcPackets,t2SrcPackets, t1DstPackets,t2DstPackets, t1EventStartTime, t2EventStartTime
+           DstPackets = coalesce(t1DstPackets,t2DstPackets),
+           EventOriginalSubType = coalesce(t1EventOriginalSubType,t2EventOriginalSubType),
+           NetworkDirection = coalesce(t1NetworkDirection,t2NetworkDirection),
+           EventOriginalUid = coalesce(t1EventOriginalUid,t2EventOriginalUid),
+           ThreatName = coalesce(t1ThreatName,t2ThreatName),
+           ThreatId=coalesce(t1ThreatId,t2ThreatId)
+     | project-away t1SrcZone,t2SrcZone, t1DstZone,t2DstZone, t1NetworkSessionId,t2NetworkSessionId,t1RuleNumber,t2RuleNumber,   t1NetworkDuration,t2NetworkDuration, t1DstGeoCountry,t2DstGeoCountry, t1SrcGeoCountry,t2SrcGeoCountry, t1ThreatOriginalRiskLevel,t2ThreatOriginalRiskLevel, t1SrcPackets,t2SrcPackets, t1DstPackets,t2DstPackets, t1EventStartTime, t2EventStartTime, vd, t1EventOriginalSubType,t2EventOriginalSubType, t1NetworkDirection,t2NetworkDirection, t1EventOriginalUid,t2EventOriginalUid, FTNTFGTvd, t1ThreatName,t2ThreatName, t1ThreatId,t2ThreatId
     | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
     | extend 
         HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
         HttpUserAgent = coalesce(temp_HttpUserAgent,HttpUserAgent)
     | project-away temp_*
-    | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any(httpuseragent_has_any))
+    | extend AdditionalFields_ips =  bag_pack(
+                                "incidentserialno",incidentserialno, 
+                                "policytype",policytype,
+                                "profile",profile,
+                                "ref",ref,
+                                "Message",msg,
+                                "deviceSeverity", deviceSeverity)
     | extend 
-        EventCount               = int(1)
-        , EventSchema            = "WebSession"
-        , EventSchemaVersion     = "0.2.6"
-        , EventType              = "HTTPsession"
-        , EventVendor            = "Fortinet"
-        , DvcIdType              = "Other"
-        , NetworkBytes           = DstBytes + SrcBytes
-        , EventEndTime           = TimeGenerated
-        , EventStartTime         = coalesce(EventStartTime, TimeGenerated)
-        , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
-            , DstIpAddr contains ":", "IPv6"
-            , "")
-        , NetworkPackets         = DstPackets + SrcPackets
-        , UserAgent              = HttpUserAgent
-        , Dvc                    = DvcHostname
-        , User                   = SrcUsername
-        , Hostname               = DstHostname
+      EventCount               = int(1)
+      , EventSchema            = "WebSession"
+      , EventSchemaVersion     = "0.2.6"
+      , EventType              = "HTTPsession"
+      , EventVendor            = "Fortinet"
+      , DvcIdType              = "Other"
+      , NetworkBytes           = DstBytes + SrcBytes
+      , EventEndTime           = TimeGenerated
+      , EventStartTime         = coalesce(EventStartTime, TimeGenerated)
+      , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
+          , DstIpAddr contains ":", "IPv6"
+          , "")
+      , NetworkPackets         = DstPackets + SrcPackets
+      , UserAgent              = HttpUserAgent
+      , Dvc                    = DvcHostname
+      , User                   = SrcUsername
+      , Hostname               = DstHostname
     | lookup SeverityLookup on EventOriginalSeverity
+    | extend EventOriginalSeverity = toint(EventOriginalSeverity)
+    | extend EventSeverity = iff(EventMessage has_all ('ips', 'utm') and EventOriginalSeverity >= 9, severity, EventSeverity)
     | extend 
         Src       = SrcIpAddr,
         Dst       = DstIpAddr,
@@ -243,6 +283,6 @@ ParserQuery: |
         IpAddr    = SrcIpAddr,
         Duration  = NetworkDuration,
         Rule      = tostring(RuleNumber)
-    | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber
+    | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber, severity, incidentserialno, policytype, profile, ref, msg, deviceSeverity
   };
   parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
