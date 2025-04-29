@@ -21,15 +21,17 @@ relevantTechniques:
   - T1110
   - T1584
 query: |
-  Event
-  | where Source == 'Semperis-DSP-Notifications' and EventID == 30001
-  | extend p1Xml = parse_xml(EventData).DataItem.EventData.Data
+  SecurityEvent
+  | where EventSourceName == 'Semperis-DSP-Notifications' and EventID == 30001
+  | extend p1Xml = parse_xml(EventData).EventData.Data
   | mv-expand bagexpansion=array p1Xml
   | evaluate bag_unpack(p1Xml)
   | extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')
+  | evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)
   | parse column_ifexists('objectDN', '') with * "CN=" cnName "," *
   | where "Critical" == column_ifexists('severity', "")
-  | extend NTDomain = tostring(split(UserName, '\\', 0)[0]), LoginUser = tostring(split(UserName, '\\', 1)[0])
+  | extend changedBy = column_ifexists('changedBy', "")
+  | extend NTDomain = tostring(split(changedBy, '\\', 0)[0]), LoginUser = tostring(split(changedBy, '\\', 1)[0])
   | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
 entityMappings:
   - entityType: Account
@@ -49,5 +51,5 @@ eventGroupingSettings:
 alertDetailsOverride:
   alertDisplayNameFormat: Critical Notification -- Alert from Semperis Directory Services Protector
   alertDescriptionFormat: A critical notification was created in the DSP system.
-version: 1.1.1
+version: 2.0.7
 kind: Scheduled

@@ -19,14 +19,20 @@ relevantTechniques:
 triggerOperator: gt
 triggerThreshold: 0
 query: |
-  Event
-  | where Source == 'Semperis-Operation-Log' and EventID == 20002
+  SecurityEvent
+  | where EventSourceName == 'Semperis-Operation-Log' and EventID == 20002
   | sort by TimeGenerated desc 
-  | parse RenderedDescription with "Operation: " Operation "Access Granted:" AccessGranted "Result: " Result "Details: " * "Trustee Name: " TrusteeName " Correlation ID: " * " Source: " HostIP "WebSite Target" *
+  | extend p1Xml = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion=array p1Xml
+  | evaluate bag_unpack(p1Xml)
+  | extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')
+  | evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)
+  | extend det = column_ifexists('details', '')
+  | parse det with * "Trustee Name: " TrusteeName " Correlation ID: " * " Source: " HostIP "WebSite Target" *
   | extend host = tostring(HostIP)
   | extend HostIP = trim_end(":", HostIP)
-  | project TimeGenerated, UserName, HostIP, _ResourceId
-  | extend NTDomain = tostring(split(UserName, '\\', 0)[0]), Name = tostring(split(UserName, '\\', 1)[0]) 
+  | project TimeGenerated, TrusteeName, HostIP, _ResourceId
+  | extend NTDomain = tostring(split(TrusteeName, '\\', 0)[0]), Name = tostring(split(TrusteeName, '\\', 1)[0]) 
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -43,5 +49,5 @@ eventGroupingSettings:
 alertDetailsOverride:
   alertDisplayNameFormat: Failed Logon -- Alert from Semperis Directory Services Protector
   alertDescriptionFormat: A failed logon was detected to the DSP system.
-version: 1.1.1
+version: 2.0.7
 kind: Scheduled

@@ -51,6 +51,9 @@ class RequestSender:
                 return await send_request_fun(session, headers, *data)
 
             except ClientResponseError as e:
+                if e.headers:
+                    logging.info(f"Request-ID: {e.headers.get('Request-ID')}")
+
                 if e.status in [400, 401, 403]:
                     raise AuthenticationException(status=e.status, message=e.message)
                 if e.status == 404:

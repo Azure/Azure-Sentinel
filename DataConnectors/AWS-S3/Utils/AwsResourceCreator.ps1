@@ -102,8 +102,8 @@ function New-ArnRole
             $rolePolicy = Get-OIDCRoleArnPolicy -WorkspaceId $workspaceId -CustomerAWSAccountId $CustomerAWSAccountId
             # $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
             
-            Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(Get-SentinelTagInJsonFormat) 2>&1" -LogFileName $LogFileName -Severity Verbose
-            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags [$(Get-SentinelTagInJsonFormat)] 2>&1
+            Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1" -LogFileName $LogFileName -Severity Verbose
+            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(ConvertTo-Json -InputObject @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) -Depth 99 -Compress) 2>&1
             Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
             
             # If the role was retrieved then the role was created successfully
@@ -165,8 +165,8 @@ function New-S3Bucket
                 if ($lastexitcode -eq 0)
                 {
                     Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
-                    Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
-                    aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
+                    Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging $(ConvertTo-Json -InputObject @{'TagSet'=@($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json)} -Depth 99 -Compress)" -LogFileName $LogFileName -Severity Verbose
+                    aws s3api put-bucket-tagging --bucket $bucketName --tagging  $(ConvertTo-Json -InputObject @{'TagSet'=@($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json)} -Depth 99 -Compress)
                 }
                 elseif($error[0] -Match "InvalidBucketName")
                 {
@@ -198,7 +198,7 @@ function New-SQSQueue
         $script:sqsName = Read-ValidatedHost -Prompt "Please enter Sqs Name"
         Write-Log -Message "Using Sqs name: $sqsName" -LogFileName $LogFileName -Indent 2
 
-        $sentinelTags =  "{\""$(Get-SentinelTagKey)\"": \""$(Get-SentinelTagValue)\""}"
+        $sentinelTags = @{(Get-SentinelTagKey) = (Get-SentinelTagValue)} | ConvertTo-Json -Depth 99 -Compress
         Write-Log -Message "Executing: aws sqs create-queue --queue-name $sqsName --tags $sentinelTags 2>&1" -LogFileName $LogFileName -Severity Verbose
         $tempForOutput = aws sqs create-queue --queue-name $sqsName --tags $sentinelTags 2>&1
         Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
@@ -264,15 +264,15 @@ function Enable-S3EventNotification
 
         if ($null -ne $existingEventConfig)
         {
-            $newEventConfigObject = $newEventConfig | ConvertFrom-Json
-            $existingEventConfigObject = $existingEventConfig | ConvertFrom-Json 
+            $newEventConfigObject = $($newEventConfig | ConvertFrom-Json)
+            $existingEventConfigObject = $($existingEventConfig | ConvertFrom-Json)
             
             $newEventConfigObject.QueueConfigurations += $existingEventConfigObject.QueueConfigurations
-            $updatedEventConfigs = ($newEventConfigObject | ConvertTo-Json -Depth 6 ).Replace('"','\"')
+            $updatedEventConfigs = $($newEventConfigObject | ConvertTo-Json -Depth 99 -Compress)
         }
         else
         {
-            $updatedEventConfigs = $newEventConfig.Replace('"','\"')
+            $updatedEventConfigs = $newEventConfig
         }
         Write-Log -Message "Executing: aws s3api put-bucket-notification-configuration --bucket $bucketName --notification-configuration $updatedEventConfigs 2>&1" -LogFileName $LogFileName -Severity Verbose
         $tempForOutput = aws s3api put-bucket-notification-configuration --bucket $bucketName --notification-configuration $updatedEventConfigs 2>&1
@@ -301,7 +301,7 @@ function New-KMS
         $isKmsNotExist = $lastexitcode -ne 0
         if ($isKmsNotExist)
         {
-            $sentinelTag = "{\""TagKey\"": \""$(Get-SentinelTagKey)\"", \""TagValue\"": \""$(Get-SentinelTagValue)\""}"
+            $sentinelTag = @{'TagKey'= (Get-SentinelTagKey); 'TagValue' = (Get-SentinelTagValue)} | ConvertTo-Json -Depth 99 -Compress
             Write-Log -Message "Executing: aws kms create-key --tags $sentinelTag" -LogFileName $LogFileName -Severity Verbose    
             $script:kmsKeyDescription = aws kms create-key --tags $sentinelTag          
             Write-Log -Message $kmsKeyDescription -LogFileName $LogFileName -Severity Verbose

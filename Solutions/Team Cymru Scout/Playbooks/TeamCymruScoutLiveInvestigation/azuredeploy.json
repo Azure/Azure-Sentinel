@@ -74,8 +74,7 @@
         }
     },
     "variables": {
-        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-        "RegexmatchingipConnectionName": "[concat('Regexmatchingip-', parameters('PlaybookName'))]"
+        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -155,14 +154,13 @@
                                                     "else": {
                                                         "actions": {
                                                             "Terminate_Due_To_Failure_While_Executing_Sub_Playbook_For_Malicious_IP": {
-                                                                "runAfter": {},
                                                                 "type": "Terminate",
                                                                 "inputs": {
+                                                                    "runStatus": "Failed",
                                                                     "runError": {
                                                                         "code": "400",
                                                                         "message": "@{body('CreateIncidentAndMailForMaliciousIP')}"
-                                                                    },
-                                                                    "runStatus": "Failed"
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -180,21 +178,20 @@
                                                     "type": "If"
                                                 },
                                                 "CreateIncidentAndMailForMaliciousIP": {
-                                                    "runAfter": {},
                                                     "type": "Workflow",
                                                     "inputs": {
+                                                        "host": {
+                                                            "workflow": {
+                                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('CreateIncidentAndNotifyPlaybookName'))]"
+                                                            },
+                                                            "triggerName": "manual"
+                                                        },
                                                         "body": {
                                                             "country_code": "@{body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['geo_ip_cc']}",
                                                             "indicator_value": "@variables('indicator_value')",
                                                             "insights": "@body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['insights']",
                                                             "open_ports": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['open_ports']?['top_open_ports']",
                                                             "pdns": "@body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['pdns']?['top_pdns']"
-                                                        },
-                                                        "host": {
-                                                            "triggerName": "manual",
-                                                            "workflow": {
-                                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('CreateIncidentAndNotifyPlaybookName'))]"
-                                                            }
                                                         },
                                                         "retryPolicy": {
                                                             "type": "none"
@@ -229,6 +226,9 @@
                                                     "Failed"
                                                 ]
                                             },
+                                            "else": {
+                                                "actions": {}
+                                            },
                                             "expression": {
                                                 "and": [
                                                     {
@@ -244,7 +244,6 @@
                                         "Condition_To_Ingest_Proto_By_IP_Sections_Data_If_It_is_Fetched_Successfully": {
                                             "actions": {
                                                 "Parse_JSON_For_Proto_By_IP_Sections_Data": {
-                                                    "runAfter": {},
                                                     "type": "ParseJson",
                                                     "inputs": {
                                                         "content": "@body('HTTP_Request_To_Fetch_Proto_By_IP_Sections_Data')",
@@ -389,16 +388,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{body('Parse_JSON_For_Proto_By_IP_Sections_Data')?['proto_by_ip']}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('proto_by_ip_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{body('Parse_JSON_For_Proto_By_IP_Sections_Data')?['proto_by_ip']}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('proto_by_ip_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 }
@@ -413,14 +412,13 @@
                                             "else": {
                                                 "actions": {
                                                     "Terminate_Due_To_Failure_While_Fetching_Proto_By_IP_Sections_Data": {
-                                                        "runAfter": {},
                                                         "type": "Terminate",
                                                         "inputs": {
+                                                            "runStatus": "Failed",
                                                             "runError": {
                                                                 "code": "@{outputs('HTTP_Request_To_Fetch_Proto_By_IP_Sections_Data')['statusCode']}",
                                                                 "message": "@{body('HTTP_Request_To_Fetch_Proto_By_IP_Sections_Data')}"
-                                                            },
-                                                            "runStatus": "Failed"
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -455,7 +453,6 @@
                                                             }
                                                         },
                                                         "Compose_Each_Asns_Dataset_Object_To_Add_Dates_Array_In_It": {
-                                                            "runAfter": {},
                                                             "type": "Compose",
                                                             "inputs": "@setProperty(items('For_Each_Dataset_Of_Asns'), 'dates', body('Parse_JSON_For_Top_Asns_By_IP_Sections_Data')?['top_asns_by_ip']?['data']?['dates'])"
                                                         }
@@ -473,7 +470,6 @@
                                                     }
                                                 },
                                                 "Parse_JSON_For_Top_Asns_By_IP_Sections_Data": {
-                                                    "runAfter": {},
                                                     "type": "ParseJson",
                                                     "inputs": {
                                                         "content": "@body('HTTP_Request_To_Fetch_Top_Asns_By_IP_Sections_Data')",
@@ -601,16 +597,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{variables('top_asns_data_obj')}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('top_asns_by_ip_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{variables('top_asns_data_obj')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('top_asns_by_ip_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 },
@@ -648,14 +644,13 @@
                                             "else": {
                                                 "actions": {
                                                     "Terminate_Due_To_Failure_While_Fetching_Top_Asns_By_IP_Sections_Data": {
-                                                        "runAfter": {},
                                                         "type": "Terminate",
                                                         "inputs": {
+                                                            "runStatus": "Failed",
                                                             "runError": {
                                                                 "code": "@{outputs('HTTP_Request_To_Fetch_Top_Asns_By_IP_Sections_Data')['statusCode']}",
                                                                 "message": "@{body('HTTP_Request_To_Fetch_Top_Asns_By_IP_Sections_Data')}"
-                                                            },
-                                                            "runStatus": "Failed"
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -687,7 +682,6 @@
                                                     "foreach": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['certs']?['top_certs']",
                                                     "actions": {
                                                         "Append_IP_Address_To_Top_Certs_Data": {
-                                                            "runAfter": {},
                                                             "type": "AppendToArrayVariable",
                                                             "inputs": {
                                                                 "name": "certs_data",
@@ -695,7 +689,6 @@
                                                             }
                                                         }
                                                     },
-                                                    "runAfter": {},
                                                     "type": "Foreach"
                                                 },
                                                 "Send_Top_Certs_Data_To_Log_Analytics_Table": {
@@ -706,16 +699,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{outputs('Compose_Object_From_Top_Certs_Data')}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('certs_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{outputs('Compose_Object_From_Top_Certs_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('certs_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 }
@@ -724,6 +717,9 @@
                                                 "Condition_To_Ingest_Top_Open_Ports_Data_If_It_Is_Not_Null": [
                                                     "Succeeded"
                                                 ]
+                                            },
+                                            "else": {
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -757,7 +753,6 @@
                                                             }
                                                         },
                                                         "Compose_Each_Country_Codes_Dataset_Object_To_Add_Dates_Array_In_It": {
-                                                            "runAfter": {},
                                                             "type": "Compose",
                                                             "inputs": "@setProperty(items('For_Each_Dataset_Of_Country_Codes'), 'dates', body('Parse_JSON_For_Top_Country_Codes_Sections_Data')?['top_country_codes_by_ip']?['data']?['dates'])"
                                                         }
@@ -775,7 +770,6 @@
                                                     }
                                                 },
                                                 "Parse_JSON_For_Top_Country_Codes_Sections_Data": {
-                                                    "runAfter": {},
                                                     "type": "ParseJson",
                                                     "inputs": {
                                                         "content": "@body('HTTP_Request_To_Fetch_Top_Country_Codes_By_IP_Sections_Data')",
@@ -910,16 +904,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{variables('top_country_codes_data_obj')}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('top_country_codes_by_ip_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{variables('top_country_codes_data_obj')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('top_country_codes_by_ip_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 },
@@ -957,14 +951,13 @@
                                             "else": {
                                                 "actions": {
                                                     "Terminate_Due_To_Failure_While_Fetching_Top_Country_Codes_By_IP_Data": {
-                                                        "runAfter": {},
                                                         "type": "Terminate",
                                                         "inputs": {
+                                                            "runStatus": "Failed",
                                                             "runError": {
                                                                 "code": "@{outputs('HTTP_Request_To_Fetch_Top_Country_Codes_By_IP_Sections_Data')['statusCode']}",
                                                                 "message": "@{body('HTTP_Request_To_Fetch_Top_Country_Codes_By_IP_Sections_Data')}"
-                                                            },
-                                                            "runStatus": "Failed"
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -996,7 +989,6 @@
                                                     "foreach": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['fingerprints']?['top_fingerprints']",
                                                     "actions": {
                                                         "Append_IP_Address_To_Fingerprints_Data": {
-                                                            "runAfter": {},
                                                             "type": "AppendToArrayVariable",
                                                             "inputs": {
                                                                 "name": "fingerprints_data",
@@ -1004,7 +996,6 @@
                                                             }
                                                         }
                                                     },
-                                                    "runAfter": {},
                                                     "type": "Foreach"
                                                 },
                                                 "Send_Top_Fingerprints_Data_To_Log_Analytics_Table": {
@@ -1015,16 +1006,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{outputs('Compose_Object_From_Fingerprints_Data')}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('fingerprints_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{outputs('Compose_Object_From_Fingerprints_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('fingerprints_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 }
@@ -1033,6 +1024,9 @@
                                                 "Condition_To_Ingest_Top_Certs_Data_If_It_Is_Not_Null": [
                                                     "Succeeded"
                                                 ]
+                                            },
+                                            "else": {
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -1063,7 +1057,6 @@
                                                     "foreach": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['open_ports']?['top_open_ports']",
                                                     "actions": {
                                                         "Append_IP_Address_To_Top_Open_Ports_Data": {
-                                                            "runAfter": {},
                                                             "type": "AppendToArrayVariable",
                                                             "inputs": {
                                                                 "name": "open_ports_data",
@@ -1071,7 +1064,6 @@
                                                             }
                                                         }
                                                     },
-                                                    "runAfter": {},
                                                     "type": "Foreach"
                                                 },
                                                 "Send_Open_Ports_Section_Data_To_Log_Analytics_Table": {
@@ -1082,16 +1074,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{outputs('Compose_An_Object_From_Top_Open_Ports_Data')}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('open_ports_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{outputs('Compose_An_Object_From_Top_Open_Ports_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('open_ports_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 }
@@ -1100,6 +1092,9 @@
                                                 "Condition_To_Ingest_Top_Pdns_Data_If_It_Is_Not_Null": [
                                                     "Succeeded"
                                                 ]
+                                            },
+                                            "else": {
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -1130,7 +1125,6 @@
                                                     "foreach": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['pdns']?['top_pdns']",
                                                     "actions": {
                                                         "Append_IP_Address_To_Every_Pdns_Object": {
-                                                            "runAfter": {},
                                                             "type": "AppendToArrayVariable",
                                                             "inputs": {
                                                                 "name": "pdns_data",
@@ -1138,7 +1132,6 @@
                                                             }
                                                         }
                                                     },
-                                                    "runAfter": {},
                                                     "type": "Foreach"
                                                 },
                                                 "Send_Top_Pdns_Data_To_Log_Analytics_Table": {
@@ -1149,16 +1142,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{outputs('Compose_An_Object_From_Top_Pdns_Data')}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('pdns_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{outputs('Compose_An_Object_From_Top_Pdns_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('pdns_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 }
@@ -1167,6 +1160,9 @@
                                                 "Parse_JSON_For_IP_Indicator_Details_Data": [
                                                     "Succeeded"
                                                 ]
+                                            },
+                                            "else": {
+                                                "actions": {}
                                             },
                                             "expression": {
                                                 "and": [
@@ -1200,7 +1196,6 @@
                                                             }
                                                         },
                                                         "Compose_Each_Services_Dataset_Object_To_Add_Dates_Array_In_It": {
-                                                            "runAfter": {},
                                                             "type": "Compose",
                                                             "inputs": "@setProperty(items('For_Each_Dataset_Of_Services'), 'dates', body('Parse_JSON_For_Top_Services_By_IP_Sections_Data')?['top_services_by_ip']?['data']?['dates'])"
                                                         }
@@ -1218,7 +1213,6 @@
                                                     }
                                                 },
                                                 "Parse_JSON_For_Top_Services_By_IP_Sections_Data": {
-                                                    "runAfter": {},
                                                     "type": "ParseJson",
                                                     "inputs": {
                                                         "content": "@body('HTTP_Request_To_Fetch_Top_Services_By_IP_Sections_Data')",
@@ -1346,16 +1340,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{variables('top_services_data_obj')}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('top_services_by_ip_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{variables('top_services_data_obj')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('top_services_by_ip_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 },
@@ -1393,14 +1387,13 @@
                                             "else": {
                                                 "actions": {
                                                     "Terminate_Due_To_Failure_While_Fetching_Top_Services_By_IP_Sections_Data": {
-                                                        "runAfter": {},
                                                         "type": "Terminate",
                                                         "inputs": {
+                                                            "runStatus": "Failed",
                                                             "runError": {
                                                                 "code": "@{outputs('HTTP_Request_To_Fetch_Top_Services_By_IP_Sections_Data')['statusCode']}",
                                                                 "message": "@{body('HTTP_Request_To_Fetch_Top_Services_By_IP_Sections_Data')}"
-                                                            },
-                                                            "runStatus": "Failed"
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -1435,7 +1428,6 @@
                                                             }
                                                         },
                                                         "Compose_Each_Tags_Dataset_Object_To_Add_Dates_Array_In_It": {
-                                                            "runAfter": {},
                                                             "type": "Compose",
                                                             "inputs": "@setProperty(items('For_Each_Dataset_Of_Tags'), 'dates', body('Parse_JSON_For_Top_Tags_By_IP_Sections_Data')?['top_tags_by_ip']?['data']?['dates'])"
                                                         }
@@ -1453,7 +1445,6 @@
                                                     }
                                                 },
                                                 "Parse_JSON_For_Top_Tags_By_IP_Sections_Data": {
-                                                    "runAfter": {},
                                                     "type": "ParseJson",
                                                     "inputs": {
                                                         "content": "@body('HTTP_Request_To_Fetch_Top_Tags_By_IP_Sections_Data')",
@@ -1581,16 +1572,16 @@
                                                     },
                                                     "type": "ApiConnection",
                                                     "inputs": {
-                                                        "body": "@{variables('top_tags_data_obj')}",
-                                                        "headers": {
-                                                            "Log-Type": "@variables('top_tags_by_ip_table_name')"
-                                                        },
                                                         "host": {
                                                             "connection": {
                                                                 "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                             }
                                                         },
                                                         "method": "post",
+                                                        "body": "@{variables('top_tags_data_obj')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('top_tags_by_ip_table_name')"
+                                                        },
                                                         "path": "/api/logs"
                                                     }
                                                 },
@@ -1628,14 +1619,13 @@
                                             "else": {
                                                 "actions": {
                                                     "Terminate_Due_To_Failure_While_Fetching_Top_Tags_By_IP_Sections_Data": {
-                                                        "runAfter": {},
                                                         "type": "Terminate",
                                                         "inputs": {
+                                                            "runStatus": "Failed",
                                                             "runError": {
                                                                 "code": "@{outputs('HTTP_Request_To_Fetch_Top_Tags_By_IP_Sections_Data')['statusCode']}",
                                                                 "message": "@{body('HTTP_Request_To_Fetch_Top_Tags_By_IP_Sections_Data')}"
-                                                            },
-                                                            "runStatus": "Failed"
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -1660,16 +1650,16 @@
                                             },
                                             "type": "Http",
                                             "inputs": {
-                                                "authentication": {
-                                                    "password": "@parameters('password')",
-                                                    "type": "Basic",
-                                                    "username": "@variables('username')"
-                                                },
+                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
                                                     "sections": "proto_by_ip"
                                                 },
-                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details"
+                                                "authentication": {
+                                                    "password": "@parameters('password')",
+                                                    "type": "Basic",
+                                                    "username": "@variables('username')"
+                                                }
                                             },
                                             "runtimeConfiguration": {
                                                 "secureData": {
@@ -1688,16 +1678,16 @@
                                             },
                                             "type": "Http",
                                             "inputs": {
-                                                "authentication": {
-                                                    "password": "@parameters('password')",
-                                                    "type": "Basic",
-                                                    "username": "@variables('username')"
-                                                },
+                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
                                                     "sections": "top_asns_by_ip"
                                                 },
-                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details"
+                                                "authentication": {
+                                                    "password": "@parameters('password')",
+                                                    "type": "Basic",
+                                                    "username": "@variables('username')"
+                                                }
                                             },
                                             "runtimeConfiguration": {
                                                 "secureData": {
@@ -1716,16 +1706,16 @@
                                             },
                                             "type": "Http",
                                             "inputs": {
-                                                "authentication": {
-                                                    "password": "@parameters('password')",
-                                                    "type": "Basic",
-                                                    "username": "@variables('username')"
-                                                },
+                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
                                                     "sections": "top_country_codes_by_ip"
                                                 },
-                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details"
+                                                "authentication": {
+                                                    "password": "@parameters('password')",
+                                                    "type": "Basic",
+                                                    "username": "@variables('username')"
+                                                }
                                             },
                                             "runtimeConfiguration": {
                                                 "secureData": {
@@ -1744,16 +1734,16 @@
                                             },
                                             "type": "Http",
                                             "inputs": {
-                                                "authentication": {
-                                                    "password": "@parameters('password')",
-                                                    "type": "Basic",
-                                                    "username": "@variables('username')"
-                                                },
+                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
                                                     "sections": "top_services_by_ip"
                                                 },
-                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details"
+                                                "authentication": {
+                                                    "password": "@parameters('password')",
+                                                    "type": "Basic",
+                                                    "username": "@variables('username')"
+                                                }
                                             },
                                             "runtimeConfiguration": {
                                                 "secureData": {
@@ -1772,16 +1762,16 @@
                                             },
                                             "type": "Http",
                                             "inputs": {
-                                                "authentication": {
-                                                    "password": "@parameters('password')",
-                                                    "type": "Basic",
-                                                    "username": "@variables('username')"
-                                                },
+                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
                                                     "sections": "top_tags_by_ip"
                                                 },
-                                                "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details"
+                                                "authentication": {
+                                                    "password": "@parameters('password')",
+                                                    "type": "Basic",
+                                                    "username": "@variables('username')"
+                                                }
                                             },
                                             "runtimeConfiguration": {
                                                 "secureData": {
@@ -1793,7 +1783,6 @@
                                             }
                                         },
                                         "Parse_JSON_For_IP_Indicator_Details_Data": {
-                                            "runAfter": {},
                                             "type": "ParseJson",
                                             "inputs": {
                                                 "content": "@body('HTTP_Request_To_Fetch_Details_Of_IP_Indicator')",
@@ -3992,16 +3981,16 @@
                                             },
                                             "type": "ApiConnection",
                                             "inputs": {
-                                                "body": "@{variables('summary_table_data')}",
-                                                "headers": {
-                                                    "Log-Type": "@variables('summary_details_table_name')"
-                                                },
                                                 "host": {
                                                     "connection": {
                                                         "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                     }
                                                 },
                                                 "method": "post",
+                                                "body": "@{variables('summary_table_data')}",
+                                                "headers": {
+                                                    "Log-Type": "@variables('summary_details_table_name')"
+                                                },
                                                 "path": "/api/logs"
                                             }
                                         },
@@ -4013,16 +4002,16 @@
                                             },
                                             "type": "ApiConnection",
                                             "inputs": {
-                                                "body": "@{outputs('Compose_Identity_Object_To_Add_IP_Address_Property')}",
-                                                "headers": {
-                                                    "Log-Type": "@variables('identity_table_name')"
-                                                },
                                                 "host": {
                                                     "connection": {
                                                         "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                     }
                                                 },
                                                 "method": "post",
+                                                "body": "@{outputs('Compose_Identity_Object_To_Add_IP_Address_Property')}",
+                                                "headers": {
+                                                    "Log-Type": "@variables('identity_table_name')"
+                                                },
                                                 "path": "/api/logs"
                                             }
                                         },
@@ -4034,16 +4023,16 @@
                                             },
                                             "type": "ApiConnection",
                                             "inputs": {
-                                                "body": "@{outputs('Compose_Whois_Object_To_Add_IP_Address_Property')}",
-                                                "headers": {
-                                                    "Log-Type": "@variables('whois_table_name')"
-                                                },
                                                 "host": {
                                                     "connection": {
                                                         "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                     }
                                                 },
                                                 "method": "post",
+                                                "body": "@{outputs('Compose_Whois_Object_To_Add_IP_Address_Property')}",
+                                                "headers": {
+                                                    "Log-Type": "@variables('whois_table_name')"
+                                                },
                                                 "path": "/api/logs"
                                             }
                                         },
@@ -4120,14 +4109,13 @@
                                     "else": {
                                         "actions": {
                                             "Terminate_Due_To_Error_While_Fetching_IP_Indicator_Details_Data": {
-                                                "runAfter": {},
                                                 "type": "Terminate",
                                                 "inputs": {
+                                                    "runStatus": "Failed",
                                                     "runError": {
                                                         "code": "@{outputs('HTTP_Request_To_Fetch_Details_Of_IP_Indicator')['statusCode']}",
                                                         "message": "@{body('HTTP_Request_To_Fetch_Details_Of_IP_Indicator')}"
-                                                    },
-                                                    "runStatus": "Failed"
+                                                    }
                                                 }
                                             }
                                         }
@@ -4145,16 +4133,15 @@
                                     "type": "If"
                                 },
                                 "HTTP_Request_To_Fetch_Details_Of_IP_Indicator": {
-                                    "runAfter": {},
                                     "type": "Http",
                                     "inputs": {
+                                        "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
+                                        "method": "GET",
                                         "authentication": {
                                             "password": "@parameters('password')",
                                             "type": "Basic",
                                             "username": "@variables('username')"
-                                        },
-                                        "method": "GET",
-                                        "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details"
+                                        }
                                     },
                                     "runtimeConfiguration": {
                                         "secureData": {
@@ -4173,91 +4160,192 @@
                             },
                             "else": {
                                 "actions": {
-                                    "Condition_To_Fetch_Data_If_Domain_is_Valid": {
+                                    "HTTP_Request_To_Fetch_Details_Of_Domain_Indicator": {
+                                        "type": "Http",
+                                        "inputs": {
+                                            "uri": "@{variables('base_url')}/api/scout/search",
+                                            "method": "GET",
+                                            "queries": {
+                                                "query": "@variables('indicator_value')"
+                                            },
+                                            "authentication": {
+                                                "password": "@parameters('password')",
+                                                "type": "Basic",
+                                                "username": "@variables('username')"
+                                            }
+                                        },
+                                        "runtimeConfiguration": {
+                                            "secureData": {
+                                                "properties": [
+                                                    "inputs",
+                                                    "outputs"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "Condition_To_Verify_Domain_Indicator_Details_Data_Fetched_Successfully": {
                                         "actions": {
-                                            "Condition_To_Verify_Domain_Indicator_Details_Data_Fetched_Successfully": {
+                                            "Compose_An_Object_From_Array_Of_Ips": {
+                                                "runAfter": {
+                                                    "For_Each_IPs": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Compose",
+                                                "inputs": "@variables('domain_data')"
+                                            },
+                                            "Condition_To_Terminate_If_No_Data_Found_For_Domain": {
                                                 "actions": {
-                                                    "Compose_An_Object_From_Array_Of_Ips": {
-                                                        "runAfter": {
-                                                            "For_Each_IPs": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Compose",
-                                                        "inputs": "@variables('domain_data')"
-                                                    },
-                                                    "Condition_To_Terminate_If_No_Data_Found_For_Domain": {
-                                                        "actions": {
-                                                            "Terminate_Due_To_No_Data_Found_For_Domain": {
-                                                                "runAfter": {},
-                                                                "type": "Terminate",
-                                                                "inputs": {
-                                                                    "runStatus": "Succeeded"
-                                                                }
-                                                            }
-                                                        },
-                                                        "runAfter": {
-                                                            "Parse_JSON_For_Domain_Data": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "expression": {
-                                                            "and": [
-                                                                {
-                                                                    "equals": [
-                                                                        "@body('Parse_JSON_For_Domain_Data')?['ips']",
-                                                                        "@null"
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        "type": "If"
-                                                    },
-                                                    "For_Each_IPs": {
-                                                        "foreach": "@body('Parse_JSON_For_Domain_Data')?['ips']",
-                                                        "actions": {
-                                                            "Append_Query_To_Each_IPs_Data": {
-                                                                "runAfter": {},
-                                                                "type": "AppendToArrayVariable",
-                                                                "inputs": {
-                                                                    "name": "domain_data",
-                                                                    "value": "@setProperty(items('For_Each_IPs'), 'query', body('Parse_JSON_For_Domain_Data')?['query'])"
-                                                                }
-                                                            }
-                                                        },
-                                                        "runAfter": {
-                                                            "Condition_To_Terminate_If_No_Data_Found_For_Domain": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Foreach"
-                                                    },
-                                                    "Parse_JSON_For_Domain_Data": {
-                                                        "runAfter": {},
-                                                        "type": "ParseJson",
+                                                    "Terminate_Due_To_No_Data_Found_For_Domain": {
+                                                        "type": "Terminate",
                                                         "inputs": {
-                                                            "content": "@body('HTTP_Request_To_Fetch_Details_Of_Domain_Indicator')",
-                                                            "schema": {
-                                                                "properties": {
-                                                                    "end_date": {
-                                                                        "type": [
-                                                                            "string",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "ips": {
-                                                                        "items": {
+                                                            "runStatus": "Succeeded"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Parse_JSON_For_Domain_Data": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "else": {
+                                                    "actions": {}
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@body('Parse_JSON_For_Domain_Data')?['ips']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            },
+                                            "For_Each_IPs": {
+                                                "foreach": "@body('Parse_JSON_For_Domain_Data')?['ips']",
+                                                "actions": {
+                                                    "Append_Query_To_Each_IPs_Data": {
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "domain_data",
+                                                            "value": "@setProperty(items('For_Each_IPs'), 'query', body('Parse_JSON_For_Domain_Data')?['query'])"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Condition_To_Terminate_If_No_Data_Found_For_Domain": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Foreach"
+                                            },
+                                            "Parse_JSON_For_Domain_Data": {
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('HTTP_Request_To_Fetch_Details_Of_Domain_Indicator')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "end_date": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "ips": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "as_info": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "as_name": {
+                                                                                        "type": [
+                                                                                            "string",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    },
+                                                                                    "asn": {
+                                                                                        "type": [
+                                                                                            "integer",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "asn",
+                                                                                    "as_name"
+                                                                                ],
+                                                                                "type": [
+                                                                                    "object",
+                                                                                    "null"
+                                                                                ]
+                                                                            },
+                                                                            "type": [
+                                                                                "array",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "country_codes": {
+                                                                            "items": {
+                                                                                "type": [
+                                                                                    "string",
+                                                                                    "null"
+                                                                                ]
+                                                                            },
+                                                                            "type": [
+                                                                                "array",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "event_count": {
+                                                                            "type": [
+                                                                                "integer",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "ip": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "summary": {
                                                                             "properties": {
-                                                                                "as_info": {
+                                                                                "certs": {
                                                                                     "items": {
                                                                                         "properties": {
-                                                                                            "as_name": {
+                                                                                            "common_name": {
                                                                                                 "type": [
                                                                                                     "string",
                                                                                                     "null"
                                                                                                 ]
                                                                                             },
-                                                                                            "asn": {
+                                                                                            "event_count": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "ip": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "issuer": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "issuer_common_name": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "port": {
                                                                                                 "type": [
                                                                                                     "integer",
                                                                                                     "null"
@@ -4265,8 +4353,12 @@
                                                                                             }
                                                                                         },
                                                                                         "required": [
-                                                                                            "asn",
-                                                                                            "as_name"
+                                                                                            "ip",
+                                                                                            "issuer",
+                                                                                            "issuer_common_name",
+                                                                                            "common_name",
+                                                                                            "port",
+                                                                                            "event_count"
                                                                                         ],
                                                                                         "type": [
                                                                                             "object",
@@ -4278,10 +4370,48 @@
                                                                                         "null"
                                                                                     ]
                                                                                 },
-                                                                                "country_codes": {
+                                                                                "comms_total": {
+                                                                                    "type": [
+                                                                                        "integer",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "fingerprints": {
                                                                                     "items": {
+                                                                                        "properties": {
+                                                                                            "event_count": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "ip": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "signature": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "ip",
+                                                                                            "type",
+                                                                                            "signature",
+                                                                                            "event_count"
+                                                                                        ],
                                                                                         "type": [
-                                                                                            "string",
+                                                                                            "object",
                                                                                             "null"
                                                                                         ]
                                                                                     },
@@ -4290,48 +4420,137 @@
                                                                                         "null"
                                                                                     ]
                                                                                 },
-                                                                                "event_count": {
-                                                                                    "type": [
-                                                                                        "integer",
-                                                                                        "null"
-                                                                                    ]
-                                                                                },
-                                                                                "ip": {
+                                                                                "last_seen": {
                                                                                     "type": [
                                                                                         "string",
                                                                                         "null"
                                                                                     ]
                                                                                 },
-                                                                                "summary": {
-                                                                                    "properties": {
-                                                                                        "certs": {
-                                                                                            "items": {
+                                                                                "open_ports": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "event_count": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "ip": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "port": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "protocol": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "protocol_text": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "service": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "ip",
+                                                                                            "port",
+                                                                                            "protocol",
+                                                                                            "protocol_text",
+                                                                                            "service",
+                                                                                            "event_count"
+                                                                                        ],
+                                                                                        "type": [
+                                                                                            "object",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": [
+                                                                                        "array",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "pdns": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "domain": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "event_count": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "ip": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "ip",
+                                                                                            "domain",
+                                                                                            "event_count"
+                                                                                        ],
+                                                                                        "type": [
+                                                                                            "object",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": [
+                                                                                        "array",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "service_counts": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "event_count": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "port": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "proto": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "proto_text": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "service": {
                                                                                                 "properties": {
-                                                                                                    "common_name": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "event_count": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "ip": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "issuer": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "issuer_common_name": {
+                                                                                                    "description": {
                                                                                                         "type": [
                                                                                                             "string",
                                                                                                             "null"
@@ -4342,313 +4561,96 @@
                                                                                                             "integer",
                                                                                                             "null"
                                                                                                         ]
-                                                                                                    }
-                                                                                                },
-                                                                                                "required": [
-                                                                                                    "ip",
-                                                                                                    "issuer",
-                                                                                                    "issuer_common_name",
-                                                                                                    "common_name",
-                                                                                                    "port",
-                                                                                                    "event_count"
-                                                                                                ],
-                                                                                                "type": [
-                                                                                                    "object",
-                                                                                                    "null"
-                                                                                                ]
-                                                                                            },
-                                                                                            "type": [
-                                                                                                "array",
-                                                                                                "null"
-                                                                                            ]
-                                                                                        },
-                                                                                        "comms_total": {
-                                                                                            "type": [
-                                                                                                "integer",
-                                                                                                "null"
-                                                                                            ]
-                                                                                        },
-                                                                                        "fingerprints": {
-                                                                                            "items": {
-                                                                                                "properties": {
-                                                                                                    "event_count": {
+                                                                                                    },
+                                                                                                    "proto_number": {
                                                                                                         "type": [
                                                                                                             "integer",
                                                                                                             "null"
                                                                                                         ]
                                                                                                     },
-                                                                                                    "ip": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "signature": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "type": {
+                                                                                                    "service_name": {
                                                                                                         "type": [
                                                                                                             "string",
                                                                                                             "null"
                                                                                                         ]
                                                                                                     }
                                                                                                 },
-                                                                                                "required": [
-                                                                                                    "ip",
-                                                                                                    "type",
-                                                                                                    "signature",
-                                                                                                    "event_count"
-                                                                                                ],
                                                                                                 "type": [
                                                                                                     "object",
                                                                                                     "null"
                                                                                                 ]
-                                                                                            },
-                                                                                            "type": [
-                                                                                                "array",
-                                                                                                "null"
-                                                                                            ]
+                                                                                            }
                                                                                         },
-                                                                                        "last_seen": {
+                                                                                        "required": [
+                                                                                            "proto",
+                                                                                            "proto_text",
+                                                                                            "port",
+                                                                                            "event_count",
+                                                                                            "service"
+                                                                                        ],
+                                                                                        "type": [
+                                                                                            "object",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": [
+                                                                                        "array",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "top_peers": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "event_count": {
+                                                                                                "type": [
+                                                                                                    "integer",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            },
+                                                                                            "ip": {
+                                                                                                "type": [
+                                                                                                    "string",
+                                                                                                    "null"
+                                                                                                ]
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "ip",
+                                                                                            "event_count"
+                                                                                        ],
+                                                                                        "type": [
+                                                                                            "object",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": [
+                                                                                        "array",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "whois": {
+                                                                                    "properties": {
+                                                                                        "as_name": {
                                                                                             "type": [
                                                                                                 "string",
                                                                                                 "null"
                                                                                             ]
                                                                                         },
-                                                                                        "open_ports": {
-                                                                                            "items": {
-                                                                                                "properties": {
-                                                                                                    "event_count": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "ip": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "port": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "protocol": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "protocol_text": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "service": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    }
-                                                                                                },
-                                                                                                "required": [
-                                                                                                    "ip",
-                                                                                                    "port",
-                                                                                                    "protocol",
-                                                                                                    "protocol_text",
-                                                                                                    "service",
-                                                                                                    "event_count"
-                                                                                                ],
-                                                                                                "type": [
-                                                                                                    "object",
-                                                                                                    "null"
-                                                                                                ]
-                                                                                            },
+                                                                                        "asn": {
                                                                                             "type": [
-                                                                                                "array",
+                                                                                                "integer",
                                                                                                 "null"
                                                                                             ]
                                                                                         },
-                                                                                        "pdns": {
-                                                                                            "items": {
-                                                                                                "properties": {
-                                                                                                    "domain": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "event_count": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "ip": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    }
-                                                                                                },
-                                                                                                "required": [
-                                                                                                    "ip",
-                                                                                                    "domain",
-                                                                                                    "event_count"
-                                                                                                ],
-                                                                                                "type": [
-                                                                                                    "object",
-                                                                                                    "null"
-                                                                                                ]
-                                                                                            },
+                                                                                        "net_name": {
                                                                                             "type": [
-                                                                                                "array",
+                                                                                                "string",
                                                                                                 "null"
                                                                                             ]
                                                                                         },
-                                                                                        "service_counts": {
-                                                                                            "items": {
-                                                                                                "properties": {
-                                                                                                    "event_count": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "port": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "proto": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "proto_text": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "service": {
-                                                                                                        "properties": {
-                                                                                                            "description": {
-                                                                                                                "type": [
-                                                                                                                    "string",
-                                                                                                                    "null"
-                                                                                                                ]
-                                                                                                            },
-                                                                                                            "port": {
-                                                                                                                "type": [
-                                                                                                                    "integer",
-                                                                                                                    "null"
-                                                                                                                ]
-                                                                                                            },
-                                                                                                            "proto_number": {
-                                                                                                                "type": [
-                                                                                                                    "integer",
-                                                                                                                    "null"
-                                                                                                                ]
-                                                                                                            },
-                                                                                                            "service_name": {
-                                                                                                                "type": [
-                                                                                                                    "string",
-                                                                                                                    "null"
-                                                                                                                ]
-                                                                                                            }
-                                                                                                        },
-                                                                                                        "type": [
-                                                                                                            "object",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    }
-                                                                                                },
-                                                                                                "required": [
-                                                                                                    "proto",
-                                                                                                    "proto_text",
-                                                                                                    "port",
-                                                                                                    "event_count",
-                                                                                                    "service"
-                                                                                                ],
-                                                                                                "type": [
-                                                                                                    "object",
-                                                                                                    "null"
-                                                                                                ]
-                                                                                            },
+                                                                                        "org_name": {
                                                                                             "type": [
-                                                                                                "array",
-                                                                                                "null"
-                                                                                            ]
-                                                                                        },
-                                                                                        "top_peers": {
-                                                                                            "items": {
-                                                                                                "properties": {
-                                                                                                    "event_count": {
-                                                                                                        "type": [
-                                                                                                            "integer",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    },
-                                                                                                    "ip": {
-                                                                                                        "type": [
-                                                                                                            "string",
-                                                                                                            "null"
-                                                                                                        ]
-                                                                                                    }
-                                                                                                },
-                                                                                                "required": [
-                                                                                                    "ip",
-                                                                                                    "event_count"
-                                                                                                ],
-                                                                                                "type": [
-                                                                                                    "object",
-                                                                                                    "null"
-                                                                                                ]
-                                                                                            },
-                                                                                            "type": [
-                                                                                                "array",
-                                                                                                "null"
-                                                                                            ]
-                                                                                        },
-                                                                                        "whois": {
-                                                                                            "properties": {
-                                                                                                "as_name": {
-                                                                                                    "type": [
-                                                                                                        "string",
-                                                                                                        "null"
-                                                                                                    ]
-                                                                                                },
-                                                                                                "asn": {
-                                                                                                    "type": [
-                                                                                                        "integer",
-                                                                                                        "null"
-                                                                                                    ]
-                                                                                                },
-                                                                                                "net_name": {
-                                                                                                    "type": [
-                                                                                                        "string",
-                                                                                                        "null"
-                                                                                                    ]
-                                                                                                },
-                                                                                                "org_name": {
-                                                                                                    "type": [
-                                                                                                        "string",
-                                                                                                        "null"
-                                                                                                    ]
-                                                                                                }
-                                                                                            },
-                                                                                            "type": [
-                                                                                                "object",
+                                                                                                "string",
                                                                                                 "null"
                                                                                             ]
                                                                                         }
@@ -4657,232 +4659,178 @@
                                                                                         "object",
                                                                                         "null"
                                                                                     ]
-                                                                                },
-                                                                                "tags": {
-                                                                                    "items": {
-                                                                                        "properties": {
-                                                                                            "children": {
-                                                                                                "items": {
-                                                                                                    "properties": {
-                                                                                                        "children": {},
-                                                                                                        "id": {
-                                                                                                            "type": [
-                                                                                                                "integer",
-                                                                                                                "null"
-                                                                                                            ]
-                                                                                                        },
-                                                                                                        "name": {
-                                                                                                            "type": [
-                                                                                                                "string",
-                                                                                                                "null"
-                                                                                                            ]
-                                                                                                        }
-                                                                                                    },
-                                                                                                    "required": [
-                                                                                                        "id",
-                                                                                                        "name",
-                                                                                                        "children"
-                                                                                                    ],
-                                                                                                    "type": [
-                                                                                                        "object",
-                                                                                                        "null"
-                                                                                                    ]
-                                                                                                },
-                                                                                                "type": [
-                                                                                                    "array",
-                                                                                                    "null"
-                                                                                                ]
-                                                                                            },
-                                                                                            "id": {
-                                                                                                "type": [
-                                                                                                    "integer",
-                                                                                                    "null"
-                                                                                                ]
-                                                                                            },
-                                                                                            "name": {
-                                                                                                "type": [
-                                                                                                    "string",
-                                                                                                    "null"
-                                                                                                ]
-                                                                                            }
-                                                                                        },
-                                                                                        "required": [
-                                                                                            "id",
-                                                                                            "name",
-                                                                                            "children"
-                                                                                        ],
-                                                                                        "type": [
-                                                                                            "object",
-                                                                                            "null"
-                                                                                        ]
-                                                                                    },
-                                                                                    "type": [
-                                                                                        "array",
-                                                                                        "null"
-                                                                                    ]
                                                                                 }
                                                                             },
-                                                                            "required": [
-                                                                                "ip",
-                                                                                "country_codes",
-                                                                                "as_info",
-                                                                                "tags",
-                                                                                "event_count",
-                                                                                "summary"
-                                                                            ],
                                                                             "type": [
                                                                                 "object",
                                                                                 "null"
                                                                             ]
                                                                         },
-                                                                        "type": [
-                                                                            "array",
-                                                                            "null"
-                                                                        ]
+                                                                        "tags": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "children": {
+                                                                                        "items": {
+                                                                                            "properties": {
+                                                                                                "children": {},
+                                                                                                "id": {
+                                                                                                    "type": [
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "name": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                }
+                                                                                            },
+                                                                                            "required": [
+                                                                                                "id",
+                                                                                                "name",
+                                                                                                "children"
+                                                                                            ],
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": [
+                                                                                            "array",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    },
+                                                                                    "id": {
+                                                                                        "type": [
+                                                                                            "integer",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    },
+                                                                                    "name": {
+                                                                                        "type": [
+                                                                                            "string",
+                                                                                            "null"
+                                                                                        ]
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "id",
+                                                                                    "name",
+                                                                                    "children"
+                                                                                ],
+                                                                                "type": [
+                                                                                    "object",
+                                                                                    "null"
+                                                                                ]
+                                                                            },
+                                                                            "type": [
+                                                                                "array",
+                                                                                "null"
+                                                                            ]
+                                                                        }
                                                                     },
-                                                                    "query": {
-                                                                        "type": [
-                                                                            "string",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "request_id": {
-                                                                        "type": [
-                                                                            "string",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "size": {
-                                                                        "type": [
-                                                                            "integer",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "start_date": {
-                                                                        "type": [
-                                                                            "string",
-                                                                            "null"
-                                                                        ]
-                                                                    },
-                                                                    "total": {
-                                                                        "type": [
-                                                                            "integer",
-                                                                            "null"
-                                                                        ]
-                                                                    }
+                                                                    "required": [
+                                                                        "ip",
+                                                                        "country_codes",
+                                                                        "as_info",
+                                                                        "tags",
+                                                                        "event_count",
+                                                                        "summary"
+                                                                    ],
+                                                                    "type": [
+                                                                        "object",
+                                                                        "null"
+                                                                    ]
                                                                 },
-                                                                "type": "object"
-                                                            }
-                                                        }
-                                                    },
-                                                    "Send_Domain_Data_To_Log_Analytics_Table": {
-                                                        "runAfter": {
-                                                            "Compose_An_Object_From_Array_Of_Ips": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "ApiConnection",
-                                                        "inputs": {
-                                                            "body": "@{outputs('Compose_An_Object_From_Array_Of_Ips')}",
-                                                            "headers": {
-                                                                "Log-Type": "@variables('domain_details_table_name')"
+                                                                "type": [
+                                                                    "array",
+                                                                    "null"
+                                                                ]
                                                             },
-                                                            "host": {
-                                                                "connection": {
-                                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                                }
+                                                            "query": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
                                                             },
-                                                            "method": "post",
-                                                            "path": "/api/logs"
-                                                        }
-                                                    },
-                                                    "Terminate_Due_To_Successfully_Ingested_Domain_Data": {
-                                                        "runAfter": {
-                                                            "Send_Domain_Data_To_Log_Analytics_Table": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Terminate",
-                                                        "inputs": {
-                                                            "runStatus": "Succeeded"
-                                                        }
-                                                    }
-                                                },
-                                                "runAfter": {
-                                                    "HTTP_Request_To_Fetch_Details_Of_Domain_Indicator": [
-                                                        "Succeeded",
-                                                        "TimedOut",
-                                                        "Failed"
-                                                    ]
-                                                },
-                                                "else": {
-                                                    "actions": {
-                                                        "Terminate_Due_To_Failure_While_Fetching_Domain_Indicator_Data": {
-                                                            "runAfter": {},
-                                                            "type": "Terminate",
-                                                            "inputs": {
-                                                                "runError": {
-                                                                    "code": "@{outputs('HTTP_Request_To_Fetch_Details_Of_Domain_Indicator')['statusCode']}",
-                                                                    "message": "@{body('HTTP_Request_To_Fetch_Details_Of_Domain_Indicator')}"
-                                                                },
-                                                                "runStatus": "Failed"
+                                                            "request_id": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "size": {
+                                                                "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "start_date": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "total": {
+                                                                "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
                                                             }
-                                                        }
+                                                        },
+                                                        "type": "object"
                                                     }
-                                                },
-                                                "expression": {
-                                                    "and": [
-                                                        {
-                                                            "equals": [
-                                                                "@outputs('HTTP_Request_To_Fetch_Details_Of_Domain_Indicator')['statusCode']",
-                                                                200
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                "type": "If"
+                                                }
                                             },
-                                            "HTTP_Request_To_Fetch_Details_Of_Domain_Indicator": {
-                                                "runAfter": {},
-                                                "type": "Http",
-                                                "inputs": {
-                                                    "authentication": {
-                                                        "password": "@parameters('password')",
-                                                        "type": "Basic",
-                                                        "username": "@variables('username')"
-                                                    },
-                                                    "method": "GET",
-                                                    "queries": {
-                                                        "query": "@variables('indicator_value')"
-                                                    },
-                                                    "uri": "@{variables('base_url')}/api/scout/search"
+                                            "Send_Domain_Data_To_Log_Analytics_Table": {
+                                                "runAfter": {
+                                                    "Compose_An_Object_From_Array_Of_Ips": [
+                                                        "Succeeded"
+                                                    ]
                                                 },
-                                                "runtimeConfiguration": {
-                                                    "secureData": {
-                                                        "properties": [
-                                                            "inputs",
-                                                            "outputs"
-                                                        ]
-                                                    }
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "body": "@{outputs('Compose_An_Object_From_Array_Of_Ips')}",
+                                                    "headers": {
+                                                        "Log-Type": "@variables('domain_details_table_name')"
+                                                    },
+                                                    "path": "/api/logs"
+                                                }
+                                            },
+                                            "Terminate_Due_To_Successfully_Ingested_Domain_Data": {
+                                                "runAfter": {
+                                                    "Send_Domain_Data_To_Log_Analytics_Table": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Succeeded"
                                                 }
                                             }
                                         },
                                         "runAfter": {
-                                            "Verify_User_Has_Entered_Valid_Domain": [
+                                            "HTTP_Request_To_Fetch_Details_Of_Domain_Indicator": [
                                                 "Succeeded"
                                             ]
                                         },
                                         "else": {
                                             "actions": {
-                                                "Terminate_Due_To_Invalid_Domain_Input": {
-                                                    "runAfter": {},
+                                                "Terminate_Due_To_Failure_While_Fetching_Domain_Indicator_Data": {
                                                     "type": "Terminate",
                                                     "inputs": {
+                                                        "runStatus": "Failed",
                                                         "runError": {
-                                                            "code": "400",
-                                                            "message": "Please provide valid domain indicator value."
-                                                        },
-                                                        "runStatus": "Failed"
+                                                            "code": "@{outputs('HTTP_Request_To_Fetch_Details_Of_Domain_Indicator')['statusCode']}",
+                                                            "message": "@{body('HTTP_Request_To_Fetch_Details_Of_Domain_Indicator')}"
+                                                        }
                                                     }
                                                 }
                                             }
@@ -4891,30 +4839,13 @@
                                             "and": [
                                                 {
                                                     "equals": [
-                                                        "@body('Verify_User_Has_Entered_Valid_Domain')?['match_found']",
-                                                        "@true"
+                                                        "@outputs('HTTP_Request_To_Fetch_Details_Of_Domain_Indicator')['statusCode']",
+                                                        200
                                                     ]
                                                 }
                                             ]
                                         },
                                         "type": "If"
-                                    },
-                                    "Verify_User_Has_Entered_Valid_Domain": {
-                                        "runAfter": {},
-                                        "type": "ApiConnection",
-                                        "inputs": {
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['regexmatchingip']['connectionId']"
-                                                }
-                                            },
-                                            "method": "get",
-                                            "path": "/api/regexPattern/",
-                                            "queries": {
-                                                "pattern": "^(?:[a-zA-Z0-9-]+(?:\\[\\.\\]|\\.))+[a-zA-Z]{2,}(?:\\s*,\\s*(?:[a-zA-Z0-9-]+(?:\\[\\.\\]|\\.))+[a-zA-Z]{2,})*$",
-                                                "text": "@variables('indicator_value')"
-                                            }
-                                        }
                                     }
                                 }
                             },
@@ -5426,17 +5357,13 @@
                     "outputs": {}
                 },
                 "parameters": {
+                    "password": {},
                     "$connections": {
                         "value": {
                             "azureloganalyticsdatacollector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
                                 "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                            },
-                            "regexmatchingip": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RegexmatchingipConnectionName'))]",
-                                "connectionName": "[variables('RegexmatchingipConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Regexmatchingip')]"
                             }
                         }
                     }
@@ -5446,7 +5373,8 @@
             "type": "Microsoft.Logic/workflows",
             "location": "[resourceGroup().location]",
             "tags": {
-                "hidden-SentinelTemplateName": "CymruScoutLiveInvestigation",
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "TeamCymruScoutLiveInvestigation",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -5454,8 +5382,7 @@
             },
             "apiVersion": "2017-07-01",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('RegexmatchingipConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
             ]
         },
         {
@@ -5469,20 +5396,6 @@
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                }
-            }
-        },
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('RegexmatchingipConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "kind": "V1",
-            "properties": {
-                "displayName": "[variables('RegexmatchingipConnectionName')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Regexmatchingip')]"
                 }
             }
         }
