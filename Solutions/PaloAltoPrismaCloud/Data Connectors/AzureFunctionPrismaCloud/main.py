@@ -160,14 +160,23 @@ class PrismaCloudConnector:
         }
 
         unix_ts_now = (int(time.time()) - 10) * 1000
+        # POST-based filter query
         data = {
-            "timeRange": {
-                "type": "absolute",
-                "value": {
-                    "startTime": start_time,
-                    "endTime": unix_ts_now
+            "filters": [
+                {
+                    "name": "timeRange.type",
+                    "operator": "=",
+                    "value": "ALERT_STATUS_UPDATED"
+                },
+                {
+                    "name": "alertTime",
+                    "operator": "between",
+                    "value": {
+                        "startTime": start_time,
+                        "endTime": unix_ts_now
+                    }
                 }
-            },
+            ],
             "sortBy": ["alertTime:asc"],
             "detailed": True
         }
