@@ -20,11 +20,12 @@ This solution helps security teams monitor identity infrastructure for suspiciou
 ## **Prerequisites**
 
 1. A valid **PingOne** tenant.
-2. A **Client Credentials** application in PingOne with:
+2. A **Client Credentials** application in PingOne with:  
    - **Client ID**
    - **Client Secret**
    - **Environment ID**
    - Scope: `p1:read:audit` (Audit role added via custom roles, and additional roles like **Environment Admin** or others suitable for your needs)
+   [refer to section below to generate credentials]
 3. Access to an Azure subscription with **Microsoft Sentinel** enabled and permissions to deploy Data Connectors.
 
 ---
