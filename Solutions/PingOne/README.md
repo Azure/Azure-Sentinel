@@ -2,7 +2,7 @@
 
 ## **Summary**
 
-This Microsoft Sentinel data connector enables ingestion of **audit activity logs** from **PingOne** via the **Centralized Cloud Pull (CCP)** framework. These logs capture administrative actions, configuration changes, sign-in attempts, and other audit-relevant events across the PingOne platform.
+This Microsoft Sentinel data connector enables ingestion of **audit activity logs** from **PingOne** via the CCP framework. These logs capture administrative actions, configuration changes, sign-in attempts, and other audit-relevant events across the PingOne platform.
 
 This solution helps security teams monitor identity infrastructure for suspicious behavior, policy violations, and compliance-relevant changes by sending normalized audit data to **Microsoft Sentinel** in near real-time.
 
@@ -31,7 +31,7 @@ This solution helps security teams monitor identity infrastructure for suspiciou
 
 ## **Generating PingOne OAuth Client Credentials**
 
-1. Sign into the [![PingOne Admin Console](https://www.pingidentity.com/en.html)]
+1. Sign into the [PingOne Admin Console](https://www.pingidentity.com/en.html)
 2. Go to **Connections > Applications**.
 3. Click **Add Application** and select **Client Credentials**.
 4. Assign the required scope: `p1:read:audit` (Audit role added via custom roles, and roles like **Environment Admin** or other suitable roles for your needs).
