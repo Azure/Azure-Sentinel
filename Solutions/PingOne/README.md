@@ -24,7 +24,7 @@ This solution helps security teams monitor identity infrastructure for suspiciou
    - **Client ID**
    - **Client Secret**
    - **Environment ID**
-   - Scope: `p1:read:audit` (Audit role added via custom roles, and additional roles like **Environment Admin** or others suitable for your needs)
+   - Scope: `p1:read:audit` (Audit role added via custom roles, **Environment Admin** from predefined roles and additional roles like others suitable for your needs)
    [refer to section below to generate credentials]
 3. Access to an Azure subscription with **Microsoft Sentinel** enabled and permissions to deploy Data Connectors.
 
@@ -35,10 +35,12 @@ This solution helps security teams monitor identity infrastructure for suspiciou
 1. Sign into the *PingOne Identity portal*
 2. Go to **Connections > Applications**.
 3. Click **Add Application** and select **Client Credentials**.
-4. Assign the required scope: `p1:read:audit`(Audit role added via custom roles)
-5. Assign **Environment Admin** role from predefined roles.
-   Can add other suitable roles according to your needs).
-5. Save the following values:
+4. Assign the required scope:
+  * `p1:read:audit`(Audit role added via custom roles)
+  * Assign **Environment Admin** role from predefined roles.
+  * Can add other suitable roles according to your needs,
+  * without adding the roles, logs would not be ingested.
+7. Save the following values:
    - **Client ID**
    - **Client Secret**
    - **Environment ID** (available in the PingOne URL or Environment settings)
@@ -55,7 +57,7 @@ Click the button below to deploy the connector using an ARM template:
 
 ### **Deployment Parameters**
 
-- **Client ID** (from PingOne)
+- **Client ID**
 - **Client Secret**
 - **Environment ID**
 
@@ -79,4 +81,4 @@ Ensure the deployed Data Connector has the required permissions to write to Log 
 
 The **PingOne Audit Logs** are automatically ingested into **Microsoft Sentinel** whenever an activity is triggered in the **PingOne Admin Console**. These logs capture a wide range of events, including but not limited to:
 
-- **User Sign-ins**: Every sign-in attempt to the PingOne platform will generate an event that logs details such as the time, IP address, user identity, and result (successful
+- **User Sign-ins**: Every sign-in attempt to the PingOne platform will generate an event that logs details such as the time, IP address, user identity, and result successful.
