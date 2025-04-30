@@ -30,7 +30,7 @@ This package includes:
   * [AWSIAM-EnrichIncidentWithUserInfo](./Playbooks/AWSIAM-EnrichIncidentWithUserInfo/)
   * [AWSIAM-AddTagToUser](./Playbooks/AWSIAM-AddTagToUser/)
   * [AWSIAM-DeleteAccessKeys](./Playbooks/AWSIAM-DeleteAccessKeys/)
-  * [AWS-DisableS3BucketPublicAcces](./Playbooks/AWS-DisableS3BucketPublicAccess/)
+  * [AWS-DisableS3BucketPublicAccess](./Playbooks/AWS-DisableS3BucketPublicAccess/)
 
 You can choose to deploy the whole package: connector + all three playbook templates, or each one seperately from its specific folder.
 

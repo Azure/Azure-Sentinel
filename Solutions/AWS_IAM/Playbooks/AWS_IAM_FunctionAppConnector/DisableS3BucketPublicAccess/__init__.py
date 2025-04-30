@@ -45,7 +45,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             except s3_client.exceptions.InvalidBucketName as err:
                 return func.HttpResponse(f'Invalid bucket name: {bucket_name}.', status_code=400)
 
-            return func.HttpResponse(json.dumps(str(response)), status_code=200)
+            return func.HttpResponse(json.dumps(response), status_code=200)
         except ClientError as err:
             return func.HttpResponse(str(err), status_code=401)
     else:
