@@ -84,16 +84,14 @@ class PrismaCloudConnector:
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
-            logging.info('alert_start_ts_ms {}'.format(alert_start_ts_ms))
-            logging.info('lastUpdated {}'.format(alert['lastUpdated']))
-            if alert['lastUpdated'] >=alert_start_ts_ms:
-                last_alert_ts_ms = alert['lastUpdated']
+            if alert['alertTime'] >=alert_start_ts_ms:
+                last_alert_ts_ms = alert['alertTime']
                 alert = self.clear_alert(alert)
                 logging.info('No of alerts send to Sentinel {}'.format(alert))
                 await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
                 self.sent_alerts += 1
             else:
-                logging.info(f"Skipping alert with lastUpdated: {alert['lastUpdated']} (less than start time {alert_start_ts_ms})")
+                 logging.info(f"Skipping alert with alertTime: {alert['alertTime']} (less than start time {alert_start_ts_ms})")
   
         self.last_alert_ts = int(last_alert_ts_ms) + 1
         logging.info('Updated last alert ts {}'.format(self.last_alert_ts))
@@ -162,23 +160,15 @@ class PrismaCloudConnector:
         }
 
         unix_ts_now = (int(time.time()) - 10) * 1000
-        # POST-based filter query
         data = {
-            "filters": [
-                {
-                    "name": "timeRange.type",
-                    "operator": "=",
-                    "value": "ALERT_STATUS_UPDATED"
-                }
-            ],
             "timeRange": {
                 "type": "absolute",
                 "value": {
-                    "endTime": unix_ts_now,
-                    "startTime": start_time
+                    "startTime": start_time,
+                    "endTime": unix_ts_now
                 }
             },
-            "sortBy": ["lastUpdated:asc"],
+            "sortBy": ["alertTime:asc"],
             "detailed": True
         }
         
