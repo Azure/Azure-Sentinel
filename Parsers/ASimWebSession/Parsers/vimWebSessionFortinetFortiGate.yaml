@@ -97,7 +97,7 @@ ParserQuery: |
     | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime)
     | where DeviceVendor == "Fortinet" 
       and DeviceProduct  startswith "Fortigate"
-      and Activity has_all ('webfilter', 'utm') or Activity has_all ('ips', 'utm')
+      and (Activity has_all ('webfilter', 'utm') or Activity has_all ('ips', 'utm'))
     | extend 
         EventProduct = "FortiGate"
     | where (array_length(url_has_any) == 0 or RequestURL has_any (remove_protocol_from_list(url_has_any)))
@@ -115,7 +115,7 @@ ParserQuery: |
     | where (array_length(eventresultdetails_in) == 0) 
     | lookup EventLookup on DeviceAction 
     | where (eventresult == '*' or EventResult =~ eventresult)
-    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName, ASimMatchingIpAddr
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName, ASimMatchingIpAddr , ApplicationProtocol
     | project-rename 
       Url                     = RequestURL
       , UrlCategory           = RequestContext
@@ -138,6 +138,7 @@ ParserQuery: |
       , SrcHostname           = SourceHostName
       , SrcUsername           = SourceUserName
       , DstUsername           = DestinationUserName
+      , NetworkApplicationProtocol = ApplicationProtocol
     | invoke _ASIM_ResolveNetworkProtocol ('Protocol')
     | extend 
         DstUsernameType = _ASIM_GetUsernameType(DstUsername),
@@ -192,53 +193,24 @@ ParserQuery: |
     | project-rename 
       HttpReferrer              =  ['ad.referralurl'],
       HttpRequestMethod         = ['ad.httpmethod'],
-      HttpUserAgent             = ['ad.agent'],
-      t1ThreatName              = attack,
-      t1ThreatId                = attackid,
-      t1EventOriginalUid        = logid,
-      t1EventOriginalSubType    = subtype,
-      t1EventStartTime          = start,
-      t1SrcZone                 = srcintfrole,
-      t1DstZone                 = dstintfrole,
-      t1NetworkSessionId        = externalID,
-      t1RuleNumber              = policyid,
-      t1NetworkDuration         = duration,
-      t1DstGeoCountry           = dstcountry,
-      t1SrcGeoCountry           = srccountry,
-      t1ThreatOriginalRiskLevel = crscore,
-      t1SrcPackets              = sentpkt,
-      t1DstPackets              = rcvdpkt,
-      t2ThreatName              = FTNTFGTattack,
-      t2ThreatId                = FTNTFGTattackid,
-      t2EventOriginalUid        = FTNTFGTlogid,
-      t2EventOriginalSubType    = FTNTFGTsubtype,
-      t2EventStartTime          = FTNTFGTstart,
-      t2SrcZone                 = FTNTFGTsrcintfrole,
-      t2DstZone                 = FTNTFGTdstintfrole,
-      t2NetworkSessionId        = FTNTFGTexternalID,
-      t2RuleNumber              = FTNTFGTpolicyid,
-      t2NetworkDuration         = FTNTFGTduration,
-      t2DstGeoCountry           = FTNTFGTdstcountry,
-      t2SrcGeoCountry           = FTNTFGTsrccountry,
-      t2ThreatOriginalRiskLevel = FTNTFGTcrscore,
-      t2SrcPackets              = FTNTFGTsentpkt,
-      t2DstPackets              = FTNTFGTrcvdpkt
-    | extend EventStartTime = coalesce(t1EventStartTime,t2EventStartTime),
-           SrcZone = coalesce(t1SrcZone,t2SrcZone),
-           DstZone = coalesce(t1DstZone,t2DstZone),
-           NetworkSessionId = coalesce(t1NetworkSessionId,t2NetworkSessionId),
-           RuleNumber = coalesce(t1RuleNumber,t2RuleNumber),
-           NetworkDuration = coalesce(t1NetworkDuration,t2NetworkDuration),
-           DstGeoCountry = coalesce(t1DstGeoCountry,t2DstGeoCountry),
-           SrcGeoCountry = coalesce(t1SrcGeoCountry,t2SrcGeoCountry),
-           ThreatOriginalRiskLevel = coalesce(t1ThreatOriginalRiskLevel,t2ThreatOriginalRiskLevel),
-           SrcPackets = coalesce(t1SrcPackets,t2SrcPackets),
-           DstPackets = coalesce(t1DstPackets,t2DstPackets),
-           EventOriginalSubType = coalesce(t1EventOriginalSubType,t2EventOriginalSubType),
-           EventOriginalUid = coalesce(t1EventOriginalUid,t2EventOriginalUid),
-           ThreatName = coalesce(t1ThreatName,t2ThreatName),
-           ThreatId=coalesce(t1ThreatId,t2ThreatId)
-     | project-away t1SrcZone,t2SrcZone, t1DstZone,t2DstZone, t1NetworkSessionId,t2NetworkSessionId,t1RuleNumber,t2RuleNumber,   t1NetworkDuration,t2NetworkDuration, t1DstGeoCountry,t2DstGeoCountry, t1SrcGeoCountry,t2SrcGeoCountry, t1ThreatOriginalRiskLevel,t2ThreatOriginalRiskLevel, t1SrcPackets,t2SrcPackets, t1DstPackets,t2DstPackets, t1EventStartTime, t2EventStartTime, vd, t1EventOriginalSubType,t2EventOriginalSubType, t1EventOriginalUid,t2EventOriginalUid, FTNTFGTvd, t1ThreatName,t2ThreatName, t1ThreatId,t2ThreatId
+      HttpUserAgent             = ['ad.agent']
+    | extend 
+      ThreatName              = coalesce(attack,FTNTFGTattack),
+      ThreatId                = coalesce(attackid,FTNTFGTattackid),
+      EventOriginalUid        = coalesce(logid,FTNTFGTlogid),
+      EventOriginalSubType    = coalesce(subtype,FTNTFGTsubtype),
+      EventStartTime          = coalesce(start,FTNTFGTstart),
+      SrcZone                 = coalesce(srcintfrole,FTNTFGTsrcintfrole),
+      DstZone                 = coalesce(dstintfrole,FTNTFGTdstintfrole),
+      NetworkSessionId        = coalesce(externalID,FTNTFGTexternalID),
+      RuleNumber              = coalesce(policyid,FTNTFGTpolicyid),
+      NetworkDuration         = coalesce(duration, FTNTFGTduration),
+      DstGeoCountry           = coalesce(dstcountry,FTNTFGTdstcountry),
+      SrcGeoCountry           = coalesce(srccountry,FTNTFGTsrccountry),
+      ThreatOriginalRiskLevel = coalesce(crscore,FTNTFGTcrscore),
+      SrcPackets              = coalesce(sentpkt,FTNTFGTsentpkt),
+      DstPackets              = coalesce(rcvdpkt,FTNTFGTrcvdpkt)
+    | project-away FTNTFGT*, attack, attackid, logid, subtype, start, srcintfrole, dstintfrole, externalID, policyid, dstcountry, srccountry, crscore, duration, sentpkt, rcvdpkt
     | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
     | extend 
         HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
@@ -249,6 +221,7 @@ ParserQuery: |
                                 "policytype",policytype,
                                 "profile",profile,
                                 "ref",ref,
+                                "vd",vd,
                                 "Message",msg,
                                 "deviceSeverity", deviceSeverity,
                                 "direction", direction)
@@ -279,6 +252,10 @@ ParserQuery: |
         IpAddr    = SrcIpAddr,
         Duration  = NetworkDuration,
         Rule      = tostring(RuleNumber)
-    | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber, severity, incidentserialno, policytype, profile, ref, msg, deviceSeverity, direction
+    | extend NetworkDirection = case(
+        direction == "incoming", "Inbound",
+        direction == "outgoing", "Outbound",
+        "Unknown")
+    | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber, severity, incidentserialno, policytype, profile, ref, msg, deviceSeverity, direction, vd
   };
   parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
