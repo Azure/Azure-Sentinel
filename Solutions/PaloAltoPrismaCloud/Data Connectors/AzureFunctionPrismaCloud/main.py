@@ -80,16 +80,20 @@ class PrismaCloudConnector:
             alert_start_ts_ms = max_period
             logging.info('Last alert was too long ago or there is no info about last alert timestamp.')
         else:
-            alert_start_ts_ms = int(last_alert_ts_ms) + 1
+            alert_start_ts_ms = int(last_alert_ts_ms) 
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
-            last_alert_ts_ms = alert['alertTime']
-            alert = self.clear_alert(alert)
-            await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
-            self.sent_alerts += 1
-
-        self.last_alert_ts = last_alert_ts_ms
+            if alert['lastUpdated'] >=alert_start_ts_ms:
+                last_alert_ts_ms = alert['lastUpdated']
+                alert = self.clear_alert(alert)
+                logging.info('No of alerts send to Sentinel {}'.format(alert))
+                await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
+                self.sent_alerts += 1
+            else:
+                logging.info(f"Skipping alert with lastUpdated: {alert['lastUpdated']} (less than start time {alert_start_ts_ms})")
+  
+        self.last_alert_ts = int(last_alert_ts_ms) + 1
 
         conn = self.sentinel.get_log_type_connector(ALERT_LOG_TYPE)
         if conn:
@@ -156,23 +160,30 @@ class PrismaCloudConnector:
 
         unix_ts_now = (int(time.time()) - 10) * 1000
         data = {
+            "filters": [
+                {
+                    "name": "timeRange.type",
+                    "operator": "=",
+                    "value": "ALERT_STATUS_UPDATED"
+                }
+            ],
             "timeRange": {
                 "type": "absolute",
                 "value": {
-                    "startTime": start_time,
-                    "endTime": unix_ts_now
+                    "endTime": unix_ts_now,
+                    "startTime": start_time
                 }
             },
-            "sortBy": ["alertTime:asc"],
+            "sortBy": ["lastUpdated:asc"],
             "detailed": True
         }
+        
         data = json.dumps(data)
         async with self.session.post(uri, headers=headers, data=data) as response:
             if response.status != 200:
                 raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
             res = await response.text()
             res = json.loads(res)
-
         for item in res['items']:
             yield item
 
