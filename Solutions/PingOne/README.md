@@ -11,7 +11,7 @@ This solution helps security teams monitor identity infrastructure for suspiciou
 ## **Features**
 
 - Connects to the **PingOne Audit Activities API**.
-- Parses and ingests audit logs into the custom Log Analytics table: `PingOne_AuditActivities_CL`.
+- Parses and ingests audit logs into the custom Log Analytics table: `PingOne_AuditActivitiesV2_CL`.
 - Uses secure **OAuth 2.0 Client Credentials** for authentication.
 - Integrates into Sentinel analytics, hunting queries, and incident detection.
 
@@ -49,19 +49,13 @@ These credentials are required for connector deployment.
 
 ---
 
-## **Deployment Instructions**
-
-Click the button below to deploy the connector using an ARM template:
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/YOUR-DEPLOYMENT-URL-HERE)
-
 ### **Deployment Parameters**
 
 - **Client ID**
 - **Client Secret**
 - **Environment ID**
 
-Once deployed, the connector will begin ingesting audit logs from PingOne and send them to the `PingOne_AuditActivities_CL` table in your Sentinel workspace.
+Once deployed, the connector will begin ingesting audit logs from PingOne and send them to the `PingOne_AuditActivitiesV2_CL` table in your Sentinel workspace.
 
 ---
 
