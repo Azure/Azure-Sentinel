@@ -82,8 +82,15 @@ class PrismaCloudConnector:
         else:
             alert_start_ts_ms = int(last_alert_ts_ms) 
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
-
+        
+        alerts = []
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
+            if alert.get('lastUpdated') is not None:
+               alerts.append(alert)
+            
+        alerts.sort(key=lambda x: x['lastUpdated']) 
+           
+        for alert in alerts:    
             if alert['lastUpdated'] >=alert_start_ts_ms:
                 last_alert_ts_ms = alert['lastUpdated']
                 alert = self.clear_alert(alert)
