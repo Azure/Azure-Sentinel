@@ -89,7 +89,7 @@ class PrismaCloudConnector:
                alerts.append(alert)
             
         alerts.sort(key=lambda x: x['lastUpdated']) 
-           
+        logging.info('Alert list after sorting: {}'.format(alerts))   
         for alert in alerts:    
             if alert['lastUpdated'] >=alert_start_ts_ms:
                 last_alert_ts_ms = alert['lastUpdated']
