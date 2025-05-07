@@ -101,10 +101,10 @@ function GenerateSummaryRules($solutionName, $file, $rawData, $contentResourceDe
     $summaryRuleMetadata = [PSCustomObject]@{
       "type" = "Microsoft.OperationalInsights/workspaces/providers/metadata"
       "apiVersion" = $contentResourceDetails.commonResourceMetadataApiVersion
-      "name" = "[[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('SummaryRule-', last(split(resourceId('$($type)', parameters('workspaceName'),variables('resourceId')) ,'/'))))]"
+      "name" = "[[concat(parameters('workspace-name'),'/Microsoft.SecurityInsights/',concat('SummaryRule-', last(split(resourceId('$($type)', parameters('workspace-name'),variables('workspaceResourceId')) ,'/'))))]"
       "properties" = [PSCustomObject]@{
         "description" = $metadataDescription
-        "parentId" = "[[resourceId('$($type)', parameters('workspaceName'),variables('resourceId'))]"
+        "parentId" = "[[resourceId('$($type)', parameters('workspace-name'),variables('workspaceResourceId'))]"
         "contentId" = "[variables('summaryRuleObject$global:summaryRuleCounter')._summaryRuleContentId$global:summaryRuleCounter]"
         "kind" = "SummaryRule"
         "version" = "[variables('summaryRuleObject$global:summaryRuleCounter').summaryRuleVersion$global:summaryRuleCounter]"
