@@ -130,7 +130,10 @@
                         "Check_for_successful_results": {
                             "actions": {},
                             "runAfter": {
-                                "Initialize_API_Gateway_refresh_cursor": [
+                                "Initialize_refresh_cursor": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_API_Response": [
                                     "Succeeded"
                                 ]
                             },
@@ -147,8 +150,8 @@
                                                 "type": "Http",
                                                 "inputs": {
                                                     "body": {
-                                                        "query": "@variables('api gateway query')",
-                                                        "variables": "@json(variables('api gateway query variables'))"
+                                                        "query": "@variables('apiQuery')",
+                                                        "variables": "@json(variables('queryVariables'))"
                                                     },
                                                     "headers": {
                                                         "Content-Type": "application/json",
@@ -173,7 +176,7 @@
                                                 },
                                                 "type": "SetVariable",
                                                 "inputs": {
-                                                    "name": "API Gateway Response",
+                                                    "name": "apiResponse",
                                                     "value": "@body('Refresh_API_Gateway_query')"
                                                 }
                                             },
@@ -185,20 +188,18 @@
                                                 },
                                                 "type": "SetVariable",
                                                 "inputs": {
-                                                    "name": "api gateway refresh cursor",
+                                                    "name": "refreshCursor",
                                                     "value": "@{body('Refresh_API_Gateway_query')?['data']?['endpoints']?['collectionInfo']?['startCursor']}"
                                                 }
                                             },
                                             "Update_refresh_cursor_in_query_variables": {
-                                                "runAfter": {},
                                                 "type": "SetVariable",
                                                 "inputs": {
-                                                    "name": "api gateway query variables",
-                                                    "value": "{\n  \"source\": @{variables('tanium endpoint source')},\n  \"refreshCursor\": \"@{variables('api gateway refresh cursor')}\"\n}"
+                                                    "name": "queryVariables",
+                                                    "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"refreshCursor\": \"@{variables('refreshCursor')}\"\n}"
                                                 }
                                             }
                                         },
-                                        "runAfter": {},
                                         "expression": "@greater(length(body('Refresh_API_Gateway_query')?['data']?['endpoints']?['edges']), 0)",
                                         "limit": {
                                             "count": 60,
@@ -212,13 +213,13 @@
                                 "and": [
                                     {
                                         "greater": [
-                                            "@length(body('Query_API_Gateway')?['data']?['endpoints']?['edges'])",
+                                            "@length(body('List_Available_Patches')?['data']?['endpoints']?['edges'])",
                                             0
                                         ]
                                     },
                                     {
                                         "equals": [
-                                            "@body('Query_API_Gateway')?['data']?['endpoints']?['collectionInfo']?['success']",
+                                            "@body('List_Available_Patches')?['data']?['endpoints']?['collectionInfo']?['success']",
                                             "@true"
                                         ]
                                     }
@@ -241,10 +242,9 @@
                                 "path": "/entities/host"
                             }
                         },
-                        "Exit_early_if_no_hosts_are_found": {
+                        "Exit_early_if_incident_has_no_hosts": {
                             "actions": {
-                                "Add_no_hosts_comment_to_incident_(V3)": {
-                                    "runAfter": {},
+                                "Add_comment__-_no_hosts_found": {
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
@@ -260,9 +260,9 @@
                                         "path": "/Incidents/Comment"
                                     }
                                 },
-                                "Terminate": {
+                                "Exit_early": {
                                     "runAfter": {
-                                        "Add_no_hosts_comment_to_incident_(V3)": [
+                                        "Add_comment__-_no_hosts_found": [
                                             "Succeeded"
                                         ]
                                     },
@@ -271,6 +271,9 @@
                                         "runStatus": "Succeeded"
                                     }
                                 }
+                            },
+                            "else": {
+                                "actions": {}
                             },
                             "runAfter": {
                                 "Get_Hosts_From_Incident": [
@@ -290,11 +293,12 @@
                             "type": "If"
                         },
                         "For_each_endpoint": {
+                            "type": "Foreach",
                             "foreach": "@variables('endpoints')",
                             "actions": {
-                                "Comment_available_security_patches_to_incident_(V3)": {
+                                "Add_Available_Patch_List_to_Incident": {
                                     "runAfter": {
-                                        "Create_HTML_table_of_available_security_patches": [
+                                        "Create_HTML_table": [
                                             "Succeeded"
                                         ]
                                     },
@@ -302,7 +306,7 @@
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>Available security patches for @{body('Parse_endpoint_JSON')?['name']}<br>\n<br>\n@{body('Create_HTML_table_of_available_security_patches')}</p>"
+                                            "message": "<p class=\"editor-paragraph\">Available security patches for @{variables('currentHostName')}<br><br>@{body('Create_HTML_table')}</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -313,7 +317,7 @@
                                         "path": "/Incidents/Comment"
                                     }
                                 },
-                                "Create_HTML_table_of_available_security_patches": {
+                                "Create_HTML_table": {
                                     "runAfter": {
                                         "For_each_not_installed_patch": [
                                             "Succeeded"
@@ -326,22 +330,20 @@
                                     }
                                 },
                                 "For_each_not_installed_patch": {
-                                    "foreach": "@variables('not installed row indexes')",
+                                    "foreach": "@variables('notInstalledRowIndices')",
                                     "actions": {
                                         "if_security_update": {
                                             "actions": {
                                                 "Append_to_results": {
-                                                    "runAfter": {},
                                                     "type": "AppendToArrayVariable",
                                                     "inputs": {
                                                         "name": "results",
                                                         "value": {
-                                                            "Available Security Patches": "@variables('patch titles')[items('For_each_not_installed_patch')]"
+                                                            "Available Security Patches": "@variables('patchTitles')[items('For_each_not_installed_patch')]"
                                                         }
                                                     }
                                                 }
                                             },
-                                            "runAfter": {},
                                             "expression": {
                                                 "or": [
                                                     {
@@ -358,7 +360,10 @@
                                                     }
                                                 ]
                                             },
-                                            "type": "If"
+                                            "type": "If",
+                                            "else": {
+                                                "actions": {}
+                                            }
                                         }
                                     },
                                     "runAfter": {
@@ -374,13 +379,11 @@
                                         "if_column_is_from_patch_list_applicability": {
                                             "actions": {
                                                 "Switch_on_sensor_column": {
-                                                    "runAfter": {},
                                                     "cases": {
                                                         "Case_Classification": {
                                                             "case": "Classification",
                                                             "actions": {
                                                                 "Set_classifications": {
-                                                                    "runAfter": {},
                                                                     "type": "SetVariable",
                                                                     "inputs": {
                                                                         "name": "classifications",
@@ -398,15 +401,16 @@
                                                                         "If_install_status_is_Not_Installed": {
                                                                             "actions": {
                                                                                 "Append_to_not_installed_column_indexes": {
-                                                                                    "runAfter": {},
                                                                                     "type": "AppendToArrayVariable",
                                                                                     "inputs": {
-                                                                                        "name": "not installed row indexes",
-                                                                                        "value": "@variables('column index')"
+                                                                                        "name": "notInstalledRowIndices",
+                                                                                        "value": "@variables('columnIndex')"
                                                                                     }
                                                                                 }
                                                                             },
-                                                                            "runAfter": {},
+                                                                            "else": {
+                                                                                "actions": {}
+                                                                            },
                                                                             "expression": {
                                                                                 "and": [
                                                                                     {
@@ -427,25 +431,23 @@
                                                                             },
                                                                             "type": "IncrementVariable",
                                                                             "inputs": {
-                                                                                "name": "column index",
+                                                                                "name": "columnIndex",
                                                                                 "value": 1
                                                                             }
                                                                         }
                                                                     },
-                                                                    "runAfter": {},
+                                                                    "runAfter": {
+                                                                        "Set_column_index_to_0": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
                                                                     "type": "Foreach"
-                                                                }
-                                                            }
-                                                        },
-                                                        "Case_Tanium_UID": {
-                                                            "case": "Tanium UID",
-                                                            "actions": {
-                                                                "Set_tanium_patch_ids": {
-                                                                    "runAfter": {},
+                                                                },
+                                                                "Set_column_index_to_0": {
                                                                     "type": "SetVariable",
                                                                     "inputs": {
-                                                                        "name": "tanium patch ids",
-                                                                        "value": "@items('For_each_sensor_reading_column')?['values']"
+                                                                        "name": "columnIndex",
+                                                                        "value": 0
                                                                     }
                                                                 }
                                                             }
@@ -454,10 +456,9 @@
                                                             "case": "Title",
                                                             "actions": {
                                                                 "Set_patch_titles": {
-                                                                    "runAfter": {},
                                                                     "type": "SetVariable",
                                                                     "inputs": {
-                                                                        "name": "patch titles",
+                                                                        "name": "patchTitles",
                                                                         "value": "@items('For_each_sensor_reading_column')?['values']"
                                                                     }
                                                                 }
@@ -471,7 +472,6 @@
                                                     "type": "Switch"
                                                 }
                                             },
-                                            "runAfter": {},
                                             "expression": {
                                                 "and": [
                                                     {
@@ -482,25 +482,26 @@
                                                     }
                                                 ]
                                             },
-                                            "type": "If"
+                                            "type": "If",
+                                            "else": {
+                                                "actions": {}
+                                            }
                                         }
                                     },
                                     "runAfter": {
-                                        "Parse_endpoint_JSON": [
+                                        "Set_notInstalledRowIndices_to_empty_list": [
+                                            "Succeeded"
+                                        ],
+                                        "Set_currentHostName": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "Foreach"
                                 },
                                 "Parse_endpoint_JSON": {
-                                    "runAfter": {
-                                        "Set_not_installed_row_indexes_to_empty_list": [
-                                            "Succeeded"
-                                        ]
-                                    },
                                     "type": "ParseJson",
                                     "inputs": {
-                                        "content": "@variables('endpoint')",
+                                        "content": "@items('For_each_endpoint')?['node']",
                                         "schema": {
                                             "properties": {
                                                 "ipAddress": {
@@ -557,179 +558,87 @@
                                         }
                                     }
                                 },
-                                "Set_column_index_to_0": {
-                                    "runAfter": {
-                                        "Set_endpoint": [
-                                            "Succeeded"
-                                        ]
-                                    },
+                                "Set_notInstalledRowIndices_to_empty_list": {
                                     "type": "SetVariable",
                                     "inputs": {
-                                        "name": "column index",
-                                        "value": 0
-                                    }
-                                },
-                                "Set_endpoint": {
-                                    "runAfter": {},
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "endpoint",
-                                        "value": "@items('For_each_endpoint')?['node']"
-                                    }
-                                },
-                                "Set_not_installed_row_indexes_to_empty_list": {
-                                    "runAfter": {
-                                        "Set_column_index_to_0": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "not installed row indexes",
+                                        "name": "notInstalledRowIndices",
                                         "value": []
+                                    }
+                                },
+                                "Set_currentHostName": {
+                                    "runAfter": {
+                                        "Parse_endpoint_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "currentHostName",
+                                        "value": "@body('Parse_endpoint_JSON')?['name']"
                                     }
                                 }
                             },
                             "runAfter": {
-                                "Initialize_result_row_indexes": [
+                                "Initialize_classifications": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_patch_titles": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_notInstalledRowIndices": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_column_index": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_results": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_currentHostName": [
                                     "Succeeded"
                                 ]
-                            },
-                            "type": "Foreach"
-                        },
-                        "Build_Endpoint_Filter_from_Hosts_With_FQDN": {
-                            "inputs": {
-                                "code": "var hosts = workflowContext.actions.Get_Hosts_From_Incident.outputs.body.Hosts;\r\nvar filters=[];for(let i=0;i<hosts.length;i++){var a=hosts[i].hostName,t=hosts[i].additionalData,e=null!=t,l=e&&null!==t.LastIpAddress&&void 0!==t.LastIpAddress,n=e&&null!==t.FQDN&&void 0!==t.FQDN&&t.FQDN.includes(\".\");if(null!=a&&\"\"!==a){var s={path:\"name\",value:a},d={sensor:{column:\"Install Status\",name:\"Patch - Patch List Applicability\",params:[{name:\"bin\",value:\"0\"},{name:\"binCount\",value:\"1\"}]},value:\"Not Installed\"};if(n&&l){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress},d,{any:!0,filters:[s,{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1}]});continue}if(n&&!l){filters.push({any:!0,filters:[s,d,{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1});continue}}}\r\nreturn filters; "
-                            },
-                            "runAfter": {
-                                "Initialize_Endpoint_Filter": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "JavaScriptCode"
-                        },
-                        "Build_Endpoint_Filter_from_Hosts_Without_FQDN": {
-                            "inputs": {
-                                "code": "var filters = workflowContext.actions.Parse_Endpoint_Filter_so_next_code_block_can_access.outputs.body;\r\nvar hosts = workflowContext.actions.Get_Hosts_From_Incident.outputs.body.Hosts;\r\nfor(let i=0;i<hosts.length;i++){var a=hosts[i].hostName,l=hosts[i].additionalData,t=null!=l,s=t&&null!==l.LastIpAddress&&void 0!==l.LastIpAddress,e=t&&null!==l.FQDN&&void 0!==l.FQDN&&l.FQDN.includes(\".\");if(null!=a&&\"\"!==a){var n={path:\"name\",value:a},d={sensor:{column:\"Install Status\",name:\"Patch - Patch List Applicability\",params:[{name:\"bin\",value:\"0\"},{name:\"binCount\",value:\"1\"}]},value:\"Not Installed\"};if(s&&!e){filters.push({filters:[n,d,{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress}]});continue}e||s||filters.push({filters:[n,d,]})}}\r\nreturn filters;"
-                            },
-                            "runAfter": {
-                                "Parse_Endpoint_Filter_so_next_code_block_can_access": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "JavaScriptCode"
+                            }
                         },
                         "Initialize_Endpoint_Filter": {
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "endpoint filters",
+                                        "name": "endpointFilters",
                                         "type": "array"
                                     }
                                 ]
                             },
                             "runAfter": {
-                                "Initialize_API_Gateway_Query": [
+                                "Exit_early_if_incident_has_no_hosts": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "InitializeVariable"
                         },
-                        "Parse_Endpoint_Filter_so_next_code_block_can_access": {
-                            "inputs": {
-                                "content": "@variables('endpoint filters')",
-                                "schema": {
-                                    "type": "array"
-                                }
-                            },
-                            "runAfter": {
-                                "Set_Endpoint_Filter_if_Needed_from_Hosts_with_FQDN": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson"
-                        },
-                        "Set_Endpoint_Filter_if_Needed_from_Hosts_with_FQDN": {
-                            "actions": {
-                                "Set_Endpoint_filters_from_Hosts_with_FQDN": {
-                                    "inputs": {
-                                        "name": "endpoint filters",
-                                        "value": "@body('Build_Endpoint_Filter_from_Hosts_With_FQDN')"
-                                    },
-                                    "runAfter": {},
-                                    "type": "SetVariable"
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "not": {
-                                            "equals": [
-                                                "@length(outputs('Build_Endpoint_Filter_from_Hosts_With_FQDN')['body'])",
-                                                0
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                            "runAfter": {
-                                "Build_Endpoint_Filter_from_Hosts_With_FQDN": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "Set_Endpoint_Filter_if_needed_from_Hosts_without_FQDN": {
-                            "actions": {
-                                "Set_Endpoint_Filters_from_Hosts_Without_FQDN": {
-                                    "inputs": {
-                                        "name": "endpoint filters",
-                                        "value": "@body('Build_Endpoint_Filter_from_Hosts_Without_FQDN')"
-                                    },
-                                    "runAfter": {},
-                                    "type": "SetVariable"
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "not": {
-                                            "equals": [
-                                                "@length(outputs('Build_Endpoint_Filter_from_Hosts_Without_FQDN')['body'])",
-                                                0
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                            "runAfter": {
-                                "Build_Endpoint_Filter_from_Hosts_Without_FQDN": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "Initialize_API_Gateway_Query": {
-                            "runAfter": {
-                                "Exit_early_if_no_hosts_are_found": [
-                                    "Succeeded"
-                                ]
-                            },
+                        "Initialize_API_Query": {
                             "type": "InitializeVariable",
+                            "description": "To check this query against a Tanium Server question use this in the query variables: {\"source\":{\"ts\":{\"stableWaitTime\":10}}}",
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "api gateway query",
+                                        "name": "apiQuery",
                                         "type": "string",
                                         "value": "query ($endpointsFilter: EndpointFieldFilter, $endCursor: Cursor, $source: EndpointSource, $refreshCursor: Cursor) {\n  endpoints(source: $source, first: 10, after: $endCursor, filter: $endpointsFilter, refresh: $refreshCursor) {\n    edges {\n      node {\n        name\n        ipAddress\n        os { platform }\n        sensorReadings(\n          sensors: [\n            {\n              name: \"Patch - Patch List Applicability\",\n              params: [{name: \"bin\", value: \"0\"}, {name: \"binCount\", value: \"1\"}],\n            \t\n            }\n          ]\n        ) {\n          columns {\n            sensor {\n              name\n            }\n            name\n            values\n          }\n        }\n      }\n    }\n    collectionInfo {\n      startCursor\n      success\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n  }\n}"
                                     }
                                 ]
                             },
-                            "description": "To check this query against a Tanium Server question use this in the query variables: {\"source\":{\"ts\":{\"stableWaitTime\":10}}}"
-                        },
-                        "Initialize_API_Gateway_Query_Variables": {
                             "runAfter": {
-                                "Initialize_Tanium_Endpoint_Source_to_TS": [
+                                "Exit_early_if_incident_has_no_hosts": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_API_Variables": {
+                            "runAfter": {
+                                "Initialize_Endpoint_Source_to_TS": [
+                                    "Succeeded"
+                                ],
+                                "Set_Endpoint_filter": [
                                     "Succeeded"
                                 ]
                             },
@@ -737,16 +646,16 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "api gateway query variables",
+                                        "name": "queryVariables",
                                         "type": "string",
-                                        "value": "{\n  \"source\": @{variables('Tanium Endpoint Source')},\n  \"endpointsFilter\": {\n    \"any\": true,\n    \"filters\": @{variables('endpoint filters')}\n  }\n}"
+                                        "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"endpointsFilter\": {\n    \"any\": true,\n    \"filters\": @{variables('endpointFilters')}\n  }\n}"
                                     }
                                 ]
                             }
                         },
-                        "Initialize_API_Gateway_Response": {
+                        "Initialize_API_Response": {
                             "runAfter": {
-                                "Until_some_endpoint_data_is_returned": [
+                                "Until_endpoint_data_is_returned": [
                                     "Succeeded"
                                 ]
                             },
@@ -754,16 +663,16 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "API Gateway Response",
+                                        "name": "apiResponse",
                                         "type": "object",
-                                        "value": "@body('Query_API_Gateway')"
+                                        "value": "@body('List_Available_Patches')"
                                     }
                                 ]
                             }
                         },
-                        "Initialize_API_Gateway_query_cursor": {
+                        "Initialize_response_cursor": {
                             "runAfter": {
-                                "Stop_If_Tanium_Has_No_Hosts_From_Incident": [
+                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -773,14 +682,14 @@
                                     {
                                         "name": "cursor",
                                         "type": "string",
-                                        "value": "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
                                     }
                                 ]
                             }
                         },
-                        "Initialize_API_Gateway_refresh_cursor": {
+                        "Initialize_refresh_cursor": {
                             "runAfter": {
-                                "Initialize_API_Gateway_Response": [
+                                "Until_endpoint_data_is_returned": [
                                     "Succeeded"
                                 ]
                             },
@@ -788,16 +697,16 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "api gateway refresh cursor",
+                                        "name": "refreshCursor",
                                         "type": "string",
-                                        "value": "@{body('Query_API_Gateway')?['data']?['endpoints']?['collectionInfo']?['startCursor']}"
+                                        "value": "@{body('List_Available_Patches')?['data']?['endpoints']?['collectionInfo']?['startCursor']}"
                                     }
                                 ]
                             }
                         },
-                        "Initialize_Tanium_Endpoint_Source_to_TS": {
+                        "Initialize_Endpoint_Source_to_TS": {
                             "runAfter": {
-                                "Set_Endpoint_Filter_if_needed_from_Hosts_without_FQDN": [
+                                "Exit_early_if_incident_has_no_hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -805,7 +714,7 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "tanium endpoint source",
+                                        "name": "endpointSource",
                                         "type": "object",
                                         "value": {
                                             "ts": {
@@ -818,7 +727,7 @@
                         },
                         "Initialize_classifications": {
                             "runAfter": {
-                                "Initialize_patch_titles": [
+                                "Loop_Paginated_Response_if_has_multiple_pages": [
                                     "Succeeded"
                                 ]
                             },
@@ -834,7 +743,7 @@
                         },
                         "Initialize_column_index": {
                             "runAfter": {
-                                "Initialize_results": [
+                                "Loop_Paginated_Response_if_has_multiple_pages": [
                                     "Succeeded"
                                 ]
                             },
@@ -842,32 +751,16 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "column index",
+                                        "name": "columnIndex",
                                         "type": "integer",
                                         "value": 0
                                     }
                                 ]
                             }
                         },
-                        "Initialize_endpoint": {
+                        "Initialize_list_of_endpoints": {
                             "runAfter": {
-                                "Paginate_API_Gateway_query_if_needed": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "endpoint",
-                                        "type": "object"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_endpoints_array": {
-                            "runAfter": {
-                                "Initialize_API_Gateway_query_cursor": [
+                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -877,14 +770,14 @@
                                     {
                                         "name": "endpoints",
                                         "type": "array",
-                                        "value": "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['edges']"
+                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['edges']"
                                     }
                                 ]
                             }
                         },
-                        "Initialize_not_installed_row_indexes": {
+                        "Initialize_notInstalledRowIndices": {
                             "runAfter": {
-                                "Initialize_column_index": [
+                                "Loop_Paginated_Response_if_has_multiple_pages": [
                                     "Succeeded"
                                 ]
                             },
@@ -892,7 +785,7 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "not installed row indexes",
+                                        "name": "notInstalledRowIndices",
                                         "type": "array"
                                     }
                                 ]
@@ -900,7 +793,7 @@
                         },
                         "Initialize_patch_titles": {
                             "runAfter": {
-                                "Initialize_not_installed_row_indexes": [
+                                "Loop_Paginated_Response_if_has_multiple_pages": [
                                     "Succeeded"
                                 ]
                             },
@@ -908,32 +801,15 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "patch titles",
+                                        "name": "patchTitles",
                                         "type": "array"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_result_row_indexes": {
-                            "runAfter": {
-                                "Initialize_tanium_patch_ids": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "result row indexes",
-                                        "type": "array",
-                                        "value": []
                                     }
                                 ]
                             }
                         },
                         "Initialize_results": {
                             "runAfter": {
-                                "Initialize_endpoint": [
+                                "Loop_Paginated_Response_if_has_multiple_pages": [
                                     "Succeeded"
                                 ]
                             },
@@ -947,31 +823,14 @@
                                 ]
                             }
                         },
-                        "Initialize_tanium_patch_ids": {
-                            "runAfter": {
-                                "Initialize_classifications": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "tanium patch ids",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
-                        "Paginate_API_Gateway_query_if_needed": {
+                        "Loop_Paginated_Response_if_has_multiple_pages": {
                             "actions": {
                                 "Until_there_are_no_more_pages": {
                                     "actions": {
                                         "For_each_endpoint_in_paginated_API_Gateway_response": {
-                                            "foreach": "@body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['edges']",
+                                            "foreach": "@body('Parse_page')?['data']?['endpoints']?['edges']",
                                             "actions": {
                                                 "Append_endpoint_to_endpoints": {
-                                                    "runAfter": {},
                                                     "type": "AppendToArrayVariable",
                                                     "inputs": {
                                                         "name": "endpoints",
@@ -980,7 +839,7 @@
                                                 }
                                             },
                                             "runAfter": {
-                                                "Update_API_Gateway_query_cursor": [
+                                                "Update_cursor_to_next_page": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -991,17 +850,17 @@
                                                 }
                                             }
                                         },
-                                        "Paginate_API_Gateway": {
+                                        "Get_next_page": {
                                             "runAfter": {
-                                                "Update_API_Gateway_query_variables": [
+                                                "Update_cursor_for_next_page": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "Http",
                                             "inputs": {
                                                 "body": {
-                                                    "query": "@variables('api gateway query')",
-                                                    "variables": "@json(variables('api gateway query variables'))"
+                                                    "query": "@variables('apiQuery')",
+                                                    "variables": "@json(variables('queryVariables'))"
                                                 },
                                                 "headers": {
                                                     "Content-Type": "application/json",
@@ -1018,15 +877,15 @@
                                                 }
                                             }
                                         },
-                                        "Parse_paginated_API_Gateway_response": {
+                                        "Parse_page": {
                                             "runAfter": {
-                                                "Paginate_API_Gateway": [
+                                                "Get_next_page": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "ParseJson",
                                             "inputs": {
-                                                "content": "@body('Paginate_API_Gateway')",
+                                                "content": "@body('Get_next_page')",
                                                 "schema": {
                                                     "properties": {
                                                         "data": {
@@ -1081,29 +940,27 @@
                                                 }
                                             }
                                         },
-                                        "Update_API_Gateway_query_cursor": {
+                                        "Update_cursor_to_next_page": {
                                             "runAfter": {
-                                                "Parse_paginated_API_Gateway_response": [
+                                                "Parse_page": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "SetVariable",
                                             "inputs": {
                                                 "name": "cursor",
-                                                "value": "@body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                                "value": "@body('Parse_page')?['data']?['endpoints']?['pageInfo']?['endCursor']"
                                             }
                                         },
-                                        "Update_API_Gateway_query_variables": {
-                                            "runAfter": {},
+                                        "Update_cursor_for_next_page": {
                                             "type": "SetVariable",
                                             "inputs": {
-                                                "name": "api gateway query variables",
-                                                "value": "{\n  \"source\": @{variables('tanium endpoint source')},\n  \"endCursor\": \"@{variables('cursor')}\"\n}"
+                                                "name": "queryVariables",
+                                                "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"endCursor\": \"@{variables('cursor')}\"\n}"
                                             }
                                         }
                                     },
-                                    "runAfter": {},
-                                    "expression": "@equals(body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage'], false)",
+                                    "expression": "@equals(body('Parse_page')?['data']?['endpoints']?['pageInfo']?['hasNextPage'],false)",
                                     "limit": {
                                         "count": 60,
                                         "timeout": "PT1H"
@@ -1111,8 +968,14 @@
                                     "type": "Until"
                                 }
                             },
+                            "else": {
+                                "actions": {}
+                            },
                             "runAfter": {
-                                "Initialize_endpoints_array": [
+                                "Initialize_list_of_endpoints": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_response_cursor": [
                                     "Succeeded"
                                 ]
                             },
@@ -1120,7 +983,7 @@
                                 "and": [
                                     {
                                         "equals": [
-                                            "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
+                                            "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
                                             "@true"
                                         ]
                                     }
@@ -1128,10 +991,9 @@
                             },
                             "type": "If"
                         },
-                        "Stop_If_Tanium_Has_No_Hosts_From_Incident": {
+                        "Exit_early_If_Tanium_Has_No_Data_for_Incident": {
                             "actions": {
-                                "Add_comment_to_incident_(V3)_3": {
-                                    "runAfter": {},
+                                "Add_comment__-_no_data_in_Tanium": {
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
@@ -1147,9 +1009,9 @@
                                         "path": "/Incidents/Comment"
                                     }
                                 },
-                                "Terminate_no_hosts_in_Tanium": {
+                                "Exit_early__-_no_data_in_Tanium": {
                                     "runAfter": {
-                                        "Add_comment_to_incident_(V3)_3": [
+                                        "Add_comment__-_no_data_in_Tanium": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1159,8 +1021,11 @@
                                     }
                                 }
                             },
+                            "else": {
+                                "actions": {}
+                            },
                             "runAfter": {
-                                "Parse_API_Gateway_response": [
+                                "Parse_API_response": [
                                     "Succeeded"
                                 ]
                             },
@@ -1168,7 +1033,7 @@
                                 "and": [
                                     {
                                         "equals": [
-                                            "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
+                                            "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
                                             "@null"
                                         ]
                                     }
@@ -1176,7 +1041,7 @@
                             },
                             "type": "If"
                         },
-                        "Parse_API_Gateway_response": {
+                        "Parse_API_response": {
                             "runAfter": {
                                 "Check_for_successful_results": [
                                     "Succeeded"
@@ -1184,7 +1049,7 @@
                             },
                             "type": "ParseJson",
                             "inputs": {
-                                "content": "@variables('API Gateway Response')",
+                                "content": "@variables('apiResponse')",
                                 "schema": {
                                     "properties": {
                                         "data": {
@@ -1290,15 +1155,14 @@
                                 }
                             }
                         },
-                        "Until_some_endpoint_data_is_returned": {
+                        "Until_endpoint_data_is_returned": {
                             "actions": {
-                                "Query_API_Gateway": {
-                                    "runAfter": {},
+                                "List_Available_Patches": {
                                     "type": "Http",
                                     "inputs": {
                                         "body": {
-                                            "query": "@variables('api gateway query')",
-                                            "variables": "@json(variables('api gateway query variables'))"
+                                            "query": "@variables('apiQuery')",
+                                            "variables": "@json(variables('queryVariables'))"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json",
@@ -1317,16 +1181,58 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_API_Gateway_Query_Variables": [
+                                "Initialize_API_Variables": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_API_Query": [
                                     "Succeeded"
                                 ]
                             },
-                            "expression": "@not(equals(body('Query_API_Gateway')?['data']?['endpoints'], null))",
+                            "expression": "@not(equals(body('List_Available_Patches')?['data']?['endpoints']?['edges'],null))",
                             "limit": {
                                 "count": 60,
                                 "timeout": "PT1H"
                             },
                             "type": "Until"
+                        },
+                        "Build_Endpoint_Filter_from_Hosts": {
+                            "type": "JavaScriptCode",
+                            "inputs": {
+                                "code": "var hosts=workflowContext.actions.Get_Hosts_From_Incident.outputs.body.Hosts,filters=[];for(let s=0;s<hosts.length;s++){var hn=hosts[s].hostName,ad=hosts[s].additionalData,hAd=null!=ad,hIp=hAd&&null!==ad.LastIpAddress&&void 0!==ad.LastIpAddress,hFq=hAd&&null!==ad.FQDN&&void 0!==ad.FQDN&&ad.FQDN.includes(\".\");if(null!=hn&&\"\"!==hn){var hf={path:\"name\",value:hn},sf={sensor:{column:\"Install Status\",name:\"Patch - Patch List Applicability\",params:[{name:\"bin\",value:\"0\"},{name:\"binCount\",value:\"1\"}]},value:\"Not Installed\"};if(hFq&&hIp){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:ad.LastIpAddress},sf,{any:!0,filters:[hf,{path:\"name\",value:ad.FQDN.trim()}],negated:!1}]});continue}if(hFq&&!hIp){filters.push({any:!0,filters:[hf,sf,{path:\"name\",value:ad.FQDN.trim()}],negated:!1});continue}if(hIp&&!hFq){filters.push({filters:[hf,sf,{op:\"CONTAINS\",path:\"ipAddress\",value:ad.LastIpAddress}]});continue}filters.push({filters:[hf,sf]})}}\nreturn filters;\n"
+                            },
+                            "runAfter": {
+                                "Initialize_Endpoint_Filter": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Set_Endpoint_filter": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "endpointFilters",
+                                "value": "@body('Build_Endpoint_Filter_from_Hosts')"
+                            },
+                            "runAfter": {
+                                "Build_Endpoint_Filter_from_Hosts": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_currentHostName": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "currentHostName",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Loop_Paginated_Response_if_has_multiple_pages": [
+                                    "Succeeded"
+                                ]
+                            }
                         }
                     },
                     "outputs": {}
