@@ -7,12 +7,16 @@ from datetime import UTC, datetime
 
 async def main(name: str):
     connections_last_time = int(name)
+    scheduled_run = os.environ.get("Schedule", "*/10 * * * *")
+
+    previous_iteration_timestamp =\
+        croniter.croniter(scheduled_run, datetime.now(tz=UTC)).get_prev(datetime).timestamp() * 1000
     if connections_last_time == 0:
-        scheduled_run = os.environ.get("Schedule", "*/10 * * * *")
-        connections_last_time = croniter.croniter(scheduled_run, datetime.now(tz=UTC)).get_prev(datetime)
-        connections_last_time = connections_last_time.timestamp() * 1000
+        connections_last_time = previous_iteration_timestamp
 
     last_connection_time = int(connections_last_time)
+    if last_connection_time < previous_iteration_timestamp:
+        last_connection_time = previous_iteration_timestamp
 
     return await run_import_loop(
         destination_table='GuardicoreConnections',
