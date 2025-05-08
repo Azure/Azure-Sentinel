@@ -4,7 +4,7 @@ More information about Recorded Future Intelligence Solution for Microsoft Senti
 
 The Recorded Future Sandbox integration requires **BOTH** a API key for ```Recorded Future Sandbox for Microsoft Sentinel``` **AND** a ```Recorded Future for Microsoft Sentinel``` API key that is different than the one used in the ```Recorded Future for Microsoft Sentinel``` integration. They need to both be input in their respective places.
 
-Refer to [Recorded Future API Key](../readme.md#api-keys) for guidance on obtaining and using the necessary API keys.
+Refer to [Recorded Future API Key](../readme.md#recorded-future-api-key) for guidance on obtaining and using the necessary API keys.
 
 ## **Malware Sandbox Analysis**
 
@@ -15,8 +15,8 @@ Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The 
 ## RecordedFuture-Sandbox_Enrichment-Url
 Type: **Response**\
 Included in Recorded Future Intelligence Solution: **Yes**\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. \
-Connectors used: ***recordedfuturesandbo*** and ***azuresentinel*** see [Connector authorization](../readme.md#connectors-authorization) for guidance.
+Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connector-authorization) section. \
+Connectors used: ***recordedfuturesandbo*** and ***azuresentinel*** see [Connector authorization](../readme.md#connector-authorization) for guidance.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -35,7 +35,7 @@ To set up automatic enrichment, map alerts to a <a href="https://learn.microsoft
 ## RecordedFuture-Sandbox_Outlook_Attachment
 Type: **Response**\
 Included in Recorded Future Intelligence Solution: **No**\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. \
+Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connector-authorization) section. \
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -59,7 +59,7 @@ To set up automatic enrichment, map alerts to a <a href="https://learn.microsoft
 ## RecordedFuture-Sandbox_StorageAccount
 Type: **Response**\
 Included in Recorded Future Intelligence Solution: **No**\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section.
+Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connector-authorization) section.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
