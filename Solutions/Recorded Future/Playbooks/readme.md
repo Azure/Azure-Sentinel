@@ -103,7 +103,7 @@ Consider your organizational use cases and install the corresponding playbooks t
 | Custom connectors | [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md) |
 | Deprecated playbooks | [Deprecated Risk List Playbooks](Deprecated/readme.md) |
 
-<a id="connectors-authorization"></a>
+<a id="connector-authorization"></a>
 ## Connector Authorization
 
 Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type.
