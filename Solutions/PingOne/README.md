@@ -26,7 +26,9 @@ This solution helps security teams monitor identity infrastructure for suspiciou
    - **Environment ID**
    - Scope: `p1:read:audit` (Audit role added via custom roles, **Environment Admin** from predefined roles and additional roles like others suitable for your needs)
    [refer to section below to generate credentials]
-3. Access to an Azure subscription with **Microsoft Sentinel** enabled and permissions to deploy Data Connectors.
+3. Make sure the token auth method is  Client Secret Post  enabled in configaration section of App.
+4. Access to an Azure subscription with **Microsoft Sentinel** enabled and permissions to deploy Data Connectors.
+   
 
 ---
 
@@ -40,6 +42,8 @@ This solution helps security teams monitor identity infrastructure for suspiciou
   * Assign **Environment Admin** role from predefined roles.
   * Can add other suitable roles according to your needs,
   * without adding the roles, logs would not be ingested.
+  * Make sure the token auth method is  Client Secret Post  enabled in configaration section of App.
+  * Ensure the application is enabled.
 7. Save the following values:
    - **Client ID**
    - **Client Secret**
