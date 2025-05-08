@@ -20,7 +20,6 @@ import azure.functions as func
 import re
 
 
-
 MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
 DIVIDE_TO_MULTIPLE_TABLES = True
@@ -36,12 +35,12 @@ aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-match = re.match(pattern,str(logAnalyticsUri))
-if(not match):
+match = re.match(pattern, str(logAnalyticsUri))
+if (not match):
     raise Exception("Cisco_Umbrella: Invalid Log Analytics Uri.")
 
 
@@ -50,24 +49,28 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
 
     logging.info('Starting program')
-    
+
     script_start_time = int(time.time())
-    state_manager_cu = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
-    
+    state_manager_cu = StateManager(
+        FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
+
     ts_from = state_manager_cu.get()
     ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
     if ts_from is not None:
-        if (datetime.datetime.utcnow() - datetime.timedelta(days=3)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
+        if (datetime.datetime.utcnow() - datetime.timedelta(days=3)) > datetime.datetime.strptime(ts_from, "%Y-%m-%dT%H:%M:%S.%fZ"):
             ts_from = parse_date_from(ts_from)
-            ts_to = ts_from +  datetime.timedelta(days=1)
+            ts_to = ts_from + datetime.timedelta(days=1)
         else:
             ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
     ts_from = parse_date_from(ts_from)
-    ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
-        
-    cli = UmbrellaClient(aws_access_key_id, aws_secret_acces_key, aws_s3_bucket)
-    
-    logging.info('Searching files last modified from {} to {}'.format(ts_from, ts_to))
+    ts_to = ts_to.replace(tzinfo=datetime.timezone.utc,
+                          second=0, microsecond=0)
+
+    cli = UmbrellaClient(
+        aws_access_key_id, aws_secret_acces_key, aws_s3_bucket)
+
+    logging.info(
+        'Searching files last modified from {} to {}'.format(ts_from, ts_to))
     obj_list = cli.get_files_list(ts_from, ts_to)
 
     logging.info('Total number of files is {}. Total size is {} MB'.format(
@@ -80,12 +83,12 @@ def main(mytimer: func.TimerRequest) -> None:
 
     if DIVIDE_TO_MULTIPLE_TABLES:
         sentinel_dict = {
-        'dns': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10),
-        'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
-        'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
-        'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10),
-        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
-                        }
+            'dns': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10),
+            'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
+            'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
+            'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10),
+            'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
+        }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
             key = obj.get('Key', '')
@@ -98,7 +101,7 @@ def main(mytimer: func.TimerRequest) -> None:
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 sentinel = sentinel_dict['cloudfirewall']
             elif 'firewalllogs' in key.lower():
-                sentinel = sentinel_dict['firewall']    
+                sentinel = sentinel_dict['firewall']
             else:
                 # skip files of unknown types
                 continue
@@ -106,53 +109,69 @@ def main(mytimer: func.TimerRequest) -> None:
                 cli.process_file(obj, dest=sentinel)
                 last_ts = obj['LastModified']
                 if last_ts:
-                    state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    state_manager_cu.post(datetime.datetime.strftime(
+                        last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
                     if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        logging.info(
+                            f'Script is running too long. Stop processing new events. Finish script.')
                         break
                 else:
-                    state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    state_manager_cu.post(datetime.datetime.strftime(
+                        ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
                     if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        logging.info(
+                            f'Script is running too long. Stop processing new events. Finish script.')
                         break
         if last_ts:
-            state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+            state_manager_cu.post(datetime.datetime.strftime(
+                last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
         else:
-            state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+            state_manager_cu.post(datetime.datetime.strftime(
+                ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
 
-        failed_sent_events_number = sum([sentinel.failed_sent_events_number for sentinel in sentinel_dict.values()])
-        successfull_sent_events_number = sum([sentinel.successfull_sent_events_number for sentinel in sentinel_dict.values()])
-
+        failed_sent_events_number = sum(
+            [sentinel.failed_sent_events_number for sentinel in sentinel_dict.values()])
+        successfull_sent_events_number = sum(
+            [sentinel.successfull_sent_events_number for sentinel in sentinel_dict.values()])
 
     else:
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id,
+                                          sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in sorted(obj_list, key=lambda k: k['LastModified']):
                 cli.process_file(obj, dest=sentinel)
                 last_ts = obj['LastModified']
                 if last_ts:
-                    state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    state_manager_cu.post(datetime.datetime.strftime(
+                        last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
                     if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        logging.info(
+                            f'Script is running too long. Stop processing new events. Finish script.')
                         return
                 else:
-                    state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    state_manager_cu.post(datetime.datetime.strftime(
+                        ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
                     if check_if_script_runs_too_long(script_start_time):
-                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        logging.info(
+                            f'Script is running too long. Stop processing new events. Finish script.')
                         return
-            
+
             if last_ts:
-                state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                state_manager_cu.post(datetime.datetime.strftime(
+                    last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
             else:
-                state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))   
-                
+                state_manager_cu.post(datetime.datetime.strftime(
+                    ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
     if failed_sent_events_number:
-        logging.error('{} events have not been sent'.format(failed_sent_events_number))
+        logging.error('{} events have not been sent'.format(
+            failed_sent_events_number))
 
-    logging.info('Program finished. {} events have been sent. {} events have not been sent'.format(successfull_sent_events_number, failed_sent_events_number))
+    logging.info('Program finished. {} events have been sent. {} events have not been sent'.format(
+        successfull_sent_events_number, failed_sent_events_number))
 
 
 def convert_list_to_csv_line(ls):
@@ -163,22 +182,24 @@ def convert_list_to_csv_line(ls):
 
 
 def check_if_script_runs_too_long(script_start_time: int) -> bool:
-        now = int(time.time())
-        duration = now - script_start_time
-        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
-        return duration > max_duration
+    now = int(time.time())
+    duration = now - script_start_time
+    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
+    return duration > max_duration
 
 
 def parse_date_from(date_from: str) -> datetime.datetime:
     try:
-        date_from = parse_datetime(date_from)+ datetime.timedelta(milliseconds=1)
+        date_from = parse_datetime(date_from) + \
+            datetime.timedelta(milliseconds=1)
     except:
         pass
     if not isinstance(date_from, datetime.datetime):
-        date_from = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - datetime.timedelta(minutes=10)
+        date_from = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - \
+            datetime.timedelta(minutes=10)
     return date_from
 
-    
+
 class UmbrellaClient:
 
     def __init__(self, aws_access_key_id, aws_secret_acces_key, aws_s3_bucket):
@@ -227,27 +248,32 @@ class UmbrellaClient:
             Prefix=prefix
         )
         try:
-            response_code = response.get('ResponseMetadata', {}).get('HTTPStatusCode', None)
+            response_code = response.get(
+                'ResponseMetadata', {}).get('HTTPStatusCode', None)
             if response_code == 200:
                 return response
             else:
-                raise Exception('HTTP Response Code - {}'.format(response_code))
+                raise Exception(
+                    'HTTP Response Code - {}'.format(response_code))
         except Exception as err:
             logging.error('Error while getting objects list - {}'.format(err))
             raise Exception
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs',
+                   'firewalllogs', 'cloudfirewalllogs', 'cdfwlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
-        marker_end = (ts_from - datetime.timedelta(minutes=60)).strftime("/%Y-%m-%d/%Y-%m-%d-%H-%M")
+        marker_end = (ts_from - datetime.timedelta(minutes=60)
+                      ).strftime("/%Y-%m-%d/%Y-%m-%d-%H-%M")
 
         for folder in folders:
             marker = folder + marker_end
             while True:
-                response = self._make_objects_list_request(marker=marker, prefix=folder)
+                response = self._make_objects_list_request(
+                    marker=marker, prefix=folder)
                 for file_obj in response.get('Contents', []):
                     if ts_to > file_obj['LastModified'] >= ts_from:
                         files.append(file_obj)
@@ -256,14 +282,15 @@ class UmbrellaClient:
                     marker = response['Contents'][-1]['Key']
                 else:
                     break
-                
+
         return files
 
     def download_obj(self, key):
         logging.info('Started downloading {}'.format(key))
         res = self.s3.get_object(Bucket=self.aws_s3_bucket, Key=key)
         try:
-            response_code = res.get('ResponseMetadata', {}).get('HTTPStatusCode', None)
+            response_code = res.get('ResponseMetadata', {}).get(
+                'HTTPStatusCode', None)
             if response_code == 200:
                 body = res['Body']
                 data = body.read()
@@ -271,9 +298,11 @@ class UmbrellaClient:
                 return data
 
             else:
-                logging.error('Error while getting object {}. HTTP Response Code - {}'.format(key, response_code))
+                logging.error(
+                    'Error while getting object {}. HTTP Response Code - {}'.format(key, response_code))
         except Exception as err:
-            logging.error('Error while getting object {} - {}'.format(key, err))
+            logging.error(
+                'Error while getting object {} - {}'.format(key, err))
 
     def unpack_file(self, downloaded_obj, key):
         try:
@@ -282,7 +311,8 @@ class UmbrellaClient:
             return csv_file
 
         except Exception as err:
-            logging.error('Error while unpacking file {} - {}'.format(key, err))
+            logging.error(
+                'Error while unpacking file {} - {}'.format(key, err))
 
     @staticmethod
     def convert_empty_string_to_null_values(d: dict):
@@ -321,94 +351,100 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_proxy(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
-            if len(row) > 1:
-                if len(row) >= 21:
-                    event = {
-                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
-                        'Identities': row[1],
-                        'Policy Identity': row[1],
-                        'Internal IP': row[2],
-                        'External IP': row[3],
-                        'Destination IP': row[4],
-                        'Content Type': row[5],
-                        'Verdict': row[6],
-                        'URL': row[7],
-                        'Referer': row[8],
-                        'userAgent': row[9],
-                        'statusCode': row[10],
-                        'requestSize': row[11],
-                        'responseSize': row[12],
-                        'responseBodySize': row[13],
-                        'SHA-SHA256': row[14],
-                        'Categories': row[15].split(','),
-                        'AVDetections': row[16].split(','),
-                        'PUAs': row[17].split(','),
-                        'AMP Disposition': row[18],
-                        'AMP Malware Name': row[19],
-                        'AMP Score': row[20],
-                        'Policy Identity Type': row[21]
-                    }
-                    try:
-                        event['Blocked Categories'] = row[22].split(',')
-                    except IndexError:
-                        pass
-                     #Version 5 — The same as version 4, but adds three new fields: all Identities, all Identity Types, and Request Method for Proxy logs.
-                    try:
-                        event['Identities'] = row[23]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Identity Types'] = row[24]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Request Method'] = row[25]
-                    except IndexError:
-                        pass
-                    #Version 6 — The same as version 5 with these additional fields to Proxy logs: Certificate Errors, Destination Lists IDs, DLP Status, File Name, Rule ID, and Ruleset ID.
-                    try:
-                        event['DLP Status'] = row[26]
-                    except IndexError:
-                        pass                     
-                    try:
-                        event['Certificate Errors'] = row[27]
-                    except IndexError:
-                        pass
-                    try:
-                        event['File Name'] = row[28]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Ruleset ID'] = row[29]
-                    except IndexError:
-                        pass                                                         
-                    try:
-                        event['Rule ID'] = row[30]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Destination List IDs'] = row[31]
-                    except IndexError:
-                        pass                                         
-
-                    int_fields = [
-                        'requestSize',
-                        'responseSize',
-                        'responseBodySize'
-                    ]
-
-                    for field in int_fields:
+            try:
+                if len(row) > 1:
+                    if len(row) >= 21:
+                        event = {
+                            'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                            'Identities': row[1],
+                            'Policy Identity': row[1],
+                            'Internal IP': row[2],
+                            'External IP': row[3],
+                            'Destination IP': row[4],
+                            'Content Type': row[5],
+                            'Verdict': row[6],
+                            'URL': row[7],
+                            'Referer': row[8],
+                            'userAgent': row[9],
+                            'statusCode': row[10],
+                            'requestSize': row[11],
+                            'responseSize': row[12],
+                            'responseBodySize': row[13],
+                            'SHA-SHA256': row[14],
+                            'Categories': row[15].split(','),
+                            'AVDetections': row[16].split(','),
+                            'PUAs': row[17].split(','),
+                            'AMP Disposition': row[18],
+                            'AMP Malware Name': row[19],
+                            'AMP Score': row[20],
+                            'Policy Identity Type': row[21]
+                        }
                         try:
-                            event[field] = int(event[field])
-                        except Exception:
+                            event['Blocked Categories'] = row[22].split(',')
+                        except IndexError:
                             pass
-                else:
-                    event = {"message": convert_list_to_csv_line(row)}
-                event = self.convert_empty_string_to_null_values(event)
-                event['EventType'] = 'proxylogs'
-                yield event
+                        # Version 5 — The same as version 4, but adds three new fields: all Identities, all Identity Types, and Request Method for Proxy logs.
+                        try:
+                            event['Identities'] = row[23]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Identity Types'] = row[24]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Request Method'] = row[25]
+                        except IndexError:
+                            pass
+                        # Version 6 — The same as version 5 with these additional fields to Proxy logs: Certificate Errors, Destination Lists IDs, DLP Status, File Name, Rule ID, and Ruleset ID.
+                        try:
+                            event['DLP Status'] = row[26]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Certificate Errors'] = row[27]
+                        except IndexError:
+                            pass
+                        try:
+                            event['File Name'] = row[28]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Ruleset ID'] = row[29]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Rule ID'] = row[30]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Destination List IDs'] = row[31]
+                        except IndexError:
+                            pass
+
+                        int_fields = [
+                            'requestSize',
+                            'responseSize',
+                            'responseBodySize'
+                        ]
+
+                        for field in int_fields:
+                            try:
+                                event[field] = int(event[field])
+                            except Exception:
+                                pass
+                    else:
+                        event = {"message": convert_list_to_csv_line(row)}
+                    event = self.convert_empty_string_to_null_values(event)
+                    event['EventType'] = 'proxylogs'
+                    yield event
+            except Exception as e:
+                logging.error(f"Error processing row {row}: {e}")
+                continue
 
     def parse_csv_dns(self, csv_file):
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
@@ -515,7 +551,7 @@ class UmbrellaClient:
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
             elif 'firewalllogs' in key.lower():
-                parser_func =  self.parse_csv_fw
+                parser_func = self.parse_csv_fw
 
             if parser_func:
                 file_events = 0
@@ -525,7 +561,8 @@ class UmbrellaClient:
                     file_events += 1
                     self.total_events += 1
 
-                logging.info('File processed | TIME {} sec | SIZE {} MB | Events {} | Key {}'.format(round(time.time() - t0, 2), round(obj['Size'] / 10**6, 2), file_events, key))
+                logging.info('File processed | TIME {} sec | SIZE {} MB | Events {} | Key {}'.format(
+                    round(time.time() - t0, 2), round(obj['Size'] / 10**6, 2), file_events, key))
 
 
 class AzureSentinelConnector:
@@ -563,7 +600,8 @@ class AzureSentinelConnector:
             if queue:
                 queue_list = self._split_big_request(queue)
                 for q in queue_list:
-                    jobs.append(Thread(target=self._post_data, args=(self.customer_id, self.shared_key, q, self.log_type, )))
+                    jobs.append(Thread(target=self._post_data, args=(
+                        self.customer_id, self.shared_key, q, self.log_type, )))
 
         for job in jobs:
             job.start()
@@ -581,10 +619,13 @@ class AzureSentinelConnector:
 
     def _build_signature(self, customer_id, shared_key, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
-        string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
+        string_to_hash = method + "\n" + \
+            str(content_length) + "\n" + content_type + \
+            "\n" + x_headers + "\n" + resource
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
-        encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
+        encoded_hash = base64.b64encode(hmac.new(
+            decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
         authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
         return authorization
 
@@ -596,7 +637,8 @@ class AzureSentinelConnector:
         resource = '/api/logs'
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
-        signature = self._build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
+        signature = self._build_signature(
+            customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
         uri = self.log_analytics_uri + resource + '?api-version=2016-04-01'
 
         headers = {
@@ -608,10 +650,12 @@ class AzureSentinelConnector:
 
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
-            logging.info('{} events have been successfully sent to Microsoft Sentinel'.format(events_number))
+            logging.info(
+                '{} events have been successfully sent to Microsoft Sentinel'.format(events_number))
             self.successfull_sent_events_number += events_number
         else:
-            logging.error("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status_code))
+            logging.error("Error during sending events to Microsoft Sentinel. Response code: {}".format(
+                response.status_code))
             self.failed_sent_events_number += events_number
 
     def _check_size(self, queue):
