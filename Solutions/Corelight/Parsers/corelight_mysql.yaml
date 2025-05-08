@@ -1,34 +1,87 @@
-id: fab78221-af5e-5344-a403-b36a6e6854dc
+id: 14f8caf6-fbbe-423e-9a30-c3b76c323fe7
 Function:
-  Title: corelight_mysql parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight Mysql Events
+  Version: '1.1.0'
+  LastUpdated: '2024-12-09'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_mysql
 FunctionAlias: corelight_mysql
-FunctionQuery: |+
-  let corelight_mysql = view () {
-      Corelight_v2_mysql_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          uid=uid_s,
-          id_orig_h=id_orig_h_s,
-          id_orig_p=id_orig_p_d,
-          id_resp_h=id_resp_h_s,
-          id_resp_p=id_resp_p_d,
-          cmd=cmd_s,
-          arg=arg_s,
-          success=success_b,
-          rows=rows_d,
-          response=response_s
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="mysql",
-          ts=TimeGenerated
-  };
-  corelight_mysql
-
-...
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let corelight_mysql = view () {
+        union isfuzzy=true Corelight_v2_mysql_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+        | join kind=leftouter 
+        ( corelight_conn
+        | project uid, local_orig, local_resp
+        ) on $left.uid_s == $right.uid
+        | project-away uid
+        | extend
+            path = column_ifexists("_path_s", ""),
+            system_name = column_ifexists("_system_name_s", ""),
+            write_ts = column_ifexists("_write_ts_t", ""),
+            uid = column_ifexists("uid_s", ""),
+            id_orig_h = column_ifexists("id_orig_h_s", ""),
+            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
+            id_resp_h = column_ifexists("id_resp_h_s", ""),
+            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
+            cmd = column_ifexists("cmd_s", ""),
+            arg = column_ifexists("arg_s", ""),
+            success = column_ifexists("success_b", ""),
+            rows = column_ifexists("rows_d", real(null)),
+            response = column_ifexists("response_s", "")
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "mysql",
+            ts = TimeGenerated,
+            action = cmd,
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            user = iff(cmd=="login",arg,""),
+            query = iff(cmd=="query",arg,""),
+            sensor_name = coalesce(system_name, "unknown")
+        | extend
+            is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false"),
+            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+        | project
+            TimeGenerated,
+            path,
+            system_name,
+            write_ts,
+            uid,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            cmd,
+            arg,
+            success,
+            rows,
+            response,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts,
+            action,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            user,
+            query,
+            sensor_name,
+            is_broadcast,
+            is_dest_internal_ip,
+            is_src_internal_ip,
+            direction
+    };
+    corelight_mysql

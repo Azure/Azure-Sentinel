@@ -1,4 +1,4 @@
-| **Version**   | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                 |
-|---------------|--------------------------------|----------------------------------------------------------------------------------------------------|
-|  3.0.0        | 22-02-2024                     | Initial commit - Data Connector based on Azure Function and "Top computers by infections" Workbook |
-                     
+| **Version**     | **Date Modified (DD-MM-YYYY)**   | **Change History**                                                                                                           |
+|-----------------|----------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| 3.0.1           | 28-03-2025                       | Memory overflow fix - process events via batches<br/>Fix wrong workspace name in sentinel connector installation instruction |
+| 3.0.0           | 22-02-2024                       | Initial commit - Data Connector based on Azure Function and "Top computers by infections" Workbook                           |                  
