@@ -1,4 +1,95 @@
 // ASIM Parser for Authentication (Auth) logs
-// TODO: Implement KQL function to transform raw Auth logs into the relevant ASIM schema (e.g., Authentication).
-// Function name should follow ASIM naming convention (e.g., imAuthentication).
-// Refer to ASIM documentation for schema details.
+// Function to parse OpenSystems Authentication logs into ASIM Authentication schema
+// Ingestion-time KQL transform already maps 'event_time' to 'TimeGenerated'
+// Table name: OSAGAuthenticationLogs_CL
+//
+// Relevant columns from OSAGAuthenticationLogs_CL (based on mainTemplate.json):
+// - TimeGenerated (datetime)
+// - login (string)         -> ActorUsername / TargetUsername
+// - remoteAddress (dynamic) -> SrcIpAddr
+// - result (string)        -> EventResult
+// - event_time (datetime)  -> EventStartTime
+// - RawData (string)
+//
+// ASIM Authentication Schema: https://learn.microsoft.com/azure/sentinel/normalization-schema-reference-authentication
+
+let parser = (disabled: bool=false) {
+  OSAGAuthenticationLogs_CL
+  | where not(disabled)
+  | extend
+      // --- Event Information ---
+      EventProduct = "OpenSystems",
+      EventVendor = "OpenSystems",
+      EventSchemaVersion = "0.1.0", // ASIM Authentication schema version. Adjust if necessary.
+      // Assuming 'result' contains strings like "success", "failure", "successful", "failed", etc.
+      // Customize this logic based on the actual values in your 'result' field.
+      EventType = iff(result has_cs "success", "LogonSuccess", "LogonFailed"),
+      EventResult = case(
+                        result has_cs "success", "Success",
+                        result has_cs "fail", "Failure", // Catches "failure", "failed"
+                        // Add more specific cases for other 'result' values if they exist
+                        "Other" // Default if no other case matches
+                      ),
+      EventStartTime = todatetime(event_time), // Derived from the original event_time
+      EventEndTime = todatetime(event_time),   // Assuming logon events are point-in-time
+
+      // --- Actor Information (User performing the logon attempt) ---
+      ActorUsername = tostring(login),
+      ActorUsernameType = "Simple", // Assuming 'login' is a simple username. Change to "UPN", "SID", etc., if applicable.
+
+      // --- Target User Information (User whose credentials are being used) ---
+      // For authentication events, Actor and Target are often the same.
+      TargetUsername = tostring(login),
+      TargetUsernameType = "Simple",
+
+      // --- Source Device Information ---
+      // Assuming 'remoteAddress' directly contains the IP address as a string.
+      // If 'remoteAddress' is a JSON object (e.g., { "ip": "1.2.3.4", "port": 1234 }),
+      // you would need to parse it: SrcIpAddr = tostring(parse_json(remoteAddress).ip)
+      SrcIpAddr = tostring(remoteAddress),
+
+      // --- Additional Fields ---
+      // Preserving original values that informed ASIM fields or other relevant raw data.
+      AdditionalFields = pack(
+                            "OriginalResult", result,
+                            "OriginalRemoteAddress", remoteAddress,
+                            "OriginalLogin", login,
+                            "OriginalEventTime", event_time
+                         )
+
+  // --- Aliases & Standard Fields ---
+  // EventTime is an alias for EventStartTime, and TimeGenerated is often used as EventTime.
+  // Since TimeGenerated is already set to event_time at ingestion, we can use it directly.
+  | project-rename
+      EventTime = TimeGenerated, // Standard ASIM alias for the primary event time
+      User = ActorUsername,      // Common alias for ActorUsername
+      IpAddress = SrcIpAddr      // Common alias for SrcIpAddr
+
+  // --- Select and Order ASIM Fields ---
+  // Project only the fields that are being populated, plus common aliases.
+  | project
+      // Event
+      EventTime,
+      EventProduct,
+      EventVendor,
+      EventSchemaVersion,
+      EventType,
+      EventResult,
+      EventStartTime,
+      EventEndTime,
+      // Actor
+      ActorUsername,
+      ActorUsernameType,
+      // Target User
+      TargetUsername,
+      TargetUsernameType,
+      // Source Device
+      SrcIpAddr,
+      // Aliases
+      User,
+      IpAddress,
+      // Additional & Raw
+      AdditionalFields,
+      RawData // Include the original raw log message
+};
+parser // Execute the parser function

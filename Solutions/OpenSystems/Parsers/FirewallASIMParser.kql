@@ -1,4 +1,105 @@
-// ASIM Parser for Firewall logs
-// TODO: Implement KQL function to transform raw Firewall logs into the relevant ASIM schema (e.g., NetworkSession).
-// Function name should follow ASIM naming convention (e.g., imNetworkSessionFirewall).
-// Refer to ASIM documentation for schema details.
+// ASIM Parser for OpenSystems Firewall logs to ASIM NetworkSession Schema
+// Table name: OSAGFirewallLogs_CL
+// Ingestion-time KQL transform: source | extend TimeGenerated = datetime_add('second', timestamp, datetime(1970-01-01))
+// ASIM NetworkSession Schema: https://learn.microsoft.com/azure/sentinel/normalization-schema-reference-network-session
+
+let parser = (disabled: bool=false) {
+  OSAGFirewallLogs_CL
+  | where not(disabled)
+  | extend
+      // --- Event Information ---
+      EventProduct = "OpenSystems",
+      EventVendor = "OpenSystems",
+      EventSchemaVersion = "0.2.7", // Refer to the latest ASIM NetworkSession version
+      EventType = iff(action in ("accept", "allow"), "NetworkSession", "NetworkFlow"), // Or more specific if available
+
+      // --- Event Timestamps ---
+      // TimeGenerated is already set at ingestion from 'timestamp' (epoch seconds)
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated, // Firewall logs are typically point-in-time for a session/flow event
+
+      // --- Network Information ---
+      SrcIpAddr = ip_src,
+      DstIpAddr = ip_dst,
+      SrcPortNumber = toint(port_src),
+      DstPortNumber = toint(port_dst),
+      // NetworkProtocol needs to be derived if not directly available. Assuming TCP/UDP based on common ports or a dedicated protocol field if it exists.
+      // For this example, we'll leave it generic or try to infer. If you have a protocol field, use it.
+      NetworkProtocol = case( DstPortNumber == 53 or SrcPortNumber == 53, "UDP", // Example for DNS
+                               DstPortNumber == 80 or SrcPortNumber == 80, "TCP", // Example for HTTP
+                               DstPortNumber == 443 or SrcPortNumber == 443, "TCP", // Example for HTTPS
+                               // Add more protocol inferences based on common ports
+                               "Other"
+                              ),
+      NetworkDirection = case(
+                            // Infer direction based on zones or interfaces if possible. This is a placeholder.
+                            // Example: iface_in startswith "lan" and iface_out startswith "wan", "Outbound",
+                            //          iface_in startswith "wan" and iface_out startswith "lan", "Inbound",
+                            isnotempty(iface_in) and isnotempty(iface_out), "Other", // If interfaces are known but direction unclear
+                            "Unknown"
+                          ),
+
+      // --- Event Result & Details ---
+      EventResult = case(
+                      action in ("accept", "allow", "permit"), "Success",
+                      action in ("deny", "drop", "reject"), "Failure",
+                      "Other"
+                    ),
+      EventResultDetails = action, // Original action can serve as details
+
+      // --- Device Information (Firewall itself) ---
+      DvcHostname = host_name,
+      DvcInboundInterface = iface_in,
+      DvcOutboundInterface = iface_out,
+
+      // --- Rule Information ---
+      // If a specific firewall rule name/ID is logged, map it here.
+      // NetworkRuleName = firewall_rule_name, // Example
+
+      // --- Additional Fields ---
+      AdditionalFields = pack(
+                            "ZoneSrc", zone_src,
+                            "ZoneDst", zone_dst,
+                            "OriginalAction", action,
+                            "OriginalTimestamp", timestamp // Original epoch timestamp
+                         )
+
+  // --- Aliases & Standard Fields ---
+  | project-rename
+      EventOriginalUid = RawData, // Assuming RawData contains a unique ID or the full log.
+      IpAddress = SrcIpAddr,      // Common alias
+      Rule = action // Simple alias for the action taken
+
+  // --- Select and Order ASIM Fields ---
+  | project
+      // Event
+      EventTime, // Alias for EventStartTime, using TimeGenerated
+      EventProduct,
+      EventVendor,
+      EventSchemaVersion,
+      EventType,
+      EventResult,
+      EventResultDetails,
+      EventStartTime,
+      EventEndTime,
+      EventOriginalUid,
+      // Network
+      SrcIpAddr,
+      DstIpAddr,
+      SrcPortNumber,
+      DstPortNumber,
+      NetworkProtocol,
+      NetworkDirection,
+      // Device
+      DvcHostname,
+      DvcInboundInterface,
+      DvcOutboundInterface,
+      // Rule
+      Rule, // Alias for action
+      // Aliases
+      IpAddress,
+      // Additional & Raw
+      AdditionalFields,
+      RawData
+};
+parser // Execute the parser function

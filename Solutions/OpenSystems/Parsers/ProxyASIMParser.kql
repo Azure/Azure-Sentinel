@@ -1,4 +1,156 @@
-// ASIM Parser for Proxy logs
-// TODO: Implement KQL function to transform raw Proxy logs into the relevant ASIM schema (e.g., NetworkSession).
-// Function name should follow ASIM naming convention (e.g., imNetworkSessionProxy).
-// Refer to ASIM documentation for schema details.
+// ASIM Parser for OpenSystems Proxy logs to ASIM NetworkSession Schema
+// Table name: OSAGProxyLogs_CL
+// Ingestion-time KQL transform: source | extend TimeGenerated = datetime_add('second', tolong(timestamp), datetime(1970-01-01))
+// ASIM NetworkSession Schema: https://learn.microsoft.com/azure/sentinel/normalization-schema-reference-network-session
+
+let parser = (disabled: bool=false) {
+  OSAGProxyLogs_CL
+  | where not(disabled)
+  | extend
+      // --- Event Information ---
+      EventProduct = "OpenSystems",
+      EventVendor = "OpenSystems",
+      EventSchemaVersion = "0.2.7", // Refer to the latest ASIM NetworkSession version
+      EventType = "HttpRequest",    // Assuming these are HTTP/HTTPS proxy logs
+
+      // --- Event Timestamps ---
+      // TimeGenerated is already set at ingestion from 'timestamp' (epoch seconds)
+      EventStartTime = TimeGenerated,
+      EventEndTime = case(
+                        isnotempty(duration) and isnotempty(TimeGenerated), TimeGenerated + totimespan(strcat(tostring(toint(duration)), "ms")), // Assuming duration is in milliseconds
+                        TimeGenerated // Fallback if duration is not available
+                       ),
+
+      // --- Network Information ---
+      SrcIpAddr = client_ip,
+      DstIpAddr = server_ip,
+      NetworkProtocol = case(
+                          url startswith "https://", "HTTPS",
+                          url startswith "http://", "HTTP",
+                          "Other"
+                        ),
+      NetworkDirection = "Outbound", // Typically for proxy logs
+
+      // --- URL and HTTP Details ---
+      Url = url,
+      HttpRequestMethod = http_method,
+      HttpUserAgent = user_agent,
+      HttpStatusCode = tostring(client_response_status), // Ensure it's a string
+      HttpContentType = content_type,
+
+      // --- Size Information ---
+      // Convert sizes to long. Handle potential non-numeric values or empty strings.
+      NetworkBytesSent = todouble(client_request_size), // DvcHttpRequestSizeBytes in some contexts
+      NetworkBytesReceived = todouble(client_response_size), // DvcHttpResponseSizeBytes in some contexts
+
+      // --- Event Result & Details ---
+      EventResult = case(
+                      url_filter_action has_cs "allow", "Success",
+                      url_filter_action has_cs "block", "Failure",
+                      url_filter_action has_cs "monitor", "Success", // Or "Other" depending on intent
+                      isnotempty(client_response_status) and tostring(client_response_status) startswith "2", "Success", // 2xx codes
+                      isnotempty(client_response_status) and tostring(client_response_status) startswith "3", "Success", // 3xx codes (redirects are usually successful from proxy PoV)
+                      isnotempty(client_response_status), "Failure", // 4xx, 5xx and others
+                      "Other"
+                    ),
+      EventResultDetails = coalesce(error_details, url_filter_result, ""),
+
+      // --- Actor (User) Information ---
+      ActorUsername = user_id,
+      ActorUsernameType = iff(isnotempty(user_id), "Simple", ""), // Assuming simple username
+
+      // --- Threat & Category Information ---
+      ThreatCategory = url_filter_categories, // Can be mapped to NetworkRuleName as well
+      // Assuming casb_risk_score is numeric or can be mapped to ASIM risk levels (Informational, Low, Medium, High, Critical)
+      ThreatRiskLevel = case(
+                          casb_risk_score == "1", "Low",
+                          casb_risk_score == "2", "Low",
+                          casb_risk_score == "3", "Medium",
+                          casb_risk_score == "4", "High",
+                          casb_risk_score == "5", "Critical",
+                          "" // Default or if not applicable
+                        ),
+
+      // --- Device Information (Proxy Server itself) ---
+      // Dvc fields are usually for the reporting device.
+      // DvcHostname, DvcIpAddr could be added if known and static for the proxy.
+
+      // --- Additional Fields ---
+      AdditionalFields = pack(
+                            "CasbApplication", casb_application,
+                            "CasbCategory", casb_category,
+                            "CasbOperation", casb_operation,
+                            "CasbRiskScore", casb_risk_score,
+                            "ClientRequestSize", client_request_size,
+                            "ClientResponseSize", client_response_size,
+                            "DurationMs", duration,
+                            "TimeDns", time_dns,
+                            "TimeIcap", time_icap,
+                            "TimeServer", time_server,
+                            "TlsCertErrors", tls_cert_errors,
+                            "TlsClientCipher", tls_client_cipher,
+                            "TlsClientMaxVersion", tls_client_max_version,
+                            "TlsClientVersion", tls_client_version,
+                            "TlsServerCipher", tls_server_cipher,
+                            "TlsServerMaxVersion", tls_server_max_version,
+                            "TlsServerVersion", tls_server_version,
+                            "UrlFilterAction", url_filter_action,
+                            "UrlFilterResult", url_filter_result,
+                            "OriginalTimestamp", timestamp
+                         )
+
+  // --- Aliases & Standard Fields ---
+  | project-rename
+      EventOriginalUid = RawData, // Assuming RawData contains a unique ID or the full log. If not, generate one.
+      HttpReferrer = casb_application, // Or another field if more appropriate for referrer
+      User = ActorUsername,
+      IpAddress = SrcIpAddr, // Common alias, though DstIpAddr is also important
+      RuleName = url_filter_categories // Alias for ThreatCategory or specific rule name
+
+  // --- Select and Order ASIM Fields ---
+  | project
+      // Event
+      EventTime, // Alias for EventStartTime, using TimeGenerated
+      EventProduct,
+      EventVendor,
+      EventSchemaVersion,
+      EventType,
+      EventResult,
+      EventResultDetails,
+      EventStartTime,
+      EventEndTime,
+      EventOriginalUid,
+      // Network
+      SrcIpAddr,
+      DstIpAddr,
+      NetworkProtocol,
+      NetworkDirection,
+      // URL & HTTP
+      Url,
+      HttpRequestMethod,
+      HttpUserAgent,
+      HttpStatusCode,
+      HttpContentType,
+      HttpReferrer,
+      // Size & Duration
+      NetworkBytesSent,
+      NetworkBytesReceived,
+      Duration, // This should be the ASIM Duration field (in ms)
+      // Actor
+      ActorUsername,
+      ActorUsernameType,
+      // Threat
+      ThreatCategory,
+      ThreatRiskLevel,
+      // Aliases
+      User,
+      IpAddress,
+      RuleName,
+      // Additional & Raw
+      AdditionalFields,
+      RawData
+  // Ensure Duration is correctly populated as a timespan or long (milliseconds)
+  // The extend for EventEndTime already calculates duration, let's ensure ASIM 'Duration' field is also populated
+  | extend Duration = todouble(duration) // Assuming original 'duration' field is in milliseconds and numeric
+};
+parser // Execute the parser function

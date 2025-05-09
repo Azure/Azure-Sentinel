@@ -1,4 +1,100 @@
-// ASIM Parser for ZTNA logs
-// TODO: Implement KQL function to transform raw ZTNA logs into the relevant ASIM schema.
-// Function name should follow ASIM naming convention.
-// Refer to ASIM documentation for schema details.
+// ASIM Parser for OpenSystems ZTNA logs to ASIM Authentication Schema
+// Table name: OSAGZtnaLogs_CL
+// Ingestion-time KQL transform: source | extend TimeGenerated = todatetime(timestamp)
+// ASIM Authentication Schema: https://learn.microsoft.com/azure/sentinel/normalization-schema-reference-authentication
+
+let parser = (disabled: bool=false) {
+  OSAGZtnaLogs_CL
+  | where not(disabled)
+  | extend
+      // --- Event Information ---
+      EventProduct = "OpenSystems ZTNA",
+      EventVendor = "OpenSystems",
+      EventSchemaVersion = "0.1.0", // Refer to the latest ASIM Authentication version
+      // Infer EventType based on 'status' or 'message_type' if possible. Defaulting to ZTNAAccess.
+      EventType = case(
+                      status has_cs "success", "LogonSuccess",
+                      status has_cs "fail", "LogonFailed",
+                      status has_cs "denied", "LogonFailed",
+                      status has_cs "allowed", "LogonSuccess",
+                      "ZTNAAccess" // Generic fallback
+                    ),
+      EventResult = case(
+                      status has_cs "success", "Success",
+                      status has_cs "allowed", "Success",
+                      status has_cs "fail", "Failure",
+                      status has_cs "denied", "Failure",
+                      // Add more specific cases for other 'status' values if they exist
+                      "Other" // Default if no other case matches
+                    ),
+      EventStartTime = TimeGenerated, // Already derived from original 'timestamp'
+      EventEndTime = TimeGenerated,   // Assuming ZTNA events are point-in-time
+      EventOriginalUid = uuid,
+      EventMessage = message,
+
+      // --- Actor Information (User attempting access) ---
+      ActorUsername = subject_name,
+      ActorUsernameType = "Simple", // Assuming 'subject_name' is a simple username. Change if applicable.
+
+      // --- Target User Information (Often same as Actor in ZTNA context) ---
+      TargetUsername = subject_name,
+      TargetUsernameType = "Simple",
+
+      // --- Source Device Information ---
+      SrcIpAddr = remote_address,
+
+      // --- Target Application Information ---
+      TargetAppName = object_name,
+      TargetAppType = "ZTNA", // Or more specific if available
+
+      // --- Additional Fields ---
+      AdditionalFields = pack(
+                            "AuthorityName", authority_name,
+                            "MessageType", message_type,
+                            "ObjectNamePortal", object_name_portal,
+                            "OriginalStatus", status,
+                            "OriginalTimestamp", timestamp,
+                            "ZtnaTenant", ztna_tenant,
+                            "ZtnaUpstream", ztna_upstream
+                         )
+
+  // --- Aliases & Standard Fields ---
+  | project-rename
+      EventTime = EventStartTime, // Standard ASIM alias
+      User = ActorUsername,       // Common alias
+      IpAddress = SrcIpAddr,      // Common alias
+      Application = TargetAppName // Common alias
+
+  // --- Select and Order ASIM Fields ---
+  | project
+      // Event
+      EventTime,
+      EventProduct,
+      EventVendor,
+      EventSchemaVersion,
+      EventType,
+      EventResult,
+      EventStartTime,
+      EventEndTime,
+      EventOriginalUid,
+      EventMessage,
+      // Actor
+      ActorUsername,
+      ActorUsernameType,
+      // Target User
+      TargetUsername,
+      TargetUsernameType,
+      // Source Device
+      SrcIpAddr,
+      // Target Application
+      TargetAppName,
+      TargetAppType,
+      // Aliases
+      User,
+      IpAddress,
+      Application,
+      // Additional & Raw
+      AdditionalFields,
+      RawData // Include the original raw log message
+};
+parser // Execute the parser function
