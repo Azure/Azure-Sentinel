@@ -1,0 +1,61 @@
+id: b7b409df-af7b-4feb-9cc9-109beed37512
+name: Suspicious Anonymous Storage Blob Access Pattern
+description: |
+  'This hunting query will identify potential reconnaissance or enumeration behavior in Azure Storage Blob access logs 
+  by identifying anonymous read requests accessing many distinct blob paths in a short period of time. 
+  This pattern may indicate scanning activity or probing for sensitive data using anonymous access'
+requiredDataConnectors: []
+tactics:
+  - Reconnaissance
+  - Collection
+relevantTechniques:
+  - T1595
+  - T1530
+query: |
+
+  let maxTimeBetweenRequests = 30s;
+  let maxWindowTime = 12h;
+  let timeRange = 30d;
+  let authTypes = dynamic(["Anonymous"]);
+  StorageBlobLogs
+  | where TimeGenerated > ago(timeRange)
+  // Collect anonymous requests to storage
+  | where AuthenticationType has_any(authTypes)
+  | where Uri !endswith "favicon.ico"
+  | where Category =~ "StorageRead"
+  // Process the filepath out of the request URI
+  | extend FilePath = array_slice(split(split(Uri, "?")[0], "/"), 3, -1)
+  | extend FullPath = strcat("/", strcat_array(FilePath, "/"))
+  // Extract the IP address, removing the port used
+  | extend CallerIpAddress = tostring(split(CallerIpAddress, ":")[0])
+  // Ignore private IP addresses
+  | where not(ipv4_is_private(CallerIpAddress))
+  | project
+      TimeGenerated,
+      AccountName,
+      FullPath,
+      CallerIpAddress,
+      UserAgentHeader,
+      StatusCode
+  | order by TimeGenerated asc 
+  | serialize 
+  // Generate sessions of access activity, where each request is within maxTimeBetweenRequests doens't last longer than maxWindowTime
+  | extend SessionStarted = row_window_session(TimeGenerated, maxWindowTime, maxTimeBetweenRequests, AccountName != prev(AccountName))
+  | order by TimeGenerated asc
+  // Summarize the results using the Session start time
+  | summarize Paths=make_list(FullPath), Statuses=make_set(StatusCode), CallerIPs=make_list(CallerIpAddress),
+      DistinctPathCount=dcount(FullPath), AllRequestsCount=count(), CallerIPCount=dcount(CallerIpAddress), CallerUACount=dcount(UserAgentHeader), SessionEnded=max(TimeGenerated)
+      by SessionStarted, AccountName
+  // Validate that each path visited is unique, scanners will generally try files once
+  | where DistinctPathCount > 1 and DistinctPathCount == AllRequestsCount
+  | order by DistinctPathCount
+  | extend ["Duration (Mins)"] = datetime_diff("minute", SessionEnded, SessionStarted)
+  | project-reorder
+      SessionStarted,
+      SessionEnded,
+      ['Duration (Mins)'],
+      AccountName,
+      DistinctPathCount,
+      AllRequestsCount,
+      CallerIPCount,
+      CallerUACount
