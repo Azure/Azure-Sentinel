@@ -323,7 +323,7 @@ class UmbrellaClient:
     def parse_csv_proxy(self, csv_file):
         sanitized_csv_file = csv_file.replace('\x00', '')
         
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             try:
                 if len(row) > 1:
