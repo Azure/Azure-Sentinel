@@ -75,7 +75,7 @@ class AzureSentinel:
         uri = (
             "https://"
             + customer_id
-            + ".ods.opinsights.azure.com"
+            + ".ods.opinsights.azure.us"
             + resource
             + "?api-version=2016-04-01"
         )
