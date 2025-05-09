@@ -1,0 +1,340 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Google Threat Intelligence - IoC Stream",
+        "description": "This playbook will ingest Google Threat Intelligence from your IoC Streams into Threat Intelligence Sentinel.",
+        "prerequisites": [
+            "You will need to register to Google Threat Intelligence for an API key"
+        ],
+        "postDeployment": [
+            "After deployment, attach this playbook to an **automation rule** so it runs when the incident is created."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2024-12-19T00:00:00Z",
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Google"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "GTI ioC Stream - Google Threat Intelligence report",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GTI-IoCStream",
+            "type": "string"
+        },
+        "ConnectorName": {
+            "defaultValue": "GoogleThreatIntelligence-CustomConnector",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "GoogleThreatIntelligenceConnectionName": "GoogleThreatIntelligence-CustomConnector",
+        "AzureSentinelConnectionName": "GoogleThreatIntelligence-MicrosoftSentinelConnection",
+        "AzureTablesConnectionName": "GoogleThreatIntelligence-AzureTablesConnection"
+    },
+    "functions": [],
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateVersion": "2.8"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureTablesConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('GoogleThreatIntelligenceConnectionName'))]"
+            ],
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "interval": 60,
+                                "frequency": "Minute",
+                                "timeZone": "Romance Standard Time",
+                                "startTime": "2024-12-17T09:40:00Z"
+                            },
+                            "conditions": []
+                        }
+                    },
+                    "actions": {
+                        "Until_no_cursor": {
+                            "type": "Until",
+                            "expression": "@equals(body('Get_IoC_Stream_list')?['extensions']?['extension-definition--e0e2bd88-8e87-52d5-b822-3fdd60918598']?['meta']?['cursor'],null)",
+                            "limit": {
+                                "count": 1000,
+                                "timeout": "PT1H"
+                            },
+                            "actions": {
+                                "Get_IoC_Stream_list": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['googlethreatintelligence']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/ioc_stream",
+                                        "queries": {
+                                            "filter": "date:@{variables('timestamp')}+",
+                                            "output_format": "stix"
+                                        }
+                                    }
+                                },
+                                "Threat_Intelligence_-_Upload_Indicators_of_Compromise_(V2)_(Preview)": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "sourcesystem": "Google Threat Intelligence",
+                                            "indicators": "@body('Get_IoC_Stream_list')?['objects']"
+                                        },
+                                        "path": "/V2/ThreatIntelligence/@{encodeURIComponent('')}/UploadIndicators/"
+                                    },
+                                    "runAfter": {
+                                        "Get_IoC_Stream_list": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Create_table_(V2)": [
+                                    "Succeeded",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "Set_timestamp": [
+                                    "Succeeded",
+                                    "Skipped"
+                                ]
+                            }
+                        },
+                        "Table_name": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "table_name",
+                                        "type": "string",
+                                        "value": "GoogleThreatIntelligence"
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Account_name": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "account_name",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Update_last_execution": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuretables']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "body": {
+                                    "LastExTimestamp": "@{convertTimeZone(utcNow(), 'UTC', 'Romance Standard Time','yyyy-MM-ddTHH:mm:ss')}"
+                                },
+                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(variables('account_name')))}/tables/@{encodeURIComponent(variables('table_name'))}/entities(PartitionKey='@{encodeURIComponent('IoCStream-',workflow().name)}',RowKey='@{encodeURIComponent('LastExTimestamp')}')"
+                            },
+                            "runAfter": {
+                                "Until_no_cursor": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Create_table_(V2)": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuretables']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@variables('table_name')",
+                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(variables('account_name')))}/tables"
+                            },
+                            "runAfter": {
+                                "Get_last_execution": [
+                                    "Failed"
+                                ]
+                            }
+                        },
+                        "Get_last_execution": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuretables']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(variables('account_name')))}/tables/@{encodeURIComponent(variables('table_name'))}/entities(PartitionKey='@{encodeURIComponent('IoCStream-',workflow().name)}',RowKey='@{encodeURIComponent('LastExTimestamp')}')"
+                            },
+                            "runAfter": {
+                                "Table_name": [
+                                    "Succeeded"
+                                ],
+                                "Account_name": [
+                                    "Succeeded"
+                                ],
+                                "Timestamp": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Set_timestamp": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "timestamp",
+                                "value": "@body('Get_last_execution')?['LastExTimestamp']"
+                            },
+                            "runAfter": {
+                                "Get_last_execution": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Timestamp": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "timestamp",
+                                        "type": "string",
+                                        "value": "@{convertTimeZone(utcNow(), 'UTC', 'Romance Standard Time','yyyy-MM-ddTHH:mm:ss')}"
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        }
+                    },
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object",
+                            "defaultValue": {}
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "googlethreatintelligence": {
+                                "id": "[concat(resourceGroup().id,'/providers/Microsoft.Web/customApis/',parameters('ConnectorName'))]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('GoogleThreatIntelligenceConnectionName'))]",
+                                "connectionName": "[variables('GoogleThreatIntelligenceConnectionName')]"
+                            },
+                            "azuretables": {
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuretables')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureTablesConnectionName'))]",
+                                "connectionName": "[variables('AzureTablesConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('GoogleThreatIntelligenceConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('GoogleThreatIntelligenceConnectionName')]",
+                "api": {
+                    "id": "[concat(resourceGroup().id,'/providers/Microsoft.Web/customApis/',parameters('ConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureTablesConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureTablesConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueSet": {
+                    "name": "managedIdentityAuth",
+                    "values": {}
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuretables')]"
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
