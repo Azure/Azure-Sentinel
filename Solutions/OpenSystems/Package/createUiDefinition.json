@@ -4,104 +4,139 @@
   "version": "0.1.2-preview",
   "parameters": {
     "config": {
+      "isWizard": true,
       "basics": {
+        "description": "This solution deploys a Logstash instance to collect OpenSystems logs from an Event Hub and send them to Azure Sentinel. Please provide the necessary details for your Event Hub and the target Sentinel workspace.",
+        "options": {
+          "text": "Learn more about this solution (link to your docs)"
+        },
         "resourceGroup": {
           "allowExisting": true
         }
       }
     },
-    "basics": [],
+    "basics": [
+      {
+        "name": "logAnalyticsWorkspace",
+        "type": "Microsoft.Solutions.ResourceSelector",
+        "label": "Log Analytics workspace",
+        "toolTip": "Select the Log Analytics workspace that Azure Sentinel is built on.",
+        "resourceType": "Microsoft.OperationalInsights/workspaces",
+        "options": {
+          "filter": {
+            "subscription": "onBasics",
+            "location": "onBasics"
+          }
+        },
+        "visible": true
+      }
+    ],
     "steps": [
       {
-        "name": "osag",
-        "label": "OSAG Logs-API",
+        "name": "logSourceSelection",
+        "label": "Log Source Configuration",
         "elements": [
           {
-            "name": "eventhubEndpoint",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Logs-API Endpoint",
-            "placeholder": "",
-            "multiLine": false,
-            "visible": true,
-            "constraints": {
-              "required": true
-            }
-          },
-          {
-            "name": "eventhubConnectionString",
-            "type": "Microsoft.Common.PasswordBox",
-            "label": {
-              "password": "Logs-API Connection String"
-            },
-            "constraints": {
-              "required": true
-            },
-            "options": {
-              "hideConfirmation": true
-            },
-            "visible": true
+            "name": "proxy",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Enable Proxy Logs",
+            "defaultValue": true,
+            "toolTip": "Ingest proxy logs."
           },
           {
             "name": "auth",
             "type": "Microsoft.Common.CheckBox",
-            "label": "Authentication"
-          },
-          {
-            "name": "proxy",
-            "type": "Microsoft.Common.CheckBox",
-            "label": "Proxy"
-          },
-          {
-            "name": "ztna",
-            "type": "Microsoft.Common.CheckBox",
-            "label": "ZTNA"
+            "label": "Enable Authentication Logs",
+            "defaultValue": true,
+            "toolTip": "Ingest authentication logs."
           },
           {
             "name": "firewall",
             "type": "Microsoft.Common.CheckBox",
-            "label": "Firewall"
+            "label": "Enable Firewall Logs",
+            "defaultValue": true,
+            "toolTip": "Ingest firewall logs."
+          },
+          {
+            "name": "ztna",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Enable ZTNA Logs",
+            "defaultValue": true,
+            "toolTip": "Ingest ZTNA logs."
           },
           {
             "name": "mail",
             "type": "Microsoft.Common.CheckBox",
-            "label": "Mail"
+            "label": "Enable Mail Logs",
+            "defaultValue": false,
+            "toolTip": "Ingest mail logs."
           },
           {
             "name": "zeek",
             "type": "Microsoft.Common.CheckBox",
-            "label": "Zeek"
+            "label": "Enable Zeek Logs",
+            "defaultValue": false,
+            "toolTip": "Ingest Zeek logs."
           }
         ]
       },
       {
-        "name": "logsWorkspace",
-        "label": "Log Analytics",
+        "name": "eventHubDetails",
+        "label": "Event Hub Details",
         "elements": [
           {
-            "name": "logsWorkspaceSelector",
-            "type": "Microsoft.Solutions.ResourceSelector",
-            "label": "Select Log Analytics workspace",
-            "resourceType": "Microsoft.OperationalInsights/workspaces"
-          },
-          {
-            "name": "servicePrincipal",
-            "type": "Microsoft.Common.ServicePrincipalSelector",
-            "label": {
-              "password": "Password",
-              "sectionHeader": "Service Principal"
-            },
-            "toolTip": {
-              "password": "Fow existing Service Principal please use pre-configured secret"
-            },
-            "defaultValue": {
-              "principalId": "<default guid>",
-              "name": "osag-logs-api-connector"
-            },
+            "name": "eventhubEndpoint",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Event Hub-compatible endpoint FQDN",
+            "toolTip": "The FQDN of your Event Hubs Namespace (e.g., yournamespace.servicebus.windows.net)",
             "constraints": {
               "required": true
             },
-            "options": {
-              "hideCertificate": true
+            "visible": true
+          },
+          {
+            "name": "eventhubConnectionString",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": "Event Hub Connection String (Primary or Secondary)",
+            "toolTip": "The connection string for the Event Hub Namespace. Ensure it has Listen permissions for all configured Event Hubs (proxy, auth, firewall, etc.). Example: Endpoint=sb://<namespace>.servicebus.windows.net/;SharedAccessKeyName=<keyName>;SharedAccessKey=<key>",
+            "constraints": {
+              "required": true
+            },
+            "visible": true
+          }
+        ]
+      },
+      {
+        "name": "servicePrincipalDetails",
+        "label": "Service Principal Details",
+        "elements": [
+          {
+            "name": "principalClientId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Service Principal Client ID",
+            "toolTip": "Client ID of the Azure AD App Registration that has 'Azure Sentinel Contributor' or 'Log Analytics Contributor' role on the workspace and 'Monitoring Metrics Publisher' on the Data Collection Rules.",
+            "constraints": {
+              "required": true
+            },
+            "visible": true
+          },
+          {
+            "name": "principalObjectId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Service Principal Object ID",
+            "toolTip": "Object ID (not Application ID) of the Azure AD App Registration (Service Principal). This is required for assigning necessary roles.",
+            "constraints": {
+              "required": true
+            },
+            "visible": true
+          },
+          {
+            "name": "principalClientSecret",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": "Service Principal Client Secret",
+            "toolTip": "Client Secret of the Azure AD App Registration.",
+            "constraints": {
+              "required": true
             },
             "visible": true
           }
@@ -109,18 +144,20 @@
       }
     ],
     "outputs": {
-      "principalId": "[steps('logsWorkspace').servicePrincipal.objectId]",
-      "principalClientId": "[steps('logsWorkspace').servicePrincipal.appId]",
-      "logAnalyticsWorkspaceName": "[steps('logsWorkspace').logsWorkspaceSelector.name]",
-      "principalSecret": "[steps('logsWorkspace').servicePrincipal.password]",
-      "eventhubEndpoint": "[steps('osag').eventhubEndpoint]",
-      "eventhubConnectionString": "[steps('osag').eventhubConnectionString]",
-      "proxy": "[steps('osag').proxy]",
-      "ztna": "[steps('osag').ztna]",
-      "firewall": "[steps('osag').firewall]",
-      "mail": "[steps('osag').mail]",
-      "zeek": "[steps('osag').zeek]",
-      "auth": "[steps('osag').auth]"
+      "logAnalyticsWorkspaceName": "[basics('workspace').name]",
+      "location": "[basics('workspace').location]",
+      "proxy": "[if(contains(steps('logSourceSelection').logSources, 'proxy'), bool('true'), bool('false'))]",
+      "auth": "[if(contains(steps('logSourceSelection').logSources, 'auth'), bool('true'), bool('false'))]",
+      "firewall": "[if(contains(steps('logSourceSelection').logSources, 'firewall'), bool('true'), bool('false'))]",
+      "ztna": "[if(contains(steps('logSourceSelection').logSources, 'ztna'), bool('true'), bool('false'))]",
+      "mail": "[if(contains(steps('logSourceSelection').logSources, 'mail'), bool('true'), bool('false'))]",
+      "zeek": "[if(contains(steps('logSourceSelection').logSources, 'zeek'), bool('true'), bool('false'))]",
+      "eventhubEndpoint": "[concat(steps('eventHubDetails').eventHubNamespace, '.servicebus.windows.net')]",
+      "eventHubName": "[steps('eventHubDetails').eventHubName]",
+      "eventHubConnectionString": "[steps('eventHubDetails').eventHubConnectionString]",
+      "principalClientId": "[steps('servicePrincipalDetails').applicationId]",
+      "principalId": "[array(steps('servicePrincipalDetails').principalObjectId)]",
+      "principalSecret": "[steps('servicePrincipalDetails').servicePrincipalKey]"
     }
   }
 }
