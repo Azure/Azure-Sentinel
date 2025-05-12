@@ -1,0 +1,84 @@
+id: 92e8e945-6e99-4e4b-bef8-468b4c19fc3a
+name: TI map IP entity to Workday(ASimAuditEventLogs)
+description: |
+  Detects a match in Workday activity from any IP Indicator of Compromise (IOC) provided by Threat Intelligence (TI).
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: Workday
+    dataTypes:
+      - Workday
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dtLookBack = 1h; // Define the lookback period for audit events
+  let ioc_lookBack = 14d; // Define the lookback period for threat intelligence indicators
+  ThreatIntelIndicators 
+  | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
+  //extract key part of kv pair
+       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | extend NetworkSourceIP = toupper(ObservableValue)
+       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | where isnotempty(NetworkSourceIP)
+        or isnotempty(NetworkSourceIP) // Filter for indicators with relevant IP fields
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id // Get the latest indicator time for each IndicatorId
+    | extend TI_ipEntity = coalesce(NetworkSourceIP, NetworkSourceIP, NetworkSourceIP, NetworkSourceIP) // Combine IP fields into a single entity
+    | where IsActive == true and ValidUntil > now() // Filter for active indicators that have not expired
+    | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
+    | join kind=inner (
+        ASimAuditEventLogs
+        | where EventVendor == "Workday" // Filter for Workday events
+        | where TimeGenerated >= ago(dtLookBack) // Filter events within the lookback period
+        | where isnotempty(DvcIpAddr) // Filter for events with a device IP address
+        | extend WD_TimeGenerated = EventStartTime // Rename the event start time column
+        | project WD_TimeGenerated, ActorUsername, DvcIpAddr, Operation, Object // Select relevant columns
+        )
+        on $left.TI_ipEntity == $right.DvcIpAddr // Join on the IP entity
+        | extend Description = tostring(parse_json(Data).description)
+        | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+    | project
+        LatestIndicatorTime,
+        Description,
+        ActivityGroupNames,
+        Id,
+        ValidUntil,
+        Confidence,
+        WD_TimeGenerated,
+        ActorUsername,
+        DvcIpAddr,
+        Operation,
+        Object // Select relevant columns after the join
+    | extend
+        timestamp = WD_TimeGenerated,
+        Name = tostring(split(ActorUsername, '@', 0)),
+        UPNSuffix = tostring(split(ActorUsername, '@', 1)) // Add additional fields for timestamp, name, and UPN suffix     
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorUsername
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DvcIpAddr
+version: 1.0.1
+kind: Scheduled
