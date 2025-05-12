@@ -1,0 +1,77 @@
+id: 
+Function:
+  Title: ASIM Parser for OpenSystems Firewall logs
+  Version: '1.0.0'
+  LastUpdated: May 12th 2025
+Category: OpenSystemsParser
+FunctionName: FirewallASIMParser
+FunctionAlias: FirewallASIMParser
+FunctionParams: []
+FunctionQuery: |
+    let parser = () {
+      OSAGFirewallLogs_CL
+      | extend
+          EventProduct = "OpenSystems",
+          EventVendor = "OpenSystems",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.7",
+          EventType = iff(action in ("accept", "allow"), "NetworkSession", "NetworkFlow"),
+          EventCount = 1,
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          SrcIpAddr = ip_src,
+          DstIpAddr = ip_dst,
+          SrcPortNumber = toint(port_src),
+          DstPortNumber = toint(port_dst),
+          NetworkProtocol = case( toint(port_dst) == 53 or toint(port_src) == 53, "UDP",
+                                   toint(port_dst) == 80 or toint(port_src) == 80, "TCP",
+                                   toint(port_dst) == 443 or toint(port_src) == 443, "TCP",
+                                   "Other"
+                                  ),
+          NetworkDirection = case(
+                                isnotempty(iface_in) and isnotempty(iface_out) and iface_in != iface_out, "Other",
+                                "Unknown"
+                              ),
+          EventResult = case(
+                          action in ("accept", "allow", "permit"), "Success",
+                          action in ("deny", "drop", "reject"), "Failure",
+                          "Other"
+                        ),
+          EventResultDetails = action,
+          Dvc = host_name,
+          DvcHostname = host_name,
+          DvcInboundInterface = iface_in,
+          DvcOutboundInterface = iface_out,
+          AdditionalFields = pack(
+                                "ZoneSrc", zone_src,
+                                "ZoneDst", zone_dst,
+                                "OriginalAction", action,
+                                "OriginalTimestamp", timestamp
+                             )
+      | project-rename
+          EventOriginalUid = RawData
+      | project
+          EventStartTime,
+          EventEndTime,
+          EventProduct,
+          EventVendor,
+          EventSchema,
+          EventSchemaVersion,
+          EventType,
+          EventResult,
+          EventCount,
+          EventResultDetails,
+          EventOriginalUid,
+          SrcIpAddr,
+          DstIpAddr,
+          SrcPortNumber,
+          DstPortNumber,
+          NetworkProtocol,
+          NetworkDirection,
+          Dvc,
+          DvcHostname,
+          DvcInboundInterface,
+          DvcOutboundInterface,
+          AdditionalFields
+    };
+    parser
