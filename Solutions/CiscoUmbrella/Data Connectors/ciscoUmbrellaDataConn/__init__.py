@@ -321,94 +321,100 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_proxy(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
-            if len(row) > 1:
-                if len(row) >= 21:
-                    event = {
-                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
-                        'Identities': row[1],
-                        'Policy Identity': row[1],
-                        'Internal IP': row[2],
-                        'External IP': row[3],
-                        'Destination IP': row[4],
-                        'Content Type': row[5],
-                        'Verdict': row[6],
-                        'URL': row[7],
-                        'Referer': row[8],
-                        'userAgent': row[9],
-                        'statusCode': row[10],
-                        'requestSize': row[11],
-                        'responseSize': row[12],
-                        'responseBodySize': row[13],
-                        'SHA-SHA256': row[14],
-                        'Categories': row[15].split(','),
-                        'AVDetections': row[16].split(','),
-                        'PUAs': row[17].split(','),
-                        'AMP Disposition': row[18],
-                        'AMP Malware Name': row[19],
-                        'AMP Score': row[20],
-                        'Policy Identity Type': row[21]
-                    }
-                    try:
-                        event['Blocked Categories'] = row[22].split(',')
-                    except IndexError:
-                        pass
-                     #Version 5 — The same as version 4, but adds three new fields: all Identities, all Identity Types, and Request Method for Proxy logs.
-                    try:
-                        event['Identities'] = row[23]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Identity Types'] = row[24]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Request Method'] = row[25]
-                    except IndexError:
-                        pass
-                    #Version 6 — The same as version 5 with these additional fields to Proxy logs: Certificate Errors, Destination Lists IDs, DLP Status, File Name, Rule ID, and Ruleset ID.
-                    try:
-                        event['DLP Status'] = row[26]
-                    except IndexError:
-                        pass                     
-                    try:
-                        event['Certificate Errors'] = row[27]
-                    except IndexError:
-                        pass
-                    try:
-                        event['File Name'] = row[28]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Ruleset ID'] = row[29]
-                    except IndexError:
-                        pass                                                         
-                    try:
-                        event['Rule ID'] = row[30]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Destination List IDs'] = row[31]
-                    except IndexError:
-                        pass                                         
-
-                    int_fields = [
-                        'requestSize',
-                        'responseSize',
-                        'responseBodySize'
-                    ]
-
-                    for field in int_fields:
+            try:
+                if len(row) > 1:
+                    if len(row) >= 21:
+                        event = {
+                            'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                            'Identities': row[1],
+                            'Policy Identity': row[1],
+                            'Internal IP': row[2],
+                            'External IP': row[3],
+                            'Destination IP': row[4],
+                            'Content Type': row[5],
+                            'Verdict': row[6],
+                            'URL': row[7],
+                            'Referer': row[8],
+                            'userAgent': row[9],
+                            'statusCode': row[10],
+                            'requestSize': row[11],
+                            'responseSize': row[12],
+                            'responseBodySize': row[13],
+                            'SHA-SHA256': row[14],
+                            'Categories': row[15].split(','),
+                            'AVDetections': row[16].split(','),
+                            'PUAs': row[17].split(','),
+                            'AMP Disposition': row[18],
+                            'AMP Malware Name': row[19],
+                            'AMP Score': row[20],
+                            'Policy Identity Type': row[21]
+                        }
                         try:
-                            event[field] = int(event[field])
-                        except Exception:
+                            event['Blocked Categories'] = row[22].split(',')
+                        except IndexError:
                             pass
-                else:
-                    event = {"message": convert_list_to_csv_line(row)}
-                event = self.convert_empty_string_to_null_values(event)
-                event['EventType'] = 'proxylogs'
-                yield event
+                         #Version 5 — The same as version 4, but adds three new fields: all Identities, all Identity Types, and Request Method for Proxy logs.
+                        try:
+                            event['Identities'] = row[23]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Identity Types'] = row[24]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Request Method'] = row[25]
+                        except IndexError:
+                            pass
+                        #Version 6 — The same as version 5 with these additional fields to Proxy logs: Certificate Errors, Destination Lists IDs, DLP Status, File Name, Rule ID, and Ruleset ID.
+                        try:
+                            event['DLP Status'] = row[26]
+                        except IndexError:
+                            pass                     
+                        try:
+                            event['Certificate Errors'] = row[27]
+                        except IndexError:
+                            pass
+                        try:
+                            event['File Name'] = row[28]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Ruleset ID'] = row[29]
+                        except IndexError:
+                            pass                                                         
+                        try:
+                            event['Rule ID'] = row[30]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Destination List IDs'] = row[31]
+                        except IndexError:
+                            pass                                         
+
+                        int_fields = [
+                            'requestSize',
+                            'responseSize',
+                            'responseBodySize'
+                        ]
+
+                        for field in int_fields:
+                            try:
+                                event[field] = int(event[field])
+                            except Exception:
+                                pass
+                    else:
+                        event = {"message": convert_list_to_csv_line(row)}
+                    event = self.convert_empty_string_to_null_values(event)
+                    event['EventType'] = 'proxylogs'
+                    yield event
+            except Exception as e:
+                logging.error(f"Error processing row {row}: {e}")
+                continue
 
     def parse_csv_dns(self, csv_file):
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
