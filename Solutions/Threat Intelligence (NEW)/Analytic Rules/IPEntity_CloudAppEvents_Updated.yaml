@@ -1,0 +1,76 @@
+id: 16a45aee-5e39-4d1b-b508-40f847c99353
+name: TI map IP entity to Cloud App Events
+description: |
+   'Identifies compromises and attacks and detect malicious activities in one's IP entity from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1d;
+  let ioc_lookBack = 14d; 
+  let IP_Indicators = ThreatIntelIndicators
+  //extract key part of kv pair
+       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | extend NetworkSourceIP = toupper(ObservableValue)
+       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and ValidUntil > now()
+    | where isnotempty(NetworkSourceIP)
+  or isnotempty(NetworkSourceIP)
+    | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)
+    | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity);
+  //  | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity);
+  IP_Indicators
+     | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
+    | join kind=innerunique (
+    CloudAppEvents
+      | where isnotempty(IPAddress)
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.TI_ipEntity == $right.IPAddress
+      | where CloudAppEvents_TimeGenerated < ValidUntil
+      | summarize CloudAppEventsTimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by Id, IPAddress
+      | extend
+        Description = column_ifexists("max_CloudAppEvents_TimeGenerated_Description", ""),
+        ActivityGroupNames = column_ifexists("max_CloudAppEvents_TimeGenerated_ActivityGroupNames", ""),
+        ThreatType = column_ifexists("max_CloudAppEvents_TimeGenerated_ThreatType", ""),
+        ExpirationDateTime = column_ifexists("max_CloudAppEvents_TimeGenerated_ExpirationDateTime", ""),
+        ConfidenceScore = column_ifexists("max_CloudAppEvents_TimeGenerated_ConfidenceScore", ""),
+        TI_ipEntity = column_ifexists("max_CloudAppEvents_TimeGenerated_TI_ipEntity", ""),
+        NetworkDestinationIP = column_ifexists("max_CloudAppEvents_TimeGenerated_NetworkDestinationIP", ""),
+        NetworkSourceIP = column_ifexists("max_CloudAppEvents_TimeGenerated_NetworkSourceIP", ""),
+        EmailSourceIPAddress = column_ifexists("max_CloudAppEvents_TimeGenerated_EmailSourceIpAddress", "")
+      | project CloudAppEventsTimeGenerated, Description, ActivityGroupNames, Id, ThreatType, ExpirationDateTime, ConfidenceScore, TI_ipEntity, NetworkDestinationIP, NetworkSourceIP, EmailSourceIPAddress
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TI_ipEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkDestinationIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkSourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: EmailSourceIPAddress
+version: 1.0.4
+kind: Scheduled
