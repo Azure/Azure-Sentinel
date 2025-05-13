@@ -1,0 +1,905 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "proxy": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable proxy logs ingestion."
+      }
+    },
+    "auth": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable authentication logs ingestion."
+      }
+    },
+    "firewall": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable firewall logs ingestion."
+      }
+    },
+    "ztna": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable ZTNA logs ingestion."
+      }
+    },
+    "mail": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable mail logs ingestion."
+      }
+    },
+    "zeek": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable Zeek logs ingestion."
+      }
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace. This will be provided by the createUiDefinition."
+      }
+    },
+    "dceName": {
+      "type": "string",
+      "defaultValue": "osag-sentinel-eventhub",
+      "metadata": {
+        "description": "Name of the data collection endpoint."
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Location for all resources. This will be provided by the createUiDefinition based on the selected Log Analytics workspace."
+      }
+    },
+    "principalId": {
+      "type": "array",
+      "metadata": {
+        "description": "Principal ID (Object ID) of the service principal. This will be provided by the createUiDefinition."
+      }
+    },
+    "principalSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Principal secret of the user or service principal."
+      }
+    },
+    "principalClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "Principal client ID of the user or service principal."
+      }
+    },
+    "eventhubEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Eventhub endpoint."
+      }
+    },
+    "eventhubConnectionString": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Eventhub connection string."
+      }
+    }
+  },
+  "variables": {
+    "logTypes": [
+      {
+        "name": "Zeek",
+        "enabled": "[parameters('zeek')]",
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "timestamp",
+            "type": "datetime"
+          },
+          {
+            "name": "message",
+            "type": "dynamic"
+          },
+          {
+            "name": "RawData",
+            "type": "string"
+          }
+        ],
+        "transformKql": "source | extend TimeGenerated = todatetime(timestamp)"
+      },
+      {
+        "name": "Mail",
+        "enabled": "[parameters('mail')]",
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "timestamp",
+            "type": "datetime"
+          },
+          {
+            "name": "message",
+            "type": "dynamic"
+          },
+          {
+            "name": "RawData",
+            "type": "string"
+          }
+        ],
+        "transformKql": "source | extend TimeGenerated = todatetime(timestamp)"
+      },
+      {
+        "name": "Ztna",
+        "enabled": "[parameters('ztna')]",
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "authority_name",
+            "type": "string"
+          },
+          {
+            "name": "message",
+            "type": "string"
+          },
+          {
+            "name": "message_type",
+            "type": "string"
+          },
+          {
+            "name": "object_name",
+            "type": "string"
+          },
+          {
+            "name": "object_name_portal",
+            "type": "string"
+          },
+          {
+            "name": "remote_address",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": "string"
+          },
+          {
+            "name": "subject_name",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "string"
+          },
+          {
+            "name": "uuid",
+            "type": "string"
+          },
+          {
+            "name": "ztna_tenant",
+            "type": "string"
+          },
+          {
+            "name": "ztna_upstream",
+            "type": "string"
+          },
+          {
+            "name": "RawData",
+            "type": "string"
+          }
+        ],
+        "transformKql": "source | extend TimeGenerated = todatetime(timestamp)"
+      },
+      {
+        "name": "Firewall",
+        "enabled": "[parameters('firewall')]",
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "action",
+            "type": "string"
+          },
+          {
+            "name": "host_name",
+            "type": "string"
+          },
+          {
+            "name": "iface_in",
+            "type": "string"
+          },
+          {
+            "name": "iface_out",
+            "type": "string"
+          },
+          {
+            "name": "ip_dst",
+            "type": "string"
+          },
+          {
+            "name": "ip_src",
+            "type": "string"
+          },
+          {
+            "name": "port_dst",
+            "type": "int"
+          },
+          {
+            "name": "port_src",
+            "type": "int"
+          },
+          {
+            "name": "timestamp",
+            "type": "int"
+          },
+          {
+            "name": "zone_dst",
+            "type": "string"
+          },
+          {
+            "name": "zone_src",
+            "type": "string"
+          },
+          {
+            "name": "RawData",
+            "type": "string"
+          }
+        ],
+        "transformKql": "source | extend TimeGenerated = datetime_add('second', timestamp, datetime(1970-01-01))"
+      },
+      {
+        "name": "Authentication",
+        "enabled": "[parameters('auth')]",
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "login",
+            "type": "string"
+          },
+          {
+            "name": "remoteAddress",
+            "type": "dynamic"
+          },
+          {
+            "name": "result",
+            "type": "string"
+          },
+          {
+            "name": "event_time",
+            "type": "datetime"
+          },
+          {
+            "name": "RawData",
+            "type": "string"
+          }
+        ],
+        "transformKql": "source | extend TimeGenerated = todatetime(event_time)"
+      },
+      {
+        "name": "Proxy",
+        "enabled": "[parameters('proxy')]",
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "casb_application",
+            "type": "string"
+          },
+          {
+            "name": "casb_category",
+            "type": "string"
+          },
+          {
+            "name": "casb_operation",
+            "type": "string"
+          },
+          {
+            "name": "casb_risk_score",
+            "type": "string"
+          },
+          {
+            "name": "client_ip",
+            "type": "string"
+          },
+          {
+            "name": "client_request_size",
+            "type": "string"
+          },
+          {
+            "name": "client_response_size",
+            "type": "string"
+          },
+          {
+            "name": "client_response_status",
+            "type": "string"
+          },
+          {
+            "name": "content_type",
+            "type": "string"
+          },
+          {
+            "name": "duration",
+            "type": "string"
+          },
+          {
+            "name": "error_details",
+            "type": "string"
+          },
+          {
+            "name": "http_method",
+            "type": "string"
+          },
+          {
+            "name": "server_ip",
+            "type": "string"
+          },
+          {
+            "name": "server_response_size",
+            "type": "string"
+          },
+          {
+            "name": "time_dns",
+            "type": "string"
+          },
+          {
+            "name": "time_icap",
+            "type": "string"
+          },
+          {
+            "name": "time_server",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "real"
+          },
+          {
+            "name": "tls_cert_errors",
+            "type": "string"
+          },
+          {
+            "name": "tls_client_cipher",
+            "type": "string"
+          },
+          {
+            "name": "tls_client_max_version",
+            "type": "string"
+          },
+          {
+            "name": "tls_client_version",
+            "type": "string"
+          },
+          {
+            "name": "tls_server_cipher",
+            "type": "string"
+          },
+          {
+            "name": "tls_server_max_version",
+            "type": "string"
+          },
+          {
+            "name": "tls_server_version",
+            "type": "string"
+          },
+          {
+            "name": "url",
+            "type": "string"
+          },
+          {
+            "name": "url_filter_action",
+            "type": "string"
+          },
+          {
+            "name": "url_filter_categories",
+            "type": "string"
+          },
+          {
+            "name": "url_filter_result",
+            "type": "string"
+          },
+          {
+            "name": "user_agent",
+            "type": "string"
+          },
+          {
+            "name": "user_id",
+            "type": "string"
+          },
+          {
+            "name": "RawData",
+            "type": "string"
+          }
+        ],
+        "transformKql": "source | extend TimeGenerated = datetime_add('second', tolong(timestamp), datetime(1970-01-01))"
+      }
+    ],
+    "proxyLogstash": {
+      "input": "
+          kafka { 
+            bootstrap_servers=>\"${EVENTHUB_ENDPOINT}\" 
+            security_protocol=>\"SASL_SSL\" 
+            sasl_mechanism=>\"PLAIN\" 
+            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${EVENTHUB_STRING};EntityPath=proxy';\" 
+            topics=>[\"proxy\"]
+            decorate_events => \"basic\"
+            codec => \"json\"
+            group_id => \"$Default\"
+            auto_offset_reset => \"earliest\"
+            client_id => \"sentinel-connector-proxy\"
+          }
+        ",
+      "output": "
+          if [@metadata][kafka][topic] == \"proxy\" {
+            microsoft-sentinel-log-analytics-logstash-output-plugin {
+              client_app_Id => \"${CLIENT_ID}\"
+              client_app_secret => \"${CLIENT_SECRET}\"
+              tenant_id => \"${TENANT_ID}\"
+              data_collection_endpoint => \"${DCR_ENDPOINT}\"
+              dcr_immutable_id => \"${PROXY_DCR_ID}\"
+              dcr_stream_name => \"${PROXY_DCR_STREAM}\"
+            }
+          }
+        "
+    },
+    "authLogstash": {
+      "input": "
+          kafka { 
+            bootstrap_servers=>\"${EVENTHUB_ENDPOINT}\" 
+            security_protocol=>\"SASL_SSL\" 
+            sasl_mechanism=>\"PLAIN\" 
+            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${EVENTHUB_STRING};EntityPath=auth';\" 
+            topics=>[\"auth\"]
+            decorate_events => \"basic\"
+            codec => \"json\"
+            group_id => \"$Default\"
+            auto_offset_reset => \"earliest\"
+            client_id => \"sentinel-connector-auth\"
+          }
+        ",
+      "output": "
+          if [@metadata][kafka][topic] == \"auth\" {
+            microsoft-sentinel-log-analytics-logstash-output-plugin {
+              client_app_Id => \"${CLIENT_ID}\"
+              client_app_secret => \"${CLIENT_SECRET}\"
+              tenant_id => \"${TENANT_ID}\"
+              data_collection_endpoint => \"${DCR_ENDPOINT}\"
+              dcr_immutable_id => \"${AUTH_DCR_ID}\"
+              dcr_stream_name => \"${AUTH_DCR_STREAM}\"
+            }
+          }
+        "
+    },
+    "firewallLogstash": {
+      "input": "
+          kafka { 
+            bootstrap_servers=>\"${EVENTHUB_ENDPOINT}\" 
+            security_protocol=>\"SASL_SSL\" 
+            sasl_mechanism=>\"PLAIN\" 
+            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${EVENTHUB_STRING};EntityPath=firewall';\" 
+            topics=>[\"firewall\"]
+            decorate_events => \"basic\"
+            codec => \"json\"
+            group_id => \"$Default\"
+            auto_offset_reset => \"earliest\"
+            client_id => \"sentinel-connector-firewall\"
+          }
+        ",
+      "output": "
+          if [@metadata][kafka][topic] == \"firewall\" {
+            microsoft-sentinel-log-analytics-logstash-output-plugin {
+              client_app_Id => \"${CLIENT_ID}\"
+              client_app_secret => \"${CLIENT_SECRET}\"
+              tenant_id => \"${TENANT_ID}\"
+              data_collection_endpoint => \"${DCR_ENDPOINT}\"
+              dcr_immutable_id => \"${FIREWALL_DCR_ID}\"
+              dcr_stream_name => \"${FIREWALL_DCR_STREAM}\"
+            }
+          }
+        "
+    },
+    "ztnaLogstash": {
+      "input": "
+          kafka { 
+            bootstrap_servers=>\"${EVENTHUB_ENDPOINT}\" 
+            security_protocol=>\"SASL_SSL\" 
+            sasl_mechanism=>\"PLAIN\" 
+            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${EVENTHUB_STRING};EntityPath=ztna';\" 
+            topics=>[\"ztna\"]
+            decorate_events => \"basic\"
+            codec => \"json\"
+            group_id => \"$Default\"
+            auto_offset_reset => \"earliest\"
+            client_id => \"sentinel-connector-ztna\"
+          }
+        ",
+      "output": "
+          if [@metadata][kafka][topic] == \"ztna\" {
+            microsoft-sentinel-log-analytics-logstash-output-plugin {
+              client_app_Id => \"${CLIENT_ID}\"
+              client_app_secret => \"${CLIENT_SECRET}\"
+              tenant_id => \"${TENANT_ID}\"
+              data_collection_endpoint => \"${DCR_ENDPOINT}\"
+              dcr_immutable_id => \"${ZTNA_DCR_ID}\"
+              dcr_stream_name => \"${ZTNA_DCR_STREAM}\"
+            }
+          }
+        "
+    },
+    "mailLogstash": {
+      "input": "
+          kafka { 
+            bootstrap_servers=>\"${EVENTHUB_ENDPOINT}\" 
+            security_protocol=>\"SASL_SSL\" 
+            sasl_mechanism=>\"PLAIN\" 
+            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${EVENTHUB_STRING};EntityPath=mail';\" 
+            topics=>[\"mail\"]
+            decorate_events => \"basic\"
+            group_id => \"$Default\"
+            auto_offset_reset => \"earliest\"
+            client_id => \"sentinel-connector-mail\"
+          }
+        ",
+      "output": "
+          if [@metadata][kafka][topic] == \"mail\" {
+            microsoft-sentinel-log-analytics-logstash-output-plugin {
+              client_app_Id => \"${CLIENT_ID}\"
+              client_app_secret => \"${CLIENT_SECRET}\"
+              tenant_id => \"${TENANT_ID}\"
+              data_collection_endpoint => \"${DCR_ENDPOINT}\"
+              dcr_immutable_id => \"${MAIL_DCR_ID}\"
+              dcr_stream_name => \"${MAIL_DCR_STREAM}\"
+            }
+          }
+        "
+    },
+    "zeekLogstash": {
+      "input": "
+          kafka { 
+            bootstrap_servers=>\"${EVENTHUB_ENDPOINT}\" 
+            security_protocol=>\"SASL_SSL\" 
+            sasl_mechanism=>\"PLAIN\" 
+            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${EVENTHUB_STRING};EntityPath=zeek';\" 
+            topics=>[\"zeek\"]
+            decorate_events => \"basic\"
+            group_id => \"$Default\"
+            auto_offset_reset => \"earliest\"
+            client_id => \"sentinel-connector-zeek\"
+          }
+        ",
+      "output": "
+          if [@metadata][kafka][topic] == \"zeek\" {
+            microsoft-sentinel-log-analytics-logstash-output-plugin {
+              client_app_Id => \"${CLIENT_ID}\"
+              client_app_secret => \"${CLIENT_SECRET}\"
+              tenant_id => \"${TENANT_ID}\"
+              data_collection_endpoint => \"${DCR_ENDPOINT}\"
+              dcr_immutable_id => \"${ZEEK_DCR_ID}\"
+              dcr_stream_name => \"${ZEEK_DCR_STREAM}\"
+            }
+          }
+        "
+    },
+    "enabledLogstashInputs": "[
+      concat(
+        'input {\n',
+        if(parameters('proxy'), variables('proxyLogstash').input, ''),
+        if(parameters('auth'), variables('authLogstash').input, ''),
+        if(parameters('firewall'), variables('firewallLogstash').input, ''),
+        if(parameters('ztna'), variables('ztnaLogstash').input, ''), 
+        if(parameters('mail'), variables('mailLogstash').input, ''),
+        if(parameters('zeek'), variables('zeekLogstash').input, ''),
+        '\n} \n'
+      )]",
+    "enabledLogstashOutputs": "[
+      concat(
+        'output {\n',
+        if(parameters('proxy'), variables('proxyLogstash').output, ''),
+        if(parameters('auth'), variables('authLogstash').output, ''),
+        if(parameters('firewall'), variables('firewallLogstash').output, ''),
+        if(parameters('ztna'), variables('ztnaLogstash').output, ''), 
+        if(parameters('mail'), variables('mailLogstash').output, ''),
+        if(parameters('zeek'), variables('zeekLogstash').output, ''),
+        '\n} \n'
+      )]",
+    "logstashConfig": "[
+      concat(
+        variables('enabledLogstashInputs'), 
+        'filter { mutate { remove_field => [ \"event\", \"ls_version\"] }}\n',
+        variables('enabledLogstashOutputs')
+        )]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2023-03-11",
+      "name": "[parameters('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "logsIngestion": {
+          "enabled": true
+        }
+      }
+    },
+    {
+      "copy": {
+        "name": "tablesCopy",
+        "count": "[length(variables('logTypes'))]"
+      },
+      "condition": "[variables('logTypes')[copyIndex()].enabled]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2023-09-01",
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/OSAG', variables('logTypes')[copyIndex()].name, 'Logs_CL')]",
+      "properties": {
+        "schema": {
+          "name": "[concat('OSAG', variables('logTypes')[copyIndex()].name, 'Logs_CL')]",
+          "columns": "[variables('logTypes')[copyIndex()].columns]"
+        }
+      }
+    },
+    {
+      "copy": {
+        "name": "dcrsCopy",
+        "count": "[length(variables('logTypes'))]"
+      },
+      "condition": "[variables('logTypes')[copyIndex()].enabled]",
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[concat('osag-', toLower(variables('logTypes')[copyIndex()].name), '-dcr')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+        "streamDeclarations": {
+          "[concat('Custom-OSAG', variables('logTypes')[copyIndex()].name, 'Logs')]": {
+            "columns": "[variables('logTypes')[copyIndex()].columns]"
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "name": "logAnalyticsDestination",
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [ "[concat('Custom-OSAG', variables('logTypes')[copyIndex()].name, 'Logs')]" ],
+            "destinations": [ "logAnalyticsDestination" ],
+            "transformKql": "[variables('logTypes')[copyIndex()].transformKql]",
+            "outputStream": "[concat('Custom-OSAG', variables('logTypes')[copyIndex()].name, 'Logs_CL')]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsWorkspaceName'), concat('OSAG', variables('logTypes')[copyIndex()].name, 'Logs_CL'))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "roleAssignmentsCopy",
+        "count": "[length(variables('logTypes'))]"
+      },
+      "condition": "[variables('logTypes')[copyIndex()].enabled]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, concat('osag-', toLower(variables('logTypes')[copyIndex()].name), '-dcr'), parameters('principalId')[0], 'MetricsPublisher')]",
+      "scope": "[concat('Microsoft.Insights/dataCollectionRules', '/', concat('osag-', toLower(variables('logTypes')[copyIndex()].name), '-dcr'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', concat('osag-', toLower(variables('logTypes')[copyIndex()].name), '-dcr'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "principalId": "[parameters('principalId')[0]]"
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "osag-sentinel-conector",
+      "location": "[parameters('location')]",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "osag-sentinel-conector",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', 'osag-sentinel-conector')]"
+      ],
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', 'osag-sentinel-conector')]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "secrets": [
+            {
+              "name": "eventhub-connection-string",
+              "value": "[parameters('eventhubConnectionString')]"
+            },
+            {
+              "name": "principal-secret",
+              "value": "[parameters('principalSecret')]"
+            },
+            {
+              "name": "protocols",
+              "value": "ip      0       IP      # internet protocol\nicmp    1       ICMP    # internet control message protocol\ntcp     6       TCP     # transmission control protocol\nudp     17      UDP     # user datagram protocol"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "logstash",
+              "image": "docker.elastic.co/logstash/logstash:8.12.0",
+              "resources": {
+                "cpu": 1.0,
+                "memory": "2Gi"
+              },
+              "command": [
+                "/bin/bash",
+                "-c",
+                "/usr/share/logstash/bin/logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin && cat /usr/share/logstash/pipeline/logstash.conf && /usr/local/bin/docker-entrypoint"
+              ],
+              "env": [
+                {
+                  "name": "XPACK_MONITORING_ENABLED",
+                  "value": "false"
+                },
+                {
+                  "name": "XPACK_SECURITY_ENABLED",
+                  "value": "false"
+                },
+                {
+                  "name": "XPACK_ML_ENABLED",
+                  "value": "false"
+                },
+                {
+                  "name": "EVENTHUB_ENDPOINT",
+                  "value": "[parameters('eventhubEndpoint')]"
+                },
+                {
+                  "name": "EVENTHUB_STRING",
+                  "secretRef": "eventhub-connection-string"
+                },
+                {
+                  "name": "CLIENT_ID",
+                  "value": "[parameters('principalClientId')]"
+                },
+                {
+                  "name": "CLIENT_SECRET",
+                  "secretRef": "principal-secret"
+                },
+                {
+                  "name": "TENANT_ID",
+                  "value": "[subscription().tenantId]"
+                },
+                {
+                  "name": "DCR_ENDPOINT",
+                  "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2023-03-11').logsIngestion.endpoint]"
+                },
+                {
+                  "name": "PROXY_DCR_ID",
+                  "value": "[if( parameters('proxy'),reference(resourceId('Microsoft.Insights/dataCollectionRules', 'osag-proxy-dcr'), '2023-03-11').immutableId, '')]"
+                },
+                {
+                  "name": "PROXY_DCR_STREAM",
+                  "value": "Custom-OSAGProxyLogs"
+                },
+                {
+                  "name": "AUTH_DCR_ID",
+                  "value": "[if (parameters('auth'), reference(resourceId('Microsoft.Insights/dataCollectionRules', 'osag-Authentication-dcr'), '2023-03-11').immutableId, '')]"
+                },
+                {
+                  "name": "AUTH_DCR_STREAM",
+                  "value": "Custom-OSAGAuthenticationLogs"
+                },
+                {
+                  "name": "FIREWALL_DCR_ID",
+                  "value": "[ if (parameters('firewall'), reference(resourceId('Microsoft.Insights/dataCollectionRules', 'osag-firewall-dcr'), '2023-03-11').immutableId, '')]"
+                },
+                {
+                  "name": "FIREWALL_DCR_STREAM",
+                  "value": "Custom-OSAGFirewallLogs"
+                },
+                {
+                  "name": "ZTNA_DCR_ID",
+                  "value": "[if (parameters('ztna'), reference(resourceId('Microsoft.Insights/dataCollectionRules', 'osag-ztna-dcr'), '2023-03-11').immutableId, '')]"
+                },
+                {
+                  "name": "ZTNA_DCR_STREAM",
+                  "value": "Custom-OSAGZtnaLogs"
+                },
+                {
+                  "name": "MAIL_DCR_ID",
+                  "value": "[if (parameters('mail'), reference(resourceId('Microsoft.Insights/dataCollectionRules', 'osag-mail-dcr'), '2023-03-11').immutableId, '')]"
+                },
+                {
+                  "name": "MAIL_DCR_STREAM",
+                  "value": "Custom-OSAGMailLogs"
+                },
+                {
+                  "name": "ZEEK_DCR_ID",
+                  "value": "[if (parameters('zeek'), reference(resourceId('Microsoft.Insights/dataCollectionRules', 'osag-zeek-dcr'), '2023-03-11').immutableId, '')]"
+                },
+                {
+                  "name": "ZEEK_DCR_STREAM",
+                  "value": "Custom-OSAGZeekLogs"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "logstash-config",
+                  "mountPath": "/usr/share/logstash/pipeline"
+                },
+                {
+                  "volumeName": "protocols",
+                  "mountPath": "/etc/protocols",
+                  "subPath": "protocols"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          },
+          "volumes": [
+            {
+              "name": "logstash-config",
+              "storageType": "EmptyDir"
+            },
+            {
+              "name": "protocols",
+              "storageType": "Secret",
+              "secrets": [
+                {
+                  "secretRef": "protocols"
+                }
+              ]
+            }
+          ],
+          "initContainers": [
+            {
+              "name": "init-config",
+              "image": "busybox",
+              "command": [
+                "sh",
+                "-c",
+                "[concat('cat > /config/logstash.conf << ''EOT''\n', variables('logstashConfig'), '\nEOT\n')]"
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "logstash-config",
+                  "mountPath": "/config"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
