@@ -4,7 +4,7 @@ function Set-UriProperty {
         [string]$propertyName,
         [string]$queueVarName
     )
-    $uriValue = "[[uri(concat('https://', variables('storageAccountName'), parameters('blobContainerUriDomain'), '/', variables('$queueVarName')))]"
+    $uriValue = "[[uri(concat('https://', variables('storageAccountName'), '.queue.core', '.windows.net', '/'), variables('$queueVarName'))]"
 
     # Ensure 'request' object exists inside 'properties'
     if (-not ($armResource.properties.PSObject.Properties.Name -contains 'request')) {
@@ -30,7 +30,6 @@ function Set-ArmVariable {
 
     if (-not $variables.ContainsKey($name)) {
         $variables[$name] = $value
-        Write-Host "name: $name , value: $value"
     }
 }
 
@@ -58,7 +57,7 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
             $templateContentConnections.properties.mainTemplate | Add-Member -NotePropertyName "variables" -NotePropertyValue @{}
         }
 
-        $templateContentConnections.properties.mainTemplate.variables = Set-ResourceVariables 
+        Set-ResourceVariables 
         $templateContentConnections.properties.mainTemplate.resources += Get-StorageAccountDeploymentTemplate
     }
     catch {
@@ -96,11 +95,9 @@ function Get-StorageAccountDeploymentTemplate {
                             apiVersion = "2022-06-15"
                             name       = "[[variables('EGSystemTopicName')]"
                             location   = "[[parameters('StorageAccountLocation')]"
-                            properties = @{
-                                provisioningState = "Succeeded"
+                            properties = [ordered]@{
                                 source            = "[[variables('storageAccountId')]"
                                 topicType         = "microsoft.storage.storageaccounts"
-                                metricResourceId  = "0cefe8d9-3269-4f68-a44e-46a4fc26e4a9"
                             }
                             condition  = "[[empty(parameters('EGSystemTopicName'))]"
                         },
@@ -109,18 +106,17 @@ function Get-StorageAccountDeploymentTemplate {
                             apiVersion = "2023-12-15-preview"
                             name       = "[[format('{0}/{1}', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]"
                             dependsOn  = @(
-                                "[[variables('EGTopicResourceId')]",
-                                "[[variables('notificationQueueResourceId')]"
+                                "[[format('Microsoft.EventGrid/systemTopics/{0}', variables('EGSystemTopicName'))]"
                             )
                             properties = @{
-                                destination = @{
+                                destination = [ordered]@{
                                     endpointType = "StorageQueue"
-                                    properties   = @{
+                                    properties   = [ordered]@{
                                         queueName  = "[[variables('queueName')]"
                                         resourceId = "[[variables('storageAccountId')]"
                                     }
                                 }
-                                filter      = @{
+                                filter      = [ordered]@{
                                     includedEventTypes = @("Microsoft.Storage.BlobCreated")
                                     subjectBeginsWith  = "[[format('{0}/{1}', '/blobServices/default/containers', variables('blobContainerName'))]"
                                 }
@@ -130,7 +126,7 @@ function Get-StorageAccountDeploymentTemplate {
                             type       = "Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments"
                             apiVersion = "2018-01-01-preview"
                             name       = "[[concat(variables('storageAccountName'), '/default/', variables('blobContainerName'), '/Microsoft.Authorization/', variables('blobRaGuid'))]"
-                            properties = @{
+                            properties = [ordered]@{
                                 roleDefinitionId = "[[variables('storageBlobContributorRoleId')]"
                                 principalId      = "[[parameters('principalId')]"
                             }
@@ -142,7 +138,7 @@ function Get-StorageAccountDeploymentTemplate {
                             dependsOn  = @(
                                 "[[variables('notificationQueueResourceId')]"
                             )
-                            properties = @{
+                            properties = [ordered]@{
                                 roleDefinitionId = "[[variables('storageQueueContributorRoleId')]"
                                 principalId      = "[[parameters('principalId')]"
                             }
@@ -154,7 +150,7 @@ function Get-StorageAccountDeploymentTemplate {
                             dependsOn  = @(
                                 "[[variables('dlqResourceId')]"
                             )
-                            properties = @{
+                            properties = [ordered]@{
                                 roleDefinitionId = "[[variables('storageQueueContributorRoleId')]"
                                 principalId      = "[[parameters('principalId')]"
                             }
@@ -170,39 +166,36 @@ function Get-StorageAccountDeploymentTemplate {
 function Set-ResourceVariables {
     try {
         # Initialize variables hashtable if not already done
-        if (-not $variables) { $variables = @{} }
+        if (-not $variables) { $variables = [ordered]@{} }
 
-        $dayAndMonth = Get-Date -Format 'dd-MM'
-        $connectorName = "sentinel-connector-$dayAndMonth"
-        $blobContainerUriPart = "[concat('.blob.core', '.windows.net')]"
-        Set-ArmVariable $variables "_dataConnectorContentIdConnections$global:connectorCounter" "[variables('_dataConnectorContentIdConnections$global:connectorCounter')]"
-        Set-ArmVariable $variables "connectorName" "$connectorName"
-        Set-ArmVariable $variables "blobContainerUriPart" "$blobContainerUriPart"
-        Set-ArmVariable $variables "storageAccountName" "[[split(split(parameters('blobContainerUri'), 'https://')[1], variables('blobContainerUriPart'))[0]]"
-        Set-ArmVariable $variables "blobContainerName" "[[split(split(parameters('blobContainerUri'), variables('blobContainerUriPart'), '/')[1], '/')[0]]"
-        Set-ArmVariable $variables "queueName" "[[concat(variables('connectorName'), '-notification')]"
-        Set-ArmVariable $variables "dlqName" "[[concat(variables('connectorName'), '-dlq')]"
-        Set-ArmVariable $variables "ResourcesIdPrefix" "[[format('/subscriptions/{0}/resourceGroups/{1}/providers', parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'))]"
-        Set-ArmVariable $variables "storageAccountId" "[[subscriptionResourceId(parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
-        Set-ArmVariable $variables "notificationQueueResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/storageAccounts/', variables('storageAccountName'), '/queueServices/default/queues/', variables('queueName')))]"
-        Set-ArmVariable $variables "dlqResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.Storage/storageAccounts/', variables('storageAccountName'), '/queueServices/default/queues/', variables('dlqName')))]"
-        Set-ArmVariable $variables "EGSystemTopicDefaultName" "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('workspaceName'))]"
-        Set-ArmVariable $variables "EGSystemTopicName" "[[if(empty(parameters('EGSystemTopicName')), variables('EGSystemTopicDefaultName'), parameters('EGSystemTopicName'))]"
-        Set-ArmVariable $variables "EGTopicResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.EventGrid/systemTopics/', variables('EGSystemTopicName')))]"
-        Set-ArmVariable $variables "EgSubscriptionName" "[[format('{0}-{1}', variables('connectorName'), 'blobcreatedevents')]"
-        Set-ArmVariable $variables "EgSubscriptionResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.EventGrid/systemTopics/', variables('EGSystemTopicName'), '/eventSubscriptions/', variables('EgSubscriptionName')))]"
-        Set-ArmVariable $variables "storageBlobContributorRoleId" "[[subscriptionResourceId(parameters('StorageAccountSubscription'), '', 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
-        Set-ArmVariable $variables "storageQueueContributorRoleId" "[[subscriptionResourceId(parameters('StorageAccountSubscription'), '', 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]"
-        Set-ArmVariable $variables "blobRaGuid" "[[guid(variables('storageAccountName'), variables('blobContainerName'))]"
-        Set-ArmVariable $variables "notificationQueueRaGuid" "[[guid(variables('storageAccountName'), variables('queueName'))]"
-        Set-ArmVariable $variables "dlqRaGuid" "[[guid(variables('storageAccountName'), variables('dlqName'))]"
-        Set-ArmVariable $variables "blobRoleAssignmentResourceId" "[[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers/providers/Microsoft.Authorization/roleAssignments', variables('storageAccountName'), 'default', variables('blobContainerName'), variables('blobRaGuid'))]"
-        Set-ArmVariable $variables "notificationQueueRoleAssignmentResourceId" "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues/providers/Microsoft.Authorization/roleAssignments', variables('storageAccountName'), 'default', variables('queueName'), variables('notificationQueueRaGuid'))]"
-        Set-ArmVariable $variables "dlqRoleAssignmentResourceId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.Storage/storageAccounts/', variables('storageAccountName'), '/queueServices/default/queues/', variables('dlqName'), '/providers/Microsoft.Authorization/roleAssignments/', variables('dlqRaGuid')))]"
-        Set-ArmVariable $variables "nestedDeploymentName" "CreateDataFlowResources"
-        Set-ArmVariable $variables "nestedDeploymentId" "[[resourceId(concat(variables('ResourcesIdPrefix'), '/Microsoft.Resources/deployments/', variables('nestedDeploymentName')))]"
+        $connectorName = "sentinel-connector"
+        $variables["_dataConnectorContentIdConnections$global:connectorCounter"] = "[variables('_dataConnectorContentIdConnections$global:connectorCounter')]"
+        $variables["connectorName"] = "$connectorName"
+        $variables["blobContainerUriPart"] = "[concat('.blob.core', '.windows.net')]"
+        $variables["storageAccountName"] = "[[split(split(parameters('blobContainerUri'), 'https://')[1], variables('blobContainerUriPart'))[0]]"
+        $variables["blobContainerName"] = "[[split(split(parameters('blobContainerUri'), concat(variables('blobContainerUriPart'), '/'))[1], '/')[0]]"
+        $variables["queueName"] = "[[concat(variables('connectorName'), '-notification')]"
+        $variables["dlqName"] = "[[concat(variables('connectorName'), '-dlq')]"
+        $variables["storageAccountId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+        $variables["notificationQueueResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('queueName'))]"
+        $variables["dlqResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('dlqName'))]"
+        $variables["EGSystemTopicDefaultName"] = "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('innerWorkspace'))]"
+        $variables["EGSystemTopicName"] = "[[if(empty(parameters('EGSystemTopicName')), variables('EGSystemTopicDefaultName'), parameters('EGSystemTopicName'))]"
+        $variables["EGTopicResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics', variables('EGSystemTopicName'))]"
+        $variables["EgSubscriptionName"] = "[[format('{0}-{1}', variables('connectorName'), 'blobcreatedevents')]"
+        $variables["EgSubscriptionResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics/eventSubscriptions', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]"
+        $variables["storageBlobContributorRoleId"] = "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+        $variables["storageQueueContributorRoleId"] = "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]"
+        $variables["blobRaGuid"] = "[[guid(variables('storageAccountName'), variables('blobContainerName'))]"
+        $variables["notificationQueueRaGuid"] = "[[guid(variables('storageAccountName'), variables('queueName'))]"
+        $variables["dlqRaGuid"] = "[[guid(variables('storageAccountName'), variables('dlqName'))]"
+        $variables["blobRoleAssignmentResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments', variables('storageAccountName'), 'default', variables('blobContainerName'), 'Microsoft.Authorization', variables('blobRaGuid'))]"
+        $variables["notificationQueueRoleAssignmentResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('queueName'), 'Microsoft.Authorization', variables('notificationQueueRaGuid'))]"
+        $variables["dlqRoleAssignmentResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('dlqName'), 'Microsoft.Authorization', variables('dlqRaGuid'))]"
+        $variables["nestedDeploymentName"] = "CreateDataFlowResources"
+        $variables["nestedDeploymentId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Resources/deployments', variables('nestedDeploymentName'))]"
 
-        return $variables
+        $templateContentConnections.properties.mainTemplate.variables = $variables
     }
     catch {
         Write-Host "Error in Set-ResourceVariables function: $_"
