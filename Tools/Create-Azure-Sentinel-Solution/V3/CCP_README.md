@@ -5,7 +5,7 @@ To create a package using V3 packaging tool refer [Link to V3](https://github.co
 ## CCP connector Building Blocks:
 Every CCP connector will have 4 building blocks and should be specified in sequence given below:
 1. `Data Connector Definition` - This file will contain details on how UI page look and contains instruction steps and connectorUiConfig section.
-2. `Data Connectors (Poller)` - This file will contain details on how data will be pulled. For this you can use any of the `kind` type `RestApiPoller`, `GCP`, `AmazonWebServicesS3` or `Push`.
+2. `Data Connectors (Poller)` - This file will contain details on how data will be pulled. For this you can use any of the `kind` type `RestApiPoller`, `GCP`, `AmazonWebServicesS3`, `Push` and `StorageAccountBlobContainer`.
 3. `Data Collection Rule(DCR)` - This file will contain details on what data should be collected, how to transform that data, and where to send it.
 4. `Tables (Optional)` - This file will contain schema of your data logs where the actual data will be stored.
 
@@ -45,6 +45,20 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
   - The field `name` and `id` should be kept same.
   - InstructionSteps can be basic/oauth or of other types and keep rest of the key value pairs as is.
   - Keep rest all properties of the file as is.
+  - To add an asterisk to the label, use the validations object as shown below. For the `textbox` type, if the data connector definition file specifies that a field is not required (i.e. `"required": false`), the packaging tool will generate a parameter with a `defaultValue` set to an empty string (`""`). In this case, the `minLength` property will not be included.
+    ```json
+    {
+        "parameters": {
+            "label": "Your Text label",
+            "type": "text",
+            "name": "fieldName",
+            "validations": {
+                "required": true
+            }
+        },
+        "type": "Textbox"
+    }
+    ```
   - For more details on Data Connector Definitions fields, please [refer](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-ui-definitions-reference#example-data-connector-definition).
 
 ```json
@@ -112,6 +126,172 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
       ]
     }
   }
+}
+```
+
+  - Below is example data connector definition for **`StorageAccountBlobContainer`**. Make sure that you don't change the `name` property value from `instructionsteps--> instruction-->parameters` of the fields given below. Eg: principalId, blobContainerUri, StorageAccountLocation, StorageAccountResourceGroupName, StorageAccountSubscription and EGSystemTopicName. As this fields names are used in packaging tool to create ARM template resources for Storage Account queues, event grip topic etc.
+```json
+{
+    "name": "<NameofYourDefinition>",
+    "apiVersion": "2022-09-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "{{location}}",
+    "kind": "Customizable",
+    "properties": {
+        "connectorUiConfig": {
+            "id": "<NameofYourDefinitionWithoutSpace>",
+            "title": "<Title for the CCP Connector>",
+            "publisher": "<Publisher Name>",
+            "descriptionMarkdown": "<Enter the description>",
+            "graphQueriesTableName": "<Enter the table Name>",
+            "graphQueries": [
+                {
+                    "metricName": "Total events received",
+                    "legend": "<Name of your Events>",
+                    "baseQuery": "{{graphQueriesTableName}}"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "Get Sample Events",
+                    "query": "{{graphQueriesTableName}}\n | take 10"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "{{graphQueriesTableName}}",
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n|summarize Time = max(TimeGenerated)\n|where isnotempty(Time)"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "HasDataConnectors"
+                }
+            ],
+            "availability": {
+                "status": 1,
+                "isPreview": false
+            },
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "read": true,
+                            "write": true,
+                            "delete": true,
+                            "action": false
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Subscription permissions",
+                        "description": "You need permissions to create the data flow resources: \n- storage queues (notification queue and dead-letter queue) \n- event grid topic and subscription (to send 'blob created event' notifications to the notification queue) \n- role assignments (to grant access for sentinel app to the blob container and the storage queues.)"
+                    },
+                    {
+                        "name": "Create a storage account and a container",
+                        "description": "Before setting up a stream in GitHub, first create a storage account and a container in Microsoft Azure. Use [this guide](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) to know more about Container and Blob. Follow the steps in the [documentation](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal) to create an Azure Storage account."
+                    },
+                    {
+                        "name": "Generate a Blob SAS URL",
+                        "description": "Create and Write permissions are required. Refer the [documentation](https://learn.microsoft.com/en-us/azure/ai-services/translator/document-translation/how-to-guides/create-sas-tokens?tabs=Containers) to know more about Blob SAS token and url."
+                    },
+                    {
+                        "name": "Collecting logs from <your source> to your Blob container",
+                        "description": "Follow the steps in the [documentation](https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-streaming-to-azure-blob-storage) for collecting logs from <your source> to your Blob container."
+                    },
+                    {
+                        "name": "<your source> Enterprise type",
+                        "description": "This connector will only function with <your source> Enterprise Cloud; it will not support <your source> Enterprise Server."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "title": "Connect <your source> Blob Container Logs to Microsoft Sentinel",
+                    "description": "To enable the <your source> logs for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "tenantId": "[subscription().tenantId]",
+                                "name": "principalId",
+                                "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f"
+                            },
+                            "type": "ServicePrincipalIDTextBox_test"
+                        },
+                        {
+                            "parameters": {
+                                "label": "The Blob container's URL you want to collect data from",
+                                "type": "text",
+                                "name": "blobContainerUri",
+                                "validations": {
+                                    "required": true
+                                }
+                            },
+                            "type": "Textbox"
+                        },
+                        {
+                            "parameters": {
+                                "label": "The Blob container's storage account location",
+                                "type": "text",
+                                "name": "StorageAccountLocation",
+                                "validations": {
+                                    "required": true
+                                }
+                            },
+                            "type": "Textbox"
+                        },
+                        {
+                            "parameters": {
+                                "label": "The Blob container's storage account resource group name",
+                                "type": "text",
+                                "name": "StorageAccountResourceGroupName",
+                                "validations": {
+                                    "required": true
+                                }
+                            },
+                            "type": "Textbox"
+                        },
+                        {
+                            "parameters": {
+                                "label": "The Blob container's storage account subscription id",
+                                "type": "text",
+                                "name": "StorageAccountSubscription",
+                                "validations": {
+                                    "required": true
+                                }
+                            },
+                            "type": "Textbox"
+                        },
+                        {
+                            "parameters": {
+                                "label": "The event grid topic name of the blob container's storage account if exist else keep it empty.",
+                                "description": "The data flow using event grid to send 'blob-created event' notifications. There could be only one event grid topic for each storage account.\nGo to your blob container's storage account and look in the 'Events' section. If you already have a topic, please provide it's name else keep the textbox empty.",
+                                "type": "text",
+                                "name": "EGSystemTopicName",
+                                "validations": {
+                                    "required": false
+                                }
+                            },
+                            "type": "Textbox"
+                        },
+                        {
+                            "parameters": {
+                                "label": "toggle",
+                                "name": "toggle"
+                            },
+                            "type": "ConnectionToggleButton"
+                        }
+                    ]
+                }
+            ],
+            "isConnectivityCriteriasMatchSome": false
+        }
+    }
 }
 ```
 
@@ -189,6 +369,37 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
     }
   }
 }]
+```
+
+  - Below is an example for *`StorageAccountBlobContainer`* kind of CCP collector that is used to pole details Storage Account Blob Container using Event Grid System Topic.
+
+```json
+    [
+        {
+            "name": "<NameForYourPoller>",
+            "apiVersion": "2022-12-01-preview",
+            "type": "Microsoft.SecurityInsights/dataConnectors",
+            "location": "{{location}}",
+            "kind": "StorageAccountBlobContainer",
+            "properties": {
+                "connectorDefinitionName": "<Use same value from data connector definition connectorUiConfig-->id value>",
+                "dataType": "<Enter table name here>",
+                "dcrConfig": {
+                    "streamName": "Custom-<enter_stream_name_without_space>"
+                },
+                "auth": {
+                    "type": "ServicePrincipal"
+                },
+                "response": {
+                    "eventsJsonPaths": [
+                        "$"
+                    ],
+                    "format": "json",
+                    "isGzipCompressed": true
+                }
+            }
+        }
+    ]
 ```
 
   **c. Data Collection Rules(DCR):**
