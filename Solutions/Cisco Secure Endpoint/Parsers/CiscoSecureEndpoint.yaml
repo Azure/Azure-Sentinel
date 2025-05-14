@@ -7,11 +7,12 @@ Category: Microsoft Sentinel Parser
 FunctionName: CiscoSecureEndpoint
 FunctionAlias: CiscoSecureEndpoint
 FunctionQuery: |
+  let CiscoSecureEndpoint_View = view () {
     CiscoSecureEndpoint_CL
     | extend 
         EventVendor = 'Cisco',
         EventProduct = 'Cisco Secure Endpoint'
-    | project-rename 
+    | extend
         EventSubType = audit_log_type_s,
         SrcUserName = audit_log_user_s,
         DstMacAddr = computer_network_addresses_s,
@@ -29,7 +30,7 @@ FunctionQuery: |
         DvcHostname = new_attributes_hostname_s,
         DvcIpAddr = new_attributes_ip_external_s,
         DstDvcOsId = new_attributes_operating_system_id_d,
-        EventProductVersion = new_attributes_product_version_id_d,
+        EventProductVersion = column_ifexists('new_attributes_product_version_id_d', ''),
         SrcDvcId = computer_connector_guid_g,
         ComputerLinksComputer = computer_links_computer_s,
         ComputerLinksTrajectory = computer_links_trajectory_s,
@@ -51,8 +52,104 @@ FunctionQuery: |
         EventMessage=iff(isnotempty(event_s), event_s, event_type_s),
         Hostname = DstHostname,
         User = DstUsername
-    | project-away 
-        created_at_t,
-        date_t,
-        event_s,
-        event_type_s
+  };
+  let CiscoSecureEndpointAudit_View = view () {
+    CiscoSecureEndpointAuditLogsV2_CL
+    | extend 
+        EventVendor = 'Cisco',
+        EventProduct = 'Cisco Secure Endpoint'
+    | extend 
+        EventSubType = column_ifexists('AuditLogType', ''),
+        SrcUserName = column_ifexists('AuditLogUser', ''),
+        DstDvcHostname = column_ifexists('NewAttributes.name', ''),
+        DvcHostname = column_ifexists('NewAttributes.hostname', ''),
+        DvcIpAddr = column_ifexists('NewAttributes.ip_external', ''),
+        DstDvcOsId = column_ifexists('NewAttributes.operating_system_id', ''),
+        EventProductVersion = column_ifexists('NewAttributes.product_version_id', ''),
+        EventEndTime = column_ifexists('TimeGenerated', ''),
+        EventMessage = column_ifexists('Event', '')
+  };
+  let CiscoSecureEndpointEvent_View = view () {
+    CiscoSecureEndpointEventsV2_CL
+    | extend 
+        EventVendor = 'Cisco',
+        EventProduct = 'Cisco Secure Endpoint'
+    | extend
+        DstMacAddr = column_ifexists('ComputerNetworkAddresses', ''),
+        DstHostname = column_ifexists('ComputerHostname', ''),
+        DstUsername = column_ifexists('ComputerUser', ''),
+        DstIpAddr = column_ifexists('ComputerExternalIp', ''),
+        ConnectorGuid = column_ifexists('ConnectorGuid', ''),
+        GroupGuid = column_ifexists('GroupGuids', ''),
+        DvcId = column_ifexists('Id', ''),
+        ThreatName = column_ifexists('Detection', ''),
+        ThreatId = column_ifexists('DetectionId', ''),
+        ThreatSeverity = column_ifexists('Severity', ''),
+        EventOriginalId = column_ifexists('EventTypeId', ''),
+        SrcDvcId = column_ifexists('ComputerConnectorGuid', ''),
+        ComputerLinksComputer = column_ifexists('ComputerLinksComputer', ''),
+        ComputerLinksTrajectory = column_ifexists('ComputerLinksTrajectory', ''),
+        ComputerLinksGroup = column_ifexists('ComputerLinksGroup', ''),
+        IndicatorThreatType = column_ifexists('FileDisposition', ''),
+        SrcFileName = column_ifexists('FileFileName', ''),
+        SrcFilePath = column_ifexists('FileFilePath', ''),
+        SrcFileMD5 = column_ifexists('FileIdentityMd5', ''),
+        SrcFileSHA1 = column_ifexists('FileIdentitySha1', ''),
+        SrcFileSHA256 = column_ifexists('FileIdentitySha256', ''),
+        ParentProcessId = column_ifexists('FileParentProcessId', ''),
+        ParentProcessMD5 = column_ifexists('FileParentIdentityMd5', ''),
+        ParentProcessSHA1 = column_ifexists('FileParentIdentitySha1', ''),
+        ParentProcessSHA256 = column_ifexists('FileParentIdentitySha256', ''),
+        ParentProcessName = column_ifexists('FileParentFileName', ''),
+        ParentProcessFileDescription = column_ifexists('FileParentDisposition', ''),
+        EventEndTime = column_ifexists('TimeGenerated', ''),
+        EventMessage = column_ifexists('EventType', '')
+    | extend
+        Hostname = DstHostname,
+        User = DstUsername
+  };
+  union isfuzzy=true
+  (CiscoSecureEndpoint_View),
+  (CiscoSecureEndpointAudit_View),
+  (CiscoSecureEndpointEvent_View)
+  | project
+      EventVendor,
+      EventProduct,
+      EventSubType,
+      SrcUserName,
+      DstMacAddr,
+      DstHostname,
+      DstUsername,
+      DstIpAddr,
+      ConnectorGuid,
+      GroupGuid,
+      DvcId,
+      EventOriginalId,
+      ThreatName,
+      ThreatId,
+      ThreatSeverity,
+      DstDvcHostname,
+      DvcHostname,
+      DvcIpAddr,
+      DstDvcOsId,
+      EventProductVersion,
+      SrcDvcId,
+      ComputerLinksComputer,
+      ComputerLinksTrajectory,
+      ComputerLinksGroup,
+      IndicatorThreatType,
+      SrcFileName,
+      SrcFilePath,
+      SrcFileMD5,
+      SrcFileSHA1,
+      SrcFileSHA256,
+      ParentProcessId,
+      ParentProcessMD5,
+      ParentProcessSHA1,
+      ParentProcessSHA256,
+      ParentProcessName,
+      ParentProcessFileDescription,
+      EventEndTime,
+      EventMessage,
+      Hostname,
+      User
