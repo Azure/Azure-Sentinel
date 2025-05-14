@@ -1,0 +1,77 @@
+id: 7c8051a7-3d29-4c0d-a340-893423f7b0a5
+name: TI map IP entity to Azure Key Vault logs
+description: |
+  Identifies a match in Azure Key Vault logs from any IP IOC from TI
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureKeyVault
+    dataTypes:
+      - KeyVaultData
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h; // Look back 1 hour for AzureDiagnostics logs
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  // Fetch threat intelligence indicators related to IP addresses
+  let IP_Indicators = ThreatIntelIndicators
+  //extract key part of kv pair
+       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | extend NetworkSourceIP = toupper(ObservableValue)
+       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | where isnotempty(NetworkSourceIP)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and ValidUntil > now();
+  // Perform a join between IP indicators and AzureDiagnostics logs for Key Vault events
+  IP_Indicators
+     | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
+    // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
+    | join kind=innerunique (
+        AzureDiagnostics
+        | where ResourceType =~ "VAULTS"
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend KeyVaultEvents_TimeGenerated = TimeGenerated, ClientIP = CallerIPAddress
+    )
+    on $left.TI_ipEntity == $right.ClientIP
+    // Filter out logs that occurred after the expiration of the corresponding indicator
+    | where KeyVaultEvents_TimeGenerated < ValidUntil
+    // Group the results by IndicatorId and ClientIP, and keep the log entry with the latest timestamp
+    | summarize KeyVaultEvents_TimeGenerated = arg_max(KeyVaultEvents_TimeGenerated, *) by Id, ClientIP
+    // Select the desired output fields
+    | extend Description = tostring(parse_json(Data).description)
+    | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+    | project KeyVaultEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
+      TI_ipEntity, ClientIP, ResourceId, SubscriptionId, OperationName, ResultType, CorrelationId, id_s, clientInfo_s, httpStatusCode_d,
+      identity_claim_appid_g, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, Type
+    // Rename the timestamp field
+    | extend timestamp = KeyVaultEvents_TimeGenerated
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.3.5
+kind: Scheduled
