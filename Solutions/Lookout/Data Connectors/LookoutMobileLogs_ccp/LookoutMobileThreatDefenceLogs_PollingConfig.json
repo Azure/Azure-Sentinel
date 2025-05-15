@@ -1,79 +1,80 @@
 [
-    {
-        "name": "LookoutMobileThreatDefensePoller",
-        "apiVersion": "2022-12-01-preview",
-        "type": "Microsoft.SecurityInsights/dataConnectors",
-        "location": "{{location}}",
-        "kind": "RestApiPoller",
-        "properties": {
-            "connectorDefinitionName": "LookoutMobileLogs_ConnectorDefinition",
-            "dataType": "LookoutEventLogsV2_CL",
-            "dcrConfig": {
-                "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
-                "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
-                "streamName": "Custom-LookoutEventLogsV2_CL"
-            },
-            "auth": {
-                "type": "APIKey",
-                "ApiKey": "[[parameters('applicationKey')]",
-                "ApiKeyName": "Authorization",
-                "ApiKeyIdentifier": "Bearer"
-            },
-            "request": {
-                "apiEndpoint": "https://api.lookout.com/oauth2/token",
-                "httpMethod": "POST",
-                "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-                "rateLimitQPS": 10,
-                "queryWindowInMin": 5,
-                "retryCount": 3,
-                "timeoutInSeconds": 60,
-                "headers": {
-                    "Accept": "application/json",
-                    "Content-Type": "application/x-www-form-urlencoded"
-                },
-                "isPostPayloadJson": false,
-                "queryParameters": {
-                    "grant_type": "client_credentials"
-                }
-            },
-            "response": {
-                "eventsJsonPaths": [
-                    "$"
-                ],
-                "format": "json"
-            },
-            "stepInfo": {
-                "stepType": "Nested",
-                "nextSteps": [
-                    {
-                        "stepId": "GetEvents",
-                        "stepPlaceholdersParsingKql": "project token = parse_json(source) | project accessToken = strcat('Bearer ', tostring(token.access_token))"
-                    }
-                ]
-            },
-            "stepCollectorConfigs": {
-                "GetEvents": {
-                    "request": {
-                        "httpMethod": "GET",
-                        "apiEndpoint": "https://api.lookout.com/mra/stream/v2/events",
-                        "headers": {
-                            "Accept": "text/event-stream",
-                            "User-Agent": "Scuba",
-                            "Authorization": "{{accessToken}}"
-                        },
-                        "logResponseContent": true
-                    },
-                    "response": {
-                        "format": "json",
-                        "eventsJsonPaths": [
-                            "$"
-                        ]
-                    },
-                    "paging": {
-                        "pagingType": "NextPageUrl"
-                    }
-                }
-            }
+  {
+    "name": "LookoutMobileThreatDefensePoller",
+    "apiVersion": "2022-12-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "connectorDefinitionName": "LookoutMobileLogs_ConnectorDefinition",
+      "dataType": "LookoutEventLogsV2_CL",
+      "dcrConfig": {
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
+        "streamName": "Custom-LookoutEventLogsV2_CL"
+      },
+      "auth": {
+        "type": "APIKey",
+        "ApiKey": "[[parameters('applicationKey')]",
+        "ApiKeyName": "Authorization",
+        "ApiKeyIdentifier": "Bearer"
+      },
+      "request": {
+        "apiEndpoint": "https://api.lookout.com/oauth2/token",
+        "httpMethod": "POST",
+        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+        "rateLimitQPS": 10,
+        "queryWindowInMin": 5,
+        "retryCount": 3,
+        "timeoutInSeconds": 60,
+        "headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "isPostPayloadJson": false,
+        "queryParameters": {
+          "grant_type": "client_credentials"
         }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$"
+        ],
+        "format": "json"
+      },
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "GetEvents",
+            "stepPlaceholdersParsingKql": "source | extend token = parse_json(data) | project accessToken = tostring(token.access_token)"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "GetEvents": {
+          "request": {
+            "httpMethod": "GET",
+            "apiEndpoint": "https://api.lookout.com/events?eventType=DEVICE,THREAT,AUDIT",
+            "headers": {
+              "Accept": "application/json",
+              "Authorization": "Bearer {{accessToken}}"
+            },
+            "logResponseContent": true
+          },
+          "response": {
+            "format": "json",
+            "eventsJsonPaths": [
+              "$.events"
+            ]
+          },
+          "paging": {
+            "pagingType": "NextPageUrl",
+            "nextPageUrlJsonPath": "$.links[?(@.rel=='next')].href",
+            "nextPageUrlPrefix": "https://api.lookout.com"
+          }
+        }
+      }
     }
+  }
 ]
