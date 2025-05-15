@@ -626,7 +626,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     else 
                     {
-                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', 'GCP', 'AmazonWebServicesS3' or 'Push'." -BackgroundColor Red
+                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', 'GCP', 'AmazonWebServicesS3', 'Push' or 'StorageAccountBlobContainer'." -BackgroundColor Red
                         exit 1;
                     }
 
