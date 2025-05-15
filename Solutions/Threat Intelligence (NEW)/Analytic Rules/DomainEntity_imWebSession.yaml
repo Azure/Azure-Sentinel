@@ -40,7 +40,6 @@ query: |
     | where isnotempty(DomainName)
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | extend IndicatorId = tostring(split(Id, "--")[2])
-    | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
     | where TimeGenerated >= ago(ioc_lookBack)
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
     | where IsActive == true and ValidUntil > now();
@@ -61,7 +60,8 @@ query: |
     | summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain
     | extend Description = tostring(parse_json(Data).description)
     | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-    | project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ValidUntil, Confidence, domain, SrcIpAddr, Url     
+    | extend ThreatType=parse_json(tostring(Data.indicator_types))[0]
+    | project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ValidUntil, Confidence, domain     
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -77,10 +77,10 @@ customDetails:
   ActivityGroupNames: ActivityGroupNames
   IndicatorId: IndicatorId
   ThreatType: ThreatType
-  IoCExpirationTime: ExpirationDateTime
-  IoCConfidenceScore: ConfidenceScore
+  IoCExpirationTime: ValidUntil
+  IoCConfidenceScore: Confidence
 alertDetailsOverride:
   alertDisplayNameFormat: A web request from {{SrcIpAddr}} to hostname  {{domain}} matched an IoC
   alertDescriptionFormat: A client with address {{SrcIpAddr}} requested the URL {{Url}}, whose hostname is a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.
-version: 1.0.7
+version: 1.0.6
 kind: Scheduled

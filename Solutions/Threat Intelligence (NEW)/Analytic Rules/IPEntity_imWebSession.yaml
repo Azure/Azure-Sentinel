@@ -33,10 +33,10 @@ query: |
   let ioc_lookBack = 14d;
   let IP_TI = ThreatIntelIndicators
   //extract key part of kv pair
-       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
-       | extend NetworkSourceIP = toupper(ObservableValue)
-       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+  | extend NetworkSourceIP = toupper(ObservableValue)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | where TimeGenerated >= ago(ioc_lookBack)
     // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
     // Taking the first non-empty value based on potential IOC match availability
@@ -61,27 +61,29 @@ query: |
     )
     on $left.TI_ipEntity == $right.SrcIpAddr
   | where imNWS_TimeGenerated < ValidUntil
-  | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated, *) by IndicatorId, DstIpAddr
-  | project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ValidUntil, ConfidenceScore, TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Url, Type
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | extend ThreatType=parse_json(tostring(Data.indicator_types))[0]
+  | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated, *) by Id, DstIpAddr
+  | project imNWS_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
+    TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Type
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: DstIpAddr
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: SrcIpAddr
 customDetails:
   EventTime: imNWS_TimeGenerated
   IoCDescription: Description
   ActivityGroupNames: ActivityGroupNames
-  IndicatorId: IndicatorId
+  IndicatorId: Id
   ThreatType: ThreatType
   IoCExpirationTime: ValidUntil
-  IoCConfidenceScore: ConfidenceScore
+  IoCConfidenceScore: Confidence
 alertDetailsOverride:
   alertDisplayNameFormat: The IP {{SrcIpAddr}} of the web request matches an IP IoC
   alertDescriptionFormat: The source address {{SrcIpAddr}} of the web request for the URL {{Url}} matches a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence feed for more information about the indicator.
-version: 1.2.7
+version: 1.2.5
 kind: Scheduled
