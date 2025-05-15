@@ -90,7 +90,7 @@
                   "logo": "amazon_web_services_Logo.svg",
                   "publisher": "Microsoft",
                   "descriptionMarkdown": "This data connector allows you to ingest AWS Network Firewall logs into Microsoft Sentinel for advanced threat detection and security monitoring. By leveraging Amazon S3 and Amazon SQS, the connector forwards network traffic logs, intrusion detection alerts, and firewall events to Microsoft Sentinel, enabling real-time analysis and correlation with other security data",
-                  "graphQueriesTableName": "AWSNetworkFirewall_FlowLog_CL",
+                  "graphQueriesTableName": "AWSNetworkFirewallFlow",
                   "graphQueries": [
                     {
                       "metricName": "Total Flow events received",
@@ -100,12 +100,12 @@
                     {
                       "metricName": "Total Alerts received",
                       "legend": "Amazon Web Services NetworkFirewall AlertLog",
-                      "baseQuery": "AWSNetworkFirewall_AlertLog_CL"
+                      "baseQuery": "AWSNetworkFirewallAlert"
                     },
                     {
-                      "metricName": "Total Alerts received",
+                      "metricName": "Total TLS logs received",
                       "legend": "Amazon Web Services NetworkFirewall TLSLog",
-                      "baseQuery": "AWSNetworkFirewall_TlsLog_CL"
+                      "baseQuery": "AWSNetworkFirewallTls"
                     }
                   ],
                   "sampleQueries": [
@@ -115,11 +115,11 @@
                     },
                     {
                       "description": "Get Sample of Alert logs",
-                      "query": "AWSNetworkFirewall_AlertLog_CL\n | take 10"
+                      "query": "AWSNetworkFirewallAlert\n | take 10"
                     },
                     {
                       "description": "Get Sample of Tls logs",
-                      "query": "AWSNetworkFirewall_TlsLog_CL\n | take 10"
+                      "query": "AWSNetworkFirewallTls\n | take 10"
                     }
                   ],
                   "dataTypes": [
@@ -128,12 +128,12 @@
                       "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
                     },
                     {
-                      "name": "AWSNetworkFirewall_AlertLog_CL",
-                      "lastDataReceivedQuery": "AWSNetworkFirewall_AlertLog_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                      "name": "AWSNetworkFirewallAlert",
+                      "lastDataReceivedQuery": "AWSNetworkFirewallAlert\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
                     },
                     {
-                      "name": "AWSNetworkFirewall_TlsLog_CL",
-                      "lastDataReceivedQuery": "AWSNetworkFirewall_TlsLog_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                      "name": "AWSNetworkFirewallTls",
+                      "lastDataReceivedQuery": "AWSNetworkFirewallTls\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -343,7 +343,7 @@
                       },
                       {
                         "name": "event_timestamp",
-                        "type": "string"
+                        "type": "datetime"
                       },
                       {
                         "name": "event",
@@ -363,7 +363,7 @@
                       },
                       {
                         "name": "event_timestamp",
-                        "type": "string"
+                        "type": "datetime"
                       },
                       {
                         "name": "event",
@@ -389,7 +389,7 @@
                       "clv2ws1"
                     ],
                     "transformKql": "source | extend TimeGenerated = now()  | extend FirewallName = firewall_name, EventTimestamp = event_timestamp, AvailabilityZone = availability_zone, TCPFlags = tostring(event.tcp.tcp_flags), Syn = tobool(event.tcp.syn), Fin = tobool(event.tcp.fin), Psh = tobool(event.tcp.psh), Ack = tobool(event.tcp.ack), Ecn= tobool(event.tcp.ecn), Rst = tobool(event.tcp.rst),AppProto = tostring(event.app_proto), SrcIp = tostring(event.src_ip), SrcPort = tostring(event.src_port), NetFlowPkts = tostring(event.netflow.pkts), NetFlowBytes = tostring(event.netflow.bytes), NetFlowStart = todatetime(event.netflow.start), NetFlowEnd = todatetime(event.netflow.end), NetFlowAge = tostring(event.netflow.age), NetFlowMinttl = tostring(event.netflow.min_ttl), NetFlowMaxttl = tostring(event.netflow.max_ttl), EventType = tostring(event.event_type) | where EventType == \"netflow\" |extend FlowId = tostring(event.flow_id), DestIp = tostring(event.dest_ip), DestPort = tostring(event.dest_port), Proto = tostring(event.proto)  | project-away event, availability_zone, firewall_name",
-                    "outputStream": "Custom-AWSNetworkFirewall_FlowLog_CL"
+                    "outputStream": "Microsoft-AWSNetworkFirewallFlow"
                   },
                   {
                     "streams": [
@@ -399,7 +399,7 @@
                       "clv2ws1"
                     ],
                     "transformKql": "source | extend TimeGenerated = now(), FirewallName = firewall_name, AvailabilityZone = availability_zone, EventTimestamp = event_timestamp, TxId = tostring(event.tx_id), AppProto = tostring(event.app_proto), SrcIp = tostring(event.src_ip), SrcPort = tostring(event.src_port), EventType = tostring(event.event_type) | where EventType == \"alert\" | extend Severity = tostring(event.alert.severity), SignatureId = tostring(event.alert.signature_id), Rev = tostring(event.alert.rev), Signature = tostring(event.alert.signature), AlertAction = tostring(event.alert.action), Category = tostring(event.alert.category), FlowId = tostring(event.flow_id), DestIp = tostring(event.dest_ip), DestPort = tostring(event.dest_port), Proto = tostring(event.proto), VerdictAction = tostring(event.verdict.action), Sni = tostring(event.tls.sni), Version = tostring(event.tls.version), PktSrc = tostring(event.pkt_src), Direction = tostring(event.direction) | project-away event",
-                    "outputStream": "Custom-AWSNetworkFirewall_AlertLog_CL"
+                    "outputStream": "Microsoft-AWSNetworkFirewallAlert"
                   },
                   {
                     "streams": [
@@ -409,376 +409,9 @@
                       "clv2ws1"
                     ],
                     "transformKql": "source | extend TimeGenerated = now(), FirewallName = firewall_name, AvailabilityZone = availability_zone, EventTimestamp = event_timestamp, SrcIp = tostring(event.src_ip), SrcPort = tostring(event.src_port), DestIp = tostring(event.dest_ip), DestPort = tostring(event.dest_port), Sni = tostring(event.sni), LeafCertificateFingerprint = tostring(event.leaf_cert_fpr), Status = tostring(event.status), Action = tostring(event.action), ErrorMessage = tostring(event.tls_error.error_message) | project-away event",
-                    "outputStream": "Custom-AWSNetworkFirewall_TlsLog_CL"
+                    "outputStream": "Microsoft-AWSNetworkFirewallTls"
                   }
                 ]
-              }
-            },
-            {
-              "name": "AWSNetworkFirewall_AlertLog_CL",
-              "apiVersion": "2022-10-01",
-              "type": "Microsoft.OperationalInsights/workspaces/tables",
-              "location": "[parameters('workspace-location')]",
-              "kind": null,
-              "properties": {
-                "schema": {
-                  "name": "AWSNetworkFirewall_AlertLog_CL",
-                  "columns": [
-                    {
-                      "name": "TimeGenerated",
-                      "type": "datetime",
-                      "description": "The timestamp when the log entry was created in AWS Network Firewall."
-                    },
-                    {
-                      "name": "FirewallName",
-                      "type": "string",
-                      "description": "The name of the AWS Network Firewall instance generating the log."
-                    },
-                    {
-                      "name": "AvailabilityZone",
-                      "type": "string",
-                      "description": "The AWS Availability Zone where the firewall instance is located."
-                    },
-                    {
-                      "name": "TxId",
-                      "type": "string",
-                      "description": "The transaction ID associated with the specific network flow."
-                    },
-                    {
-                      "name": "EventTimestamp",
-                      "type": "string",
-                      "description": "The epoch timestamp of when the event occurred."
-                    },
-                    {
-                      "name": "AppProto",
-                      "type": "string",
-                      "description": "The application layer protocol detected."
-                    },
-                    {
-                      "name": "SrcIp",
-                      "type": "string",
-                      "description": "The source port from which the packet originated."
-                    },
-                    {
-                      "name": "SrcPort",
-                      "type": "string",
-                      "description": "The source port from which the packet originated."
-                    },
-                    {
-                      "name": "EventType",
-                      "type": "string",
-                      "description": "The type of event recorded (e.g., alert, flow, drop, pass)."
-                    },
-                    {
-                      "name": "Severity",
-                      "type": "string",
-                      "description": "The severity level of the event, typically based on Suricata rule classifications."
-                    },
-                    {
-                      "name": "SignatureId",
-                      "type": "string",
-                      "description": "The unique identifier of the Suricata rule that matched the event."
-                    },
-                    {
-                      "name": "Rev",
-                      "type": "string",
-                      "description": "The revision number of the matched Suricata rule."
-                    },
-                    {
-                      "name": "Signature",
-                      "type": "string",
-                      "description": "The name or description of the Suricata rule that triggered the alert."
-                    },
-                    {
-                      "name": "AlertAction",
-                      "type": "string",
-                      "description": "The action taken when an alert was triggered (e.g., allowed, dropped, rejected)."
-                    },
-                    {
-                      "name": "Category",
-                      "type": "string",
-                      "description": "The category of the detected threat or network activity."
-                    },
-                    {
-                      "name": "FlowId",
-                      "type": "string",
-                      "description": "A unique identifier for the network flow related to this event."
-                    },
-                    {
-                      "name": "DestIp",
-                      "type": "string",
-                      "description": "The destination IP address of the packet."
-                    },
-                    {
-                      "name": "Proto",
-                      "type": "string",
-                      "description": "The protocol used (e.g., TCP, UDP, ICMP)."
-                    },
-                    {
-                      "name": "VerdictAction",
-                      "type": "string",
-                      "description": "The final decision made by the firewall (e.g., pass, drop, alert)."
-                    },
-                    {
-                      "name": "Sni",
-                      "type": "string",
-                      "description": "The Server Name Indication (SNI) from TLS traffic."
-                    },
-                    {
-                      "name": "Version",
-                      "type": "string",
-                      "description": "The version of the log schema or Suricata rule format used."
-                    },
-                    {
-                      "name": "DestPort",
-                      "type": "string",
-                      "description": "The destination port to which the packet was sent."
-                    },
-                    {
-                      "name": "PktSrc",
-                      "type": "string",
-                      "description": "The source of the packet (e.g., internal, external, firewall rule)."
-                    },
-                    {
-                      "name": "Direction",
-                      "type": "string",
-                      "description": "The direction of the traffic (e.g., inbound, outbound)."
-                    },
-                    {
-                      "name": "Timestamp",
-                      "type": "datetime",
-                      "description": "The exact timestamp when the event was captured."
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "name": "AWSNetworkFirewall_FlowLog_CL",
-              "apiVersion": "2022-10-01",
-              "type": "Microsoft.OperationalInsights/workspaces/tables",
-              "location": "[parameters('workspace-location')]",
-              "kind": null,
-              "properties": {
-                "schema": {
-                  "name": "AWSNetworkFirewall_FlowLog_CL",
-                  "columns": [
-                    {
-                      "name": "TimeGenerated",
-                      "type": "datetime",
-                      "description": "The timestamp when the log entry was created in AWS Network Firewall."
-                    },
-                    {
-                      "name": "FirewallName",
-                      "type": "string",
-                      "description": "The name of the AWS Network Firewall instance generating the log."
-                    },
-                    {
-                      "name": "AvailabilityZone",
-                      "type": "string",
-                      "description": "The AWS Availability Zone where the firewall instance is located."
-                    },
-                    {
-                      "name": "EventTimestamp",
-                      "type": "string",
-                      "description": "The epoch timestamp of when the event occurred."
-                    },
-                    {
-                      "name": "TCPFlags",
-                      "type": "string",
-                      "description": "The TCP flags observed in the packet "
-                    },
-                    {
-                      "name": "Syn",
-                      "type": "bool",
-                      "description": "Indicates whether the SYN flag is set in the TCP packet (true/false)."
-                    },
-                    {
-                      "name": "Fin",
-                      "type": "bool",
-                      "description": "Indicates whether the FIN flag is set in the TCP packet, signaling the sender wants to gracefully close the connection (true/false)."
-                    },
-                    {
-                      "name": "Psh",
-                      "type": "bool",
-                      "description": "Indicates whether the PSH flag is set in the TCP packet, requesting that the data be pushed to the receiving application immediately (true/false)."
-                    },
-                    {
-                      "name": "Ack",
-                      "type": "bool",
-                      "description": "Indicates whether the ACK flag is set in the TCP packet, acknowledging receipt of data or connection requests (true/false)."
-                    },
-                    {
-                      "name": "Rst",
-                      "type": "bool",
-                      "description": "Indicates whether the RST flag is set in the TCP packet, which resets the connection and abruptly terminates it (true/false)."
-                    },
-                    {
-                      "name": "Ecn",
-                      "type": "bool",
-                      "description": "Indicates whether Explicit Congestion Notification (ECN) is set in the IP header, used to signal network congestion without dropping packets (true/false)."
-                    },
-                    {
-                      "name": "AppProto",
-                      "type": "string",
-                      "description": "The application layer protocol detected (e.g., HTTP, HTTPS, DNS)."
-                    },
-                    {
-                      "name": "SrcIp",
-                      "type": "string",
-                      "description": "The source IP address of the packet that triggered the event."
-                    },
-                    {
-                      "name": "SrcPort",
-                      "type": "string",
-                      "description": "The source port from which the packet originated."
-                    },
-                    {
-                      "name": "NetFlowPkts",
-                      "type": "string",
-                      "description": "The number of packets in the network flow."
-                    },
-                    {
-                      "name": "NetFlowBytes",
-                      "type": "string",
-                      "description": "The total number of bytes transferred in the network flow."
-                    },
-                    {
-                      "name": "NetFlowStart",
-                      "type": "datetime",
-                      "description": "The timestamp when the network flow started."
-                    },
-                    {
-                      "name": "NetFlowEnd",
-                      "type": "datetime",
-                      "description": "The timestamp when the network flow ended."
-                    },
-                    {
-                      "name": "NetFlowAge",
-                      "type": "string",
-                      "description": "The duration of the network flow in seconds."
-                    },
-                    {
-                      "name": "NetFlowMinttl",
-                      "type": "string",
-                      "description": "The minimum Time-to-Live (TTL) observed in the network flow."
-                    },
-                    {
-                      "name": "NetFlowMaxttl",
-                      "type": "string",
-                      "description": "The maximum Time-to-Live (TTL) observed in the network flow."
-                    },
-                    {
-                      "name": "EventType",
-                      "type": "string",
-                      "description": "The type of event recorded (e.g., flow, alert, drop, pass)."
-                    },
-                    {
-                      "name": "FlowId",
-                      "type": "string",
-                      "description": "A unique identifier for the network flow related to this event."
-                    },
-                    {
-                      "name": "DestIp",
-                      "type": "string",
-                      "description": "The destination IP address of the packet."
-                    },
-                    {
-                      "name": "Proto",
-                      "type": "string",
-                      "description": "The protocol used (e.g., TCP, UDP, ICMP)."
-                    },
-                    {
-                      "name": "DestPort",
-                      "type": "string",
-                      "description": "The destination port to which the packet was sent."
-                    },
-                    {
-                      "name": "Timestamp",
-                      "type": "datetime",
-                      "description": "The exact timestamp when the event was captured."
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "name": "AWSNetworkFirewall_TlsLog_CL",
-              "apiVersion": "2022-10-01",
-              "type": "Microsoft.OperationalInsights/workspaces/tables",
-              "location": "[parameters('workspace-location')]",
-              "kind": null,
-              "properties": {
-                "schema": {
-                  "name": "AWSNetworkFirewall_TlsLog_CL",
-                  "columns": [
-                    {
-                      "name": "TimeGenerated",
-                      "type": "datetime",
-                      "description": "The timestamp when the log entry was created in AWS Network Firewall."
-                    },
-                    {
-                      "name": "FirewallName",
-                      "type": "string",
-                      "description": "The name of the AWS Network Firewall instance generating the log."
-                    },
-                    {
-                      "name": "AvailabilityZone",
-                      "type": "string",
-                      "description": "The AWS Availability Zone where the firewall instance is located."
-                    },
-                    {
-                      "name": "EventTimestamp",
-                      "type": "string",
-                      "description": "The epoch timestamp of when the event occurred."
-                    },
-                    {
-                      "name": "SrcIp",
-                      "type": "string",
-                      "description": "The source IP address of the packet that triggered the event."
-                    },
-                    {
-                      "name": "SrcPort",
-                      "type": "string",
-                      "description": "The source port from which the packet originated."
-                    },
-                    {
-                      "name": "DestIp",
-                      "type": "string",
-                      "description": "The destination IP address of the packet."
-                    },
-                    {
-                      "name": "DestPort",
-                      "type": "string",
-                      "description": "The destination port to which the packet was sent."
-                    },
-                    {
-                      "name": "Sni",
-                      "type": "string",
-                      "description": "The Server Name Indication (SNI) from TLS traffic."
-                    },
-                    {
-                      "name": "LeafCertificateFingerprint",
-                      "type": "string",
-                      "description": "The SHA-256 fingerprint of the leaf certificate observed in the TLS handshake."
-                    },
-                    {
-                      "name": "Status",
-                      "type": "string",
-                      "description": "The status of the TLS inspection event (e.g., success, failure)."
-                    },
-                    {
-                      "name": "Action",
-                      "type": "string",
-                      "description": "The action taken by the firewall (e.g., allowed, dropped, inspected)."
-                    },
-                    {
-                      "name": "ErrorMessage",
-                      "type": "string",
-                      "description": "Any error message associated with the event, if applicable."
-                    }
-                  ]
-                }
               }
             }
           ]
@@ -805,7 +438,7 @@
           "logo": "amazon_web_services_Logo.svg",
           "publisher": "Microsoft",
           "descriptionMarkdown": "This data connector allows you to ingest AWS Network Firewall logs into Microsoft Sentinel for advanced threat detection and security monitoring. By leveraging Amazon S3 and Amazon SQS, the connector forwards network traffic logs, intrusion detection alerts, and firewall events to Microsoft Sentinel, enabling real-time analysis and correlation with other security data",
-          "graphQueriesTableName": "AWSNetworkFirewall_FlowLog_CL",
+          "graphQueriesTableName": "AWSNetworkFirewallFlow",
           "graphQueries": [
             {
               "metricName": "Total Flow events received",
@@ -815,12 +448,12 @@
             {
               "metricName": "Total Alerts received",
               "legend": "Amazon Web Services NetworkFirewall AlertLog",
-              "baseQuery": "AWSNetworkFirewall_AlertLog_CL"
+              "baseQuery": "AWSNetworkFirewallAlert"
             },
             {
-              "metricName": "Total Alerts received",
+              "metricName": "Total TLS logs received",
               "legend": "Amazon Web Services NetworkFirewall TLSLog",
-              "baseQuery": "AWSNetworkFirewall_TlsLog_CL"
+              "baseQuery": "AWSNetworkFirewallTls"
             }
           ],
           "sampleQueries": [
@@ -830,11 +463,11 @@
             },
             {
               "description": "Get Sample of Alert logs",
-              "query": "AWSNetworkFirewall_AlertLog_CL\n | take 10"
+              "query": "AWSNetworkFirewallAlert\n | take 10"
             },
             {
               "description": "Get Sample of Tls logs",
-              "query": "AWSNetworkFirewall_TlsLog_CL\n | take 10"
+              "query": "AWSNetworkFirewallTls\n | take 10"
             }
           ],
           "dataTypes": [
@@ -843,12 +476,12 @@
               "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
             },
             {
-              "name": "AWSNetworkFirewall_AlertLog_CL",
-              "lastDataReceivedQuery": "AWSNetworkFirewall_AlertLog_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+              "name": "AWSNetworkFirewallAlert",
+              "lastDataReceivedQuery": "AWSNetworkFirewallAlert\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
             },
             {
-              "name": "AWSNetworkFirewall_TlsLog_CL",
-              "lastDataReceivedQuery": "AWSNetworkFirewall_TlsLog_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+              "name": "AWSNetworkFirewallTls",
+              "lastDataReceivedQuery": "AWSNetworkFirewallTls\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
@@ -1059,9 +692,10 @@
               "type": "string",
               "minLength": 1
             },
-           "streamName":{        
-           "type": "array"
-            }
+           "streamName": {
+              "type": "array",
+              "minLength": 1
+            } 
           },
           "variables": {
             "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
@@ -1100,7 +734,7 @@
               "kind": "AmazonWebServicesS3",
               "properties": {
                 "connectorDefinitionName": "AwsNetworkFirewallCcpDefinition",
-                "destinationTable": "AWSNetworkFirewall_AlertLog_CL",
+                "destinationTable": "AWSNetworkFirewallAlert",
                 "dataTypes": {
                   "logs": {
                     "state": "enabled"
@@ -1130,7 +764,7 @@
               "kind": "AmazonWebServicesS3",
               "properties": {
                 "connectorDefinitionName": "AwsNetworkFirewallCcpDefinition",
-                "destinationTable": "AWSNetworkFirewall_FlowLog_CL",
+                "destinationTable": "AWSNetworkFirewallFlow",
                 "dataTypes": {
                   "logs": {
                     "state": "enabled"
@@ -1160,7 +794,7 @@
               "kind": "AmazonWebServicesS3",
               "properties": {
                 "connectorDefinitionName": "AwsNetworkFirewallCcpDefinition",
-                "destinationTable": "AWSNetworkFirewall_TlsLog_CL",
+                "destinationTable": "AWSNetworkFirewallTls",
                 "dataTypes": {
                   "logs": {
                     "state": "enabled"
