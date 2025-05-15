@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+#######################################################################################################################################
+#  Script Name: check_build.sh
+#  Description: As simple script that checks the differences in the newly built solution files before submitting a release to Azure.
+#      And prompts the developer to do the manual verification of the solution file.
+#  Author: Tanium
+#  Version: 1.0
+#  Usage: ./check_build # Be sure to run from the root of the repo
+#######################################################################################################################################
+
 set -Eeuo pipefail
 
 _msg() {
