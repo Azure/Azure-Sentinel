@@ -29,6 +29,7 @@ $standardStreamMapping += @{ Key = 'SENTINEL_AWSCLOUDWATCH'; Value = 'Microsoft-
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSGUARDDUTY'; Value = 'Microsoft-AWSGuardDuty'}
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSVPCFLOW'; Value = 'Microsoft-AWSVPCFlow'}
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSWAF'; Value = 'Microsoft-AWSWAF'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGCLOUDAPPEVENTS'; Value = 'Microsoft-CloudAppEvents'}
 $standardStreamMapping += @{ Key = 'SECURITY_CISCO_ASA_BLOB'; Value = 'Microsoft-CommonSecurityLog'}
 $standardStreamMapping += @{ Key = 'SECURITY_CEF_BLOB'; Value = 'Microsoft-CommonSecurityLog'}
