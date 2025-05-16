@@ -545,12 +545,14 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             function CCPDataConnectorsResource($fileContent) {
                 if ($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
-                    # add variable for comma separated text field
-                    $commaSeparatedVariable = @{
-                        "commaSeparatedArray" = "[[split(parameters('$($global:commaSeparatedTextFieldName)'), ',')]"
-                    }
+                    if ($global:commaSeparatedTextFieldName -ne "") {
+                        # add variable for comma separated text field
+                        $commaSeparatedVariable = @{
+                            "commaSeparatedArray" = "[[split(parameters('$($global:commaSeparatedTextFieldName)'), ',')]"
+                        }
 
-                    $templateContentConnections.properties.mainTemplate.variables = $commaSeparatedVariable
+                        $templateContentConnections.properties.mainTemplate.variables = $commaSeparatedVariable
+                    }
 
                     # add parameter of guidValue if not present
                     $templateContentConnections.properties.mainTemplate = addGuidValueParameter -templateResourceObj $templateContentConnections.properties.mainTemplate
@@ -909,7 +911,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
             }
             $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
-
+            $global:commaSeparatedTextFieldName = ""
             $global:connectorCounter += 1
         }
     }
