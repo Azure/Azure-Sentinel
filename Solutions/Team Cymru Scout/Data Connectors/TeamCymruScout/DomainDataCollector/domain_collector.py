@@ -23,7 +23,6 @@ class DomainDataCollector:
         self.utility_obj.validate_params()
         self.rest_helper_obj = TeamCymruScout()
         self.checkpoint_obj = CheckpointManager(file_path="domain")
-        self.error_logs = "{}(method={}) {}"
 
     def get_domain_data_into_sentinel(self):
         """To retrieve domain data from input/watchlist, fetch details from Team Cymru Scout and post it to Sentinel."""
@@ -69,12 +68,7 @@ class DomainDataCollector:
                     )
                 )
                 applogger.debug("{}(method={}) Total data to post: {}".format(self.logs_starts_with, __method_name, len(parse_data)))
-                self.rest_helper_obj.send_data_to_sentinel(
-                    parse_data,
-                    consts.DOMAIN_TABLE_NAME,
-                    consts.AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES,
-                    indicator_value=domain,
-                )
+                self.rest_helper_obj.send_data_to_sentinel(parse_data, consts.DOMAIN_TABLE_NAME, indicator_value=domain)
                 if watchlist_flag:
                     self.checkpoint_obj.save_checkpoint(domain, indicator_type="domain")
         except requests.exceptions.Timeout as error:

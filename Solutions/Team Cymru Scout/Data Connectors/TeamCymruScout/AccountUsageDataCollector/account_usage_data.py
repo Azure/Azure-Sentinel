@@ -18,7 +18,6 @@ class AccountUsageDataCollector:
         self.rest_helper_obj = TeamCymruScout()
         self.utility_obj = TeamCymruScoutUtility()
         self.utility_obj.validate_params()
-        self.error_logs = "{}(method={}) {}"
 
     def get_account_usage_data(self):
         """
@@ -31,9 +30,7 @@ class AccountUsageDataCollector:
         try:
             applogger.debug("{}(method={}) fetch account usages data from Cymru Scout.".format(self.logs_starts_with, __method_name))
             account_data = self.rest_helper_obj.make_rest_call(endpoint=consts.ACCOUNT_USAGE_ENDPOINT, params={})
-            self.rest_helper_obj.send_data_to_sentinel(
-                [account_data], consts.ACCOUNT_USAGE_TABLE_NAME, consts.AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES
-            )
+            self.rest_helper_obj.send_data_to_sentinel(account_data, consts.ACCOUNT_USAGE_TABLE_NAME)
         except requests.exceptions.Timeout as error:
             applogger.error(
                 self.error_logs.format(

@@ -145,7 +145,6 @@ class IPDataCollector:
                     self.rest_helper_obj.send_data_to_sentinel(
                         foundation_data,
                         "{}_{}".format(consts.IP_TABLE_NAME, "Foundation"),
-                        consts.AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES,
                         indicator_value=valid_ip_values,
                     )
                 if watchlist_flag:
@@ -232,14 +231,9 @@ class IPDataCollector:
                             item["ip"] = ip_data.get("ip")
                             item["start_date"] = ip_data.get("start_date")
                             item["end_date"] = ip_data.get("end_date")
-                    if table_name in ["PDNS", "Fingerprints", "Summary_Fingerprints"]:
-                        for data in child_data:
-                            if "type" in data:
-                                data["{}_type".format(table_name[:-1].lower())] = data.pop("type")
                     self.rest_helper_obj.send_data_to_sentinel(
                         child_data,
                         "{}_{}".format(consts.IP_TABLE_NAME, table_name),
-                        consts.AZURE_DATA_COLLECTION_RULE_ID_SUB_TABLES,
                         indicator_value=indicator_value,
                     )
                     parent_data.pop(child_key)
@@ -301,9 +295,8 @@ class IPDataCollector:
             ip_data["open_ports"] = openports
             ip_data["x509"] = x509
             self.rest_helper_obj.send_data_to_sentinel(
-                [ip_data],
+                ip_data,
                 "{}_{}".format(consts.IP_TABLE_NAME, "Details"),
-                consts.AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES,
                 indicator_value=indicator_value,
             )
             if summary_details:
@@ -344,9 +337,8 @@ class IPDataCollector:
                 summary_details["certs"] = summary_certs
                 summary_details["fingerprints"] = summary_fingerprints
                 self.rest_helper_obj.send_data_to_sentinel(
-                    [summary_details],
+                    summary_details,
                     "{}_{}".format(consts.IP_TABLE_NAME, "Summary_Details"),
-                    consts.AZURE_DATA_COLLECTION_RULE_ID_SUB_TABLES,
                     indicator_value=indicator_value,
                 )
         except Exception as err:
