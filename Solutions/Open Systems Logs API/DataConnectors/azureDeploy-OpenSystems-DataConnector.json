@@ -92,6 +92,80 @@
       "metadata": {
         "description": "Open Systems Logs API connection string."
       }
+    },
+    "containerCpu": {
+      "type": "string",
+      "defaultValue": "2.0",
+      "metadata": {
+        "description": "Allocated CPU resource for log processor container."
+      }
+    },
+    "containerMemory": {
+      "type": "int",
+      "defaultValue": 4,
+      "metadata": {
+        "description": "Allocated memory resource for log processor container."
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "defaultValue": "docker.elastic.co/logstash/logstash:8.12.0",
+      "metadata": {
+        "description": "Log processor container image."
+      }
+    },
+    "containerAppMinReplicas": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "Minimum number of replicas for log processor container."
+      }
+    },
+    "containerAppMaxReplicas": {
+      "type": "int",
+      "defaultValue": 5,
+      "metadata": {
+        "description": "Maximum number of replicas for log processor container."
+      }
+    },
+    "containerTargetCpuUtilization": {
+      "type": "int",
+      "defaultValue": 90,
+      "metadata": {
+        "description": "Target CPU utilization for log processor container."
+      }
+    },
+    "enableAutoScale": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable autoscale for log processor container."
+      }
+    },
+    "xmxPercentage": {
+      "type": "int",
+      "defaultValue": 75,
+      "minValue": 1,
+      "maxValue": 100,
+      "metadata": {
+        "description": "Percentage of container memory to allocate to Xmx."
+      }
+    },
+    "xmsPercentage": {
+      "type": "int",
+      "defaultValue": 70,
+      "minValue": 1,
+      "maxValue": 100,
+      "metadata": {
+        "description": "Percentage of container memory to allocate to Xms."
+      }
+    },
+    "collectContainerLogs": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable collection of container logs."
+      }
     }
   },
   "variables": {
@@ -612,7 +686,21 @@
         variables('enabledLogstashInputs'), 
         'filter { mutate { remove_field => [ \"event\", \"ls_version\"] }}\n',
         variables('enabledLogstashOutputs')
-        )]"
+        )]",
+    "scalingRule": {
+      "name": "cpu",
+      "custom": {
+        "type": "cpu",
+        "metadata": {
+          "type": "Utilization",
+          "value": "[string(parameters('containerTargetCpuUtilization'))]"
+        }
+      }
+    },
+    "xmxMemoryInMi": "[div(mul(parameters('containerMemory'), mul(1024, parameters('xmxPercentage'))), 100)]",
+    "xmsMemoryInMi": "[div(mul(parameters('containerMemory'), mul(1024, parameters('xmsPercentage'))), 100)]",
+    "javaOpts": "[concat('-Xms', variables('xmsMemoryInMi'), 'm -Xmx', variables('xmxMemoryInMi'), 'm')]",
+    "maxReplicas": "[if(parameters('enableAutoScale'), parameters('containerAppMaxReplicas'), parameters('containerAppMinReplicas'))]"
   },
   "resources": [
     {
@@ -701,6 +789,23 @@
     },
     {
       "type": "Microsoft.App/managedEnvironments",
+      "condition": "[parameters('collectContainerLogs')]",
+      "apiVersion": "2024-03-01",
+      "name": "opensystems-sentinel-conector",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('logAnalyticsWorkspaceName')), '2022-10-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('logAnalyticsWorkspaceName')), '2022-10-01').primarySharedKey]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "condition": "[not(parameters('collectContainerLogs'))]",
       "apiVersion": "2024-03-01",
       "name": "opensystems-sentinel-conector",
       "location": "[parameters('location')]",
@@ -737,10 +842,10 @@
           "containers": [
             {
               "name": "logstash",
-              "image": "docker.elastic.co/logstash/logstash:8.12.0",
+              "image": "[parameters('containerImage')]",
               "resources": {
-                "cpu": 1.0,
-                "memory": "2Gi"
+                "cpu": "[json(parameters('containerCpu'))]",
+                "memory": "[concat(parameters('containerMemory'), 'Gi')]"
               },
               "command": [
                 "/bin/bash",
@@ -759,6 +864,10 @@
                 {
                   "name": "XPACK_ML_ENABLED",
                   "value": "false"
+                },
+                {
+                  "name": "LS_JAVA_OPTS",
+                  "value": "[variables('javaOpts')]"
                 },
                 {
                   "name": "LOGS_API_ENDPOINT",
@@ -847,8 +956,9 @@
             }
           ],
           "scale": {
-            "minReplicas": 1,
-            "maxReplicas": 1
+            "minReplicas": "[parameters('containerAppMinReplicas')]",
+            "maxReplicas": "[variables('maxReplicas')]",
+            "rules": "[if(parameters('enableAutoScale'), array(variables('scalingRule')), json('null'))]"
           },
           "volumes": [
             {
