@@ -43,11 +43,12 @@ class TeamCymruScoutUtility:
             "AZURE_CLIENT_ID": consts.AZURE_CLIENT_ID,
             "AZURE_CLIENT_SECRET": consts.AZURE_CLIENT_SECRET,
             "AZURE_TENANT_ID": consts.AZURE_TENANT_ID,
-            "WorkspaceID": consts.WORKSPACE_ID,
-            "WorkspaceKey": consts.WORKSPACE_KEY,
             "IPTableName": consts.IP_TABLE_NAME,
             "DomainTableName": consts.DOMAIN_TABLE_NAME,
             "AccountUsageTableName": consts.ACCOUNT_USAGE_TABLE_NAME,
+            "AZURE_DATA_COLLECTION_ENDPOINT": consts.AZURE_DATA_COLLECTION_ENDPOINT,
+            "AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES": consts.AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES,
+            "AZURE_DATA_COLLECTION_RULE_ID_SUB_TABLES": consts.AZURE_DATA_COLLECTION_RULE_ID_SUB_TABLES,
         }
         if consts.AUTHENTICATION_TYPE == "API Key":
             required_params.update({"APIKey": consts.API_KEY})
