@@ -17,6 +17,7 @@ AWS Access Key Id and AWS Secret Access Key are required. Check the [documentati
 | **DeleteAccessKey** | Deletes the access key pair associated with the specified IAM user. |
 | **DeleteUserPolicy** | Deletes the specified inline policy that is embedded in the specified IAM user. |
 | **DetachUserPolicy** | Removes the specified managed policy from the specified user. |
+| **DisableS3BucketPublicAccess** | Disable public access for the specified S3 bucket. (parameter: BucketName) |
 | **GetUser** | Retrieves information about the specified IAM user, including the user's creation date, path, unique ID, and ARN. |
 | **ListAccessKeys** | Returns information about the access key IDs associated with the specified IAM user. |
 | **ListAttachedUserPolicies** | Lists all managed policies that are attached to the specified IAM user. |
