@@ -9,7 +9,7 @@ requiredDataConnectors:
     dataTypes:
       - AWSCloudTrail
 queryFrequency: 1d
-queryPeriod: 1d
+queryPeriod: 14d # Query Period needs to be equal to maximum Lookback which is 14 Day
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -41,19 +41,20 @@ query: |
   | extend Action = tostring(Action)
   | where Effect =~ "Allow" and (((Action has "iam:*" or Action has "iam:PassRole") and Action has "cloudformation:*") or ((Action has "iam:*" or Action has "iam:PassRole") and Action contains "cloudformation:DescribeStacks" and Action contains "cloudformation:CreateStack") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "cloudformation:Describe*" and Action contains "cloudformation:Create*")) and Resource == "*" and Condition == ""
   | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn,  RecipientAccountId, AccountName, AccountUPNSuffix
-  | project-rename StartTime = TimeGenerated  );
+  | project-rename PolicyCreationDate = TimeGenerated  );
   let PolicyAttach = materialize(  EventInfo
   | where TimeGenerated >= ago(timeframe)
   | where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)
   | extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),"/")[1])
-  | summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityType , UserIdentityArn, SourceIpAddress, PolicyName
+  | summarize AttachEventCount=count(),  = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityType , UserIdentityArn, SourceIpAddress, PolicyName
   | extend AttachEvent = pack("StartTime", StartTime, "EndTime", EndTime, "EventName", EventName, "UserIdentityType",   UserIdentityType, "SourceIpAddress", SourceIpAddress, "AccountName", AccountName, "AccountUPNSuffix", AccountUPNSuffix, "RecipientAccountId", RecipientAccountId, "UserIdentityArn", UserIdentityArn)
   | project EventSource, PolicyName, AttachEvent, AttachEventCount, RecipientAccountId, AccountName, AccountUPNSuffix
   );
   // Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.
   // These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.
   FullAdminPolicyEvents
-  | join kind=leftouter
+  // Flavor needs to be inner or we will have 14 incident for every Policy creation as this do not verify if it is attach or not.
+  | join kind=inner
   (
       PolicyAttach
   )
@@ -75,3 +76,6 @@ entityMappings:
         columnName: SourceIpAddress
 version: 1.0.3
 kind: Scheduled
+customDetails : 
+  - "PolicyName" :  PolicyName
+  
