@@ -70,6 +70,20 @@ class TestTryStrToDateTime(unittest.TestCase):
         with self.assertRaises(ValueError):
             try_str_to_datetime(time_str)
 
+    def test_fromisoformat(self):
+        # Test case for ISO format without Z (fromisoformat)
+        time_str = "2024-10-01T12:34:56.123456"
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
+
+    def test_fromisoformat_no_fraction(self):
+        # Test case for ISO format without fractional seconds
+        time_str = "2024-10-01T12:34:56"
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
+
 
 class TestTimeRange(unittest.TestCase):
     def test_valid_timerange(self):
