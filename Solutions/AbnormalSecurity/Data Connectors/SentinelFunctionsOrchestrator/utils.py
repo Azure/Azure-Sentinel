@@ -146,7 +146,7 @@ def compute_intervals(ctx: Context) -> List[OptionalEndTimeRange]:
 
 
 def should_use_v2_logic() -> bool:
-    return bool(os.environ.get("ABNORMAL_ENABLE_V2_LOGIC"))
+    return not bool(os.environ.get("ABNORMAL_DISABLE_V2_LOGIC"))
 
 
 def get_context(stored_date_time: str) -> Context:
