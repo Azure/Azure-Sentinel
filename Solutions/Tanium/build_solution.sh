@@ -135,7 +135,7 @@ _validate_solution_resources() {
   local json_property
   json_property=".\"${expected_folder}\"[]"
 
-  actual_files=$(find "Solutions/Tanium/${expected_folder}" -name "*.${expected_file_type}" | sort | sed -e 's|Solutions/Tanium/||')
+  actual_files=$(find "Solutions/Tanium/${expected_folder}" -name "*.${expected_file_type}" ! -name connect-module-connections.json | sort | sed -e 's|Solutions/Tanium/||')
   declared_files=$(jq -r "$json_property" Solutions/Tanium/Data/Solution_Tanium.json | sort)
 
   _msg "    🕵️  checking all files are all declared in the manifest"
