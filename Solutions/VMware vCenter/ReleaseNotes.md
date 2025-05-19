@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.5       | 19-05-2025                     | Updating **Parser** for parsing new fields  |
 | 3.0.4       | 03-12-2024                     | Removed Deprecated **Data Connector**       |
 | 3.0.3       | 18-11-2024                     | Modified **Parser** vCenter.yaml for better parsing                 |
 | 3.0.2       | 09-08-2024                     | Deprecating **Data Connectors**                 |
