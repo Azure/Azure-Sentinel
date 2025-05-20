@@ -1,0 +1,574 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This stack integrates Microsoft Sentinel by creating an IAM role with minimal permissions. This role allows Microsoft Sentinel to access your logs stored in a specified S3 bucket and SQS queue. The stack also creates an S3 bucket, an SQS Queue, and sets up S3 notifications. Additionally, it includes necessary IAM policies.",
+    "Parameters": {
+        "AwsRoleName": {
+            "Type": "String",
+            "Description": "Enter the ARN name for the role. The name must start with 'OIDC_', otherwise the connector will not function properly.",
+            "AllowedPattern": "OIDC_[-_a-zA-Z0-9]+",
+            "Default": "OIDC_MicrosoftSentinelRole_Redshift"
+        },
+        "BucketName": {
+            "Type": "String",
+            "AllowedPattern": "^[a-z0-9][a-z0-9-.]{1,61}[a-z0-9]$",
+            "Description": "Enter the name of the S3 bucket. Bucket name must be unique within the global namespace and follow the bucket naming rules.",
+            "Default": "redshiftlog-s3-bucket"
+        },
+        "SentinelWorkspaceId": {
+            "Type": "String",
+            "Description": "Enter the Microsoft Sentinel Workspace ID"
+        },
+        "CreateNewBucket": {
+            "AllowedValues": [
+                true,
+                false
+            ],
+            "Default": true,
+            "Description": "Set to false to have Amazon S3 use an existing S3 Bucket.",
+            "Type": "String"
+        }
+    },
+    "Conditions": {
+        "CreateNewBucketCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateNewBucket"
+                },
+                true
+            ]
+        }
+    },
+    "Resources": {
+        "SentinelWebIdentityBasedRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Ref": "AwsRoleName"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Fn::Sub": "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Principal\": {\"Federated\": \"arn:aws:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/\"},\"Action\": \"sts:AssumeRoleWithWebIdentity\",\"Condition\": {\"StringEquals\": {\"sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud\": \"api://1462b192-27f7-4cb9-8523-0f4ecb54b47e\",\"sts:RoleSessionName\": \"MicrosoftSentinel_${SentinelWorkspaceId}\"}}}]}"
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "AWSRedshiftLoggingPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "redshift:EnableLogging",
+                                        "redshift:DescribeLoggingStatus"
+                                    ],
+                                    "Resource": [
+                                        "*"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Sid": "LoggingConfigurationAPI"
+                                },
+                                {
+                                    "Sid": "WebACLLogDelivery",
+                                    "Action": [
+                                        "logs:CreateLogDelivery",
+                                        "logs:DeleteLogDelivery"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Sid": "WebACLLoggingS3",
+                                    "Action": [
+                                        "s3:PutBucketPolicy",
+                                        "s3:GetBucketPolicy"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${BucketName}"
+                                        }
+                                    ],
+                                    "Effect": "Allow"
+                                },
+                                {
+                                    "Sid": "AllowS3ObjectReadAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                                    }
+                                },
+                                {
+                                    "Sid": "AllowAccessToConnectionLogSQS",
+                                    "Effect": "Allow",
+                                    "Action": "sqs:*",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SentinelSQSQueueConnectionLog",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "AllowAccessToUserLogSQS",
+                                    "Effect": "Allow",
+                                    "Action": "sqs:*",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SentinelSQSQueueUserLog",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "AllowAccessToUserActivityLogSQS",
+                                    "Effect": "Allow",
+                                    "Action": "sqs:*",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SentinelSQSQueueUserActivityLog",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Condition": "CreateNewBucketCondition",
+            "DeletionPolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${BucketName}"
+                },
+                "NotificationConfiguration": {
+                    "QueueConfigurations": [
+                        {
+                            "Queue": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueConnectionLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Event": "s3:ObjectCreated:*",
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "prefix",
+                                            "Value": {
+                                                "Fn::Sub": "AWSLogs/${AWS::AccountId}/redshift/connectionlog"
+                                            }
+                                        },
+                                        {
+                                            "Name": "suffix",
+                                            "Value": ".gz"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "Queue": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueUserLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Event": "s3:ObjectCreated:*",
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "prefix",
+                                            "Value": {
+                                                "Fn::Sub": "AWSLogs/${AWS::AccountId}/redshift/userlog"
+                                            }
+                                        },
+                                        {
+                                            "Name": "suffix",
+                                            "Value": ".gz"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "Queue": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueUserActivityLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Event": "s3:ObjectCreated:*",
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "prefix",
+                                            "Value": {
+                                                "Fn::Sub": "AWSLogs/${AWS::AccountId}/redshift/useractivitylog"
+                                            }
+                                        },
+                                        {
+                                            "Name": "suffix",
+                                            "Value": ".gz"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SampleBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Fn::Sub": "${BucketName}"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSLogDeliveryWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${BucketName}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "aws:SourceAccount": [
+                                        {
+                                            "Fn::Sub": "${AWS::AccountId}"
+                                        }
+                                    ]
+                                },
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSLogDeliveryAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${BucketName}"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": [
+                                        {
+                                            "Fn::Sub": "${AWS::AccountId}"
+                                        }
+                                    ]
+                                },
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow Arn read access S3 bucket",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AwsRoleName}"
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SentinelSQSQueueConnectionLog": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": "Sentinel-Redshift-ConnectionLog-SQS"
+            }
+        },
+        "SentinelSQSQueueUserLog": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": "Sentinel-Redshift-UserLog-SQS"
+            }
+        },
+        "SentinelSQSQueueUserActivityLog": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": "Sentinel-Redshift-UserActivityLog-SQS"
+            }
+        },
+        "SentinelSQSQueuePolicyForS3": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "allow s3 to send notification messages to SQS queue",
+                            "Action": [
+                                "SQS:SendMessage"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueConnectionLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Condition": {
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "allow s3 to send notification messages to SQS queue",
+                            "Action": [
+                                "SQS:SendMessage"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueUserLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Condition": {
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "allow s3 to send notification messages to SQS queue",
+                            "Action": [
+                                "SQS:SendMessage"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueUserActivityLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Condition": {
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "allow specific role to read/delete/change visibility of SQS messages and get queue url",
+                            "Action": [
+                                "SQS:ChangeMessageVisibility",
+                                "SQS:DeleteMessage",
+                                "SQS:ReceiveMessage",
+                                "SQS:GetQueueUrl"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueConnectionLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Principal": {
+                                "AWS": [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "SentinelWebIdentityBasedRole",
+                                            "Arn"
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "allow specific role to read/delete/change visibility of SQS messages and get queue url",
+                            "Action": [
+                                "SQS:ChangeMessageVisibility",
+                                "SQS:DeleteMessage",
+                                "SQS:ReceiveMessage",
+                                "SQS:GetQueueUrl"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueUserLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Principal": {
+                                "AWS": [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "SentinelWebIdentityBasedRole",
+                                            "Arn"
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "allow specific role to read/delete/change visibility of SQS messages and get queue url",
+                            "Action": [
+                                "SQS:ChangeMessageVisibility",
+                                "SQS:DeleteMessage",
+                                "SQS:ReceiveMessage",
+                                "SQS:GetQueueUrl"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueueUserActivityLog",
+                                    "Arn"
+                                ]
+                            },
+                            "Principal": {
+                                "AWS": [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "SentinelWebIdentityBasedRole",
+                                            "Arn"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Queues": [
+                    {
+                        "Ref": "SentinelSQSQueueConnectionLog"
+                    },
+                    {
+                        "Ref": "SentinelSQSQueueUserLog"
+                    },
+                    {
+                        "Ref": "SentinelSQSQueueUserActivityLog"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "SentinelRoleArn": {
+            "Description": "Role ARN for Sentinel Role that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelWebIdentityBasedRole",
+                    "Arn"
+                ]
+            }
+        },
+        "SentinelSQSQueueConnectionLogURL": {
+            "Description": "AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.",
+            "Value": {
+                "Ref": "SentinelSQSQueueConnectionLog"
+            }
+        },
+        "SentinelSQSQueueConnectionLogArn": {
+            "Description": "Log destination ARN to be used when setting up other accounts to export logs",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelSQSQueueConnectionLog",
+                    "Arn"
+                ]
+            }
+        },
+        "SentinelSQSQueueConnectionLogName": {
+            "Description": "SQS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelSQSQueueConnectionLog",
+                    "QueueName"
+                ]
+            }
+        },
+        "SentinelSQSQueueUserLogURL": {
+            "Description": "AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.",
+            "Value": {
+                "Ref": "SentinelSQSQueueUserLog"
+            }
+        },
+        "SentinelSQSQueueUserLogArn": {
+            "Description": "Log destination ARN to be used when setting up other accounts to export logs",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelSQSQueueUserLog",
+                    "Arn"
+                ]
+            }
+        },
+        "SentinelSQSQueueUserLogName": {
+            "Description": "SQS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelSQSQueueUserLog",
+                    "QueueName"
+                ]
+            }
+        },
+        "SentinelSQSQueueUserActivityLogURL": {
+            "Description": "AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.",
+            "Value": {
+                "Ref": "SentinelSQSQueueUserActivityLog"
+            }
+        },
+        "SentinelSQSQueueUserActivityLogArn": {
+            "Description": "Log destination ARN to be used when setting up other accounts to export logs",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelSQSQueueUserActivityLog",
+                    "Arn"
+                ]
+            }
+        },
+        "SentinelSQSQueueUserActivityLogName": {
+            "Description": "SQS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelSQSQueueUserActivityLog",
+                    "QueueName"
+                ]
+            }
+        }
+    }
+}
