@@ -144,7 +144,7 @@ if ($null -eq $servicePrincipal) {
 - Configurations in Sentinel (Recommended step)<br>
    - While creating analytical rule , kindly take care of proper mapping beacuse these playbooks require Name and UPNsuffix identifier to be mapped properly under account entity .
    for example if you want the jhon@abc.company.com to be blocked then , kindly map the column having jhon to Name identifier and abc.company.com to UPNsuffix identifier
-   ![image](https://github.com/user-attachments/assets/7a81fd01-b9a8-4866-9bf0-1d379125cdef)
+   ![image](./entity-trigger/images/entity_mapping.png)<br>
 ## Screenshots
 **Incident Trigger**<br>
 ![Incident Trigger](./incident-trigger/images/incidentTrigger_light.png)<br>
