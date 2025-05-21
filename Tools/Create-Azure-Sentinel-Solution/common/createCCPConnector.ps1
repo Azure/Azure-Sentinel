@@ -568,7 +568,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     {
                         CreateGCPResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
                     }
-                    elseif ($armResource.kind.ToLower() -eq 'restapipoller')
+                    elseif ($armResource.kind.ToLower() -eq 'restapipoller' -or $armResource.kind.ToLower() -eq 'websocket')
                     {
                         CreateRestApiPollerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
                     }
@@ -626,7 +626,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     else 
                     {
-                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', 'GCP', 'AmazonWebServicesS3', 'Push' or 'StorageAccountBlobContainer'." -BackgroundColor Red
+                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', WebSocket, 'GCP', 'AmazonWebServicesS3', 'Push' and 'StorageAccountBlobContainer'." -BackgroundColor Red
                         exit 1;
                     }
 
@@ -954,6 +954,10 @@ function ProcessPropertyPlaceholders($armResource, $templateContentConnections,
 
 function CreateRestApiPollerResourceProperties($armResource, $templateContentConnections, $fileType) {
     $kindType = 'RestApiPoller'
+    if ($armResource.kind.ToLower() -eq 'websocket') {
+        $kindType = 'WebSocket'
+    }
+
     if($armResource.properties.auth.type.ToLower() -eq 'oauth2')
     {
         # clientid
@@ -989,7 +993,7 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
     }
     else 
     {
-        Write-Host "Error: For kind RestApiPoller, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2' or 'APIKey'." -BackgroundColor Red
+        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2' or 'APIKey'." -BackgroundColor Red
         exit 1;
     }
 
