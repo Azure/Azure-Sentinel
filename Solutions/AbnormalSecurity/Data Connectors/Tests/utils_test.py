@@ -55,20 +55,38 @@ class TestTryStrToDateTime(unittest.TestCase):
     def test_invalid_format(self):
         # Test case for invalid format
         time_str = "2024-10-01 12:34:56"
-        with self.assertRaises(ValueError):
-            try_str_to_datetime(time_str)
+        # This is now a valid ISO format for fromisoformat, so check correct parsing
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
 
     def test_incomplete_date(self):
         # Test case for incomplete date
         time_str = "2024-10-01T12:34"
-        with self.assertRaises(ValueError):
-            try_str_to_datetime(time_str)
+        # This is now a valid ISO format for fromisoformat, so check correct parsing
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
 
     def test_empty_string(self):
         # Test case for empty string
         time_str = ""
         with self.assertRaises(ValueError):
             try_str_to_datetime(time_str)
+
+    def test_fromisoformat(self):
+        # Test case for ISO format without Z (fromisoformat)
+        time_str = "2024-10-01T12:34:56.123456"
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
+
+    def test_fromisoformat_no_fraction(self):
+        # Test case for ISO format without fractional seconds
+        time_str = "2024-10-01T12:34:56"
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
 
 
 class TestTimeRange(unittest.TestCase):
