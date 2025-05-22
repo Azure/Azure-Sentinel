@@ -1,0 +1,293 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Cyble-ThreatIntelligence-Ingest-Playbook",
+    "description": "This playbook imports IoC lists from Cyble and stores them as Threat Intelligence Indicators in Microsoft Sentinel, for detection purposes.\n\nThis playbook depends on Cyble-ThreatIntelligence-Ingest that need to be installed **manually** before installing this playbook.",
+    "prerequisites": [
+      "First install the Cyble-ThreatIntelligenceImport playbook.",
+      "To use the Cyble for Azure connector, you will need a valid API token from Cyble"
+    ],
+    "prerequisitesDeployTemplateFile": "../azuredeploy.json",
+    "lastUpdateTime": "2025-05-06T00:00:00.000Z",
+    "entities": [],
+    "tags": [ "Threat Intelligence" ],
+    "support": {
+      "tier": "Partner",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "Cyble Inc."
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0",
+        "title": "Cyble-ThreatIntelligence-Ingest",
+        "description": "This playbook imports IoC lists from Cyble and stores them as Threat Intelligence Indicators in Microsoft Sentinel, for detection purposes.\n\nThis playbook depends on Cyble-ThreatIntelligence-Ingest that need to be installed **manually** before installing this playbook.",
+        "prerequisites": [
+            "First install the Cyble-ThreatIntelligenceImport playbook.",
+            "To use the Cyble for Azure connector, you will need a valid API token from Cyble"
+        ],
+        "prerequisitesDeployTemplateFile": "../azuredeploy.json",
+        "lastUpdateTime": "2025-05-06T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Threat Intelligence" ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Cyble Inc."
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Cyble-ThreatIntelligence-Ingest",
+                "notes": [ "Initial version" ]
+            }
+        ]
+      }
+    ],
+    "basics": {
+      "displayName": "Cyble Threat Intelligence Ingestion",
+      "description": "Import IOCs using the Cyble Threat Intelligence API.",
+      "category": "Threat Intelligence"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Cyble-TI-Ingest-Playbook",
+      "type": "String"
+    },
+    "ScheduleFrequencyInMinutes": {
+      "defaultValue": "60",
+      "type": "String"
+    },
+    "CybleApiBearerToken": {
+      "defaultValue": "",
+      "type": "SecureString"
+    },
+    "WorkspaceID": {
+      "defaultValue": "",
+      "type": "String"
+    }
+  },
+  "variables": {
+    "apiConnectionResourceName": "[concat(parameters('PlaybookName'), '-ti-conn-', uniqueString(resourceGroup().id, parameters('PlaybookName')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('apiConnectionResourceName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('apiConnectionResourceName')]",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+          "type": "Microsoft.Web/locations/managedApis"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('apiConnectionResourceName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "ScheduleFrequencyInMinutes": {
+            "type": "String",
+            "value": "[parameters('ScheduleFrequencyInMinutes')]"
+          },
+          "CybleApiBearerToken": {
+            "type": "securestring",
+            "value": "[parameters('CybleApiBearerToken')]"
+          },
+          "WorkspaceID": {
+            "type": "String",
+            "value": "[parameters('WorkspaceID')]"
+          },
+          "$connections": {
+            "type": "Object",
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('apiConnectionResourceName'))]",
+                "connectionName": "[variables('apiConnectionResourceName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "alternativeParameterValues": {
+                  "authenticationType": "ManagedServiceIdentity"
+                }
+              }
+            }
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "ScheduleFrequencyInMinutes": {
+              "type": "String"
+            },
+            "CybleApiBearerToken": {
+              "type": "securestring"
+            },
+            "$connections": {
+              "type": "Object"
+            },
+            "WorkspaceID": {
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Recurrence_Trigger": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Minute",
+                "interval": "@int(parameters('ScheduleFrequencyInMinutes'))"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_StartDateTimeFull": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "StartDateTimeFull",
+                    "type": "String",
+                    "value": "@{formatDateTime(addMinutes(utcNow(), mul(-1, int(parameters('ScheduleFrequencyInMinutes')))), 'yyyy-MM-ddTHH:mm:ssZ')}"
+                  }
+                ]
+              }
+            },
+            "Initialize_EndDateTimeFull": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_StartDateTimeFull": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "EndDateTimeFull",
+                    "type": "String",
+                    "value": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}"
+                  }
+                ]
+              }
+            },
+            "HTTP_Get_IOC_Data": {
+              "type": "Http",
+              "runAfter": {
+                "Initialize_EndDateTimeFull": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "method": "GET",
+                "uri": "@concat('https://api.cyble.ai/engine/api/v2/y/iocs?sortBy=last_seen&order=desc&limit=100&startDate=', variables('StartDateTimeFull'), '&endDate=', variables('EndDateTimeFull'))",
+                "headers": {
+                  "Authorization": "@concat('Bearer ', parameters('CybleApiBearerToken'))",
+                  "Content-Type": "application/json"
+                }
+              }
+            },
+            "Parse_IOC_Response": {
+              "type": "ParseJson",
+              "runAfter": {
+                "HTTP_Get_IOC_Data": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "content": "@body('HTTP_Get_IOC_Data')",
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "For_Each_IOC": {
+              "type": "Foreach",
+              "runAfter": {
+                "Parse_IOC_Response": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              },
+              "foreach": "@coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))",
+              "actions": {
+                "Check_If_in_lastNmins": {
+                  "type": "If",
+                  "expression": "@and(\n  greaterOrEquals(\n    item()?['last_seen'],\n    div(\n      sub(\n        ticks(variables('StartDateTimeFull')),\n        ticks('1970-01-01T00:00:00Z')\n      ),\n      10000000\n    )\n  ),\n  lessOrEquals(\n    item()?['last_seen'],\n    div(\n      sub(\n        ticks(variables('EndDateTimeFull')),\n        ticks('1970-01-01T00:00:00Z')\n      ),\n      10000000\n    )\n  )\n)",
+                  "actions": {
+                    "Upload_Indicators_v2": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/V2/ThreatIntelligence/@{encodeURIComponent(parameters('WorkspaceID'))}/UploadIndicators/",
+                        "body": {
+                          "sourcesystem": "CybleVision",
+                          "indicators": [
+                            {
+                              "DisplayName": "@item()?['ioc']",
+                              "Name": "@item()?['ioc']",
+                              "IndicatorValue": "@item()?['ioc']",
+                              "IndicatorType": "@if(equals(item()?['ioc_type'],'FileHash-SHA256'),'filehash-sha256',if(equals(item()?['ioc_type'],'IPv4'),'ipv4address','url'))",
+                              "ThreatType": "malicious-activity",
+                              "Confidence": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
+                              "SeverityLevel": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
+                              "severity_level": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
+                              "Tags": [
+                                "@coalesce(item()?['confidence_rating'],'Unknown')"
+                              ],
+                              "ExpirationDateTime": "@addDays(utcNow(),7)",
+                              "description": "IOC from Cyble",
+                              "labels": [
+                                "@join(coalesce(item()?['behaviour_tags'], json('[]')), ',')"
+                              ],
+                              "pattern": "@if(equals(item()?['ioc_type'],'FileHash-SHA256'), concat('[[file:hashes.''SHA-256'' = ''', item()?['ioc'], ''']]'), if(equals(item()?['ioc_type'],'IPv4'), concat('[[ipv4-addr:value = ''', item()?['ioc'], ''']]'), concat('[[url:value = ''', item()?['ioc'], ''']]')))",
+                              "valid_from": "@utcNow()",
+                              "type": "indicator",
+                              "id": "@concat('indicator--', guid())",
+                              "created": "@utcNow()",
+                              "modified": "@utcNow()",
+                              "pattern_type": "stix",
+                              "spec_version": "2.1"
+                            }
+                          ]
+                        },
+                        "retryPolicy": {
+                          "type": "Exponential",
+                          "count": 5,
+                          "interval": "PT15S"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
