@@ -5,7 +5,7 @@ To create a package using V3 packaging tool refer [Link to V3](https://github.co
 ## CCP connector Building Blocks:
 Every CCP connector will have 4 building blocks and should be specified in sequence given below:
 1. `Data Connector Definition` - This file will contain details on how UI page look and contains instruction steps and connectorUiConfig section.
-2. `Data Connectors (Poller)` - This file will contain details on how data will be pulled. For this you can use any of the `kind` type `RestApiPoller`, `GCP`, `AmazonWebServicesS3` or `Push`.
+2. `Data Connectors (Poller)` - This file will contain details on how data will be pulled. For this you can use any of the `kind` type `RestApiPoller`, `WebSocket`, `GCP`, `AmazonWebServicesS3` or `Push`.
 3. `Data Collection Rule(DCR)` - This file will contain details on what data should be collected, how to transform that data, and where to send it.
 4. `Tables (Optional)` - This file will contain schema of your data logs where the actual data will be stored.
 
@@ -134,7 +134,9 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
   - Example for AmazonWebServicesS3 kind, [Amazon Web Services](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%20Web%20Services/Data%20Connectors/AWS_WAF_CCP/AwsS3_WAF_PollingConfig.json), [VMware Carbon Black Cloud](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlackCloud_ccp/CarbonBlack_PollingConfig.json).
   - For kind **`GCP`**, please refer [Link](https://learn.microsoft.com/en-us/rest/api/securityinsights/data-connectors/create-or-update?view=rest-securityinsights-2024-01-01-preview&tabs=HTTP#gcpdataconnector).
   - Example for `GCP` kind, [Google Cloud Platform Audit Logs](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Audit%20Logs/Data%20Connectors/GCPAuditLogs_ccp/data_connector_poller.json).
-  - Below is an example for **`RestApiPoller`** kind of CCP collector that is used to pole details from the API:
+  - The **`WebSocket`** connector type shares the same properties as `RestApiPoller`, with the exception that the `ApiEndpoint` must begin with `wss://`.
+  - Example for `WebSocket` kind, [Proofpoint On demand(POD) Email Security](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand(POD)%20Email%20Security/Data%20Connectors/ProofPointEmailSecurity_CCP/ProofpointPOD_PollingConfig.json).
+  - Below is an example for **`RestApiPoller`** kind of CCP collector that is used to pole details from the API.  :
 
 ```json
 [{
