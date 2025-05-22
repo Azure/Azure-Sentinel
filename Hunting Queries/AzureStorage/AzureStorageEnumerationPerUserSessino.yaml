@@ -1,9 +1,15 @@
 id: b7b409df-af7b-4feb-9cc9-109beed37512
-name: Suspicious Anonymous Storage Blob Access Pattern
+name: Detect Enumeration Activity Using Unique Identifiers and Session Aggregation
 description: |
-  "This hunting query will identify potential reconnaissance or enumeration behavior in Azure Storage Blob access logs 
-  by identifying anonymous read requests accessing many distinct blob paths in a short period of time. 
-  This pattern may indicate scanning activity or probing for sensitive data using anonymous access
+  "This Kusto (KQL) hunting query detects blob-enumeration or file-spraying behaviour in Azure Storage by:
+    - Aggregating requests into time-bound sessions with row_window_session().
+    - Defining a "user" as the combination of AccountName | UserAgentHeader, which is tolerant of rapid IP rotation.
+    - Raising an alert when, within any single session:
+    - The actor touches at least 10 distinct objects, and
+    - At least 50 % of those requests return an HTTP 4xx/5xx status, and
+    - Each object is accessed exactly once ("touch-once" pattern typical of enumeration).
+    All tuning knobs (look-back window, session gap, thresholds, authentication type) are exposed at the top of the query.
+    Be sure to validate the query against both benign and malicious samples in your own environment before relying on it for production detection.
   Reference: https://techcommunity.microsoft.com/blog/microsoftdefendercloudblog/protect-your-storage-resources-against-blob-hunting/3735238"
 requiredDataConnectors: []
 tactics:
@@ -14,49 +20,62 @@ relevantTechniques:
   - T1530
 query: |
 
-  let maxTimeBetweenRequests = 30s;
-  let maxWindowTime = 12h;
-  let timeRange = 30d;
-  let authTypes = dynamic(["Anonymous"]);
+  // ==========================================================
+  //  Detect Enumeration Activity Using Unique User Identifiers
+  // ==========================================================
+  // ----------  Tuning parameters  ----------
+  let maxTimeBetweenRequests = 30s;   // gap that keeps events in the same session
+  let maxWindowTime          = 12h;   // hard cap on session duration
+  let lookback               = 30d;   // history window
+  let authTypes              = dynamic(['Anonymous']);  // adjust if needed
+  let minDistinctObjects     = 10;    // minimum objects per session
+  let minFailureRatio        = 0.5;   // minimum failure rate (0.5 = 50 %)
+  // ---------------------------------------
+  // ----------  Core query  ----------
   StorageBlobLogs
-  | where TimeGenerated > ago(timeRange)
-  // Collect anonymous requests to storage
+  | where TimeGenerated > ago(lookback)
   | where AuthenticationType has_any(authTypes)
-  | where Uri !endswith "favicon.ico"
-  | where Category =~ "StorageRead"
-  // Process the filepath out of the request URI
-  | extend FilePath = array_slice(split(split(Uri, "?")[0], "/"), 3, -1)
-  | extend FullPath = strcat("/", strcat_array(FilePath, "/"))
-  // Extract the IP address, removing the port used
-  | extend CallerIpAddress = tostring(split(CallerIpAddress, ":")[0])
-  // Ignore private IP addresses
-  | where not(ipv4_is_private(CallerIpAddress))
-  | project
-      TimeGenerated,
-      AccountName,
-      FullPath,
-      CallerIpAddress,
-      UserAgentHeader,
-      StatusCode
-  | order by TimeGenerated asc 
-  | serialize 
-  // Generate sessions of access activity, where each request is within maxTimeBetweenRequests doens't last longer than maxWindowTime
-  | extend SessionStarted = row_window_session(TimeGenerated, maxWindowTime, maxTimeBetweenRequests, AccountName != prev(AccountName))
+  | where Category == 'StorageRead'
+  | where Uri !endswith 'favicon.ico'
+  // Extract full blob path
+  | extend FilePathElems = array_slice(split(split(Uri,'?')[0], '/'), 3, -1)
+  | extend FullPath      = strcat('/', strcat_array(FilePathElems, '/'))
+  // Normalise caller IP
+  | extend CallerIp = tostring(split(CallerIpAddress, ':')[0])
+  | where not(ipv4_is_private(CallerIp))
+  // Build identity key resilient to IP hopping
+  | extend IdentityKey = strcat(AccountName, '|', UserAgentHeader)
+  | project TimeGenerated, AccountName, FullPath,
+            CallerIp, StatusCode, UserAgentHeader, IdentityKey
   | order by TimeGenerated asc
-  // Summarize the results using the Session start time
-  | summarize Paths=make_list(FullPath), Statuses=make_set(StatusCode), CallerIPs=make_list(CallerIpAddress),
-      DistinctPathCount=dcount(FullPath), AllRequestsCount=count(), CallerIPCount=dcount(CallerIpAddress), CallerUACount=dcount(UserAgentHeader), SessionEnded=max(TimeGenerated)
-      by SessionStarted, AccountName
-  // Validate that each path visited is unique, scanners will generally try files once
-  | where DistinctPathCount > 1 and DistinctPathCount == AllRequestsCount
-  | order by DistinctPathCount
-  | extend ["Duration (Mins)"] = datetime_diff("minute", SessionEnded, SessionStarted)
-  | project-reorder
-      SessionStarted,
-      SessionEnded,
-      ['Duration (Mins)'],
-      AccountName,
-      DistinctPathCount,
-      AllRequestsCount,
-      CallerIPCount,
-      CallerUACount
+  | serialize
+  // Build activity sessions
+  | extend SessionId = row_window_session(
+          TimeGenerated,
+          maxWindowTime,
+          maxTimeBetweenRequests,
+          IdentityKey != prev(IdentityKey))
+  // Status code as integer for numeric comparisons
+  | extend StatusCodeInt = toint(StatusCode)
+  | summarize
+          DistinctObjCount = dcount(FullPath),
+          RequestCount     = count(),
+          FailCount        = countif(StatusCodeInt >= 400),
+          CallerIPs        = make_set(CallerIp, 64),
+          SessionStart     = min(TimeGenerated),
+          SessionEnd       = max(TimeGenerated),
+          UserAgent        = any(UserAgentHeader)
+        by SessionId, IdentityKey, AccountName
+  | extend FailureRatio = todouble(FailCount) / RequestCount,
+          DurationMins  = datetime_diff('minute', SessionEnd, SessionStart)
+  // -----------  Detection logic  ----------
+  | where DistinctObjCount >= minDistinctObjects
+        and FailureRatio   >= minFailureRatio
+        and DistinctObjCount == RequestCount    // touch-once rule
+  // -----------  Output  ----------
+  | project SessionStart, SessionEnd, DurationMins,
+            AccountName, IdentityKey, DistinctObjCount,
+            RequestCount, FailureRatio,
+            CallerIPCount = array_length(CallerIPs),
+            CallerIPs, UserAgent
+  | order by DistinctObjCount desc
