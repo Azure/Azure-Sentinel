@@ -1114,22 +1114,27 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
 function AddOnAttributes($armResource) {
     $hasAddOnAttributes = [bool]($armResource.properties.PSobject.Properties.name -match "addOnAttributes")
     if ($hasAddOnAttributes) {
-        $addOnAttributesProperties = $armResource.properties.addOnAttributes.PSobject.Properties.name
+        foreach ($addOnAttributeProps in $armResource.properties.addOnAttributes.PSobject.Properties) {
+            $fieldName = $addOnAttributeProps.name
 
-        foreach ($addOnAttributeProps in $addOnAttributesProperties) {
-            ProcessPropertyPlaceholders -armResource $armResource `
-                -templateContentConnections $templateContentConnections `
-                -isOnlyObjectCheck $false `
-                -propertyObject $armResource.properties.addOnAttributes `
-                -propertyName $addOnAttributeProps `
-                -isInnerObject $true `
-                -innerObjectName 'addOnAttributes' `
-                -kindType $kindType `
-                -isSecret $true `
-                -isRequired $false `
-                -fileType $fileType `
-                -minLength 4 `
-                -isCreateArray $false
+            if ($global:commaSeparatedTextFieldName -ne "" -and $fieldName -eq $global:commaSeparatedTextFieldName) {
+                # WHEN MULTIPLE PLACEHOLDERS ARE PRESENT IN THE SAME FIELD
+                $armResource.properties.addOnAttributes.$fieldName = "[[variables('commaSeparatedArray')[copyIndex()]]"
+            } else {
+                ProcessPropertyPlaceholders -armResource $armResource `
+                    -templateContentConnections $templateContentConnections `
+                    -isOnlyObjectCheck $false `
+                    -propertyObject $armResource.properties.addOnAttributes `
+                    -propertyName $fieldName `
+                    -isInnerObject $true `
+                    -innerObjectName 'addOnAttributes' `
+                    -kindType $kindType `
+                    -isSecret $true `
+                    -isRequired $false `
+                    -fileType $fileType `
+                    -minLength 4 `
+                    -isCreateArray $false
+            }
         }
     }
 }
