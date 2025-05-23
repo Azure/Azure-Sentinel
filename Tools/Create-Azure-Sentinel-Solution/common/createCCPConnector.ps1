@@ -10,9 +10,10 @@
 }
 
 #build the connection template parameters, according to the connector definition instructions
-function Get-ConnectionsTemplateParameters($activeResource, $ccpItem) {
+function Get-ConnectionsTemplateParameters($activeResource) {
     # this is for data connector definition only
-    $title = $ccpItem.title;
+    $connectorDefinitionObject = $activeResource | where-object -Property "type" -eq 'Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions'
+    $title = $connectorDefinitionObject.properties.connectorUiConfig.title;
     $paramTestForDefinition = [PSCustomObject]@{
         defaultValue = $title;
         type         = "securestring";
@@ -38,7 +39,7 @@ function Get-ConnectionsTemplateParameters($activeResource, $ccpItem) {
         dcrConfig               = $dcrConfigParameter;
     }
 
-    $connectorDefinitionObject = $activeResource | where-object -Property "type" -eq 'Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions'
+    
     foreach ($instructionSteps in $connectorDefinitionObject.properties.connectorUiConfig.instructionSteps) {
         New-ParametersForConnectorInstuctions $instructionSteps.instructions   
     }
@@ -70,6 +71,14 @@ function New-ParametersForConnectorInstuctions($instructions) {
             if ($setDefaultValueAndRemoveMinLength) {
                 $newParameter.defaultValue = ""
                 $newParameter.PSObject.Properties.Remove('minLength')
+            }
+
+            $hasCommaSeparatedTextInDescription = [bool]($instruction.parameters.PSobject.Properties.name -match "description")
+            if ($hasCommaSeparatedTextInDescription) {
+                $descriptionText = $instruction.parameters.description
+                if ($descriptionText -like "*comma separated*") {
+                    $global:commaSeparatedTextFieldName = $instruction.parameters.name
+                }
             }
 
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
@@ -309,6 +318,10 @@ function Convert-ToParameterFormat($propValue) {
     if ($matchesPattern.Count -eq 1 -and $propValue -eq $matchesPattern[0].Value) {
         $paramName = $matchesPattern[0].Groups[1].Value
 
+        if ($paramName -eq 'commaSeparatedArray') {
+            return "[[trim(variables('commaSeparatedArray')[copyIndex()])]"
+        }
+
         $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$paramName" -isSecret $true
 
         return "[[parameters('$paramName')]"
@@ -328,9 +341,21 @@ function Convert-ToParameterFormat($propValue) {
         # Add the parameter reference
         $paramName = $matchValue.Groups[1].Value
  
-        $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$paramName" -isSecret $true
- 
-        $result += "parameters('$paramName'),"
+        if ($paramName -eq 'commaSeparatedArray') {
+            # Insert custom expression for commaSeparatedArray
+            $result = ($result -join ",").TrimEnd(',')
+            $result = ($result -join ",").TrimEnd("'")
+            $result += "`"',"    # Opening quote
+            $result += "trim(variables('commaSeparatedArray')[copyIndex()])"
+            $result += ",'`"'"   # Closing quote
+        } else {
+            $templateContentConnections.properties.mainTemplate = addNewParameter `
+                -templateResourceObj $templateContentConnections.properties.mainTemplate `
+                -parameterName "$paramName" -isSecret $true
+
+            $result += "parameters('$paramName'),"
+        }
+
         $lastIndex = $matchValue.Index + $matchValue.Length
     }
  
@@ -427,7 +452,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                     #========end:dc definition resource===========
                 }
-                
+
+                # create parameters for the data connector definition fields
+                $global:commaSeparatedTextFieldName = ""
+                $paramItems = Get-ConnectionsTemplateParameters $activeResource;
                 $templateContent.properties.mainTemplate.resources += Get-MetaDataResource $TemplateCounter $dataFileMetadata $solutionFileMetadata
                 
                 if ($TemplateCounter -eq 2) {
@@ -483,7 +511,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         }
                     } else {
                         if ($currentName.Count -eq 1 -and $currentName -like '{{') {
-                            $concatenateParts = "[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($currentName)', $guidValue)]"
+                            $concatenateParts = "[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($currentName)', $guidValue"
                         } else {
                             if ($concatenateParts.Count -ge 1) {
                                 # if we have multiple parts in name {{innerWorkspace}}/Microsoft.SecurityInsights/OktaDCV1_{{domainname}}
@@ -497,20 +525,35 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
 
                 if ($concatenateParts.Count -gt 1 -and $concatenateParts -notmatch 'concat') {
-                    $outputString = "[[concat($($concatenateParts -join ', '), $guidValue)]"
+                    $outputString = "[[concat($($concatenateParts -join ', '), $guidValue"
                 } elseif ($concatenateParts.Count -eq 1 -and $concatenateParts[0] -match 'parameters') {
                     # if we just have parameters('abcwork')
-                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue)]"
+                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue"
                 } else {
                     # if we just have 'abcwork'
-                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue)]"
+                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue"
                 }
             
+                if ($global:commaSeparatedTextFieldName -eq "") {
+                    $outputString += ")]"
+                } else {
+                    $outputString += ", copyIndex())]"
+                }
+
                 return $outputString
             }
 
             function CCPDataConnectorsResource($fileContent) {
                 if ($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
+                    if ($global:commaSeparatedTextFieldName -ne "") {
+                        # add variable for comma separated text field
+                        $commaSeparatedVariable = @{
+                            "commaSeparatedArray" = "[[split(parameters('$($global:commaSeparatedTextFieldName)'), ',')]"
+                        }
+
+                        $templateContentConnections.properties.mainTemplate.variables = $commaSeparatedVariable
+                    }
+
                     # add parameter of guidValue if not present
                     $templateContentConnections.properties.mainTemplate = addGuidValueParameter -templateResourceObj $templateContentConnections.properties.mainTemplate
 
@@ -523,6 +566,15 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
+
+                    if ($global:commaSeparatedTextFieldName -ne "") {
+                        $copyObject = [ordered]@{
+                            name  = "copyObject"
+                            count = "[[length(variables('commaSeparatedArray'))]"
+                        }
+
+                        $armResource | Add-Member -MemberType NoteProperty -Name "copy" -Value $copyObject
+                    }
     
                     # dataCollectionEndpoint : this is optional field for users to add.
                     $hasDataCollectionEndpoint = [bool](($armResource.properties.dcrConfig).PSobject.Properties.name -match "dataCollectionEndpoint")
@@ -789,7 +841,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             #========end: tables resource===========
 
             ## Build the full package resources
-            $paramItems = Get-ConnectionsTemplateParameters $activeResource $ccpItem;
             $finalParameters = $templateContentConnections.properties.mainTemplate.parameters;
             foreach ($paramItem in $paramItems.PSObject.Properties) {
                 $existingParam = $finalParameters.PSObject.Properties[$paramItem.Name]
@@ -860,7 +911,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
             }
             $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
-
+            $global:commaSeparatedTextFieldName = ""
             $global:connectorCounter += 1
         }
     }
@@ -1055,6 +1106,36 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
     if ($hasQueryParametersTemplate) {
         $queryParametersTemplateValue = $armResource.properties.request.queryParametersTemplate
         $armResource.properties.request.queryParametersTemplate = Convert-ToParameterFormat -propValue $queryParametersTemplateValue
+    }
+
+    AddOnAttributes($armResource)
+}
+
+function AddOnAttributes($armResource) {
+    $hasAddOnAttributes = [bool]($armResource.properties.PSobject.Properties.name -match "addOnAttributes")
+    if ($hasAddOnAttributes) {
+        foreach ($addOnAttributeProps in $armResource.properties.addOnAttributes.PSobject.Properties) {
+            $fieldName = $addOnAttributeProps.name
+
+            if ($global:commaSeparatedTextFieldName -ne "" -and $fieldName -eq $global:commaSeparatedTextFieldName) {
+                # WHEN MULTIPLE PLACEHOLDERS ARE PRESENT IN THE SAME FIELD
+                $armResource.properties.addOnAttributes.$fieldName = "[[variables('commaSeparatedArray')[copyIndex()]]"
+            } else {
+                ProcessPropertyPlaceholders -armResource $armResource `
+                    -templateContentConnections $templateContentConnections `
+                    -isOnlyObjectCheck $false `
+                    -propertyObject $armResource.properties.addOnAttributes `
+                    -propertyName $fieldName `
+                    -isInnerObject $true `
+                    -innerObjectName 'addOnAttributes' `
+                    -kindType $kindType `
+                    -isSecret $true `
+                    -isRequired $false `
+                    -fileType $fileType `
+                    -minLength 4 `
+                    -isCreateArray $false
+            }
+        }
     }
 }
 
