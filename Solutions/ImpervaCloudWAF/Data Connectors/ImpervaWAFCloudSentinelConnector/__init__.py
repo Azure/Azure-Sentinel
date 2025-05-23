@@ -54,10 +54,16 @@ class ImpervaFilesHandler:
             r = self.session.get(url="{}/{}".format(self.url, f"logs.index"),
                             headers= self.auth
                             )
+            logging.info(
+                f"Attempting to download logs.index from URL: {self.url}")
+            logging.info(f"HTTP response status code: {r.status_code}")
             if 200 <= r.status_code <= 299:
                 logging.info("Successfully downloaded index file.")
                 for line in r.iter_lines():
                     files_array.append(line.decode('UTF-8'))
+                logging.info(
+                    f"Complete list of files in logs.index: {files_array}")
+                logging.info(f"Total number of files listed: {len(files_array)}")
                 return files_array
             elif r.status_code == 400:
                 logging.error("Bad Request. The request was invalid or cannot be otherwise served."
