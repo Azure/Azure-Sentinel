@@ -2,7 +2,7 @@
 
 ## Summary
 
-This playbook will create an incident for malicious ip and notify to pre-defined or user customizable email id.
+This playbook will create an incident for suspicious or malicious ip and notify to pre-defined or user customizable email id.
 
 ### Prerequisites
 
