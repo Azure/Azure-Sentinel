@@ -28,8 +28,6 @@ After deployment, you can run this playbook manually from an entity context in t
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Entra%2520ID%2FPlaybooks%2FReset-AADUserPassword%2Fentity-trigger%2Fazuredeploy.json)
 
 
-## Prerequisites
-
 ## Post deployment
 - Authorize Office 365 Outlook connection
    - Open Playbook
