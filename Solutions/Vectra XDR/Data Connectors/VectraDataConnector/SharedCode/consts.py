@@ -64,6 +64,7 @@ ACCOUNT_ENTITY_CLIENT_SECRET = os.environ.get(
 FUNCTION_APP_NAME = os.environ.get("Function_App_Name")
 RESOURCE_GROUP = os.environ.get("Azure_Resource_Group_Name")
 SUBSCRIPTION_ID = os.environ.get("Azure_Subscription_Id")
+LOG_ANALYTICS_URL = os.environ.get("logAnalyticsUri")
 AZURE_AUTHENTICATION_URL = "https://login.microsoftonline.com/{}/oauth2/v2.0/token"
 AZURE_AUTHENTICATION_SCOPE = "https://management.azure.com/.default"
 DISABLE_FUNCTION_APP_URL = ("https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/"
