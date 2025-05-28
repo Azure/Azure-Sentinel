@@ -36,32 +36,7 @@ ERROR_MESSAGES = {
 }
 
 CHECKPOINT_TABLE_NAME = "ArmisDeviceCheckpoint"
-DEVICE_FIELD_LIST = [
-    "accessSwitch",
-    "category",
-    "firstSeen",
-    "id",
-    "ipAddress",
-    "lastSeen",
-    "macAddress",
-    "manufacturer",
-    "model",
-    "name",
-    "operatingSystem",
-    "operatingSystemVersion",
-    "riskLevel",
-    "sensor",
-    "site",
-    "tags",
-    "type",
-    "user",
-    "visibility",
-    "serialNumber",
-    "plcModule",
-    "purdueLevel",
-    "firmwareVersion",
-    "dataSources"
-]
+
 MAX_RETRY = 5
 FUNCTION_APP_TIMEOUT_SECONDS = 570
 body = ""
@@ -288,7 +263,6 @@ class ArmisDevice:
                 "aql": aql_data,
                 "orderBy": "lastSeen",
                 "length": 1000,
-                "fields": ",".join(DEVICE_FIELD_LIST),
             }
             while self._data_device_from is not None:
                 if int(time.time()) >= self.start_time + FUNCTION_APP_TIMEOUT_SECONDS:
@@ -329,7 +303,6 @@ class ArmisDevice:
             last_seen_time = datetime.datetime.strptime(
                 last_seen_time, "%Y-%m-%dT%H:%M:%S"
             )
-            last_seen_time += datetime.timedelta(seconds=1)
             last_seen_time = last_seen_time.strftime("%Y-%m-%dT%H:%M:%S")
             checkpoint_table_object.merge(
                 "armisdevice",

@@ -30,6 +30,8 @@ DATA_COLLECTION_ENDPOINT = "LOGS_ENDPOINT"
 DCR_RULE_ID = "LOGS_DCR_RULE_ID"
 DCR_STREAM = "LOGS_DCR_STREAM_NAME"
 
+MAX_EVENTS_COUNT = "MAX_EVENTS_COUNT"
+
 log = logging.getLogger(__name__)
 
 
@@ -51,6 +53,7 @@ def upload_security_events(timer):
         entra_client = os.environ.get(ENTRA_ID_KEY)
         entra_secret = os.environ.get(ENTRA_SECRET_KEY)
         entra_tenant = os.environ.get(ENTRA_TENANT_KEY)
+        max_events_count = os.environ.get(MAX_EVENTS_COUNT, 1000)
 
         log.info("Secret values ok " + client_id)
 
@@ -68,7 +71,7 @@ def upload_security_events(timer):
         engine = os.environ.get(ENGINE, "default")
         engine_group = os.environ.get(ENGINE_GROUP, "default")
         withsecure_client = WithSecureClient(
-            elements_api_url, client_id, client_secret, engine, engine_group, requests
+            elements_api_url, client_id, client_secret, engine, engine_group, requests, max_events_count
         )
 
         connector = Connector(
