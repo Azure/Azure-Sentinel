@@ -1,0 +1,1539 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for AWS_ELB"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "AWS_ELB",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "AwsELBLogsDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "AwsELBLogsDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "AWS ELB Logs",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "AwsELBLogsDefinition",
+                  "title": "AWS ELB Logs",
+                  "logo": "amazon_web_services_Logo.svg",
+                  "publisher": "Microsoft",
+                  "providerDisplayName": "Amazon Web Services",
+                  "descriptionMarkdown": "This connector allows you to ingest AWS Elastic Load Balancer (ALB and NLB) logs into Microsoft Sentinel. These logs contain detailed records for requests handled by your load balancers, including client IPs, latencies, request paths, and status codes. These logs are useful for monitoring traffic patterns, investigating anomalies, and ensuring security compliance.",
+                  "graphQueriesTableName": "AWSALBAccessLogs_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total ALB logs received",
+                      "legend": "AWS ALB Logs",
+                      "baseQuery": "AWSALBAccessLogs_CL"
+                    },
+                    {
+                      "metricName": "Total NLB Access logs received",
+                      "legend": "AWS NLB Access Logs",
+                      "baseQuery": "AWSNLBAccessLogs_CL"
+                    },
+                    {
+                      "metricName": "Total Flow logs received",
+                      "legend": "AWS Flow Logs",
+                      "baseQuery": "AWSELBFlowLogs_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get ALB log samples",
+                      "query": "AWSALBAccessLogs_CL\n | take 10"
+                    },
+                    {
+                      "description": "Get NLB log samples",
+                      "query": "AWSNLBAccessLogs_CL\n | take 10"
+                    },
+                    {
+                      "description": "Get Flow log samples",
+                      "query": "AWSELBFlowLogs_CL\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "AWSALBAccessLogs_CL",
+                      "lastDataReceivedQuery": "AWSALBAccessLogs_CL\n | where TimeGenerated > ago(12h) | summarize LastReceived=max(TimeGenerated)"
+                    },
+                    {
+                      "name": "AWSNLBAccessLogs_CL",
+                      "lastDataReceivedQuery": "AWSNLBAccessLogs_CL\n | where TimeGenerated > ago(12h) | summarize LastReceived=max(TimeGenerated)"
+                    },
+                    {
+                      "name": "AWSELBFlowLogs_CL",
+                      "lastDataReceivedQuery": "AWSELBFlowLogs_CL\n | where TimeGenerated > ago(12h) | summarize LastReceived=max(TimeGenerated)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": null
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "providerDisplayName": "Workspace",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "providerDisplayName": "Keys",
+                        "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": false,
+                          "write": false,
+                          "delete": false,
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Environment",
+                        "description": "You must have the following AWS resources defined and configured: S3 Bucket, Simple Queue Service (SQS), IAM roles and permissions policies."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "### 1. AWS CloudFormation Deployment \n To configure access on AWS, use CloudFormation templates to set up the environment to send logs from ALB and NLB to your Log Analytics Workspace."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Deployment steps: \n 1. Download the [CloudFormation Templates](https://github.com/Alekhya0824/GithubValidationREPO/tree/main/AWS%20ELB%20Logs/CloudFormationTemplates). \n 2. Go to [AWS CloudFormation Stacks](https://aka.ms/awsCloudFormationLink#/stacks/create). \n 3. Create the stacks using the downloaded templates. \n 4. Note down the Role ARN and SQS Queue URLs."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "### 2. Connect new collectors \n To enable the connector, click **Add new collector**, enter the required details, and click **Connect**."
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "instructions": [
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnValue": "properties.roleArn",
+                                "columnName": "Role ARN"
+                              },
+                              {
+                                "columnValue": "properties.sqsUrls[0]",
+                                "columnName": "Queue URL"
+                              },
+                              {
+                                "columnValue": "properties.dcrConfig.streamName",
+                                "columnName": "Stream name"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "title": "Add new controller",
+                            "subtitle": "AWS S3 connector",
+                            "label": "Add new collector",
+                            "instructionSteps": [
+                              {
+                                "title": "Account details",
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Role ARN",
+                                      "type": "text",
+                                      "name": "roleArn",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Queue URL",
+                                      "type": "text",
+                                      "name": "queueUrl",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Dropdown",
+                                    "parameters": {
+                                      "label": "Data type",
+                                      "type": "text",
+                                      "name": "streamName",
+                                      "required": true,
+                                      "placeholder": "Select a data type",
+                                      "options": [
+                                        {
+                                          "key": "Custom-AWSALBAccessLogs_CL",
+                                          "text": "ALB Access Logs "
+                                        },
+                                        {
+                                          "key": "Custom-AWSNLBAccessLogs_CL",
+                                          "text": "NLB Access Logs"
+                                        },
+                                        {
+                                          "key": "Custom-AWSELBFlowLogs_CL",
+                                          "text": "NLb Flow Logs"
+                                        },
+                                        {
+                                          "key": "Custom-AWSELBFlowLogs_CL",
+                                          "text": "GLB Flow Logs"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "ALBLogsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-AWSALBAccessLogsStream": {
+                    "columns": [
+                      {
+                        "name": "Field1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field2",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "Field3",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field4",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field6",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field7",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field8",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field9",
+                        "type": "int"
+                      },
+                      {
+                        "name": "Field10",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field11",
+                        "type": "long"
+                      },
+                      {
+                        "name": "Field12",
+                        "type": "long"
+                      },
+                      {
+                        "name": "Field13",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field14",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field15",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field16",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field17",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field18",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field19",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field20",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field21",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field22",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field23",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field24",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field25",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field26",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field27",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field28",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field29",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field30",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field31",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field32",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field33",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field34",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "Custom-AWSNLBAccessLogsStream": {
+                    "columns": [
+                      {
+                        "name": "Field1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field2",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field3",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "Field4",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field6",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field7",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field8",
+                        "type": "long"
+                      },
+                      {
+                        "name": "Field9",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field10",
+                        "type": "long"
+                      },
+                      {
+                        "name": "Field11",
+                        "type": "long"
+                      },
+                      {
+                        "name": "Field12",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field13",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field14",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field15",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field16",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field17",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field18",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field19",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field20",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field21",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Field22",
+                        "type": "datetime"
+                      }
+                    ]
+                  },
+                  "Custom-AWSNLBFlowLogsStream": {
+                    "columns": [
+                      {
+                        "name": "version",
+                        "type": "string"
+                      },
+                      {
+                        "name": "account-id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "interface-id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "srcaddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "dstaddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "srcport",
+                        "type": "string"
+                      },
+                      {
+                        "name": "dstport",
+                        "type": "string"
+                      },
+                      {
+                        "name": "protocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "packets",
+                        "type": "string"
+                      },
+                      {
+                        "name": "bytes",
+                        "type": "string"
+                      },
+                      {
+                        "name": "start",
+                        "type": "string"
+                      },
+                      {
+                        "name": "end",
+                        "type": "string"
+                      },
+                      {
+                        "name": "action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "log-status",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "Custom-AWSGLBFlowLogsStream": {
+                    "columns": [
+                      {
+                        "name": "version",
+                        "type": "string"
+                      },
+                      {
+                        "name": "account-id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "interface-id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "srcaddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "dstaddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "srcport",
+                        "type": "string"
+                      },
+                      {
+                        "name": "dstport",
+                        "type": "string"
+                      },
+                      {
+                        "name": "protocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "packets",
+                        "type": "string"
+                      },
+                      {
+                        "name": "bytes",
+                        "type": "string"
+                      },
+                      {
+                        "name": "start",
+                        "type": "string"
+                      },
+                      {
+                        "name": "end",
+                        "type": "string"
+                      },
+                      {
+                        "name": "action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "log-status",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-AWSALBAccessLogsStream"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated= todatetime(Field2),ALBType =Field1, Alb =Field3, ClientIpPort =Field4, TargetIpPort =Field5, RequestProcessingTime = tostring(Field6), TargetProcessingTime = tostring(Field7), ResponseProcessingTime = tostring(Field8), ElbStatusCode = toint(Field9), TargetStatusCode =Field10, ReceivedBytes = tolong(Field11), SentBytes = tolong(Field12), RequestRaw =Field13, UserAgent =Field14, SslCipher =Field15, SslProtocol =Field16, TargetGroupArn =Field17, TraceId =Field18, DomainName =Field19, ChosenCertArn =Field20, MatchedRulePriority =Field21, RequestCreationTime =Field22, ActionsExecuted =Field23, RedirectUrl =Field24, LambdaErrorReason =Field25, TargetPortList =Field26, TargetStatusCodeList =Field27, Classification =Field28, ClassificationReason =Field29, ConnTraceId =Field30 | extend ClientIp = tostring(split(ClientIpPort, ':')[0]), ClientPort = toint(split(ClientIpPort, ':')[1]), TargetIp = tostring(split(TargetIpPort, ':')[0]), TargetPort = toint(split(TargetIpPort, ':')[1]) | project TimeGenerated, ALBType, Alb, ClientIp, ClientPort, TargetIp, TargetPort, RequestProcessingTime, TargetProcessingTime, ResponseProcessingTime, ElbStatusCode, TargetStatusCode, ReceivedBytes, SentBytes, RequestRaw, UserAgent, SslCipher, SslProtocol, TargetGroupArn, TraceId, DomainName, ChosenCertArn, MatchedRulePriority, RequestCreationTime, ActionsExecuted, RedirectUrl,LambdaErrorReason, TargetPortList, TargetStatusCodeList, Classification, ClassificationReason, ConnTraceId",
+                    "outputStream": "Custom-AWSALBAccessLogs_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-AWSNLBAccessLogsStream"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = todatetime(Field3) | project NLBType = tostring(Field1), Version = tostring(Field2), TimeGenerated, Nlb = tostring(Field4), Listener = tostring(Field5), ClientIP_Port = tostring(Field6), TargetIP_Port = tostring(Field7), Connection_Time = tostring(Field8), Tls_Handshake_Time = tostring(Field9), Received_Bytes = tostring(Field10), Sent_Bytes = tostring(Field11), Incoming_TLS_Alert = tostring(Field12), Chosen_Cert_Arn = tostring(Field13), Chosen_Cert_Serial = tostring(Field14), TLS_Cipher = tostring(Field15), TLS_Protocol_Version = tostring(Field16), TLS_Named_Group = tostring(Field17), Domain_Name = tostring(Field18), ALPN_FE_Protocol = tostring(Field19), ALPN_BE_Protocol = tostring(Field20), ALPN_Client_Pref_List = tostring(Field21), TLS_Connection_Creation_Time = tostring(Field22)",
+                    "outputStream": "Custom-AWSNLBAccessLogs_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-AWSNLBFlowLogsStream"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = datetime(1970-01-01) + tolong(start) * 1s | project TimeGenerated, Version = tostring(version), AccountId = tostring(['account-id']), InterfaceId = tostring(['interface-id']), SourceAddress = tostring(srcaddr), DestinationAddress = tostring(dstaddr), SourcePort = tostring(srcport), DestinationPort = tostring(dstport), Protocol = tostring(protocol), Packets = tostring(packets), Bytes = tostring(bytes), SStartTime = datetime(1970-01-01) + tolong(start) * 1s, EndTime = datetime(1970-01-01) + tolong(end) * 1s, Action = tostring(action), LogStatus = tostring(['log-status']),LogType=tostring('NLBFlowLogs'),TimeNow=todatetime(now())",
+                    "outputStream": "Custom-AWSELBFlowLogs_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-AWSGLBFlowLogsStream"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = datetime(1970-01-01) + tolong(start) * 1s | project TimeGenerated, Version = tostring(version), AccountId = tostring(['account-id']), InterfaceId = tostring(['interface-id']), SourceAddress = tostring(srcaddr), DestinationAddress = tostring(dstaddr), SourcePort = tostring(srcport), DestinationPort = tostring(dstport), Protocol = tostring(protocol), Packets = tostring(packets), Bytes = tostring(bytes), SStartTime = datetime(1970-01-01) + tolong(start) * 1s, EndTime = datetime(1970-01-01) + tolong(end) * 1s, Action = tostring(action), LogStatus = tostring(['log-status']),LogType=tostring('GLBFlowLogs'),TimeNow=todatetime(now())",
+                    "outputStream": "Custom-AWSELBFlowLogs_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[concat('/subscriptions/', parameters('subscription'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Insights/dataCollectionEndpoints/', parameters('workspace'))]"
+              }
+            },
+            {
+              "name": "AWSALBAccessLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "AWSALBAccessLogs_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "ALBType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Alb",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientIp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TargetIp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "RequestProcessingTime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetProcessingTime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseProcessingTime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ElbStatusCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TargetStatusCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ReceivedBytes",
+                      "type": "long"
+                    },
+                    {
+                      "name": "SentBytes",
+                      "type": "long"
+                    },
+                    {
+                      "name": "RequestRaw",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserAgent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SslCipher",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SslProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetGroupArn",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TraceId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DomainName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ChosenCertArn",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MatchedRulePriority",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCreationTime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ActionsExecuted",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RedirectUrl",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LambdaErrorReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetPortList",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetStatusCodeList",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Classification",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClassificationReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ConnTraceId",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "totalRetentionInDays": 30
+              }
+            },
+            {
+              "name": "AWSELBFlowLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "AWSELBFlowLogs_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AccountId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InterfaceId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourceAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourcePort",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationPort",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Protocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Packets",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Bytes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SStartTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "EndTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Action",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LogStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LogType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TimeNow",
+                      "type": "datetime"
+                    }
+                  ]
+                },
+                "totalRetentionInDays": 30
+              }
+            },
+            {
+              "name": "AWSNLBAccessLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "AWSNLBAccessLogs_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "NLBType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Nlb",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Listener",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientIP_Port",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetIP_Port",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Connection_Time",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Tls_Handshake_Time",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Received_Bytes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Sent_Bytes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Incoming_TLS_Alert",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Chosen_Cert_Arn",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Chosen_Cert_Serial",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TLS_Cipher",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TLS_Protocol_Version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TLS_Named_Group",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Domain_Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ALPN_FE_Protocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ALPN_BE_Protocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ALPN_Client_Pref_List",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TLS_Connection_Creation_Time",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "totalRetentionInDays": 30
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "AwsELBLogsDefinition",
+          "title": "AWS ELB Logs",
+          "logo": "amazon_web_services_Logo.svg",
+          "publisher": "Microsoft",
+          "providerDisplayName": "Amazon Web Services",
+          "descriptionMarkdown": "This connector allows you to ingest AWS Elastic Load Balancer (ALB and NLB) logs into Microsoft Sentinel. These logs contain detailed records for requests handled by your load balancers, including client IPs, latencies, request paths, and status codes. These logs are useful for monitoring traffic patterns, investigating anomalies, and ensuring security compliance.",
+          "graphQueriesTableName": "AWSALBAccessLogs_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total ALB logs received",
+              "legend": "AWS ALB Logs",
+              "baseQuery": "AWSALBAccessLogs_CL"
+            },
+            {
+              "metricName": "Total NLB Access logs received",
+              "legend": "AWS NLB Access Logs",
+              "baseQuery": "AWSNLBAccessLogs_CL"
+            },
+            {
+              "metricName": "Total Flow logs received",
+              "legend": "AWS Flow Logs",
+              "baseQuery": "AWSELBFlowLogs_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get ALB log samples",
+              "query": "AWSALBAccessLogs_CL\n | take 10"
+            },
+            {
+              "description": "Get NLB log samples",
+              "query": "AWSNLBAccessLogs_CL\n | take 10"
+            },
+            {
+              "description": "Get Flow log samples",
+              "query": "AWSELBFlowLogs_CL\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "AWSALBAccessLogs_CL",
+              "lastDataReceivedQuery": "AWSALBAccessLogs_CL\n | where TimeGenerated > ago(12h) | summarize LastReceived=max(TimeGenerated)"
+            },
+            {
+              "name": "AWSNLBAccessLogs_CL",
+              "lastDataReceivedQuery": "AWSNLBAccessLogs_CL\n | where TimeGenerated > ago(12h) | summarize LastReceived=max(TimeGenerated)"
+            },
+            {
+              "name": "AWSELBFlowLogs_CL",
+              "lastDataReceivedQuery": "AWSELBFlowLogs_CL\n | where TimeGenerated > ago(12h) | summarize LastReceived=max(TimeGenerated)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors",
+              "value": null
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "providerDisplayName": "Workspace",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "providerDisplayName": "Keys",
+                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": false,
+                  "write": false,
+                  "delete": false,
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Environment",
+                "description": "You must have the following AWS resources defined and configured: S3 Bucket, Simple Queue Service (SQS), IAM roles and permissions policies."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "### 1. AWS CloudFormation Deployment \n To configure access on AWS, use CloudFormation templates to set up the environment to send logs from ALB and NLB to your Log Analytics Workspace."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Deployment steps: \n 1. Download the [CloudFormation Templates](https://github.com/Alekhya0824/GithubValidationREPO/tree/main/AWS%20ELB%20Logs/CloudFormationTemplates). \n 2. Go to [AWS CloudFormation Stacks](https://aka.ms/awsCloudFormationLink#/stacks/create). \n 3. Create the stacks using the downloaded templates. \n 4. Note down the Role ARN and SQS Queue URLs."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "### 2. Connect new collectors \n To enable the connector, click **Add new collector**, enter the required details, and click **Connect**."
+                  }
+                }
+              ]
+            },
+            {
+              "instructions": [
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnValue": "properties.roleArn",
+                        "columnName": "Role ARN"
+                      },
+                      {
+                        "columnValue": "properties.sqsUrls[0]",
+                        "columnName": "Queue URL"
+                      },
+                      {
+                        "columnValue": "properties.dcrConfig.streamName",
+                        "columnName": "Stream name"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "title": "Add new controller",
+                    "subtitle": "AWS S3 connector",
+                    "label": "Add new collector",
+                    "instructionSteps": [
+                      {
+                        "title": "Account details",
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Role ARN",
+                              "type": "text",
+                              "name": "roleArn",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Queue URL",
+                              "type": "text",
+                              "name": "queueUrl",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Dropdown",
+                            "parameters": {
+                              "label": "Data type",
+                              "type": "text",
+                              "name": "streamName",
+                              "required": true,
+                              "placeholder": "Select a data type",
+                              "options": [
+                                {
+                                  "key": "Custom-AWSALBAccessLogs_CL",
+                                  "text": "ALB Access Logs "
+                                },
+                                {
+                                  "key": "Custom-AWSNLBAccessLogs_CL",
+                                  "text": "NLB Access Logs"
+                                },
+                                {
+                                  "key": "Custom-AWSELBFlowLogs_CL",
+                                  "text": "NLb Flow Logs"
+                                },
+                                {
+                                  "key": "Custom-AWSELBFlowLogs_CL",
+                                  "text": "GLB Flow Logs"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "AWS ELB Logs",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "string"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "roleArn": {
+              "defaultValue": "Enter roleArn value",
+              "type": "string",
+              "minLength": 3
+            },
+            "queueUrl": {
+              "defaultValue": "Enter queueUrl value",
+              "type": "string",
+              "minLength": 3
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "AWS ELB Logs",
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "streamName": {
+              "defaultValue": "streamName",
+              "type": "array",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'AwsELBAccessLogsPollingConfigALB', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "AmazonWebServicesS3",
+              "properties": {
+                "connectorDefinitionName": "AwsELBLogsDefinition",
+                "dataTypes": {
+                  "logs": {
+                    "state": "enabled"
+                  }
+                },
+                "dcrConfig": {
+                  "streamName": "[[parameters('streamName')[0]]",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "destinationTable": "[[concat(parameters('streamName')[0],'_CL')]",
+                "dataFormat": {
+                  "Format": "csv",
+                  "CsvDelimiter": " ",
+                  "IsCompressed": false,
+                  "compressType": "None",
+                  "HasCsvHeader": false
+                },
+                "roleArn": "[[parameters('roleArn')]",
+                "sqsUrls": [
+                  "[[parameters('queueUrl')]"
+                ]
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "AWS_ELB",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/AWS_ELB/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The AWS Elastic Load Balancer (ELB) connector for Microsoft Sentinel enables the ingestion and analysis of ELB data. It provides insights into traffic distribution, performance metrics, and helps in identifying anomalies within your AWS environment.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Aws.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "AWS_ELB",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-04-22",
+        "providers": [
+          "Amazon Web Services"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
