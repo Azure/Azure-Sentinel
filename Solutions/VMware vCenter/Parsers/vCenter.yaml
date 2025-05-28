@@ -10,22 +10,48 @@ FunctionQuery: |
     let vCenter_Login =() {
         vcenter_CL
         | where Message has ("UserLoginSessionEvent")
-        | parse Message  with * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity "]" * "[User " DomainName:string "\\" Username:string "@" SourceIP " logged in as " UserAgent:string "]" *
+        | parse Message with * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity:string "]" * "[User " DomainAndUser:string "@" SourceIP:string " logged in as " UserAgent:string "]" *
+        | extend DomainAndUser = split(DomainAndUser,'\\')
+        | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], ""),
+            Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])
+        | project-away DomainAndUser
     };
     let vCenter_Logout =() {
         vcenter_CL
         | where Message has ("UserLogoutSessionEvent")
-        | parse Message with * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity "]" * "[User" DomainName:string "\\" Username:string "@" SourceIP " logged out (login time:" LoginTime:string ", number of API invocations: " APIInvocationCount:int ", user agent:" UserAgent:string ")]" *
+        | parse Message with * "Event [" EventId: string "] [1-1] [" EventTime: datetime "] [" EventType: string "] [" EventSeverity:string "]" * "[User " DomainAndUser:string "@" SourceIP " logged out (login time:" LoginTime: string ", number of API invocations: " APIInvocationCount: string ", user agent:" UserAgent: string ")]" *
+        | extend APIInvocationCount = toint(replace(',', '', APIInvocationCount))
+        | extend DomainAndUser = split(DomainAndUser,'\\')
+    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], ""),
+        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])
+    | project-away DomainAndUser
     };
-    let vCenter_Role=() {
+    let vCenter_RoleAdded=() {
         vcenter_CL
-        | where Message has_any("RoleAddedEvent","RoleRemovedEvent")
-        | parse Message with * " " * " " Hostname:string "vpxd" * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity:string "]" * "[New role " RoleName:string " " Operation:string  "]" *
+        | where Message has_any("RoleAddedEvent")
+        | parse Message with * " " * " " * " " Hostname:string "vpxd" * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity:string "] [" DomainAndUser:string "]" * " role " RoleName:string " " Operation:string  "]" *
+        | extend DomainAndUser = split(DomainAndUser,'\\')
+        | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], ""),
+            Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])
+        | project-away DomainAndUser
+    };
+    let vCenter_RoleRemoved=() {
+        vcenter_CL
+        | where Message has_any("RoleRemovedEvent")
+        | parse Message with * " " * " " * " " Hostname:string "vpxd" * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity:string "] [" DomainAndUser:string "]" * "[Role " RoleName:string " " Operation:string  "]" *
+        | extend DomainAndUser = split(DomainAndUser,'\\')
+        | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], ""),
+            Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])
+        | project-away DomainAndUser
     };
     let vCenter_RoleModified=() {
         vcenter_CL
         | where Message has ("RoleUpdatedEvent")
-        | parse Message with * " " * " " Hostname:string "vpxd" * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity:string "]" * "Previous name: " OldRoleName:string ", new name "NewRoleName:string " Added privileges: " AddedPriviledges:string " Removed privileges: " RemovedPriviledges:string "]" *
+        | parse Message with * " " * " " * " " Hostname:string "vpxd" * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity:string "] [" DomainAndUser:string "]" * "Previous name: " OldRoleName:string ", new name: " NewRoleName:string "." * "Added privileges: " AddedPriviledges:string ". " * "Removed privileges: " RemovedPriviledges:string ".]" *
+        | extend DomainAndUser = split(DomainAndUser,'\\')
+        | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], ""),
+            Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])
+        | project-away DomainAndUser
     };
-    union vCenter_Login,vCenter_Logout,vCenter_Role,vCenter_RoleModified
+    union vCenter_Login,vCenter_Logout,vCenter_RoleAdded,vCenter_RoleRemoved,vCenter_RoleModified
     | extend ClientIP = SourceIP
