@@ -10,18 +10,19 @@
 }
 
 #build the connection template parameters, according to the connector definition instructions
-function Get-ConnectionsTemplateParameters($activeResource, $ccpItem) {
+function Get-ConnectionsTemplateParameters($activeResource) {
     # this is for data connector definition only
-    $title = $ccpItem.title;
+    $connectorDefinitionObject = $activeResource | where-object -Property "type" -eq 'Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions'
+    $title = $connectorDefinitionObject.properties.connectorUiConfig.title;
     $paramTestForDefinition = [PSCustomObject]@{
         defaultValue = $title;
-        type         = "string";
+        type         = "securestring";
         minLength    = 1;
     }
 
     $workspaceParameter = [PSCustomObject]@{
         defaultValue = "[parameters('workspace')]";
-        type         = "string";
+        type         = "securestring";
     }
 
     $dcrConfigParameter = [PSCustomObject]@{
@@ -38,7 +39,7 @@ function Get-ConnectionsTemplateParameters($activeResource, $ccpItem) {
         dcrConfig               = $dcrConfigParameter;
     }
 
-    $connectorDefinitionObject = $activeResource | where-object -Property "type" -eq 'Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions'
+    
     foreach ($instructionSteps in $connectorDefinitionObject.properties.connectorUiConfig.instructionSteps) {
         New-ParametersForConnectorInstuctions $instructionSteps.instructions   
     }
@@ -49,20 +50,37 @@ function Get-ConnectionsTemplateParameters($activeResource, $ccpItem) {
 function New-ParametersForConnectorInstuctions($instructions) {
     foreach ($instruction in $instructions) {
         if ($instruction.type -eq "Textbox") {
-            if ($instruction.parameters.name.ToLower().contains("secure") -or $instruction.parameters.name.ToLower().contains("password")) {
-                $newParameter = [PSCustomObject]@{
-                    defaultValue = $instruction.parameters.name;
-                    type         = "securestring";
-                    minLength    = 1;
+            $newParameter = [PSCustomObject]@{
+                defaultValue = $instruction.parameters.name;
+                type         = "securestring";
+                minLength    = 1;
+            }
+
+            $setDefaultValueAndRemoveMinLength = $false
+            $hasRequiredValidationProperty = [bool]($instruction.parameters.PSobject.Properties.name -match "validations")
+            if ($hasRequiredValidationProperty) {
+                $hasRequiredProperty = [bool]($instruction.parameters.validations.PSobject.Properties.name -match "required")
+                if ($hasRequiredProperty) {
+                    $isRequiredTrue = [bool]($instruction.parameters.validations.required) 
+                    if (!$isRequiredTrue) {
+                        $setDefaultValueAndRemoveMinLength = $true
+                    }
                 }
             }
-            else {
-                $newParameter = [PSCustomObject]@{
-                    defaultValue = $instruction.parameters.name;
-                    type         = "string";
-                    minLength    = 1;
+
+            if ($setDefaultValueAndRemoveMinLength) {
+                $newParameter.defaultValue = ""
+                $newParameter.PSObject.Properties.Remove('minLength')
+            }
+
+            $hasCommaSeparatedTextInDescription = [bool]($instruction.parameters.PSobject.Properties.name -match "description")
+            if ($hasCommaSeparatedTextInDescription) {
+                $descriptionText = $instruction.parameters.description
+                if ($descriptionText -like "*comma separated*") {
+                    $global:commaSeparatedTextFieldName = $instruction.parameters.name
                 }
             }
+
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
         }
         elseif ($instruction.type -eq "OAuthForm") {
@@ -234,7 +252,7 @@ function addNewParameter($templateResourceObj, $parameterName, $isSecret = $fals
     if (!$hasParameter) {
         $templateResourceObj.parameters | Add-Member -NotePropertyName "$parameterName" -NotePropertyValue ([PSCustomObject] @{
                 defaultValue = $isSecret ? "-NA-" : "Enter $parameterName value";
-                type         = $isSecret ? "securestring" : "string";
+                type         = "securestring";
                 minLength    = $minLength;
             })
     }
@@ -247,7 +265,7 @@ function addWorkspaceParameter($templateResourceObj, $parameterName) {
     if (!$hasParameter) {
         $templateResourceObj.parameters | Add-Member -NotePropertyName "$parameterName" -NotePropertyValue ([PSCustomObject] @{
             defaultValue = "[parameters('workspace')]";
-            type         = "string";
+            type         = "securestring";
         })
     }
 
@@ -259,7 +277,7 @@ function addGuidValueParameter($templateResourceObj) {
     if (!$hasParameter) {
         $templateResourceObj.parameters | Add-Member -NotePropertyName "guidValue" -NotePropertyValue ([PSCustomObject] @{
             defaultValue = "[[newGuid()]";
-            type         = "string";
+            type         = "securestring";
         })
     }
 
@@ -284,6 +302,73 @@ function Add-NewObjectParameter {
     }
 
     return $TemplateResourceObj
+}
+
+function Convert-ToParameterFormat($propValue) {
+
+    $regex = [regex]'\{{([a-zA-Z0-9_]+)\}}'
+    $matchesPattern = $regex.Matches($propValue)
+ 
+    if ($matchesPattern.Count -eq 0) {
+        # No placeholders, return as-is
+        return $propValue
+    }
+ 
+    # If the value is exactly one match and no literal text
+    if ($matchesPattern.Count -eq 1 -and $propValue -eq $matchesPattern[0].Value) {
+        $paramName = $matchesPattern[0].Groups[1].Value
+
+        if ($paramName -eq 'commaSeparatedArray') {
+            return "[[trim(variables('commaSeparatedArray')[copyIndex()])]"
+        }
+
+        $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$paramName" -isSecret $true
+
+        return "[[parameters('$paramName')]"
+    }
+
+    $result = "[[concat("
+    $lastIndex = 0
+ 
+    foreach ($matchValue in $matchesPattern) {
+        # Add the part before the match as a string (if not empty)
+        if ($matchValue.Index -gt $lastIndex) {
+            $literalPart = $propValue.Substring($lastIndex, $matchValue.Index - $lastIndex)
+            $escapedLiteral = $literalPart -replace "'", "''"  # Escape single quotes
+            $result += "'$escapedLiteral',"
+        }
+ 
+        # Add the parameter reference
+        $paramName = $matchValue.Groups[1].Value
+ 
+        if ($paramName -eq 'commaSeparatedArray') {
+            # Insert custom expression for commaSeparatedArray
+            $result = ($result -join ",").TrimEnd(',')
+            $result = ($result -join ",").TrimEnd("'")
+            $result += "`"',"    # Opening quote
+            $result += "trim(variables('commaSeparatedArray')[copyIndex()])"
+            $result += ",'`"'"   # Closing quote
+        } else {
+            $templateContentConnections.properties.mainTemplate = addNewParameter `
+                -templateResourceObj $templateContentConnections.properties.mainTemplate `
+                -parameterName "$paramName" -isSecret $true
+
+            $result += "parameters('$paramName'),"
+        }
+
+        $lastIndex = $matchValue.Index + $matchValue.Length
+    }
+ 
+    # Add the remaining part after the last match
+    if ($lastIndex -lt $propValue.Length) {
+        $remaining = $propValue.Substring($lastIndex)
+        $escapedRemaining = $remaining -replace "'", "''"
+        $result += "'$escapedRemaining',"
+    }
+ 
+    # Remove trailing comma and close concat
+    $result = $result.TrimEnd(',') + ")]"
+    return $result
 }
 
 # THIS IS THE STARTUP FUNCTION FOR CCP RESOURCE CREATOR
@@ -356,7 +441,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                         $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions"
 
-                        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $false -isRequired $false -fileType 'dataConnectorDefinitions' -minLength 1
+                        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $true -isRequired $false -fileType 'dataConnectorDefinitions' -minLength 1
 
                         $templateContentConnectorDefinition = $templateContent;
                         $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
@@ -367,7 +452,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                     #========end:dc definition resource===========
                 }
-                
+
+                # create parameters for the data connector definition fields
+                $global:commaSeparatedTextFieldName = ""
+                $paramItems = Get-ConnectionsTemplateParameters $activeResource;
                 $templateContent.properties.mainTemplate.resources += Get-MetaDataResource $TemplateCounter $dataFileMetadata $solutionFileMetadata
                 
                 if ($TemplateCounter -eq 2) {
@@ -408,10 +496,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         if ($placeHolderMatched.Length -eq $currentName.Length) {
                             if ($placeHolderFieldName -eq 'workspace') {
                                 $concatenateParts += "parameters('innerWorkspace')"
-                                $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName)
+                                $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName) -isSecret $true
                             } else {
                                 $concatenateParts += "parameters('$($placeHolderFieldName)')"
-                                $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName) -isSecret $false
+                                $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName) -isSecret $true
                             }
                         } else {
                             $text = $currentName -replace $placeHolderMatched.Value, ''
@@ -419,11 +507,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $parameterNameValue = $placeHolderMatched.Value -replace '{{', '' -replace '}}', ''
                             $concatenateParts += "parameters('$($parameterNameValue)')"
 
-                            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($parameterNameValue) -isSecret $false
+                            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($parameterNameValue) -isSecret $true
                         }
                     } else {
                         if ($currentName.Count -eq 1 -and $currentName -like '{{') {
-                            $concatenateParts = "[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($currentName)', $guidValue)]"
+                            $concatenateParts = "[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($currentName)', $guidValue"
                         } else {
                             if ($concatenateParts.Count -ge 1) {
                                 # if we have multiple parts in name {{innerWorkspace}}/Microsoft.SecurityInsights/OktaDCV1_{{domainname}}
@@ -437,25 +525,40 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
 
                 if ($concatenateParts.Count -gt 1 -and $concatenateParts -notmatch 'concat') {
-                    $outputString = "[[concat($($concatenateParts -join ', '), $guidValue)]"
+                    $outputString = "[[concat($($concatenateParts -join ', '), $guidValue"
                 } elseif ($concatenateParts.Count -eq 1 -and $concatenateParts[0] -match 'parameters') {
                     # if we just have parameters('abcwork')
-                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue)]"
+                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue"
                 } else {
                     # if we just have 'abcwork'
-                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue)]"
+                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue"
                 }
             
+                if ($global:commaSeparatedTextFieldName -eq "") {
+                    $outputString += ")]"
+                } else {
+                    $outputString += ", copyIndex())]"
+                }
+
                 return $outputString
             }
 
             function CCPDataConnectorsResource($fileContent) {
                 if ($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
+                    if ($global:commaSeparatedTextFieldName -ne "") {
+                        # add variable for comma separated text field
+                        $commaSeparatedVariable = @{
+                            "commaSeparatedArray" = "[[split(parameters('$($global:commaSeparatedTextFieldName)'), ',')]"
+                        }
+
+                        $templateContentConnections.properties.mainTemplate.variables = $commaSeparatedVariable
+                    }
+
                     # add parameter of guidValue if not present
                     $templateContentConnections.properties.mainTemplate = addGuidValueParameter -templateResourceObj $templateContentConnections.properties.mainTemplate
 
                     # add parameter of innerWorkspace if not present
-                    $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'innerWorkspace' -isSecret $false
+                    $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'innerWorkspace' -isSecret $true
 
                     Write-Host "Processing for CCP Poller file path: $ccpPollerFilePath"
                     $resourceName = GetDataConnectorPollerResourceName -dataConnectorName $fileContent.name
@@ -463,6 +566,15 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
+
+                    if ($global:commaSeparatedTextFieldName -ne "") {
+                        $copyObject = [ordered]@{
+                            name  = "copyObject"
+                            count = "[[length(variables('commaSeparatedArray'))]"
+                        }
+
+                        $armResource | Add-Member -MemberType NoteProperty -Name "copy" -Value $copyObject
+                    }
     
                     # dataCollectionEndpoint : this is optional field for users to add.
                     $hasDataCollectionEndpoint = [bool](($armResource.properties.dcrConfig).PSobject.Properties.name -match "dataCollectionEndpoint")
@@ -499,7 +611,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     {
                         CreateGCPResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
                     }
-                    elseif ($armResource.kind.ToLower() -eq 'restapipoller')
+                    elseif ($armResource.kind.ToLower() -eq 'restapipoller' -or $armResource.kind.ToLower() -eq 'websocket')
                     {
                         CreateRestApiPollerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
                     }
@@ -552,7 +664,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     else 
                     {
-                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', 'GCP', 'AmazonWebServicesS3' or 'Push'." -BackgroundColor Red
+                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', WebSocket, 'GCP', 'AmazonWebServicesS3' or 'Push'." -BackgroundColor Red
                         exit 1;
                     }
 
@@ -611,7 +723,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $armResource = Get-ArmResource $fileContent.name $fileContent.type $fileContent.kind $fileContent.properties
 
                 # location
-                ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $false -isRequired $false -fileType 'dataCollectionRules' -minLength 1
+                ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $true -isRequired $false -fileType 'dataCollectionRules' -minLength 1
 
                 # dataCollectionEndpointId
                 $hasDataCollectionEndpointIdProperty = [bool](($armResource.properties).PSobject.Properties.name -match "dataCollectionEndpointId")
@@ -651,13 +763,13 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 # workspaceResourceId
                 $hasWorkspaceResourceIdProperty = [bool](($armResource.properties.destinations.logAnalytics[0]).PSobject.Properties.name -match "workspaceResourceId")
                 if ($hasWorkspaceResourceIdProperty) {
-                    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.destinations.logAnalytics[0] -propertyName 'workspaceResourceId' -isInnerObject $true -innerObjectName $logAnalytics -kindType $null -isSecret $false -isRequired $false -fileType 'dataCollectionRules' -minLength 1
+                    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.destinations.logAnalytics[0] -propertyName 'workspaceResourceId' -isInnerObject $true -innerObjectName $logAnalytics -kindType $null -isSecret $true -isRequired $false -fileType 'dataCollectionRules' -minLength 1
                 }
                 else {
                     # if workspaceResourceId property not present then add it 
                     $armResource.properties.destinations.logAnalytics | Add-Member -MemberType NoteProperty -Name "workspaceResourceId" -Value "[[parameters('workspaceResourceId')]"
 
-                    $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'workspaceResourceId' -isSecret $false
+                    $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'workspaceResourceId' -isSecret $true
                 }
 
                 $armResource = $(removePropertiesRecursively $armResource $false)
@@ -679,7 +791,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $resourceName = $tableContent.name
                         $armResource = Get-ArmResource $resourceName $tableContent.type $tableContent.kind $tableContent.properties
     
-                        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $false -isRequired $false -fileType 'tables' -minLength 1
+                        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $true -isRequired $false -fileType 'tables' -minLength 1
     
                         $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
                         $tableCounter ++;
@@ -698,21 +810,29 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
 
                     if ($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
-                        $resourceName = $fileContent.name
-                        $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
+                        foreach($fileContentData in $fileContent) {
+                            $resourceName = $fileContentData.name
 
-                        $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
-                        if ($hasLocationProperty) {
-                            $locationProperty = $armResource.location
-                            $placeHoldersMatched = $locationProperty | Select-String $placeHolderPatternMatches -AllMatches
-
-                            if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                                $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $false
+                            $hasTable = $templateContentConnectorDefinition.properties.mainTemplate.resources | Where-Object { $_.type -eq "Microsoft.OperationalInsights/workspaces/tables" -and $_.name -eq $resourceName }
+                            if ($hasTable) {
+                                continue
                             }
-                        }
+
+                            $armResource = Get-ArmResource $resourceName $fileContentData.type $fileContentData.kind $fileContentData.properties
+
+                            $hasLocationProperty = [bool]($armResource.PSobject.Properties.name -match "location")
+                            if ($hasLocationProperty) {
+                                $locationProperty = $armResource.location
+                                $placeHoldersMatched = $locationProperty | Select-String $placeHolderPatternMatches -AllMatches
+
+                                if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                                    $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                                    $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $true
+                                }
+                            }
 
                         $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
+                        }
                     }
                 }
 
@@ -721,19 +841,34 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             #========end: tables resource===========
 
             ## Build the full package resources
-            $paramItems = Get-ConnectionsTemplateParameters $activeResource $ccpItem;
             $finalParameters = $templateContentConnections.properties.mainTemplate.parameters;
-            foreach ($prop1 in $paramItems.psobject.Properties) {
-                $hasProperty = $false;
-                foreach ($prop2 in $finalParameters.psobject.Properties) {
-                    if ($prop1.Name -eq $prop2.Name) {
-                        $hasProperty = $true
-                        break;
+            foreach ($paramItem in $paramItems.PSObject.Properties) {
+                $existingParam = $finalParameters.PSObject.Properties[$paramItem.Name]
+            
+                if (-not $existingParam) {
+                    # Parameter doesn't exist, add it
+                    $finalParameters | Add-Member -MemberType NoteProperty -Name $paramItem.Name -Value $paramItem.Value
+                } else {
+                    # Parameter exists, compare and update if necessary
+                    $paramValue = $paramItem.Value
+                    $existingValue = $existingParam.Value
+            
+                    # Simple comparison, can be made deeper if properties are nested
+                    $isDifferent = $false
+            
+                    foreach ($subProp in $paramValue.PSObject.Properties) {
+                        if (-not $existingValue.PSObject.Properties[$subProp.Name] -or 
+                            $existingValue.$($subProp.Name) -ne $subProp.Value) {
+                            $isDifferent = $true
+                            break
+                        }
                     }
-                }
-
-                if (!$hasProperty) {
-                    $finalParameters | Add-Member -MemberType NoteProperty -Name $prop1.Name -Value $prop1.Value
+            
+                    if ($isDifferent) {
+                        # Update the whole parameter if it's different
+                        $finalParameters.PSObject.Properties.Remove($paramItem.Name)
+                        $finalParameters | Add-Member -MemberType NoteProperty -Name $paramItem.Name -Value $paramItem.Value
+                    }
                 }
             }
 
@@ -776,12 +911,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
             }
             $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
-
+            $global:commaSeparatedTextFieldName = ""
             $global:connectorCounter += 1
         }
     }
     catch {
-        Write-Host "Error occurred in createCCPConnector file. Error Details $_"
+        Write-Host "Error occurred in createCCPConnector file. Error Details $_" -ForegroundColor Red
     }
 }
 
@@ -818,13 +953,21 @@ function ProcessPropertyPlaceholders($armResource, $templateContentConnections,
                     # normal string field
                     $hasMoreText = $placeHoldersMatched.Line.Replace("{{$($placeHolderName)}}", '')
                     if ($hasMoreText.Length -gt 0) {
-                        $propertyObject.$($propertyName) = "[[concat(parameters('$($placeHolderName)'), '$($hasMoreText)')]"
+                        $formattedValue = Convert-ToParameterFormat -propValue $propertyObject.$($propertyName)
+                        $propertyObject.$($propertyName) = $formattedValue
                     } else {
                         $propertyObject.$($propertyName) = "[[parameters('$($placeHolderName)')]"
                     }
                 }
 
-                $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $isSecret -minLength $minLength
+                # when multiple placeholders are present in the same field
+                if ($placeHolderName.Count -gt 1) {
+                    foreach ($placeHolder in $placeHolderName) {
+                        $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolder -isSecret $isSecret -minLength $minLength
+                    }
+                } else {
+                    $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $isSecret -minLength $minLength
+                }
             }
         }
     }
@@ -848,6 +991,10 @@ function ProcessPropertyPlaceholders($armResource, $templateContentConnections,
 
 function CreateRestApiPollerResourceProperties($armResource, $templateContentConnections, $fileType) {
     $kindType = 'RestApiPoller'
+    if ($armResource.kind.ToLower() -eq 'websocket') {
+        $kindType = 'WebSocket'
+    }
+
     if($armResource.properties.auth.type.ToLower() -eq 'oauth2')
     {
         # clientid
@@ -866,12 +1013,12 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AuthorizationEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
 
         # TokenEndpoint placeholder 
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
     }
     elseif ($armResource.properties.auth.type.ToLower() -eq 'basic') 
     {
         # username
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'username' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'username' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
         # password 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'password' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
@@ -883,54 +1030,15 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
     }
     else 
     {
-        Write-Host "Error: For kind RestApiPoller, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2' or 'APIKey'." -BackgroundColor Red
+        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2' or 'APIKey'." -BackgroundColor Red
         exit 1;
     }
 
     if ($armResource.properties.request.PSObject.Properties["apiEndPoint"] -and 
         $armResource.properties.request.apiEndPoint.contains("{{"))
     {
-        # identify any placeholders in apiEndpoint
-        $endPointUrl = $armResource.properties.request.apiEndPoint
-        $placeHoldersMatched = $endPointUrl | Select-String $placeHolderPatternMatches -AllMatches
-
-        if ($placeHoldersMatched.Matches.Value.Count -gt 0) 
-        {
-            # has some placeholders 
-            $finalizedEndpointUrl = "[[concat("
-            $closureBrackets = ")]"
-
-            foreach ($currentPlaceHolder in $placeHoldersMatched.Matches.Value) {
-                $placeHolderName = $currentPlaceHolder.replace("{{", "").replace("}}", "")
-                $splitEndpoint = $endPointUrl -split "($currentPlaceHolder)"
-
-                foreach($splitItem in $splitEndpoint) 
-                {
-                    if ($splitItem -eq '') {
-                        continue
-                    }
-                    if ($splitItem -eq $currentPlaceHolder) 
-                    {
-                        $finalizedEndpointUrl += "parameters('" + $placeHolderName + "'),"
-
-                        if ($placeHolderName.Contains("secret") -or $placeHolderName.Contains("password")) 
-                        {
-                            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $true
-                        } 
-                        else 
-                        {
-                            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $false
-                        }
-                    } 
-                    else 
-                    {
-                        $finalizedEndpointUrl += "'" + $splitItem + "',"
-                    }
-                }
-            }
-
-            $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl.Substring(0, $finalizedEndpointUrl.Length - 1) + $closureBrackets
-        }
+        $apiPointUrl = $armResource.properties.request.apiEndPoint
+        $armResource.properties.request.apiEndPoint = Convert-ToParameterFormat -propValue $apiPointUrl
     }
 
     # headers placeholder
@@ -941,17 +1049,7 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         {
             $headerPropName = $headerProps.Name
             $headerPropValue = $headerProps.Value
-
-            if ($headerPropValue.ToString().contains("{{")) 
-            {
-                $placeHoldersMatched = $headerPropValue | Select-String $placeHolderPatternMatches -AllMatches
-                if ($placeHoldersMatched.Matches.Value.Count -gt 0) 
-                {
-                    $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                    $armResource.properties.request.headers."$headerPropName" = "[[parameters('$($placeHolderName)')]"
-                    $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $false
-                }
-            }
+            $armResource.properties.request.headers."$headerPropName" = Convert-ToParameterFormat -propValue $headerPropValue
         }
     }
 
@@ -983,7 +1081,19 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         foreach ($stepId in $stepIds) {
             # Check if the stepId exists in the stepCollectorConfigs
             if ($armResource.properties.stepCollectorConfigs.PSObject.Properties.Match($stepId)) {
-                ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.stepCollectorConfigs.$stepId.request -propertyName 'apiEndpoint' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+                $propObect = $armResource.properties.stepCollectorConfigs.$stepId.request
+                ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $propObect -propertyName 'apiEndpoint' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+                $hasStepCollectorConfigsHeaders = [bool]($propObect.PSobject.Properties.name -match "headers")
+                if ($hasStepCollectorConfigsHeaders) 
+                {
+                    foreach ($headerProps in $propObect.headers.PsObject.Properties) 
+                    {
+                        $headerPropName = $headerProps.Name
+                        $headerPropValue = $headerProps.Value
+                        $propObect.headers."$headerPropName" = Convert-ToParameterFormat -propValue $headerPropValue
+                    }
+                }
             } else {
                 Write-Host "Warning: Step ID $stepId not found in stepCollectorConfigs."
             }
@@ -991,6 +1101,42 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
     }
 
     QueryParameters($armResource)
+
+    $hasQueryParametersTemplate = [bool]($armResource.properties.request.PSobject.Properties.name -match "queryParametersTemplate")
+    if ($hasQueryParametersTemplate) {
+        $queryParametersTemplateValue = $armResource.properties.request.queryParametersTemplate
+        $armResource.properties.request.queryParametersTemplate = Convert-ToParameterFormat -propValue $queryParametersTemplateValue
+    }
+
+    AddOnAttributes($armResource)
+}
+
+function AddOnAttributes($armResource) {
+    $hasAddOnAttributes = [bool]($armResource.properties.PSobject.Properties.name -match "addOnAttributes")
+    if ($hasAddOnAttributes) {
+        foreach ($addOnAttributeProps in $armResource.properties.addOnAttributes.PSobject.Properties) {
+            $fieldName = $addOnAttributeProps.name
+
+            if ($global:commaSeparatedTextFieldName -ne "" -and $fieldName -eq $global:commaSeparatedTextFieldName) {
+                # WHEN MULTIPLE PLACEHOLDERS ARE PRESENT IN THE SAME FIELD
+                $armResource.properties.addOnAttributes.$fieldName = "[[variables('commaSeparatedArray')[copyIndex()]]"
+            } else {
+                ProcessPropertyPlaceholders -armResource $armResource `
+                    -templateContentConnections $templateContentConnections `
+                    -isOnlyObjectCheck $false `
+                    -propertyObject $armResource.properties.addOnAttributes `
+                    -propertyName $fieldName `
+                    -isInnerObject $true `
+                    -innerObjectName 'addOnAttributes' `
+                    -kindType $kindType `
+                    -isSecret $true `
+                    -isRequired $false `
+                    -fileType $fileType `
+                    -minLength 4 `
+                    -isCreateArray $false
+            }
+        }
+    }
 }
 
 function Paging($armResource) {
@@ -1009,7 +1155,7 @@ function Paging($armResource) {
                 -isInnerObject $true `
                 -innerObjectName 'paging' `
                 -kindType $kindType `
-                -isSecret $false `
+                -isSecret $true `
                 -isRequired $false `
                 -fileType $fileType `
                 -minLength 4 `
@@ -1036,7 +1182,7 @@ function QueryParameters($armResource) {
                     -isInnerObject $true `
                     -innerObjectName 'queryParameters' `
                     -kindType $kindType `
-                    -isSecret $false `
+                    -isSecret $true `
                     -isRequired $false `
                     -fileType $fileType `
                     -minLength 4 `
@@ -1048,41 +1194,41 @@ function QueryParameters($armResource) {
 
 function CreateGCPResourceProperties($armResource, $templateContentConnections, $fileType) {
     $kindType = 'GCP'
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'connectorDefinitionName' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'connectorDefinitionName' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dcrConfig -propertyName 'streamName' -isInnerObject $true -innerObjectName 'dcrConfig' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dcrConfig -propertyName 'streamName' -isInnerObject $true -innerObjectName 'dcrConfig' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'auth' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'auth' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'serviceAccountEmail' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'serviceAccountEmail' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'projectNumber' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 1 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'projectNumber' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 1 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'workloadIdentityProviderId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -minLength 4 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'workloadIdentityProviderId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -minLength 4 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'request' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'request' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.request -propertyName 'projectId' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.request -propertyName 'projectId' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
     # Request section subscriptionNames property
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.request -propertyName 'subscriptionNames' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $true
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.request -propertyName 'subscriptionNames' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $true
 }
 
 $awsSolutions = @('VMware Carbon Black Cloud')
 
 function CreateAwsResourceProperties($armResource, $templateContentConnections, $fileType) {
     $kindType = 'AmazonWebServicesS3'
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dataTypes' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dataTypes' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.dataTypes -propertyName 'logs' -isInnerObject $true -innerObjectName 'dataTypes' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties.dataTypes -propertyName 'logs' -isInnerObject $true -innerObjectName 'dataTypes' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dataTypes.logs -propertyName 'state' -isInnerObject $true -innerObjectName 'logs' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dataTypes.logs -propertyName 'state' -isInnerObject $true -innerObjectName 'logs' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
     if ($awsSolutions.Contains($solutionName)) {
         # Handle properties destinationTable and streamName in dc poller file for this solutions as a special case
@@ -1090,12 +1236,32 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
         $armResource.properties.destinationTable = "[[concat(parameters('streamName')[0],'_CL')]"
         $templateContentConnections.properties.mainTemplate.parameters | Add-Member -NotePropertyName "streamName" -NotePropertyValue ([PSCustomObject] @{ type = "array" })
     } else {
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dcrConfig -propertyName 'streamName' -isInnerObject $true -innerObjectName 'dcrConfig' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.dcrConfig -propertyName 'streamName' -isInnerObject $true -innerObjectName 'dcrConfig' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'destinationTable' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'destinationTable' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
     }
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'roleArn' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'roleArn' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'sqsUrls' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $true
+    ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'sqsUrls' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $true
+
+    $hasDataFormat = [bool]($armResource.properties.PSobject.Properties.name -match "dataFormat")
+    if ($hasDataFormat) {
+        $hasFormatProperty = [bool]($armResource.properties.dataFormat.PSobject.Properties.name.tolower() -match "format")
+        if ($hasFormatProperty) {
+            # check for csv format
+            $hasCsvFormat = [bool]($armResource.properties.dataFormat.format -match "csv")
+            if ($hasCsvFormat) {
+                $hasCsvDelimiterProperty = [bool]($armResource.properties.dataFormat.PSobject.Properties.name.tolower() -match "csvdelimiter")
+                if ($hasCsvDelimiterProperty) {
+                    if ($armResource.properties.dataFormat.CsvDelimiter -eq " ") {
+                        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptySpaceString" -NotePropertyValue " "
+                        $armResource.properties.dataFormat.CsvDelimiter = "[variables('TemplateEmptySpaceString')]"
+                    }
+                }
+            } else {
+                $armResource.properties.dataFormat.format = "json"
+            }
+        }
+    }
 }
