@@ -6,6 +6,7 @@ from Exceptions.ArmisExceptions import ArmisException
 import requests
 from . import consts
 from .state_manager import StateManager
+from .keyvault_secrets_management import KeyVaultSecretManager
 
 
 class Utils:
@@ -27,7 +28,14 @@ class Utils:
             ]
         )
         self._secret_key = consts.API_KEY
-        self.get_access_token()
+        self.keyvault_obj = KeyVaultSecretManager()
+        self.access_token_key = "armis-access-token"
+        properties_list = self.keyvault_obj.get_properties_list_of_secrets()
+        if self.access_token_key in properties_list:
+            self.access_token = self.keyvault_obj.get_keyvault_secret(self.access_token_key)
+            self.header.update({"Authorization": self.access_token})
+        else:
+            self.get_access_token()
         self.state_manager_obj = StateManager(
             connection_string=consts.CONNECTION_STRING, file_path=consts.CHECKPOINT_FILE_TIME
         )
@@ -58,6 +66,35 @@ class Utils:
         except Exception as err:
             logging.error(
                 consts.LOG_FORMAT.format(__method_name, "Error while checking environment variables: {}".format(err))
+            )
+            raise ArmisException()
+
+    def compare_access_token(self):
+        """compare_access_token will compare the current access token with the access token stored in keyvault
+        and update the header for further use.
+        """
+        __method_name = inspect.currentframe().f_code.co_name
+        try:
+            keyvault_access_token = self.keyvault_obj.get_keyvault_secret(self.access_token_key)
+            header_access_token = self.header.get("Authorization")
+            if keyvault_access_token == header_access_token:
+                logging.info(consts.LOG_FORMAT.format(
+                    __method_name, "KeyVault Access Token Invalid. Generating New Token."
+                ))
+                self.get_access_token()
+            else:
+                logging.info(consts.LOG_FORMAT.format(
+                    __method_name, "KeyVault Access Token Updated. Updating Header Value."
+                ))
+                self.header.update({"Authorization": keyvault_access_token})
+        except ArmisException:
+            raise ArmisException()
+        except Exception as err:
+            logging.error(
+                consts.LOG_FORMAT.format(
+                    __method_name,
+                    "Unexpected error : {}.".format(err),
+                )
             )
             raise ArmisException()
 
@@ -103,7 +140,7 @@ class Utils:
                             __method_name, "Unauthorized, Status code : {}, Retrying...".format(response.status_code)
                         )
                     )
-                    self.get_access_token()
+                    self.compare_access_token()
                     self.retry_count += 1
                     continue
                 elif response.status_code == 429:
@@ -230,6 +267,7 @@ class Utils:
             response = self.make_rest_call(method="POST", url=consts.URL + consts.ACCESS_TOKEN_SUFFIX, data=body)
             access_token = response.get("data", {}).get("access_token")
             self.header.update({"Authorization": access_token})
+            self.keyvault_obj.set_keyvault_secret(self.access_token_key, access_token)
             logging.info(consts.LOG_FORMAT.format(__method_name, "Generated access token Successfully."))
         except KeyError as err:
             logging.error(consts.LOG_FORMAT.format(__method_name, "Key error : {}.".format(err)))
