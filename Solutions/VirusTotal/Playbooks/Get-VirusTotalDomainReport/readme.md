@@ -1,5 +1,5 @@
 # Get-VirusTotalDomainReport
-Author: Nicholas DiCola, Microsoft, Microsoft, Microsoft
+Author: Nicholas DiCola, Microsoft
 
 This playbook processes each URL entity to query VirusTotal for detailed domain information. For more details, visit the [VirusTotal Domain Info API documentation](https://developers.virustotal.com/v3.0/reference#domain-info).
 
