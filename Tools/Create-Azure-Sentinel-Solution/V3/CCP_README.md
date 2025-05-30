@@ -60,7 +60,7 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
 
         <img src="./ccpimages/copyObject.png" alt="In mainTemplate poller content" width="600" height="90"/><br/>
 
-  - If you have a `dropdown` field like below for which you want to dynamically use its respective data collection rule and table then follow below:<br/>
+  - If you have a `dropdown` field like below for which you want to dynamically use its respective data collection rule and table then follow below. This is applicable for `"kind": "AmazonWebServicesS3"` only.<br/>
     - In `Data connector definition` file:<br/>
 
       <img src="./ccpimages/dropdownOptions.png" alt="In data connector definition" width="400" height="400"/><br/>
