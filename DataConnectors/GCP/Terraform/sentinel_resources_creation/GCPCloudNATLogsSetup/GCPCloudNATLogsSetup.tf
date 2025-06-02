@@ -41,12 +41,16 @@ resource "google_pubsub_topic" "sentinel_nat_topic" {
   project = data.google_project.project.project_id
 }
 
+# NAT subscription name
 resource "google_pubsub_subscription" "sentinel-subscription_natlogs" {
   project = data.google_project.project.project_id
   name    = "sentinel-subscription_natlogs"
   topic   = var.topic-name
   depends_on = [google_pubsub_topic.sentinel_nat_topic]
 }
+
+# Audit subscription name must start with NAT subscription name and end with "_audit" — essential for connector to work.
+# Example: If NAT subscription is "sentinel-subscription_natlogs", audit subscription should be "sentinel-subscription_natlogs_audit"
 
 resource "google_pubsub_subscription" "sentinel-subscription_natlogs_audit" {
   project = data.google_project.project.project_id
