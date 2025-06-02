@@ -1,0 +1,37 @@
+id: dbc25434-bbe7-4517-bf4b-48ad9cb4e980
+name: Post Delivery Events by ZAP type
+description: |
+  This query visualises the daily amount of emails that had a post delivery action from zero-hour auto purge, summarizing by phish,spam or malware detection action
+description-detailed: |
+  This query visualises the daily amount of emails that had a post delivery action from zero-hour auto purge, summarizing by phish,spam or malware detection action in Defender for Office 365
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - EmailPostDeliveryEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let TimeStart = startofday(ago(30d));
+  let TimeEnd = startofday(now());
+  let baseQuery = EmailPostDeliveryEvents
+  | where TimeGenerated >= TimeStart
+  | where ActionType has "ZAP";
+  let szap=baseQuery
+  | where ActionType has 'Spam ZAP'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Spam ZAP";
+  let pzap=baseQuery
+  | where ActionType has 'Phish ZAP'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Phish ZAP";
+  let mzap=baseQuery
+  | where ActionType has 'Malware ZAP'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Malware ZAP";
+  union szap,pzap,mzap
+  | project Count, Details, Timestamp
+  | render timechart
+version: 1.0.0
