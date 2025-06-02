@@ -114,6 +114,15 @@ function New-ParametersForConnectorInstuctions($instructions) {
 
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
         }
+        elseif ($instruction.type -eq "ServicePrincipalIDTextBox_test") {
+            $newParameter = [PSCustomObject]@{
+                defaultValue = $instruction.parameters.name;
+                type         = "securestring";
+                minLength    = 1;
+            }
+
+            $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+        }
         else {
             $instructionType = $instruction.type;
             Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"
@@ -662,9 +671,14 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     {
                         CreateAwsResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
                     }
+                    elseif ($armResource.kind.ToLower() -eq 'storageaccountblobcontainer')
+                    {
+                        . "$PSScriptRoot/storageAccountDeploymentTemplate.ps1" # load storage resource creator
+                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
+                    }
                     else 
                     {
-                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', WebSocket, 'GCP', 'AmazonWebServicesS3' or 'Push'." -BackgroundColor Red
+                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', WebSocket, 'GCP', 'AmazonWebServicesS3', 'Push' and 'StorageAccountBlobContainer'." -BackgroundColor Red
                         exit 1;
                     }
 
