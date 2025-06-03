@@ -12,6 +12,7 @@ import time
 import requests
 from .state_manager import StateManager
 from .exports_store import ExportsTableStore
+from .keyvault_secrets_management import KeyVaultSecretManager
 from Exceptions.ArmisExceptions import (
     ArmisException,
     ArmisDataNotFoundException,
@@ -70,6 +71,7 @@ class ArmisDevice:
                     response = response.json()
                     _access_token = response.get("data", {}).get("access_token")
                     self._header.update({"Authorization": _access_token})
+                    self.keyvault_obj.set_keyvault_secret(self.access_token_key, _access_token)
                 elif response.status_code == 400:
                     raise ArmisException(
                         "Armis Device Connector: Please check either armis URL or armis secret key is wrong."
@@ -126,6 +128,79 @@ class ArmisDevice:
             logging.error("Armis Device Connector: Error occurred: {}".format(err))
             raise ArmisException(err)
 
+    def compare_access_token(self):
+        """compare_access_token will compare the current access token with the access token stored in keyvault
+        and update the header for further use.
+        """
+        try:
+            keyvault_access_token = self.keyvault_obj.get_keyvault_secret(self.access_token_key)
+            header_access_token = self._header.get("Authorization")
+            if keyvault_access_token == header_access_token:
+                logging.info("Armis Device Connector: KeyVault Access Token Invalid. Generating New Token.")
+                self._get_access_token_device("/access_token/")
+            else:
+                logging.info("Armis Device Connector: KeyVault Access Token Updated. Updating Header Value.")
+                self._header.update({"Authorization": keyvault_access_token})
+        except ArmisException as err:
+            logging.error(err)
+            raise ArmisException(
+                "Armis Device Connector: Error while comparing access token."
+            )
+
+    def process_successful_data(self, results):
+        """process_successful_data will process the data and return the data to be posted in sentinel.
+
+        Args:
+            results (json): json data to be processed.
+
+        Returns:
+            tuple: tuple containing data, last_seen_time, total_data_length, count_per_frame_data
+        """
+        try:
+            if results["data"]["count"] == 0:
+                raise ArmisDataNotFoundException(
+                    "Armis Device Connector: Data not found."
+                )
+
+            if (
+                "data" in results
+                and "results" in results["data"]
+                and "total" in results["data"]
+                and "count" in results["data"]
+                and "next" in results["data"]
+            ):
+                total_data_length = results["data"]["total"]
+                count_per_frame_data = results["data"]["count"]
+                data = results["data"]["results"]
+
+                for i in data:
+                    i["armis_device_time"] = i["lastSeen"]
+
+                logging.info(
+                    "Armis Device Connector: From {}, total length {}".format(
+                        self._data_device_from, total_data_length
+                    )
+                )
+                self._data_device_from = results["data"]["next"]
+                last_seen_time = data[-1]["lastSeen"][:19]
+                last_seen_time = self.validate_timestamp(last_seen_time)
+
+                return (
+                    data,
+                    last_seen_time,
+                    total_data_length,
+                    count_per_frame_data,
+                )
+            else:
+                raise ArmisException(
+                    "Armis Device Connector: There are no proper keys in data."
+                )
+        except ArmisDataNotFoundException as err:
+            logging.info(err)
+            raise ArmisDataNotFoundException()
+        except ArmisException as err:
+            raise ArmisException(err)
+
     def _get_device_data(self, armis_link_suffix, parameter):
         """Get_device_data is used to get data using api.
 
@@ -146,44 +221,7 @@ class ArmisDevice:
                     logging.info("Armis Device Connector: Status Code : 200")
                     results = response.json()
 
-                    if results["data"]["count"] == 0:
-                        raise ArmisDataNotFoundException(
-                            "Armis Device Connector: Data not found."
-                        )
-
-                    if (
-                        "data" in results
-                        and "results" in results["data"]
-                        and "total" in results["data"]
-                        and "count" in results["data"]
-                        and "next" in results["data"]
-                    ):
-                        total_data_length = results["data"]["total"]
-                        count_per_frame_data = results["data"]["count"]
-                        data = results["data"]["results"]
-
-                        for i in data:
-                            i["armis_device_time"] = i["lastSeen"]
-
-                        logging.info(
-                            "Armis Device Connector: From {}, total length {}".format(
-                                self._data_device_from, total_data_length
-                            )
-                        )
-                        self._data_device_from = results["data"]["next"]
-                        last_seen_time = data[-1]["lastSeen"][:19]
-                        last_seen_time = self.validate_timestamp(last_seen_time)
-
-                        return (
-                            data,
-                            last_seen_time,
-                            total_data_length,
-                            count_per_frame_data,
-                        )
-                    else:
-                        raise ArmisException(
-                            "Armis Device Connector: There are no proper keys in data."
-                        )
+                    return self.process_successful_data(results)
 
                 elif response.status_code == 400:
                     logging.error(
@@ -202,7 +240,7 @@ class ArmisDevice:
                             HTTP_ERRORS[401]
                         )
                     )
-                    self._get_access_token_device("/access_token/")
+                    self.compare_access_token()
                     continue
                 else:
                     raise ArmisException(
@@ -231,8 +269,7 @@ class ArmisDevice:
                 "Armis Device Connector: Error while getting data from device api."
             )
 
-        except ArmisDataNotFoundException as err:
-            logging.info(err)
+        except ArmisDataNotFoundException:
             raise ArmisDataNotFoundException()
 
     def _fetch_device_data(
@@ -256,7 +293,14 @@ class ArmisDevice:
             else:
                 aql_data = "in:devices after:{}".format(last_time)
             logging.info("Armis Device Connector: aql query: " + aql_data)
-            self._get_access_token_device("/access_token/")
+            self.keyvault_obj = KeyVaultSecretManager()
+            self.access_token_key = "armis-access-token"
+            properties_list = self.keyvault_obj.get_properties_list_of_secrets()
+            if self.access_token_key in properties_list:
+                self.access_token = self.keyvault_obj.get_keyvault_secret(self.access_token_key)
+                self._header.update({"Authorization": self.access_token})
+            else:
+                self._get_access_token_device("/access_token/")
 
             azuresentinel = AzureSentinel()
             parameter_device = {
