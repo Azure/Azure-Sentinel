@@ -223,7 +223,7 @@ def process_activity_logs(admin_api: duo_client.Admin, start_ts, state_manager: 
 
     logging.info('Getting last timestamp')
     mintime = state_manager.get()
-    if not mintime:
+    if mintime:
         logging.info('Last timestamp is {}'.format(mintime))
         mintime = int(mintime) + 1
     else:
@@ -248,12 +248,6 @@ def process_activity_logs(admin_api: duo_client.Admin, start_ts, state_manager: 
     state_manager.post(str(maxtime))
 
     while len(events) == limit:
-        if next_offset and next_offset is not None:
-            next_offset = ','.join(next_offset)
-        else:
-            break
-        logging.info('Making activity logs request: next_offset={}'.format(next_offset))
-            
         try:
             response = admin_api.get_activity_logs(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
             logging.info('Response recieved {}'.format(response))
@@ -467,7 +461,7 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
 
 def process_tele_logs_v2(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
     limit = 1000
-    logging.info('Start processing telephony test 12-> logs')
+    logging.info('Start processing telephony v2 logs')
     logging.info('Getting last timestamp')
     mintime = state_manager.get()
     if mintime:
@@ -482,25 +476,24 @@ def process_tele_logs_v2(admin_api: duo_client.Admin, start_ts, state_manager: S
     maxwindow = int(MAX_SYNC_WINDOW_PER_RUN_MINUTES) * 60000
     if(diff > maxwindow):
         maxtime = mintime + maxwindow
-        logging.warn('Ingestion is lagging for telephony logs, limiting synchronization window to {}'.format(maxwindow))
+        logging.warn('Ingestion is lagging for telephony logs v2, limiting synchronization window to {}'.format(maxwindow))
 
     events, metadata = get_tele_logs_v2(admin_api, mintime, maxtime)
-    logging.info('Obtained {} tele events will be sending to sentinel'.format(len(events)))
+
     for event in events:
-        logging.info('Sending a telephony log event1-> {}'.format(event))
         sentinel.send(event)
     
     sentinel.flush()
 
-    logging.info('Saving telephony logs last timestamp {}'.format(maxtime))
+    logging.info('Saving telephony logs v2 last timestamp {}'.format(maxtime))
     state_manager.post(str(maxtime))
 
     while len(events) == limit:
         try:
             response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=metadata["next_offset"])
-            logging.info('Response received for telephony log {}'.format(response))
+            logging.info('Response received for telephony log v2 {}'.format(response))
         except Exception as ex:                
-            logging.info('Error while getting telephony logs - {}'.format(ex))
+            logging.info('Error while getting telephony logs v2 - {}'.format(ex))
             if ex.status == 429:
                 logging.info('429 exception occurred, trying retry after 60 seconds')
                 time.sleep(60)
@@ -508,18 +501,18 @@ def process_tele_logs_v2(admin_api: duo_client.Admin, start_ts, state_manager: S
         
         if(response is not None):
             events = response['items']
-            logging.info('Obtained {} tele events'.format(len(events)))
+            logging.info('Obtained {} tele events v2'.format(len(events)))
     
         else:
-            logging.info('Events returned as null in telephony logs')
+            logging.info('Events returned as null in telephony logs v2')
 
         for event in events:
-            logging.info('Sending a telephony log event2-> {}'.format(event))
+            logging.info('Sending a telephony log v2 event {}'.format(event))
             sentinel.send(event)
     
         sentinel.flush()
 
-        logging.info('Saving telephony logs last timestamp {}'.format(maxtime))
+        logging.info('Saving telephony logs v2 last timestamp {}'.format(maxtime))
         state_manager.post(str(maxtime))
 
         if check_if_script_runs_too_long(start_ts):
@@ -529,20 +522,20 @@ def process_tele_logs_v2(admin_api: duo_client.Admin, start_ts, state_manager: S
         
 def get_tele_logs_v2(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> Iterable[dict]:
     limit = 1000
-    logging.info('Making telephony logs request: mintime={}'.format(mintime))
+    logging.info('Making telephony logs v2 request: mintime={}'.format(mintime))
     try:
         response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc')
     except Exception as err:
-        logging.info('Error while getting telephony logs at-> line 440 - {}'.format(err))
+        logging.info('Error while getting telephony logs v2 {}'.format(err))
         if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
             response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc')
     
     if(response["items"] is not None):
-        logging.info('Obtained {} tele events'.format(len(response["items"])))
+        logging.info('Obtained {} tele events v2'.format(len(response["items"])))
     else:
-        logging.info('Error while getting telephony logs')  
+        logging.info('Error while getting telephony logs v2')  
         response["items"] = None
     return response
 
@@ -645,4 +638,3 @@ def check_if_script_runs_too_long(start_ts):
     duration = now - start_ts
     max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
     return duration > max_duration
-
