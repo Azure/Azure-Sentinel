@@ -170,7 +170,9 @@ function QualysKB {
         Write-Error -Message $_.Exception.Message
     }
     # Really simple error check, if we get a 200 return the bearer token, ortherwise return false
-    Write-Host "API Response :" $($response)
+    Write-Host "API Response :" $response
+    Write-Host "API Response for xml:" 
+    Write-Host $response.OuterXml
     if($null -ne $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN){
         Write-Host "Number of records returned after published Date $($startDate) : " $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.Length
         try {
