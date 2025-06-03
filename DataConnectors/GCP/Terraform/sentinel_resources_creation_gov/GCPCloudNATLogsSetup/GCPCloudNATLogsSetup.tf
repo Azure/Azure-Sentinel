@@ -41,12 +41,16 @@ resource "google_pubsub_topic" "sentinel_nat_topic" {
   project = data.google_project.project.project_id
 }
 
+# NAT subscription name
 resource "google_pubsub_subscription" "sentinel-subscription_natlogs" {
   project = data.google_project.project.project_id
   name    = "sentinel-subscription_natlogs"
   topic   = var.topic-name
   depends_on = [google_pubsub_topic.sentinel_nat_topic]
 }
+
+# Audit subscription name must start with NAT subscription name and end with "_audit" — essential for connector to work.
+# Example: If NAT subscription is "sentinel-subscription_natlogs", audit subscription should be "sentinel-subscription_natlogs_audit"
 
 resource "google_pubsub_subscription" "sentinel-subscription_natlogs_audit" {
   project = data.google_project.project.project_id
@@ -62,11 +66,9 @@ resource "google_logging_project_sink" "sentinel_sink" {
   destination = "pubsub.googleapis.com/projects/${data.google_project.project.project_id}/topics/${var.topic-name}"
   depends_on = [google_pubsub_topic.sentinel_nat_topic]
 
-  filter = <<EOT
-  logName="projects/${data.google_project.project.project_id}/logs/compute.googleapis.com%2Fnat_flows" OR
-  (resource.type="gce_router" AND protoPayload.serviceName="compute.googleapis.com" AND protoPayload.methodName:"v1.compute.routers.")
-  EOT
-
+ filter = <<EOT
+  logName="compute.googleapis.com%2Fnat_flows" OR (resource.type="gce_router" AND protoPayload.serviceName="compute.googleapis.com" AND protoPayload.methodName:"v1.compute.routers.")
+  EOT 
   unique_writer_identity = true
 }
 
@@ -76,10 +78,9 @@ resource "google_logging_organization_sink" "sentinel_organization_sink" {
   org_id = var.organization-id
   destination = "pubsub.googleapis.com/projects/${data.google_project.project.project_id}/topics/${var.topic-name}"
 
-  filter = <<EOT
-  logName="projects/${data.google_project.project.project_id}/logs/compute.googleapis.com%2Fnat_flows" OR
-  (resource.type="gce_router" AND protoPayload.serviceName="compute.googleapis.com" AND protoPayload.methodName:"v1.compute.routers.")
-  EOT
+ filter = <<EOT
+  logName="compute.googleapis.com%2Fnat_flows" OR (resource.type="gce_router" AND protoPayload.serviceName="compute.googleapis.com" AND protoPayload.methodName:"v1.compute.routers.")
+  EOT 
 
   include_children = true
 }
