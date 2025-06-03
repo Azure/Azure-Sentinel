@@ -223,7 +223,7 @@ def process_activity_logs(admin_api: duo_client.Admin, start_ts, state_manager: 
 
     logging.info('Getting last timestamp')
     mintime = state_manager.get()
-    if mintime:
+    if  mintime:
         logging.info('Last timestamp is {}'.format(mintime))
         mintime = int(mintime) + 1
     else:
@@ -478,7 +478,7 @@ def process_tele_logs_v2(admin_api: duo_client.Admin, start_ts, state_manager: S
         maxtime = mintime + maxwindow
         logging.warn('Ingestion is lagging for telephony logs v2, limiting synchronization window to {}'.format(maxwindow))
 
-    events, metadata = get_tele_logs_v2(admin_api, mintime, maxtime)
+    events, next_offset = get_tele_logs_v2(admin_api, mintime, maxtime)
 
     for event in events:
         sentinel.send(event)
@@ -490,14 +490,14 @@ def process_tele_logs_v2(admin_api: duo_client.Admin, start_ts, state_manager: S
 
     while len(events) == limit:
         try:
-            response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=metadata["next_offset"])
+            response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
             logging.info('Response received for telephony log v2 {}'.format(response))
         except Exception as ex:                
             logging.info('Error while getting telephony logs v2 - {}'.format(ex))
             if ex.status == 429:
                 logging.info('429 exception occurred, trying retry after 60 seconds')
                 time.sleep(60)
-                response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=metadata["next_offset"])
+                response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
         
         if(response is not None):
             events = response['items']
@@ -524,20 +524,23 @@ def get_tele_logs_v2(admin_api: duo_client.Admin, mintime: int, maxtime: int) ->
     limit = 1000
     logging.info('Making telephony logs v2 request: mintime={}'.format(mintime))
     try:
-        response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc')
+        res = admin_api.get_telephony_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
     except Exception as err:
         logging.info('Error while getting telephony logs v2 {}'.format(err))
         if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
-            response = admin_api.get_telephony_log(mintime=mintime, api_version=2, maxtime=maxtime, limit=str(limit), sort='ts:asc')
+            res = admin_api.get_telephony_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
     
-    if(response["items"] is not None):
-        logging.info('Obtained {} tele events v2'.format(len(response["items"])))
+    if(res is not None):
+        events = res['items']
+        next_offset = res['metadata']['next_offset']
+        logging.info('Obtained {} activity events'.format(len(events)))
     else:
-        logging.info('Error while getting telephony logs v2')  
-        response["items"] = None
-    return response
+        logging.info('Error while getting activity logs')   
+        events = None
+        next_offset = None 
+    return events, next_offset
 
 
 def process_offline_enrollment_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
@@ -638,3 +641,4 @@ def check_if_script_runs_too_long(start_ts):
     duration = now - start_ts
     max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
     return duration > max_duration
+
