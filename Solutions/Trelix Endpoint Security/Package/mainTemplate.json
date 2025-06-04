@@ -1,0 +1,942 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Trelix Endpoint Security"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Trelix Endpoint Security",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-trelixendpointsecurity",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "TrelixEndpointSecurityCCPDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "TrelixEndpointSecurityCCPDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": " TrelixEndpointSecurity Connector",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "TrelixEndpointSecurityCCPDefinition",
+                  "title": " TrelixEndpointSecurity Connector",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "Provides capability to ingest the Endpoint Security from Trelix API's",
+                  "graphQueriesTableName": "TrelixEndpointSecurityEvents_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total EndpointSecurity Events",
+                      "legend": "Trelix EndpointSecurity Events Logs",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    },
+                    {
+                      "metricName": "Total EndpointSecurity Audit",
+                      "legend": "Trelix EndpointSecurity Audit Logs",
+                      "baseQuery": "TrelixEndpointSecurityAudit_CL"
+                    },
+                    {
+                      "metricName": "Total EndpointSecurity Threats",
+                      "legend": "Trelix EndpointSecurity Threats Logs",
+                      "baseQuery": "TrelixEndpointSecurityThreats_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Sample of EndpointSecurity Events",
+                      "query": "{{graphQueriesTableName}}\n| take 10"
+                    },
+                    {
+                      "description": "Sample of EndpointSecurity Audit",
+                      "query": "TrelixEndpointSecurityAudit_CL\n| take 10"
+                    },
+                    {
+                      "description": "Sample of EndpointSecurity Threats",
+                      "query": "TrelixEndpointSecurityThreats_CL\n| take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | summarize Time=max(TimeGenerated) \n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "TrelixEndpointSecurityAudit_CL",
+                      "lastDataReceivedQuery": "TrelixEndpointSecurityAudit_CL\n | summarize Time=max(TimeGenerated) \n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "TrelixEndpointSecurityThreats_CL",
+                      "lastDataReceivedQuery": "TrelixEndpointSecurityThreats_CL\n | summarize Time=max(TimeGenerated) \n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permission are required",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Trelix EndpointSecurity API Access",
+                        "description": "Trelix EndpointSecurity API requires a client id and client secret to authenticate"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">Note: Configurations to connect to Trelix EndpointSecurity Rest API\n"
+                    },
+                    {
+                      "description": "Step 1: Create credentials from Trelix EndpointSecurity console. Refer this doc for steps:-  https://docs.trellix.com\n"
+                    },
+                    {
+                      "description": "Step 2: Enter the hostname. For public cloud its apis.Trelix EndpointSecurity.com\n"
+                    },
+                    {
+                      "description": "Step 3: Enter client id and client secret key\n"
+                    },
+                    {
+                      "description": "Provide required values:\n",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "x-api-key",
+                            "placeholder": "Example:QUJaYW8rYTM2SXNXbkdTcVZFcGhYZy8xSG4zL0ZVbU5aZTBJenk3NWh1QTp1cy13ZXN0LTI",
+                            "type": "text",
+                            "name": "x-api-key"
+                          }
+                        },
+                        {
+                          "type": "OAuthForm",
+                          "parameters": {
+                            "clientIdLabel": "Client ID",
+                            "clientSecretLabel": "Client Secret",
+                            "connectButtonLabel": "Connect",
+                            "disconnectButtonLabel": "Disconnect"
+                          }
+                        }
+                      ],
+                      "title": "Connect to Trelix EndpointSecurity API to start collecting logs in Microsoft Sentinel"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "TrelixEndpointSecurityDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-TrelixESEvents": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attributes",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "links",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "relationships",
+                        "type": "dynamic"
+                      }
+                    ]
+                  },
+                  "Custom-TrelixESAudit": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attributes",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "links",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "relationships",
+                        "type": "dynamic"
+                      }
+                    ]
+                  },
+                  "Custom-TrelixESThreats": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attributes",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "links",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "relationships",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-TrelixESEvents"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "TrelixEndpointSecurityEvents_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-TrelixESAudit"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "TrelixEndpointSecurityAudit_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-TrelixESThreats"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "TrelixEndpointSecurityThreats_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "TrelixEndpointSecurityAudit_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "TrelixEndpointSecurityAudit_CL",
+                  "columns": [
+                    {
+                      "name": "id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "attributes",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "links",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "relationships",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "TrelixEndpointSecurityEvents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "TrelixEndpointSecurityEvents_CL",
+                  "columns": [
+                    {
+                      "name": "id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "attributes",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "links",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "relationships",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "TrelixEndpointSecurityThreats_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "TrelixEndpointSecurityThreats_CL",
+                  "columns": [
+                    {
+                      "name": "id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "attributes",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "links",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "relationships",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "TrelixEndpointSecurityCCPDefinition",
+          "title": " TrelixEndpointSecurity Connector",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "Provides capability to ingest the Endpoint Security from Trelix API's",
+          "graphQueriesTableName": "TrelixEndpointSecurityEvents_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total EndpointSecurity Events",
+              "legend": "Trelix EndpointSecurity Events Logs",
+              "baseQuery": "{{graphQueriesTableName}}"
+            },
+            {
+              "metricName": "Total EndpointSecurity Audit",
+              "legend": "Trelix EndpointSecurity Audit Logs",
+              "baseQuery": "TrelixEndpointSecurityAudit_CL"
+            },
+            {
+              "metricName": "Total EndpointSecurity Threats",
+              "legend": "Trelix EndpointSecurity Threats Logs",
+              "baseQuery": "TrelixEndpointSecurityThreats_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Sample of EndpointSecurity Events",
+              "query": "{{graphQueriesTableName}}\n| take 10"
+            },
+            {
+              "description": "Sample of EndpointSecurity Audit",
+              "query": "TrelixEndpointSecurityAudit_CL\n| take 10"
+            },
+            {
+              "description": "Sample of EndpointSecurity Threats",
+              "query": "TrelixEndpointSecurityThreats_CL\n| take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | summarize Time=max(TimeGenerated) \n | where isnotempty(Time)"
+            },
+            {
+              "name": "TrelixEndpointSecurityAudit_CL",
+              "lastDataReceivedQuery": "TrelixEndpointSecurityAudit_CL\n | summarize Time=max(TimeGenerated) \n | where isnotempty(Time)"
+            },
+            {
+              "name": "TrelixEndpointSecurityThreats_CL",
+              "lastDataReceivedQuery": "TrelixEndpointSecurityThreats_CL\n | summarize Time=max(TimeGenerated) \n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permission are required",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Trelix EndpointSecurity API Access",
+                "description": "Trelix EndpointSecurity API requires a client id and client secret to authenticate"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">Note: Configurations to connect to Trelix EndpointSecurity Rest API\n"
+            },
+            {
+              "description": "Step 1: Create credentials from Trelix EndpointSecurity console. Refer this doc for steps:-  https://docs.trellix.com\n"
+            },
+            {
+              "description": "Step 2: Enter the hostname. For public cloud its apis.Trelix EndpointSecurity.com\n"
+            },
+            {
+              "description": "Step 3: Enter client id and client secret key\n"
+            },
+            {
+              "description": "Provide required values:\n",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "x-api-key",
+                    "placeholder": "Example:QUJaYW8rYTM2SXNXbkdTcVZFcGhYZy8xSG4zL0ZVbU5aZTBJenk3NWh1QTp1cy13ZXN0LTI",
+                    "type": "text",
+                    "name": "x-api-key"
+                  }
+                },
+                {
+                  "type": "OAuthForm",
+                  "parameters": {
+                    "clientIdLabel": "Client ID",
+                    "clientSecretLabel": "Client Secret",
+                    "connectButtonLabel": "Connect",
+                    "disconnectButtonLabel": "Disconnect"
+                  }
+                }
+              ],
+              "title": "Connect to Trelix EndpointSecurity API to start collecting logs in Microsoft Sentinel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": " TrelixEndpointSecurity Connector",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": " TrelixEndpointSecurity Connector",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "x-api-key": {
+              "defaultValue": "x-api-key",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "ClientId": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "ClientSecret": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "AuthorizationCode": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'TrelixEndpointSecurityEvents', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "TrelixEndpointSecurityCCPDefinition",
+                "dataType": "TrelixEndpointSecurityEvents_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-TrelixESecurityEvents"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "clientSecret": "[[parameters('clientSecret')]",
+                  "clientId": "[[parameters('clientId')]",
+                  "tokenEndpoint": "https://auth.trellix.com/auth/realms/IAM/protocol/openid-connect/token",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "x-api-key": "{{x-api-key}}",
+                    "scope": "epo.evt.r",
+                    "Authorization": "[[concat('Basic ', base64(concat(parameters('ClientId'), ':', parameters('ClientSecret'))))]"
+                  },
+                  "TokenEndpointQueryParameters": {},
+                  "grantType": "client_credentials"
+                },
+                "request": {
+                  "apiEndpoint": "https://api.manage.trellix.com/epo/v2/events",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 15,
+                  "httpMethod": "GET",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "headers": {
+                    "Accept": "application/json",
+                    "x-api-key": "{{x-api-key}}"
+                  }
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageParaName": "cursor"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data"
+                  ],
+                  "format": "json"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'TrelixEndpointSecurityAudit', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "TrelixEndpointSecurityCCPDefinition",
+                "dataType": "TrelixEndpointSecurityAudit_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-TrelixESAudit"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "clientSecret": "[[parameters('clientSecret')]",
+                  "clientId": "[[parameters('clientId')]",
+                  "tokenEndpoint": "https://auth.trellix.com/auth/realms/IAM/protocol/openid-connect/token",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "x-api-key": "{{x-api-key}}",
+                    "scope": "audit.svc.r",
+                    "Authorization": "[[concat('Basic ', base64(concat(parameters('ClientId'), ':', parameters('ClientSecret'))))]"
+                  },
+                  "TokenEndpointQueryParameters": {},
+                  "grantType": "client_credentials"
+                },
+                "request": {
+                  "apiEndpoint": "https://api.manage.trellix.com/epo/v2/auditLogs",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 15,
+                  "httpMethod": "GET",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "headers": {
+                    "Accept": "application/json",
+                    "x-api-key": "{{x-api-key}}"
+                  }
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageParaName": "cursor"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data"
+                  ],
+                  "format": "json"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'TrelixEndpointSecurityThreat', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "TrelixEndpointSecurityCCPDefinition",
+                "dataType": "TrelixEndpointSecurityThreats_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-TrelixESThreats"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "clientSecret": "[[parameters('clientSecret')]",
+                  "clientId": "[[parameters('clientId')]",
+                  "tokenEndpoint": "https://auth.trellix.com/auth/realms/IAM/protocol/openid-connect/token",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "x-api-key": "{{x-api-key}}",
+                    "scope": "soc.act.tg",
+                    "Authorization": "[[concat('Basic ', base64(concat(parameters('ClientId'), ':', parameters('ClientSecret'))))]"
+                  },
+                  "TokenEndpointQueryParameters": {},
+                  "grantType": "client_credentials"
+                },
+                "request": {
+                  "apiEndpoint": "https://api.manage.trellix.com/epo/v2/threats",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 15,
+                  "httpMethod": "GET",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "headers": {
+                    "Accept": "application/json",
+                    "x-api-key": "{{x-api-key}}"
+                  }
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageParaName": "cursor"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data"
+                  ],
+                  "format": "json"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Trelix Endpoint Security",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Trelix%20Endpoint%20Security/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The TrelixEndpointSecurity the capability to ingest [Endpoint security logs](Endpoint security Audit,Threat,Alerts and Event logs |  TrelixEndpointSecurity) into Microsoft Sentinel using the TrelixEndpointSecurity APIs. Refer to [TrelixEndpointSecurity API documentation](TrelixEndpointSecurity for Endpoint Audit,Threat,Alerts and Event logs  |  TrelixEndpointSecurity) for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Platform(CCP)</a></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/google_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Trelix Endpoint Security",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-07-30",
+        "providers": [
+          "Trelix"
+        ],
+        "categories": {
+          "domains": [
+            "Cloud Provider",
+            "Identity"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
