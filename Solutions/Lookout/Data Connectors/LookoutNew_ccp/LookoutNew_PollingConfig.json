@@ -1,82 +1,55 @@
 [
     {
-        "name": "LookoutNewLogsPoller",
+        "name": "LookoutNew_PollingConfig",
         "apiVersion": "2022-12-01-preview",
         "type": "Microsoft.SecurityInsights/dataConnectors",
         "location": "{{location}}",
         "kind": "RestApiPoller",
         "properties": {
             "connectorDefinitionName": "LookoutNew_ConnectorDefinition",
-            "dataType": "LookoutLogsV2_CL",
+            "dataType": "LookoutEventsV2_CL",
             "dcrConfig": {
                 "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
                 "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
-                "streamName": "Custom-LookoutLogsV2_CL"
+                "streamName": "Custom-LookoutEventsV2_CL"
             },
             "auth": {
-                "type": "APIKey",
-                "ApiKey": "[[parameters('applicationKey')]",
-                "ApiKeyName": "Authorization",
-                "ApiKeyIdentifier": "Bearer"
+                "type": "OAuth2",
+                "ClientId": "NA",
+                "ClientSecret": "NA",
+                "grantType": "client_credentials",
+                "tokenEndpoint": "https://api.lookout.com/oauth2/token",
+                "tokenEndpointHeaders": {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json",
+                    "Authorization": "[[concat('Bearer ',parameters('applicationKey'))]"
+                },
+                "TokenEndpointQueryParameters": {}
             },
             "request": {
-                "apiEndpoint": "https://api.lookout.com/oauth2/token",
-                "httpMethod": "POST",
-                "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-                "rateLimitQPS": 10,
+                "apiEndpoint": "https://api.lookout.com/mra/api/v2/threats",
+                "httpMethod": "GET",
                 "queryWindowInMin": 5,
+                "queryTimeFormat": "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                "startTimeAttributeName": "since",
+                "endTimeAttributeName": "until",
+                "rateLimitQps": 5,
                 "retryCount": 3,
                 "timeoutInSeconds": 60,
                 "headers": {
                     "Accept": "application/json",
-                    "Content-Type": "application/x-www-form-urlencoded"
-                },
-                "isPostPayloadJson": false,
-                "queryParameters": {
-                    "grant_type": "client_credentials"
+                    "User-Agent": "Scuba"
                 }
             },
             "response": {
                 "eventsJsonPaths": [
-                    "$"
+                    "$.threats"
                 ],
                 "format": "json"
             },
-            "stepInfo": {
-                "stepType": "Nested",
-                "nextSteps": [
-                    {
-                        "stepId": "GetEvents",
-                        "stepPlaceholdersParsingKql": "source | extend token = parse_json(data) | project accessToken = tostring(token.access_token)"
-                    }
-                ]
-            },
-            "stepCollectorConfigs": {
-                "GetEvents": {
-                    "request": {
-                        "httpMethod": "GET",
-                        "apiEndpoint": "https://api.lookout.com/events",
-                        "headers": {
-                            "Accept": "application/json",
-                            "Authorization": "Bearer $accessToken$"
-                        },
-                        "queryParameters": {
-                            "eventType": "DEVICE,THREAT,AUDIT"
-                        },
-                        "logResponseContent": true
-                    },
-                    "response": {
-                        "format": "json",
-                        "eventsJsonPaths": [
-                            "$.events"
-                        ]
-                    },
-                    "paging": {
-                        "pagingType": "NextPageUrl",
-                        "nextPageUrlJsonPath": "$.links[?(@.rel=='next')].href",
-                        "nextPageUrlPrefix": "https://api.lookout.com"
-                    }
-                }
+            "paging": {
+                "pagingType": "LinkHeader",
+                "linkHeaderTokenJsonPath": "$.metadata.links.next"
             }
         }
     }
