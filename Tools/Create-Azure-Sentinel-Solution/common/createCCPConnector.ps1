@@ -1044,10 +1044,10 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
     }
     elseif ($armResource.properties.auth.type.ToLower() -eq 'alicloudslsv1') 
     {
-        # username
+        # AccessKeySecret
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessKeySecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
-        # password 
+        # AccessKeyId 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessKeyId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
     else 
