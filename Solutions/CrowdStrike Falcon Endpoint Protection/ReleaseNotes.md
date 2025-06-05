@@ -1,7 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
 | 3.1.2       | 03-06-2025                     | Crowdstrike Falcon S3 **CCF connector** moving to GA.                                    |
-| 3.1.1       | 08-05-2025                     | Packaging version fix of Solution.                                    |
+| 3.1.1       | 08-05-2025                     | Added preview tag to **CCP Connector**.                                    |
 | 3.1.0       | 11-03-2025                     | Added new CCP **Data Connector** to the Solution.                                    |
 | 3.0.10      | 15-01-2025                     | Resolve **Workbook** data type dependency issue.                                    |
 | 3.0.9       | 12-11-2024                     | Removed deprecated **Data Connectors**.                                             |
