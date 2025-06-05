@@ -217,9 +217,6 @@ def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int):
     return events, next_offset
 
 
-
-
-
 def process_admin_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
     limit = 1000
     logging.info('Start processing administrator logs')
