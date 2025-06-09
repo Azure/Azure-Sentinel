@@ -130,11 +130,12 @@ let Target = 'On-Premises';
 ### Parser Definition
 
 - Title:           Exchange Admin Audit Logs Parser
-- Version:         1.3.0
-- Last Updated:    01/11/2023
+- Version:         1.4.0
+- Last Updated:    11/03/2025
 
 |**Version**  |**Details**  |
 |---------|-----------------------------------------------------------------------------------------------------------------------|
+|v1.4     | <ul><li>Change Documentation Link to new repository</li></ul>  |
 |v1.3     | <ul><li>Implement a VIP search in all VIP information (DisplayName, UPN, ObjectGUID ...). MESCheckVIP parser is now mandatory</li></ul>  |
 |v1.2     | <ul><li>The fuzzyTable need to have an objectGuid in a Guid format to be aligned with the watchlist.</li></ul>  |
 |v1.1     | <ul><li>Watchlist ExchangeVIP is not mandatory anymore</li></ul>  |
