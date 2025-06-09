@@ -6,7 +6,7 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligenceUploadIndicatorsAPI
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
 queryFrequency: 15m
 queryPeriod: 1d
 triggerOperator: gt
@@ -17,7 +17,7 @@ tactics:
 relevantTechniques:
   - T1041
   - T1568
-customDetails: 
+customDetails:
   ActorInformation: RecordedFuturePortalLink
 incidentConfiguration:
   createIncident: true
@@ -36,28 +36,29 @@ alertDetailsOverride:
       value: RecordedFuturePortalLink
 query: |
   let ioc_lookBack = 1d;
-  // The source table (ASimNetworkSessionLogs) can be replaced by any infrastructure table containing ip data.
-  // The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns  
-  imNetworkSession
+  // The source table (_Im_NetworkSession) is a ASIM parser table, but can be replaced by any infrastructure table containing ip data.
+  // The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns
+  _Im_NetworkSession
   | where isnotempty(DstIpAddr)
   | join kind=inner (
-  ThreatIntelligenceIndicator
+  ThreatIntelIndicators
   // Only look for IOCs
-  | where isnotempty(NetworkIP)
+  | where ObservableKey == 'ipv4-addr:value'
+  | where isnotempty(ObservableValue)
   // Only look at Recorded Future Threat Hunt Indicators.
-  | where Description startswith "Recorded Future - Threat Hunt"
-  // Only work with the latest indicators  
+  | where Data.description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators
   | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  ) on $left.DstIpAddr == $right.NetworkIP
-  // select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.DstIpAddr
-  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
-  | project NetworkIP, Description, Type, TimeGenerated, RecordedFuturePortalLink
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  ) on $left.DstIpAddr == $right.ObservableValue
+  // select column from the source table to match with Recorded Future ThreatIntelIndicators $left.DstIpAddr
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']
+  | project NetworkIP=ObservableValue, Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: NetworkIP
-version: 1.0.3
+version: 1.1.0
 kind: Scheduled
