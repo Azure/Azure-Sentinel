@@ -421,17 +421,17 @@ def process_activity_logs(admin_api: duo_client.Admin, start_ts, state_manager: 
     next_offset = None
     while True:
         events, next_offset = get_activity_logs(admin_api, mintime, maxtime, limit, next_offset)
-        if not events:
-            return
         for event in events:
             sentinel.send(event)
         sentinel.flush()
         logging.info('Saving activity logs last timestamp {}'.format(maxtime))
         state_manager.post(str(maxtime))
+        if not events:
+            break
         if len(events) < limit or check_if_script_runs_too_long(start_ts):
             if check_if_script_runs_too_long(start_ts):
                 logging.info('Script is running too long. Saving progress and exit.')
-                return
+            break
 
 def get_activity_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit=1000, next_offset=None):
     logging.info('Making activity logs request: mintime={}, maxtime={}, next_offset={}'.format(mintime, maxtime, next_offset))
@@ -488,13 +488,13 @@ def process_tele_logs(admin_api: duo_client.Admin, start_ts, state_manager: Stat
     next_offset = None
     while True:
         events, next_offset = get_tele_logs(admin_api, mintime, maxtime, limit, next_offset)
-        if not events:
-            break
         for event in events:
             sentinel.send(event)
         sentinel.flush()
         logging.info('Saving telephony logs v2 last timestamp {}'.format(maxtime))
         state_manager.post(str(maxtime))
+        if not events:
+            break
         if len(events) < limit or check_if_script_runs_too_long(start_ts):
             if check_if_script_runs_too_long(start_ts):
                 logging.info('Script is running too long. Saving progress and exit.')
