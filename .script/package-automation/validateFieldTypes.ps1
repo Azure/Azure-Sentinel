@@ -74,17 +74,23 @@ try {
     $resourceContent = $mainTemplateFileContent.resources | Where-Object { $_.type -eq 'Microsoft.OperationalInsights/workspaces/providers/contentTemplates' }
 
     if ($null -ne $resourceContent -and $resourceContent.Count -gt 0) {
-      foreach($rc in $resourceContent) {
-        $rcParam = $rc.properties.mainTemplate.parameters
-        $resourceInvalidFieldsList = @();
-        $resourceInvalidFieldsList = GetInvalidFields -resourceParameterProp $rcParam
+      $resourceLevelInvalidFields = @();
+      foreach ($rc in $resourceContent) {
+        $parameters = $rc.properties.mainTemplate.parameters.PSObject.Properties
+        foreach ($param in $parameters) {
+            $type = $param.Value.type.ToLower()
 
-        if ($resourceInvalidFieldsList.Count -gt 0) {
-          $hasInvalidResourceParameterType = $true
-          Write-Host "Invalid resource level parameters field(s) type. Please update the 'type' value for below given list to 'securestring'"
-          foreach ($item in $resourceInvalidFieldsList) {
-            Write-Host "--> $item"
-          }
+            if ($type -ne 'securestring' -and $type -ne 'object' -and $type -ne 'array') {
+                $resourceLevelInvalidFields += $param.Name
+            }
+        }
+      }
+
+      if ($resourceLevelInvalidFields.Count -gt 0) {
+        $hasInvalidResourceParameterType = $true
+        Write-Host "Invalid resource level parameters field(s) type. Please update the 'type' value for below given list to 'securestring', 'object' or 'array'."
+        foreach ($item in $resourceLevelInvalidFields) {
+          Write-Host "--> $item"
         }
       }
     }
@@ -95,6 +101,6 @@ try {
   }
 }
 catch {
-  Write-Host "Error occured in validateFieldTypes file. Error Details : $_"
+  Write-Host "Error occurred in validateFieldTypes file. Error Details : $_"
   exit 1
 }
