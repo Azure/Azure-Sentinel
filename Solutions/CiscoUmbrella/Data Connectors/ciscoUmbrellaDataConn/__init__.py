@@ -252,7 +252,7 @@ class UmbrellaClient:
                     if ts_to > file_obj['LastModified'] >= ts_from:
                         files.append(file_obj)
 
-                if response.get('IsTruncated', False) is True and ts_to > file_obj['LastModified']:
+                if response['IsTruncated'] is True and ts_to > file_obj['LastModified']:
                     marker = response['Contents'][-1]['Key']
                 else:
                     break
