@@ -157,133 +157,510 @@
           },
           "actions": {
             "Initialize_StartDateTimeFull": {
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "StartDateTimeFull",
-                    "type": "String",
-                    "value": "@{formatDateTime(addMinutes(utcNow(), mul(-1, int(parameters('ScheduleFrequencyInMinutes')))), 'yyyy-MM-ddTHH:mm:ssZ')}"
-                  }
-                ]
-              }
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "StartDateTimeFull",
+                            "type": "String",
+                            "value": "@formatDateTime(addMinutes(utcNow(), mul(-1, int(parameters('ScheduleFrequencyInMinutes')))), 'yyyy-MM-ddTHH:mm:ssZ')"
+                        }
+                    ]
+                }
             },
             "Initialize_EndDateTimeFull": {
-              "type": "InitializeVariable",
-              "runAfter": {
-                "Initialize_StartDateTimeFull": [
-                  "Succeeded"
-                ]
-              },
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "EndDateTimeFull",
-                    "type": "String",
-                    "value": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}"
-                  }
-                ]
-              }
+                "runAfter": {
+                    "Initialize_StartDateTimeFull": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "EndDateTimeFull",
+                            "type": "String",
+                            "value": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}"
+                        }
+                    ]
+                }
             },
             "HTTP_Get_IOC_Data": {
-              "type": "Http",
-              "runAfter": {
-                "Initialize_EndDateTimeFull": [
-                  "Succeeded"
-                ]
-              },
-              "inputs": {
-                "method": "GET",
-                "uri": "@concat('https://api.cyble.ai/engine/api/v2/y/iocs?sortBy=last_seen&order=desc&limit=100&startDate=', variables('StartDateTimeFull'), '&endDate=', variables('EndDateTimeFull'))",
-                "headers": {
-                  "Authorization": "@concat('Bearer ', parameters('CybleApiBearerToken'))",
-                  "Content-Type": "application/json"
+                "runAfter": {
+                    "Initialize_existingIoCs": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http",
+                "inputs": {
+                    "uri": "@concat('https://api.cyble.ai/engine/api/v2/y/iocs?sortBy=last_seen&order=desc&limit=100&startDate=', variables('StartDateTimeFull'), '&endDate=', variables('EndDateTimeFull'))",
+                    "method": "GET",
+                    "headers": {
+                        "Authorization": "@{concat('Bearer ', parameters('CybleApiBearerToken'))}",
+                        "Content-Type": "application/json"
+                    }
                 }
-              }
-            },
-            "Parse_IOC_Response": {
-              "type": "ParseJson",
-              "runAfter": {
-                "HTTP_Get_IOC_Data": [
-                  "Succeeded"
-                ]
-              },
-              "inputs": {
-                "content": "@body('HTTP_Get_IOC_Data')",
-                "schema": {
-                  "type": "object"
-                }
-              }
             },
             "For_Each_IOC": {
-              "type": "Foreach",
-              "runAfter": {
-                "Parse_IOC_Response": [
-                  "Succeeded"
-                ]
-              },
-              "runtimeConfiguration": {
-                "concurrency": {
-                  "repetitions": 1
-                }
-              },
-              "foreach": "@coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))",
-              "actions": {
-                "Check_If_in_lastNmins": {
-                  "type": "If",
-                  "expression": "@and(\n  greaterOrEquals(\n    item()?['last_seen'],\n    div(\n      sub(\n        ticks(variables('StartDateTimeFull')),\n        ticks('1970-01-01T00:00:00Z')\n      ),\n      10000000\n    )\n  ),\n  lessOrEquals(\n    item()?['last_seen'],\n    div(\n      sub(\n        ticks(variables('EndDateTimeFull')),\n        ticks('1970-01-01T00:00:00Z')\n      ),\n      10000000\n    )\n  )\n)",
-                  "actions": {
-                    "Upload_Indicators_v2": {
-                      "type": "ApiConnection",
-                      "inputs": {
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                          }
-                        },
-                        "method": "post",
-                        "path": "/V2/ThreatIntelligence/@{encodeURIComponent(parameters('WorkspaceID'))}/UploadIndicators/",
-                        "body": {
-                          "sourcesystem": "CybleVision",
-                          "indicators": [
-                            {
-                              "DisplayName": "@item()?['ioc']",
-                              "Name": "@item()?['ioc']",
-                              "IndicatorValue": "@item()?['ioc']",
-                              "IndicatorType": "@if(equals(item()?['ioc_type'],'FileHash-SHA256'),'filehash-sha256',if(equals(item()?['ioc_type'],'IPv4'),'ipv4address','url'))",
-                              "ThreatType": "malicious-activity",
-                              "Confidence": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
-                              "SeverityLevel": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
-                              "severity_level": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
-                              "Tags": [
-                                "@coalesce(item()?['confidence_rating'],'Unknown')"
-                              ],
-                              "ExpirationDateTime": "@addDays(utcNow(),7)",
-                              "description": "IOC from Cyble",
-                              "labels": [
-                                "@join(coalesce(item()?['behaviour_tags'], json('[]')), ',')"
-                              ],
-                              "pattern": "@if(equals(item()?['ioc_type'],'FileHash-SHA256'), concat('[[file:hashes.''SHA-256'' = ''', item()?['ioc'], ''']]'), if(equals(item()?['ioc_type'],'IPv4'), concat('[[ipv4-addr:value = ''', item()?['ioc'], ''']]'), concat('[[url:value = ''', item()?['ioc'], ''']]')))",
-                              "valid_from": "@utcNow()",
-                              "type": "indicator",
-                              "id": "@concat('indicator--', guid())",
-                              "created": "@utcNow()",
-                              "modified": "@utcNow()",
-                              "pattern_type": "stix",
-                              "spec_version": "2.1"
+                "foreach": "@variables('rawIocs')",
+                "actions": {
+                    "Condition": {
+                        "actions": {
+                            "Check_If_in_lastNmins": {
+                                "actions": {
+                                    "Upload_Indicators_v2": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "body": {
+                                                "sourcesystem": "CybleVision",
+                                                "indicators": [
+                                                    {
+                                                        "DisplayName": "@item()?['ioc']",
+                                                        "Name": "@item()?['ioc']",
+                                                        "IndicatorValue": "@item()?['ioc']",
+                                                        "IndicatorType": "@if(equals(item()?['ioc_type'],'FileHash-SHA256'),'filehash-sha256',if(equals(item()?['ioc_type'],'IPv4'),'ipv4address','url'))",
+                                                        "ThreatType": "malicious-activity",
+                                                        "Confidence": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
+                                                        "SeverityLevel": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
+                                                        "severity_level": "@if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 80), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 60), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 40), 3, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 20), 2, 1))))",
+                                                        "Tags": [
+                                                            "@coalesce(item()?['confidence_rating'],'Unknown')"
+                                                        ],
+                                                        "ExpirationDateTime": "@addDays(utcNow(),7)",
+                                                        "description": "IOC from Cyble",
+                                                        "labels": [
+                                                            "@join(coalesce(item()?['behaviour_tags'], json('[]')), ',')"
+                                                        ],
+                                                        "pattern": "@if(equals(item()?['ioc_type'],'FileHash-SHA256'), concat('[[file:hashes.''SHA-256'' = ''', item()?['ioc'], ''']]'), if(equals(item()?['ioc_type'],'IPv4'), concat('[[ipv4-addr:value = ''', item()?['ioc'], ''']]'), concat('[[url:value = ''', item()?['ioc'], ''']]')))",
+                                                        "valid_from": "@utcNow()",
+                                                        "type": "indicator",
+                                                        "id": "@concat('indicator--', guid())",
+                                                        "created": "@utcNow()",
+                                                        "modified": "@utcNow()",
+                                                        "pattern_type": "stix",
+                                                        "spec_version": "2.1"
+                                                    }
+                                                ]
+                                            },
+                                            "path": "/V2/ThreatIntelligence/@{encodeURIComponent(parameters('WorkspaceID'))}/UploadIndicators/",
+                                            "retryPolicy": {
+                                                "type": "exponential",
+                                                "count": 5,
+                                                "interval": "PT15S"
+                                            }
+                                        }
+                                    }
+                                },
+                                "else": {
+                                    "actions": {}
+                                },
+                                "expression": "@and(\n  greaterOrEquals(\n    item()?['last_seen'],\n    div(\n      sub(\n        ticks(variables('StartDateTimeFull')),\n        ticks('1970-01-01T00:00:00Z')\n      ),\n      10000000\n    )\n  ),\n  lessOrEquals(\n    item()?['last_seen'],\n    div(\n      sub(\n        ticks(variables('EndDateTimeFull')),\n        ticks('1970-01-01T00:00:00Z')\n      ),\n      10000000\n    )\n  )\n)",
+                                "type": "If"
                             }
-                          ]
                         },
-                        "retryPolicy": {
-                          "type": "Exponential",
-                          "count": 5,
-                          "interval": "PT15S"
-                        }
-                      }
+                        "else": {
+                            "actions": {
+                                "Increment_variable": {
+                                    "type": "IncrementVariable",
+                                    "inputs": {
+                                        "name": "skippedCounter",
+                                        "value": 1
+                                    }
+                                }
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "equals": [
+                                        "@not(contains(variables('existingIocs'), item()?['ioc']))",
+                                        ""
+                                    ]
+                                }
+                            ]
+                        },
+                        "type": "If"
                     }
-                  }
+                },
+                "runAfter": {
+                    "Initialize_skippedCounter": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach",
+                "runtimeConfiguration": {
+                    "concurrency": {
+                        "repetitions": 1
+                    }
                 }
-              }
+            },
+            "Compose": {
+                "runAfter": {
+                    "Get_Iocs_Per_Page": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": "@variables('existingIocs')"
+            },
+            "Initialize_skippedCounter": {
+                "runAfter": {
+                    "Compose": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "skippedCounter",
+                            "type": "integer",
+                            "value": 0
+                        }
+                    ]
+                }
+            },
+            "Compose_1": {
+                "runAfter": {
+                    "For_Each_IOC": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": "@variables('skippedCounter')"
+            },
+            "Initialize_Page_Number": {
+                "runAfter": {
+                    "Initialize_EndDateTimeFull": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "PageNumber",
+                            "type": "integer",
+                            "value": 1
+                        }
+                    ]
+                }
+            },
+            "Parse_JSON": {
+                "runAfter": {
+                    "HTTP_Get_IOC_Data": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('HTTP_Get_IOC_Data')",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "data": {
+                                "type": "object",
+                                "properties": {
+                                    "iocs": {
+                                        "type": [
+                                            "array",
+                                            "null"
+                                        ]
+                                    },
+                                    "pagination": {
+                                        "type": "object",
+                                        "properties": {
+                                            "total_count": {
+                                                "type": [
+                                                    "integer",
+                                                    "null"
+                                                ]
+                                            },
+                                            "page": {
+                                                "type": [
+                                                    "integer",
+                                                    "null"
+                                                ]
+                                            },
+                                            "limit": {
+                                                "type": [
+                                                    "integer",
+                                                    "null"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "success": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                }
+            },
+            "Initialize_Limit": {
+                "runAfter": {
+                    "Initialize_Page_Number": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Limit",
+                            "type": "integer",
+                            "value": 100
+                        }
+                    ]
+                }
+            },
+            "Initialize_TotalPages": {
+                "runAfter": {
+                    "Initialize_Limit": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "TotalPages",
+                            "type": "integer",
+                            "value": 0
+                        }
+                    ]
+                }
+            },
+            "Set_TotalPages": {
+                "runAfter": {
+                    "Parse_JSON": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "SetVariable",
+                "inputs": {
+                    "name": "TotalPages",
+                    "value": "@div(add(int(body('Parse_JSON')?['data']?['pagination']?['total_count']), sub(variables('limit'), 1)), variables('limit'))\n"
+                }
+            },
+            "Initialize_rawIoCs": {
+                "runAfter": {
+                    "Initialize_TotalPages": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "rawIocs",
+                            "type": "array"
+                        }
+                    ]
+                }
+            },
+            "Initialize_iocArray": {
+                "runAfter": {
+                    "Initialize_rawIoCs": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "iocArray",
+                            "type": "array"
+                        }
+                    ]
+                }
+            },
+            "Get_Iocs_Per_Page": {
+                "foreach": "@range(1, variables('TotalPages'))",
+                "actions": {
+                    "HTTP_Get_Iocs_Per_Page": {
+                        "runAfter": {
+                            "Set_PageNumber": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "@concat('https://api.cyble.ai/engine/api/v2/y/iocs?sortBy=last_seen&order=desc&limit=', string(variables('Limit')), '&page=', string(variables('PageNumber')), '&startDate=', variables('StartDateTimeFull'), '&endDate=', variables('EndDateTimeFull'))\n",
+                            "method": "GET",
+                            "headers": {
+                                "Content-Type": "application/json",
+                                "Authorization": "@{concat('Bearer ', parameters('CybleApiBearerToken'))}"
+                            }
+                        },
+                        "runtimeConfiguration": {
+                            "contentTransfer": {
+                                "transferMode": "Chunked"
+                            }
+                        }
+                    },
+                    "Set_PageNumber": {
+                        "type": "SetVariable",
+                        "inputs": {
+                            "name": "PageNumber",
+                            "value": "@items('Get_Iocs_Per_Page')"
+                        }
+                    },
+                    "Parse_IOC_Response": {
+                        "runAfter": {
+                            "HTTP_Get_Iocs_Per_Page": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('HTTP_Get_IOC_Data')",
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "For_each": {
+                        "foreach": "@coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))",
+                        "actions": {
+                            "Append_to_rawIoCs": {
+                                "runAfter": {
+                                    "Append_to_iocArrray": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "rawIocs",
+                                    "value": "@item()"
+                                }
+                            },
+                            "Append_to_iocArrray": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "iocArray",
+                                    "value": "@{concat('\"', items('For_each')?['ioc'], '\"')\n}\n"
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_IOC_Response": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "FinalIOCList": {
+                        "runAfter": {
+                            "For_each": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@concat('[', join(variables('iocArray'), ','), ']')"
+                    },
+                    "KQLQuery": {
+                        "runAfter": {
+                            "FinalIOCList": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@replace(\n  'let iocs = dynamic(PLACEHOLDER); ThreatIntelIndicators | where ObservableValue in (iocs) | order by TimeGenerated desc',\n  'PLACEHOLDER',\n  outputs('FinalIOCList')\n)"
+                    },
+                    "GetExistingIoCs": {
+                        "runAfter": {
+                            "KQLQuery": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "@{outputs('KQLQuery')}",
+                            "path": "/queryData",
+                            "queries": {
+                                "subscriptions": "34692849-4d09-4702-8aed-cfdb6e696cdb",
+                                "resourcegroups": "Vision",
+                                "resourcetype": "Log Analytics Workspace",
+                                "resourcename": "Microsoft-sentinel",
+                                "timerange": "Last 7 days"
+                            }
+                        }
+                    },
+                    "Parse_KQL": {
+                        "runAfter": {
+                            "GetExistingIoCs": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('GetExistingIoCs')",
+                            "schema": {
+                                "value": [
+                                    {
+                                        "ObservableValue": "16f97a927458e2c1af1a03e546730a9251f136b85fdd136dd85a091bc65cb44f"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "For_each_existing_IOC": {
+                        "foreach": "@body('Parse_KQL')?['value']\n",
+                        "actions": {
+                            "Append_to_existingIoCs": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "existingIocs",
+                                    "value": "@items('For_each_existing_IOC')?['ObservableValue']"
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_KQL": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    }
+                },
+                "runAfter": {
+                    "Set_TotalPages": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "Initialize_existingIoCs": {
+                "runAfter": {
+                    "Initialize_iocArray": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "existingIocs",
+                            "type": "array"
+                        }
+                    ]
+                }
             }
           }
         }
