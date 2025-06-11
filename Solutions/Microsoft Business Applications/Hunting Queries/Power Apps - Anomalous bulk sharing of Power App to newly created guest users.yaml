@@ -29,12 +29,13 @@ query: |
   let interval = 1h;
   PowerPlatformAdminActivity
   | where EventOriginalType == "PowerAppPermissionEdited"
-  | extend Properties = tostring(PropertyCollection)
-  | extend AppId = extract(@'"powerplatform.analytics.resource.power_app.id","Value":"([^"]+)"', 1, Properties)
-  | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
-  | extend TargetPrincipalId = extract(@'"targetuser.id","Value":"([^"]+)"', 1, Properties)
-  | extend
-      PowerAppsAppId = AppId
+  | extend Property = tostring(Properties)
+  | extend AppId = extract(@"\""powerplatform\.analytics\.resource\.power_app\.id\""\s*:\s*\""(.*?)\""", 1, Property)
+  | extend AppId = tolower(replace_string(AppId, "/providers/Microsoft.PowerApps/apps/", ""))
+  | extend TargetPrincipalId = extract(@"\""targetuser\.id\""\s*:\s*\""(.*?)\""", 1, Property)
+  | extend EnvironmentId = extract(@"\""powerplatform\.analytics\.resource\.environment\.id\""\s*:\s*\""(.*?)\""", 1, Property)
+  | extend EnvironmentId = tolower(replace_string(EnvironmentId, "/providers/Microsoft.BusinessAppPlatform/environments/Default-", ""))
+  | extend PowerAppsAppId = AppId
   | join kind=leftouter (AuditLogs
       | where ActivityDateTime >= ago(14d)
       | where SourceSystem =~ "Azure AD" and OperationName == "Invite external user"
@@ -75,15 +76,5 @@ query: |
       PowerAppsEntityId,
       AccountName,
       UPNSuffix
-entityMappings:
-  - entityType: CloudApplication
-    fieldMappings:
-      - columnName: PowerAppsEntityId
-        identifier: AppId
-  - entityType: Account
-    fieldMappings:
-      - columnName: UPNSuffix
-        identifier: UPNSuffix
-      - columnName: AccountName
-        identifier: Name
-version: 3.2.0
+entityMappings: []
+version: 3.2.3
