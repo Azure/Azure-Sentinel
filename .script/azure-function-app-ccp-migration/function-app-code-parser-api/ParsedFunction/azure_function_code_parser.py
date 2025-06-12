@@ -2,6 +2,7 @@ import os
 from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from .bing_search import BingWebSearcher
+from .errors import CodeParseError
 import argparse
 import pandas as pd                                             
 import json
@@ -11,16 +12,15 @@ from typing import List, Dict, Any
 from urllib.parse import urlparse
 import requests
 
-endpoint = "https://anki-openai.openai.azure.com/"
-model_name = "gpt-4.1"
-deployment = "sachin-gpt-4.1"
-arm_scope = "https://management.azure.com/.default"
+endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+model_name = os.getenv("AZURE_OPENAI_MODEL_NAME")
+deployment = os.getenv("AZURE_OPENAI_MODEL_DEPLOYMENT")
+api_version = os.getenv("AZURE_OPENAI_API_VERSION")
 
-api_version = "2024-12-01-preview"
-
-token_provider = get_bearer_token_provider(DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default")
-credential = DefaultAzureCredential()
-arm_token = credential.get_token(arm_scope).token
+# Use user-assigned managed identity if provided via UAMI_CLIENT_ID
+uami_client_id = os.getenv("UAMI_CLIENT_ID")
+credential = DefaultAzureCredential(managed_identity_client_id=uami_client_id)
+token_provider = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
 
 GITHUB_REPO = "Azure/Azure-Sentinel"
 GITHUB_BRANCH = "master"
@@ -30,7 +30,7 @@ GITHUB_RAW_URL = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/
 client = AzureOpenAI(
     api_version=api_version,
     azure_endpoint=endpoint,
-    azure_ad_token_provider=token_provider,
+    azure_ad_token_provider=token_provider
 )
 
 bing_key = (
@@ -62,7 +62,7 @@ CRITICAL URL RESOLUTION RULES:
    - f-strings with {placeholders}
    - .format() template calls
 3. Validation requirements:
-   - Scheme should be like http, https, ws, ...
+   - Scheme should be like http, https, wss, ws, ...
    - Hostname must contain .
    - Path must be non-empty
    - DO NOT INCLUDE *.ods.opinsights.azure.com domains
@@ -93,10 +93,12 @@ IF ingestionType == "rest":
       1. method: HTTP verb (GET, POST, …)
       2. url: Fully-qualified URL including protocol, domain, path, and placeholders ({id}) if dynamic
       3. headers: Dictionary of request headers
-      4. queryParameters: Dictionary of params passed via `params=`
-      5. request: Body structure if present
-      6. response: How the response is parsed (e.g., JSON keys)
-      7. paging: Pagination logic (next_cursor, page, limit)
+      4. auth: Authentication method (e.g., Bearer token, API key, Basic Auth, OAuth). Also include auth details (e.g. token, client_id, secret, oauth endpoint) if present.
+      5. queryParameters: Dictionary of params passed via `params=`
+      6. request: Body structure if present
+      7. response: How the response is parsed (e.g., JSON keys)
+      8. paging: Pagination logic (next_cursor, page, limit)
+  - If extracted URL is for generating authentication tokens, DO NOT INCLUDE it in the output. Instead, include it in the auth section of API calls for which it is used.
 
 ========================================
 IF ingestionType == "sdk":
@@ -108,8 +110,9 @@ IF ingestionType == "sdk":
         1. package: Package name (e.g., google.cloud.logging_v2)
         2. method: Method name (e.g., get_gcp_logs)
         3. class: Class name (e.g., GCPClient)
-        4. parameters: List of parameters used in the method
-        5. api: Underlying REST API details if documented
+        4. auth: Authentication method (e.g., Bearer token, API key, Basic Auth, OAuth). Also include auth details (e.g. token, client_id, secret, oauth endpoint) if present.
+        5. parameters: List of parameters used in the method
+        6. api: Underlying REST API details if documented
       
 ========================================
 IF ingestionType == "push":
@@ -144,13 +147,41 @@ def extract_api_details(connector_name: str, src_code: str) -> dict:
 
     ingestion_type = api_details.get("ingestionType", "")
     if ingestion_type == "rest":
-        api_details["restCalls"] = [
-            c for c in api_details.get("restCalls", [])
-            if not any(rx.search(c.get("url", "")) for rx in skip_res)
-        ]
+        processed_urls = set()
+        final_rest_calls = []
+        for call in api_details.get("restCalls", []):
+            print(f"Processing REST call: {call}")
+            url = call.get("url", "")
+            if not url or url in processed_urls:
+                print(f"Skipping already processed or empty URL: {url}")
+                continue
+
+            processed_urls.add(url)
+
+            # Check if URL matches any skip patterns
+            if any(rx.search(url) for rx in skip_res):
+                print(f"Skipping URL due to skip patterns: {url}")
+                continue
+
+            final_rest_calls.append(call)
+
+        api_details["restCalls"] = final_rest_calls
         api_details["sdk"] = []
     elif ingestion_type == "sdk":
-        api_details["sdk"] = api_details.get("sdk", [])
+        processed_package_methods = set()
+        final_sdk_calls = []
+        for sdk in api_details.get("sdk", []):
+            print(f"Processing SDK: {sdk}")
+            package = sdk.get("package", "")
+            method = sdk.get("method", "")
+            if not package or not method or (package, method) in processed_package_methods:
+                print(f"Skipping already processed or incomplete SDK: {sdk}")
+                continue
+            processed_package_methods.add((package, method))
+
+            final_sdk_calls.append(sdk)
+
+        api_details["sdk"] = final_sdk_calls
         api_details["restCalls"] = []
     else:
         api_details["restCalls"] = []
@@ -227,13 +258,12 @@ def _build_search_query_push_ingestion_type(connector: str, search_query: str) -
     print(f"Final search query for Push API: {final_search_query}")
     return final_search_query
 
-def _process_function_app_code_rest_ingestion_type(extracted_api_details: Dict[str, Any], connector_name: str, results: List[Dict[str, Any]], search_query: str) -> None:
+def _process_function_app_code_rest_ingestion_type(extracted_api_details: Dict[str, Any], connector_name: str, results: List[Dict[str, Any]], original_search_query: str) -> None:
+    
     for call in extracted_api_details.get("restCalls", []):
         print(f"Processing REST call: {call}")
         url = call.get("url", "")
-        if url:
-            search_query = _build_search_query_rest_ingestion_type(
-                url, connector_name, search_query)
+        search_query = _build_search_query_rest_ingestion_type(url, connector_name, original_search_query)
         api_urls = fetch_api_urls(search_query, top=5)
         result = {
             "urls": api_urls,
@@ -245,14 +275,12 @@ def _process_function_app_code_rest_ingestion_type(extracted_api_details: Dict[s
         print(f"For url: {url}, result: {result}")
         results.append(result)
 
-def _process_function_app_code_sdk_ingestion_type(extracted_api_details: Dict[str, Any], connector_name: str, results: List[Dict[str, Any]], search_query: str) -> None:
+def _process_function_app_code_sdk_ingestion_type(extracted_api_details: Dict[str, Any], connector_name: str, results: List[Dict[str, Any]], original_search_query: str) -> None:
     for sdk in extracted_api_details.get("sdk", []):
         print(f"Processing SDK: {sdk}")
         package = sdk.get("package", "")
         method = sdk.get("method", "")
-        if package:
-            search_query = _build_search_query_sdk_ingestion_type(
-                package, method, connector_name, search_query)
+        search_query = _build_search_query_sdk_ingestion_type(package, method, connector_name, original_search_query)
         api_urls = fetch_api_urls(search_query, top=5)
         result = {
             "urls": api_urls,
@@ -264,11 +292,11 @@ def _process_function_app_code_sdk_ingestion_type(extracted_api_details: Dict[st
         print(f"For package: {package}, method: {method}, result: {result}")
         results.append(result)
 
-def _process_function_app_code_push_ingestion_type(extracted_api_details: Dict[str, Any], connector_name: str, results: List[Dict[str, Any]], search_query: str) -> None:
+def _process_function_app_code_push_ingestion_type(extracted_api_details: Dict[str, Any], connector_name: str, results: List[Dict[str, Any]], original_search_query: str) -> None:
     """
     Process push ingestion type by fetching API URLs based on the search query.
     """
-    search_query = _build_search_query_push_ingestion_type(connector_name, search_query)
+    search_query = _build_search_query_push_ingestion_type(connector_name, original_search_query)
     api_urls = fetch_api_urls(search_query, top=5)
     result = {
         "urls": api_urls,
@@ -314,7 +342,7 @@ def get_all_python_code_from_github_dir(github_dir: str) -> str:
     resp = requests.get(api_url)
     print(f"Fetching directory listing from: {api_url}, response status: {resp.status_code}")
     if resp.status_code != 200:
-        raise ValueError(f"Failed to list directory: {api_url} (status {resp.status_code})")
+        raise CodeParseError(f"Failed to list directory: {api_url} (status {resp.status_code})")
     files = resp.json()
     code_parts = []
     for f in files:
@@ -333,15 +361,39 @@ def parse_code(request_data: Dict[str, Any]) -> Dict[str, Any]:
         { "github_dir": "Solutions/GoogleCloudPlatformCDN/Data Connectors" }
     Downloads and concatenates all .py files in the GitHub directory as code input.
     """
-    github_dir = request_data.get("github_dir", "")
-    github_dir = github_dir.strip("/ ")
-    if not github_dir:
-        raise ValueError("github_dir must be a non-empty string")
+    try:
+        github_dir = request_data.get("github_dir", "")
+        github_dir = github_dir.strip("/ ")
+        if not github_dir:
+            raise CodeParseError("github_dir must be a non-empty string")
 
-    connector_name = github_dir.split("/")[1]
-    print(f"Processing connector: {connector_name}, GitHub directory: {github_dir}")
-    code = get_all_python_code_from_github_dir(github_dir)
-    if not code:
-        raise ValueError(f"No Python files found in GitHub directory: {github_dir}")
+        connector_name = github_dir.split("/")[1]
+        print(f"Processing connector: {connector_name}, GitHub directory: {github_dir}")
+        code = get_all_python_code_from_github_dir(github_dir)
+        if not code:
+            raise CodeParseError(f"No Python files found in GitHub directory: {github_dir}")
     
-    return process_function_app_code(connector_name, code)
+        return {
+            "success": True,
+            "connectorName": connector_name,
+            "githubDir": github_dir,
+            "apiDetails": process_function_app_code(connector_name, code)
+        }
+    except CodeParseError as cpe:
+        print(f"CodeParseError in parse_code: {cpe}")
+        return {
+            "success": False,
+            "connectorName": connector_name if 'connector_name' in locals() else "Unknown",
+            "githubDir": github_dir if 'github_dir' in locals() else "Unknown",
+            "error": str(cpe)
+        }
+    except Exception as e:
+        print(f"Unexpected error in parse_code: {e}")
+        return {
+            "success": False,
+            "connectorName": connector_name if 'connector_name' in locals() else "Unknown",
+            "githubDir": github_dir if 'github_dir' in locals() else "Unknown",
+            "error": "Failed to parse code"
+        }
+
+
