@@ -1,0 +1,1106 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for GoogleCloudPlatformCDN"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "GoogleCloudPlatformCDN",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-gcp-cdn",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "GCPCDNLogsCCPDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "GCPCDNLogsCCPDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Google Cloud Platform CDN",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "GCPCDNLogsCCPDefinition",
+                  "title": "Google Cloud Platform CDN",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The Google Cloud Platform CDN data connector provides the capability to ingest Cloud CDN Audit logs and Cloud CDN Traffic logs into Microsoft Sentinel using the Compute Engine API. Refer the [Product overview](https://cloud.google.com/cdn/docs/overview) document for more details.",
+                  "graphQueriesTableName": "GCP_CDNV2_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "GCP CDN Logs",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of GCP CDN logs",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+                        {
+                          "type": "MarkdownControlEnvBased",
+                          "parameters": {
+                            "prodScript": "#### 1. Setup the GCP environment \n Ensure to have the following resources from the GCP Console:\n Project ID, Project Name, GCP Subscription name for the project, Workload Identity Pool ID, Workspace Identity Provider ID, and a Service Account to establish the connection.\n For more information, refer the [Connector tutorial](https://github.com/v-gudivya/GCP-Cloud-CDN/blob/main/README.md) for log setup and authentication setup tutorial.\n\n Find the Log set up script [**here**](https://github.com/v-gudivya/GCP-Cloud-CDN/tree/main/GCPCDN_CCPLogsSetup)\n & the Authentication set up script [**here**](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPInitialAuthenticationSetup)",
+                            "govScript": "#### 1. Setup the GCP environment \n Ensure to have the following resources from the GCP Console:\n Project ID, Project Name, GCP Subscription name for the project, Workload Identity Pool ID, Workspace Identity Provider ID, and a Service Account to establish the connection.\n For more information, refer the [Connector tutorial](https://github.com/v-gudivya/GCP-Cloud-CDN/blob/main/README.md) for log setup and authentication setup tutorial.\n\n Find the Log set up script [**here**](https://github.com/v-gudivya/GCP-Cloud-CDN/tree/main/GCPCDN_CCPLogsSetup)\n & the Authentication set up script [**here**](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation_gov/GCPInitialAuthenticationSetupGov)"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Tenant ID: A unique identifier that is used as an input in the Terraform configuration within a GCP environment.",
+                            "fillWith": [
+                              "TenantId"
+                            ],
+                            "name": "TenantId",
+                            "disabled": true
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 2. Enable CDN logs \n In the Google Cloud Console, enable cloud logging if not enabled previously, and save the changes. Navigate to Cloud CDN section and click on Add origin to create backends as per link provided below. \n\n Reference Link: [Link to documentation](https://cloud.google.com/cdn/docs/using-cdn)"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 3. Connect new collectors \n To enable GCP Cloud CDN Logs for Microsoft Sentinel, click on Add new collector button, provide the required information in the pop up and click on Connect."
+                          }
+                        },
+                        {
+                          "type": "GCPGrid",
+                          "parameters": {}
+                        },
+                        {
+                          "type": "GCPContextPane",
+                          "parameters": {}
+                        }
+                      ],
+                      "title": "Connect GCP CDN to Microsoft Sentinel\n"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "GCPCDNDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-GCPCDN": {
+                    "columns": [
+                      {
+                        "name": "insertId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "logName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "protoPayload",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "resource",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "timestamp",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "jsonPayload",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "labels",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "receiveTimestamp",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "operation",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "spanId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "trace",
+                        "type": "string"
+                      },
+                      {
+                        "name": "httpRequest",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-GCPCDN"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend ProtoPayload = parse_json(protoPayload) | extend JsonPayload = parse_json(jsonPayload) | extend Operation = parse_json(operation) | extend Labels = parse_json(labels) | extend Resource = parse_json(resource) | extend HttpRequest = parse_json(httpRequest) | extend TimeGenerated = now(), InsertID = insertId, Timestamp = timestamp, Severity = severity, LogName = logName, ReceiveTimestamp = receiveTimestamp, SpanID = spanId, Trace = trace, LabelsAPIRootTriggerID = tostring(Labels['compute.googleapis.com/root_trigger_id']), ResourceType = tostring(Resource['type']), ResourceLabelsBackendServiceID = tostring(Resource['labels']['backend_service_id']), ResourceLabelsBackendBucketID = tostring(Resource['labels']['backend_bucket_id']), ResourceLabelsProjectID = tostring(Resource['labels']['project_id']), ResourceLabelsLocation = tostring(Resource['labels']['location']), PayloadType = tostring(ProtoPayload['@type']), MethodName = tostring(ProtoPayload['methodName']), NumResponseItems = tostring(ProtoPayload['numResponseItems']), ResourceName = tostring(ProtoPayload['resourceName']), ServiceName = tostring(ProtoPayload['serviceName']), AuthenticationInfoPrincipalEmail = tostring(ProtoPayload['authenticationInfo']['principalEmail']), AuthorizationInfo = tostring(ProtoPayload['authorizationInfo']), RequestType = tostring(ProtoPayload['request']['@type']), RequestKeyName = tostring(ProtoPayload['request']['keyName']), RequestGroup = tostring(ProtoPayload['request']['group']), RequestSecurityPolicy = tostring(ProtoPayload['request']['securityPolicy']), RequestCompressionMode = tostring(ProtoPayload['request']['compressionMode']), RequestDescription = tostring(ProtoPayload['request']['description']), RequestEnableCDN = tobool(ProtoPayload['request']['enableCDN']), RequestIPAddressSelectionPolicy = tostring(ProtoPayload['request']['ipAddressSelectionPolicy']), RequestLoadBalancingScheme = tostring(ProtoPayload['request']['loadBalancingScheme']), RequestLocalityLbPolicy = tostring(ProtoPayload['request']['localityLbPolicy']), RequestName = tostring(ProtoPayload['request']['name']), RequestPortName = tostring(ProtoPayload['request']['portName']), RequestProtocol = tostring(ProtoPayload['request']['protocol']), RequestSessionAffinity = tostring(ProtoPayload['request']['sessionAffinity']), RequestTimeoutSec = tostring(ProtoPayload['request']['timeoutSec']), RequestBackends = tostring(ProtoPayload['request']['backends']), RequestCDNPolicySignedUrlCacheMaxAgeSec = tostring(ProtoPayload['request']['cdnPolicy']['signedUrlCacheMaxAgeSec']), RequestFingerprint = tostring(ProtoPayload['request']['fingerprint']), RequestCDNPolicyCacheMode = tostring(ProtoPayload['request']['cdnPolicy']['cacheMode']), RequestCDNPolicyClientTtl = tostring(ProtoPayload['request']['cdnPolicy']['clientTtl']), RequestCDNPolicyDefaultTtl = tostring(ProtoPayload['request']['cdnPolicy']['defaultTtl']), RequestCDNPolicyMaxTtl = tostring(ProtoPayload['request']['cdnPolicy']['maxTtl']), RequestCDNPolicyNegativeCaching = tobool(ProtoPayload['request']['cdnPolicy']['negativeCaching']), RequestCDNPolicyServeWhileStale = tostring(ProtoPayload['request']['cdnPolicy']['serveWhileStale']), RequestCDNPolicyCacheKeyPolicyIncludeHost = tobool(ProtoPayload['request']['cdnPolicy']['cacheKeyPolicy']['includeHost']), RequestCDNPolicyCacheKeyPolicyIncludeProtocol = tobool(ProtoPayload['request']['cdnPolicy']['cacheKeyPolicy']['includeProtocol']), RequestCDNPolicyCacheKeyPolicyIncludeQueryString = tobool(ProtoPayload['request']['cdnPolicy']['cacheKeyPolicy']['includeQueryString']), RequestConnectionDrainingTimeoutSec = tostring(ProtoPayload['request']['connectionDraining']['drainingTimeoutSec']), RequestHealthChecks = tostring(ProtoPayload['request']['healthChecks']), RequestLogConfigEnable = tobool(ProtoPayload['request']['logConfig']['enable']), RequestLogConfigSampleRate = tostring(ProtoPayload['request']['logConfig']['sampleRate']), RequestMetadataCallerIP = tostring(ProtoPayload['requestMetadata']['callerIp']), RequestMetadataCallerSuppliedUserAgent = tostring(ProtoPayload['requestMetadata']['callerSuppliedUserAgent']), RequestMetadataDestinationAttributes = tostring(ProtoPayload['requestMetadata']['destinationAttributes']), RequestMetadataRequestAttributesAuth = tostring(ProtoPayload['requestMetadata']['requestAttributes']['auth']), RequestMetadataRequestAttributesTime = todatetime(ProtoPayload['requestMetadata']['requestAttributes']['time']), RequestMetadataRequestAttributesReason = tostring(ProtoPayload['requestMetadata']['requestAttributes']['reason']), ResourceLocationCurrentLocations = tostring(ProtoPayload['resourceLocation']['currentLocations']), ResponseType = tostring(ProtoPayload['response']['@type']), ResponseID = tostring(ProtoPayload['response']['id']), ResponseInsertTime = todatetime(ProtoPayload['response']['insertTime']), ResponseName = tostring(ProtoPayload['response']['name']), ResponseOperationType = tostring(ProtoPayload['response']['operationType']), ResponseProgress = tostring(ProtoPayload['response']['progress']), ResponseSelfLink = tostring(ProtoPayload['response']['selfLink']), ResponseSelfLinkWithID = tostring(ProtoPayload['response']['selfLinkWithId']), ResponseStartTime = todatetime(ProtoPayload['response']['startTime']), ResponseStatus = tostring(ProtoPayload['response']['status']), ResponseTargetID = tostring(ProtoPayload['response']['targetId']), ResponseTargetLink = tostring(ProtoPayload['response']['targetLink']), ResponseUser = tostring(ProtoPayload['response']['user']), OperationFirst = tobool(Operation['first']), OperationLast = tobool(Operation['last']), OperationID = tostring(Operation['id']), OperationProducer = tostring(Operation['producer']), HttpRequestCacheLookup = tobool(HttpRequest['cacheLookup']), HttpRequestLatency = tostring(HttpRequest['latency']), HttpRequestRemoteIP = tostring(HttpRequest['remoteIp']), HttpRequestRequestMethod = tostring(HttpRequest['requestMethod']), HttpRequestRequestSize = tostring(HttpRequest['requestSize']), HttpRequestRequestUrl = tostring(HttpRequest['requestUrl']), HttpRequestResponseSize = tostring(HttpRequest['responseSize']), HttpRequestCacheFillBytes = tostring(HttpRequest['cacheFillBytes']), HttpRequestCacheHit = tobool(HttpRequest['cacheHit']), HttpRequestServerIP = tostring(HttpRequest['serverIp']), HttpRequestStatus = todouble(HttpRequest['status']), HttpRequestUserAgent = tostring(HttpRequest['userAgent']), JsonPayloadType = tostring(JsonPayload['@type']), BackendTargetProjectNumber = tostring(JsonPayload['backendTargetProjectNumber']), CacheDecision = tostring(JsonPayload['cacheDecision']), CacheID = tostring(JsonPayload['cacheId']), RemoteIP = tostring(JsonPayload['remoteIp']), StatusDetails = tostring(JsonPayload['statusDetails']), EnforcedEdgeSecurityPolicyConfiguredAction = tostring(JsonPayload['enforcedEdgeSecurityPolicy']['configuredAction']), EnforcedEdgeSecurityPolicyName = tostring(JsonPayload['enforcedEdgeSecurityPolicy']['name']), EnforcedEdgeSecurityPolicyOutcome = tostring(JsonPayload['enforcedEdgeSecurityPolicy']['outcome']), EnforcedEdgeSecurityPolicyPriority = tostring(JsonPayload['enforcedEdgeSecurityPolicy']['priority']), OverrideResponseCode = todouble(JsonPayload['overrideResponseCode']), ErrorService = tostring(JsonPayload['errorService']), ErrorBackendStatusDetails = tostring(JsonPayload['errorBackendStatusDetails']), AuthzPolicyInfoPolicies = tostring(JsonPayload['authzPolicyInfo']['policies']), AuthzPolicyInfoResult = tostring(JsonPayload['authzPolicyInfo']['result']), LoadBalancingScheme = tostring(JsonPayload['loadBalancingScheme']), ResourceLabelsBackendServiceName = tostring(Resource['labels']['backend_service_name']), ResourceLabelsForwardingRuleName = tostring(Resource['labels']['forwarding_rule_name']), ResourceLabelsTargetProxyName = tostring(Resource['labels']['target_proxy_name']), ResourceLabelsUrlMapName = tostring(Resource['labels']['url_map_name']), ResourceLabelsZone = tostring(Resource['labels']['zone']) | project-away protoPayload, resource, jsonPayload, labels, operation, httpRequest",
+                    "outputStream": "Custom-GCP_CDNV2_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "GCP_CDNV2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "GCP_CDNV2_CL",
+                  "columns": [
+                    {
+                      "name": "InsertID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Timestamp",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LogName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ReceiveTimestamp",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "LabelsAPIRootTriggerID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsBackendServiceID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsBackendBucketID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsProjectID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsLocation",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PayloadType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MethodName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "NumResponseItems",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ServiceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AuthenticationInfoPrincipalEmail",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AuthorizationInfo",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestKeyName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestGroup",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestSecurityPolicy",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCompressionMode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestEnableCDN",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "RequestIPAddressSelectionPolicy",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestLoadBalancingScheme",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestLocalityLbPolicy",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestPortName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestSessionAffinity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestTimeoutSec",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestBackends",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCDNPolicySignedUrlCacheMaxAgeSec",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestFingerprint",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCDNPolicyCacheMode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCDNPolicyClientTtl",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCDNPolicyDefaultTtl",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCDNPolicyMaxTtl",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCDNPolicyNegativeCaching",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "RequestCDNPolicyServeWhileStale",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestCDNPolicyCacheKeyPolicyIncludeHost",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "RequestCDNPolicyCacheKeyPolicyIncludeProtocol",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "RequestCDNPolicyCacheKeyPolicyIncludeQueryString",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "RequestConnectionDrainingTimeoutSec",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestHealthChecks",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestLogConfigEnable",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "RequestLogConfigSampleRate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestMetadataCallerIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestMetadataCallerSuppliedUserAgent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestMetadataDestinationAttributes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestMetadataRequestAttributesAuth",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestMetadataRequestAttributesTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "RequestMetadataRequestAttributesReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLocationCurrentLocations",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseInsertTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "ResponseName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseOperationType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseProgress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseSelfLink",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseSelfLinkWithID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseStartTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "ResponseStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseTargetID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseTargetLink",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseUser",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OperationFirst",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "OperationLast",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "OperationID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OperationProducer",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SpanID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Trace",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestCacheLookup",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "HttpRequestLatency",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestRemoteIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestRequestMethod",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestRequestSize",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestRequestUrl",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestResponseSize",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestCacheFillBytes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestCacheHit",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "HttpRequestServerIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HttpRequestStatus",
+                      "type": "real"
+                    },
+                    {
+                      "name": "HttpRequestUserAgent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "JsonPayloadType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BackendTargetProjectNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CacheDecision",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CacheID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RemoteIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "StatusDetails",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EnforcedEdgeSecurityPolicyConfiguredAction",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EnforcedEdgeSecurityPolicyName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EnforcedEdgeSecurityPolicyOutcome",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EnforcedEdgeSecurityPolicyPriority",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OverrideResponseCode",
+                      "type": "real"
+                    },
+                    {
+                      "name": "ErrorService",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ErrorBackendStatusDetails",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AuthzPolicyInfoPolicies",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AuthzPolicyInfoResult",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LoadBalancingScheme",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsBackendServiceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsForwardingRuleName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsTargetProxyName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsUrlMapName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceLabelsZone",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "GCPCDNLogsCCPDefinition",
+          "title": "Google Cloud Platform CDN",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The Google Cloud Platform CDN data connector provides the capability to ingest Cloud CDN Audit logs and Cloud CDN Traffic logs into Microsoft Sentinel using the Compute Engine API. Refer the [Product overview](https://cloud.google.com/cdn/docs/overview) document for more details.",
+          "graphQueriesTableName": "GCP_CDNV2_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "GCP CDN Logs",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of GCP CDN logs",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+                {
+                  "type": "MarkdownControlEnvBased",
+                  "parameters": {
+                    "prodScript": "#### 1. Setup the GCP environment \n Ensure to have the following resources from the GCP Console:\n Project ID, Project Name, GCP Subscription name for the project, Workload Identity Pool ID, Workspace Identity Provider ID, and a Service Account to establish the connection.\n For more information, refer the [Connector tutorial](https://github.com/v-gudivya/GCP-Cloud-CDN/blob/main/README.md) for log setup and authentication setup tutorial.\n\n Find the Log set up script [**here**](https://github.com/v-gudivya/GCP-Cloud-CDN/tree/main/GCPCDN_CCPLogsSetup)\n & the Authentication set up script [**here**](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPInitialAuthenticationSetup)",
+                    "govScript": "#### 1. Setup the GCP environment \n Ensure to have the following resources from the GCP Console:\n Project ID, Project Name, GCP Subscription name for the project, Workload Identity Pool ID, Workspace Identity Provider ID, and a Service Account to establish the connection.\n For more information, refer the [Connector tutorial](https://github.com/v-gudivya/GCP-Cloud-CDN/blob/main/README.md) for log setup and authentication setup tutorial.\n\n Find the Log set up script [**here**](https://github.com/v-gudivya/GCP-Cloud-CDN/tree/main/GCPCDN_CCPLogsSetup)\n & the Authentication set up script [**here**](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation_gov/GCPInitialAuthenticationSetupGov)"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Tenant ID: A unique identifier that is used as an input in the Terraform configuration within a GCP environment.",
+                    "fillWith": [
+                      "TenantId"
+                    ],
+                    "name": "TenantId",
+                    "disabled": true
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 2. Enable CDN logs \n In the Google Cloud Console, enable cloud logging if not enabled previously, and save the changes. Navigate to Cloud CDN section and click on Add origin to create backends as per link provided below. \n\n Reference Link: [Link to documentation](https://cloud.google.com/cdn/docs/using-cdn)"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 3. Connect new collectors \n To enable GCP Cloud CDN Logs for Microsoft Sentinel, click on Add new collector button, provide the required information in the pop up and click on Connect."
+                  }
+                },
+                {
+                  "type": "GCPGrid",
+                  "parameters": {}
+                },
+                {
+                  "type": "GCPContextPane",
+                  "parameters": {}
+                }
+              ],
+              "title": "Connect GCP CDN to Microsoft Sentinel\n"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Microsoft",
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Google Cloud Platform CDN",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "string"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "GCPServiceAccountEmail": {
+              "defaultValue": "Enter GCPServiceAccountEmail value",
+              "type": "string",
+              "minLength": 4
+            },
+            "GCPProjectNumber": {
+              "defaultValue": "Enter GCPProjectNumber value",
+              "type": "string",
+              "minLength": 1
+            },
+            "GCPWorkloadIdentityProviderId": {
+              "defaultValue": "Enter GCPWorkloadIdentityProviderId value",
+              "type": "string",
+              "minLength": 4
+            },
+            "GCPProjectId": {
+              "defaultValue": "Enter GCPProjectId value",
+              "type": "string",
+              "minLength": 4
+            },
+            "GCPSubscriptionName": {
+              "defaultValue": "Enter GCPSubscriptionName value",
+              "type": "string",
+              "minLength": 3
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Google Cloud Platform CDN",
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'GCPCDNLogs', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GCP",
+              "properties": {
+                "connectorDefinitionName": "GCPCDNLogsCCPDefinition",
+                "dataType": "GCP_CDNV2_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-GCPCDN",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "serviceAccountEmail": "[[parameters('GCPServiceAccountEmail')]",
+                  "projectNumber": "[[parameters('GCPProjectNumber')]",
+                  "workloadIdentityProviderId": "[[parameters('GCPWorkloadIdentityProviderId')]"
+                },
+                "request": {
+                  "projectId": "[[parameters('GCPProjectId')]",
+                  "subscriptionNames": [
+                    "[[parameters('GCPSubscriptionName')]"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "GoogleCloudPlatformCDN",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/GoogleCloudPlatformCDN/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Google Cloud Platform CDN solution provides the capability to ingest <a href=\"https://cloud.google.com/cdn/docs/audit-logging\">Cloud CDN Audit logs</a> and <a href=\"https://cloud.google.com/cdn/docs/logging\">Cloud CDN traffic logs</a> into Microsoft Sentinel using the GCP Compute Engine API and GCP Logging API.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs</p>\n<ol type=\"a\">\n<li><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Platform (CCP)</a></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/google_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "GoogleCloudPlatformCDN",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-03-07",
+        "providers": [
+          "Google"
+        ],
+        "categories": {
+          "domains": [
+            "Cloud Provider",
+            "Networking"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -1903,6 +1903,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $instructionArray = $templateSpecConnectorData.instructionSteps
                             ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
 
+                            $hasFunctionAppManualDeploymentText = $instructionArray | Where-Object { $_.title -and $_.title.IndexOf('Manual Deployment of Azure Functions') -gt 0 }
+
                             if ($existingFunctionApp -eq $false)
                             {
                                 # check if only instructions object is present without any description
@@ -1910,6 +1912,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 {
                                     if ($null -eq $item.description -and $item.instructions.Count -gt 0)
                                     {
+                                        $hasFunctionAppManualDeploymentText = $false
                                         foreach ($instructionItem in $item.instructions)
                                         {
                                             $parameterCount = $instructionItem.parameters.Count -gt 0
@@ -1925,6 +1928,15 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                                         break
                                                     }
                                                 }
+
+                                                foreach ($desc in $instructionItem.parameters.instructionSteps)
+                                                {
+                                                    if ($desc.title -and $desc.title.IndexOf('Manual Deployment of Azure Functions') -gt 0)
+                                                    {
+                                                        $hasFunctionAppManualDeploymentText = $true
+                                                        break
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1933,7 +1945,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                             if($existingFunctionApp)
                             {
-                                $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
+                                $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $hasFunctionAppManualDeploymentText ? $templateSpecConnectorData.title + " (using Azure Functions)" : $templateSpecConnectorData.title;
                             }
                         }
 
@@ -2717,6 +2729,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 if($yamlField -eq "entityMappings" -and $yaml.$yamlField.length -lt 2)
                                 {
                                     $alertRule.entityMappings = @($alertRule.entityMappings);
+                                }
+                                elseif($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2)
+                                {
+                                    $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
                                 }
                             }
                         }
