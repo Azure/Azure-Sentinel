@@ -97,6 +97,10 @@ function GenerateSummaryRules($solutionName, $file, $rawData, $contentResourceDe
       }
     }
 
+    if ($summaryRuleMetadataDependencies.criteria.Count -eq 0) {
+        $summaryRuleMetadataDependencies.PSObject.Properties.Remove('criteria')
+    }
+
     $metadataDescription = "Description about $displayName - metadata"
     # Generate ARM template for metadata
     $summaryRuleMetadata = [PSCustomObject]@{
