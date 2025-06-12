@@ -67,7 +67,7 @@ function ReadFileContent($filePath) {
         }
     }
     catch {
-        Write-Host "Error occurred in ReadFileContent. Error details : $_"
+        Write-Host "Error occured in ReadFileContent. Error details : $_" -ForegroundColor Red
         return $null;
     }
 }
@@ -2583,7 +2583,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $yaml = ConvertFrom-YAML $content # Convert YAML to PSObject
                         }
                         catch {
-                            Write-Host "Failed to deserialize $file" -ForegroundColor Red
+                            Write-Host "Failed to deserialize $file, Error Details: $_" -ForegroundColor Red
                             break;
                         }
 
