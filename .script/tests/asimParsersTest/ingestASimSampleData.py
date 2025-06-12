@@ -187,7 +187,7 @@ def create_dcr(schema,table,table_type):
     #suffic_num = str(random.randint(100,999))
     dcrname=table+"_DCR"+str(prnumber)
     request_object={ 
-            "location": "eastus", 			
+            "location": "eastus2euap", 			
             "properties": {
                 "streamDeclarations": {
                     "Custom-dcringest"+str(prnumber): {
