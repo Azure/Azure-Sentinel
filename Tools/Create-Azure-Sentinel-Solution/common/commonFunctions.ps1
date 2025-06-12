@@ -2087,7 +2087,16 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             descriptionMarkdown   = $connectorData.descriptionMarkdown;
                             graphQueries          = $connectorData.graphQueries;
                             dataTypes             = $connectorData.dataTypes;
-                            connectivityCriterias = $connectorData.connectivityCriterias;
+                            #connectivityCriterias = $connectorData.connectivityCriterias;
+                        }
+                        
+                        # Add connectivityCriterias if not null
+                        if ($null -ne $connectorData.connectivityCriterias) {
+                            $standardConnectorUiConfig | Add-Member -MemberType NoteProperty -Name connectivityCriterias -Value $connectorData.connectivityCriterias
+                        }
+                        # Else, check if connectivityCriteria exists and add it
+                        elseif ($null -ne $connectorData.connectivityCriteria) {
+                            $standardConnectorUiConfig | Add-Member -MemberType NoteProperty -Name connectivityCriteria -Value $connectorData.connectivityCriteria
                         }
 
                         if(!$is1PConnector)
