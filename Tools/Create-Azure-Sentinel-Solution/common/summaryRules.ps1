@@ -22,6 +22,7 @@ function ValidateSummaryRulesProperties($yamlData) {
 
 function GenerateSummaryRules($solutionName, $file, $rawData, $contentResourceDetails) {
   try {
+    Write-Host "Generating Summary rules for $file"
     # Parse the YAML content
     $yaml = ConvertFrom-Yaml -Yaml $rawData
 
