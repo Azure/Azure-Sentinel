@@ -1,0 +1,75 @@
+id: 16cfa413-238f-4355-9f8a-4b97ce7572ac
+name: Spam Detections by Detection technology
+description: |
+  This query visualises total emails with Spam detections over time by various Spam Detection technologies/controls.
+description-detailed: |
+  This query visualises total emails with Spam detections over time summarizing the data daily by various Spam Detection technologies/controls in Microsoft Defender for Office 365.
+  Taken from the the Microsoft Defender for Office 365 Detections and Insights - Microsoft Sentinel workbook.
+  https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This query visualises total emails with Spam detections over time summarizing the data daily by various Spam Detection technologies/controls in Microsoft Defender for Office 365.
+  let minTime = startofday(ago(30d)); // last 30 days by default, replace 30d with the desired period
+  let maxTime = startofday(now());
+  let baseQuery = EmailEvents
+  | where DetectionMethods has "Spam"
+  | where TimeGenerated >= minTime;
+  let ml=baseQuery
+  | where TimeGenerated >= minTime
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'Advanced filter'
+  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
+  | extend Details = "Advanced filter";
+  let gf=baseQuery
+  | where TimeGenerated >= minTime
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'General filter'
+  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
+  | extend Details = "General filter";
+  let bl=baseQuery
+  | where TimeGenerated >= minTime
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'BulkFilter'
+  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
+  | extend Details = "BulkFilter";
+  let mx=baseQuery
+  | where TimeGenerated >= minTime
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'Mixed analysis detection'
+  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
+  | extend Details = "Mixed analysis detection";
+  let frp=baseQuery
+  | where TimeGenerated >= minTime
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'Fingerprint matching'
+  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
+  | extend Details = "Fingerprint matching";
+  let umr=baseQuery
+  | where TimeGenerated >= minTime
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'URL malicious reputation'
+  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
+  | extend Details = "URL malicious reputation";
+  let dr=baseQuery
+  | where TimeGenerated >= minTime
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'Domain reputation'
+  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
+  | extend Details = "Domain reputation";
+  let ipr=baseQuery
+  | where TimeGenerated >= minTime
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'IP reputation' 
+  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
+  | extend Details = "IP reputation";
+  union ml,gf,bl,mx,frp,umr,dr,ipr
+  | project Count, Details, Timestamp
+  | render timechart 
+version: 1.0.0
