@@ -2,25 +2,25 @@
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Log analytics workspace name. Can be found under Log analytics \"Settings\"."
+            }
+        },
         "FunctionName": {
             "defaultValue": "CymruScout",
             "minLength": 1,
             "maxLength": 11,
             "type": "string"
-        },
-        "WorkspaceID": {
-            "type": "string",
-            "minLength": 1,
-            "metadata": {
-                "description": "Enter Workspace ID of Log Analytics Workspace"
-            }
-        },
-        "WorkspaceKey": {
-            "type": "securestring",
-            "minLength": 1,
-            "metadata": {
-                "description": "Enter Primary Key of Log Analytics Workspace"
-            }
         },
         "TeamCymruScoutBaseURL": {
             "type": "string",
@@ -85,7 +85,7 @@
                 "Details"
             ]
         },
-         "AzureClientID": {
+        "AzureClientID": {
             "type": "string",
             "minLength": 1,
             "metadata": {
@@ -104,6 +104,13 @@
             "minLength": 1,
             "metadata": {
                 "description": "Enter Tenant Id of your Microsoft Entra ID"
+            }
+        },
+        "AzureEntraObjectId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Object id of your Microsoft Entra App"
             }
         },
         "IPTableName": {
@@ -167,9 +174,2894 @@
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
         "StorageSuffix": "[environment().suffixes.storage]",
-        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "mainRuleName": "[concat(toLower(parameters('FunctionName')),'MainCollectionRule', variables('suffix'))]",
+        "subRuleName": "[concat(toLower(parameters('FunctionName')),'SubCollectionRule', variables('suffix'))]",
+        "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+        "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[parameters('Location')]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for ingestion api",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Communications_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Communications_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "local",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "local_as_info",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "proto",
+                            "type": "real"
+                        },
+                        {
+                            "name": "proto_text",
+                            "type": "string"
+                        },
+                        {
+                            "name": "local_ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "local_min_port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "local_max_port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "local_country_codes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "local_tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "local_unique_ports",
+                            "type": "real"
+                        },
+                        {
+                            "name": "local_top_services",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "peer",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "peer_ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "peer_min_port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "peer_max_port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "peer_country_codes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "peer_as_info",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "peer_tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "peer_unique_ports",
+                            "type": "real"
+                        },
+                        {
+                            "name": "peer_top_services",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Details_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Details_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "identity",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "identity_tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "identity_reverse_hostnames",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "whois_asn",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "size",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "usage",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "usage_used_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "usage_remaining_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "usage_query_limit",
+                            "type": "real"
+                        },
+                        {
+                            "name": "usage_foundation_api_usage_used_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "usage_foundation_api_usage_remaining_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "usage_foundation_api_usage_query_limit",
+                            "type": "real"
+                        },
+                        {
+                            "name": "usage_ai_insights_usage_used_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "usage_ai_insights_usage_remaining_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "usage_ai_insights_usage_query_limit",
+                            "type": "real"
+                        },
+                        {
+                            "name": "identity_asn",
+                            "type": "real"
+                        },
+                        {
+                            "name": "identity_as_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "identity_net_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "identity_org_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "whois_modified",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_cidr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_as_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_bgp_asn",
+                            "type": "real"
+                        },
+                        {
+                            "name": "whois_bgp_asn_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_net_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_net_handle",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_cc",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_city",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_address",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_abuse_contact_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_about_contact_role",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_about_contact_person",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_about_contact_email",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_about_contact_phone",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_about_contact_country",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_about_contact_city",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_about_contact_address",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_admin_contact_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_admin_contact_role",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_admin_contact_person",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_admin_contact_email",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_admin_contact_phone",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_admin_contact_country",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_admin_contact_city",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_admin_contact_address",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_tech_contact_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_tech_contact_role",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_tech_contact_person",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_tech_contact_email",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_tech_contact_phone",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_tech_contact_country",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_tech_contact_city",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_tech_contact_address",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_email",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_phone",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_country",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_city",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_address",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_mnt_by_email",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_mnt_lower_email",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_mnt_router_email",
+                            "type": "string"
+                        },
+                        {
+                            "name": "communications_event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "pdns_event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "fingerprints_event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "open_ports_event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "open_ports_unique_ports",
+                            "type": "real"
+                        },
+                        {
+                            "name": "x509_event_count",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Fingerprints_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Fingerprints_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fingerprint_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fingerprint",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "distinct_ips",
+                            "type": "real"
+                        },
+                        {
+                            "name": "active_days",
+                            "type": "real"
+                        },
+                        {
+                            "name": "event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Foundation_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Foundation_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "country_code",
+                            "type": "string"
+                        },
+                        {
+                            "name": "as_info",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "insights",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "insights_overall_rating",
+                            "type": "string"
+                        },
+                        {
+                            "name": "insights_insights",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tags_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags_name",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_OpenPorts_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_OpenPorts_CL')]",
+                    "columns": [
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol_text",
+                            "type": "string"
+                        },
+                        {
+                            "name": "service",
+                            "type": "string"
+                        },
+                        {
+                            "name": "banner",
+                            "type": "string"
+                        },
+                        {
+                            "name": "banner_sha1",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "country_codes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "as_info",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_PDNS_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_PDNS_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name" :"tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "as_info",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "root",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tld",
+                            "type": "string"
+                        },
+                        {
+                            "name": "pdn_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "registrar",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain_created",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain_expires",
+                            "type": "string"
+                        },
+                        {
+                            "name": "nameservers",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "country_codes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "distinct_ips",
+                            "type": "real"
+                        },
+                        {
+                            "name": "active_days",
+                            "type": "real"
+                        },
+                        {
+                            "name": "event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Summary_Certs_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Summary_Certs_CL')]",
+                    "columns": [
+                        {
+                            "name": "issuer",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "issuer_common_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "common_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "subject",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "self_signed",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "not_before",
+                            "type": "string"
+                        },
+                        {
+                            "name": "not_after",
+                            "type": "string"
+                        },
+                        {
+                            "name": "valid_days",
+                            "type": "real"
+                        },
+                        {
+                            "name": "md5",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha1",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha256",
+                            "type": "string"
+                        },
+                        {
+                            "name": "css_color",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Summary_Details_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Summary_Details_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "reverse_hostnames",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "whois",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "whois_asn",
+                            "type": "real"
+                        },
+                        {
+                            "name": "total",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "geo_ip_cc",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "bgp_asn",
+                            "type": "real"
+                        },
+                        {
+                            "name": "bgp_asname",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_as_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_net_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "whois_org_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "pdns",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "fingerprints",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "open_ports",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "pdns_total",
+                            "type": "real"
+                        },
+                        {
+                            "name": "open_ports_total",
+                            "type": "real"
+                        },
+                        {
+                            "name": "open_ports_unique_ports",
+                            "type": "real"
+                        },
+                        {
+                            "name": "tag_timeline",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tag_timeline_data",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "insights",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "insights_overall_rating",
+                            "type": "string"
+                        },
+                        {
+                            "name": "insights_total",
+                            "type": "real"
+                        },
+                        {
+                            "name": "insights_insights",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tags_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags_name",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Summary_Fingerprints_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Summary_Fingerprints_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "summary_fingerprint_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "signature",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Summary_OpenPorts_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Summary_OpenPorts_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "inferred_service_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "protocol",
+                            "type": "real"
+                        },
+                        {
+                            "name": "protocol_text",
+                            "type": "string"
+                        },
+                        {
+                            "name": "service",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "css_color",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_Summary_PDNS_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_Summary_PDNS_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "domain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "css_color",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('IPTableName'), '_x509_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('IPTableName'), '_x509_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "issuer",
+                            "type": "string"
+                        },
+                        {
+                            "name": "issuer_common_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "common_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "altnames",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "serial",
+                            "type": "string"
+                        },
+                        {
+                            "name": "subject",
+                            "type": "string"
+                        },
+                        {
+                            "name": "not_after",
+                            "type": "string"
+                        },
+                        {
+                            "name": "not_before",
+                            "type": "string"
+                        },
+                        {
+                            "name": "validity_period",
+                            "type": "string"
+                        },
+                        {
+                            "name": "md5",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha1",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha256",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "self_signed",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "country_codes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "as_info",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('DomainTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('DomainTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "country_codes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "as_info",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "event_count",
+                            "type": "real"
+                        },
+                        {
+                            "name": "summary",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "summary_last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "summary_whois_asn",
+                            "type": "real"
+                        },
+                        {
+                            "name": "summary_whois_as_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "summary_whois_net_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "summary_whois_org_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "summary_comms_total",
+                            "type": "real"
+                        },
+                        {
+                            "name": "summary_service_counts",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "summary_open_ports",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "summary_pdns",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "summary_top_peers",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "summary_fingerprints",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "summary_certs",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "comms_enrichment",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "query",
+                            "type": "string"
+                        },
+                        {
+                            "name": "start_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "end_date",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags_name",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('AccountUsageTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('AccountUsageTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "used_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "remaining_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "query_limit",
+                            "type": "real"
+                        },
+                        {
+                            "name" :"foundation_api_usage",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name" :"ai_insights_usage",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "foundation_api_usage_used_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "foundation_api_usage_remaining_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "foundation_api_usage_query_limit",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ai_insights_usage_used_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ai_insights_usage_remaining_queries",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ai_insights_usage_query_limit",
+                            "type": "real"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('mainRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Details_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Foundation_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('DomainTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('AccountUsageTableName'), '_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('IPTableName'), '_Details')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "identity",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "identity_tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "identity_reverse_hostnames",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "whois_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "size",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "usage",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "usage_used_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "usage_remaining_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "usage_query_limit",
+                                "type": "real"
+                            },
+                            {
+                                "name": "usage_foundation_api_usage_used_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "usage_foundation_api_usage_remaining_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "usage_foundation_api_usage_query_limit",
+                                "type": "real"
+                            },
+                            {
+                                "name": "usage_ai_insights_usage_used_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "usage_ai_insights_usage_remaining_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "usage_ai_insights_usage_query_limit",
+                                "type": "real"
+                            },
+                            {
+                                "name": "identity_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "identity_as_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "identity_net_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "identity_org_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "whois_modified",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_cidr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_as_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_bgp_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "whois_bgp_asn_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_net_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_net_handle",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_cc",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_abuse_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_about_contact_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_about_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_about_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_about_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_about_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_about_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_about_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_admin_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_admin_contact_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_admin_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_admin_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_admin_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_admin_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_admin_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_admin_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_tech_contact_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_tech_contact_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_tech_contact_person",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_tech_contact_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_tech_contact_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_tech_contact_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_tech_contact_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_tech_contact_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_org_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_org_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_org_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_org_phone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_org_country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_org_city",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_org_address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_mnt_by_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_mnt_lower_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_mnt_router_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "communications",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "communications_event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "pdns",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "pdns_event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "fingerprints",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "fingerprints_event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "open_ports",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "open_ports_event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "open_ports_unique_ports",
+                                "type": "real"
+                            },
+                            {
+                                "name": "x509",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "x509_event_count",
+                                "type": "real"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_Foundation')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "country_code",
+                                "type": "string"
+                            },
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "insights",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "insights_overall_rating",
+                                "type": "string"
+                            },
+                            {
+                                "name": "insights_insights",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tags_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags_name",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('DomainTableName'))]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "summary",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "summary_last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "summary_whois_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "summary_whois_as_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "summary_whois_net_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "summary_whois_org_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "summary_comms_total",
+                                "type": "real"
+                            },
+                            {
+                                "name": "summary_service_counts",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "summary_open_ports",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "summary_pdns",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "summary_top_peers",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "summary_fingerprints",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "summary_certs",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "comms_enrichment",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "query",
+                                "type": "string"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags_name",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('AccountUsageTableName'))]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "used_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "remaining_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "query_limit",
+                                "type": "real"
+                            },
+                            {
+                                "name" :"foundation_api_usage",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name" :"ai_insights_usage",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "foundation_api_usage_used_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "foundation_api_usage_remaining_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "foundation_api_usage_query_limit",
+                                "type": "real"
+                            },
+                            {
+                                "name": "ai_insights_usage_used_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "ai_insights_usage_remaining_queries",
+                                "type": "real"
+                            },
+                            {
+                                "name": "ai_insights_usage_query_limit",
+                                "type": "real"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Details')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_identity=parse_json(identity), json_whois=parse_json(whois), json_usage=parse_json(usage), json_open_ports = parse_json(open_ports), json_communications=parse_json(communications), json_pdns=parse_json(pdns), json_fingerprints=parse_json(fingerprints), json_x509=parse_json(x509)\n| extend identity_tags=todynamic(json_identity.tags), identity_reverse_hostnames=todynamic(json_identity.reverse_hostnames), identity_asn=toreal(json_identity.asn), identity_as_name=tostring(json_identity.as_name), identity_net_name=tostring(json_identity.net_name), identity_org_name=tostring(json_identity.org_name), whois_asn=toreal(json_whois.asn), whois_modified=tostring(json_whois.modified), whois_cidr=tostring(json_whois.cidr), whois_as_name=tostring(json_whois.as_name), whois_bgp_asn=toreal(json_whois.bgp_asn), whois_bgp_asn_name=tostring(json_whois.bgp_asn_name), whois_net_name=tostring(json_whois.net_name), whois_net_handle=tostring(json_whois.net_handle), whois_description=tostring(json_whois.description), whois_cc=tostring(json_whois.cc), whois_city=tostring(json_whois.city), whois_address=tostring(json_whois.address), whois_abuse_contact_id=tostring(json_whois.abuse_contact_id), whois_about_contact_role=tostring(json_whois.about_contact_role), whois_about_contact_person=tostring(json_whois.about_contact_person), whois_about_contact_email=tostring(json_whois.about_contact_email), whois_about_contact_phone=tostring(json_whois.about_contact_phone), whois_about_contact_country=tostring(json_whois.about_contact_country), whois_about_contact_city=tostring(json_whois.about_contact_city), whois_about_contact_address=tostring(json_whois.about_contact_address), whois_admin_contact_id=tostring(json_whois.admin_contact_id), whois_admin_contact_role=tostring(json_whois.admin_contact_role), whois_admin_contact_person=tostring(json_whois.admin_contact_person), whois_admin_contact_email=tostring(json_whois.admin_contact_email), whois_admin_contact_phone=tostring(json_whois.admin_contact_phone), whois_admin_contact_country=tostring(json_whois.admin_contact_country), whois_admin_contact_city=tostring(json_whois.admin_contact_city), whois_admin_contact_address=tostring(json_whois.admin_contact_address), whois_tech_contact_id=tostring(json_whois.tech_contact_id), whois_tech_contact_role=tostring(json_whois.tech_contact_role), whois_tech_contact_person=tostring(json_whois.tech_contact_person), whois_tech_contact_email=tostring(json_whois.tech_contact_email), whois_tech_contact_phone=tostring(json_whois.tech_contact_phone), whois_tech_contact_country=tostring(json_whois.tech_contact_country), whois_tech_contact_city=tostring(json_whois.tech_contact_city), whois_tech_contact_address=tostring(json_whois.tech_contact_address), whois_org_id=tostring(json_whois.org_id), whois_org_name=tostring(json_whois.org_name), whois_org_email=tostring(json_whois.org_email), whois_org_phone=tostring(json_whois.org_phone), whois_org_country=tostring(json_whois.org_country), whois_org_city=tostring(json_whois.org_city), whois_org_address=tostring(json_whois.org_address), whois_mnt_by_email=tostring(json_whois.mnt_by_email), whois_mnt_lower_email=tostring(json_whois.mnt_lower_email), whois_mnt_router_email=tostring(json_whois.mnt_router_email), communications_event_count=toreal(json_communications.event_count), pdns_event_count=toreal(json_pdns.event_count), fingerprints_event_count=toreal(json_fingerprints.event_count), open_ports_event_count=toreal(json_open_ports.event_count), open_ports_unique_ports=toreal(json_open_ports.unique_ports), x509_event_count=toreal(json_x509.event_count), usage_used_queries=toreal(json_usage.used_queries), usage_remaining_queries=toreal(json_usage.remaining_queries), usage_query_limit=toreal(json_usage.query_limit), usage_foundation_api_usage_used_queries=toreal(json_usage.foundation_api_usage.used_queries), usage_foundation_api_usage_remaining_queries=toreal(json_usage.foundation_api_usage.remaining_queries), usage_foundation_api_usage_query_limit=toreal(json_usage.foundation_api_usage.query_limit), usage_ai_insights_usage_used_queries=toreal(json_usage.ai_insights_usage.used_queries), usage_ai_insights_usage_remaining_queries=toreal(json_usage.ai_insights_usage.remaining_queries), usage_ai_insights_usage_query_limit=toreal(json_usage.ai_insights_usage.query_limit)\n| project-away identity, json_identity, whois, json_whois, usage, json_usage, communications, json_communications, fingerprints, json_fingerprints, pdns, json_pdns, open_ports, json_open_ports, x509, json_x509",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Details_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Foundation')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())\n| extend TimeGenerated = todatetime(now()), json_insights=parse_json(insights)\n| extend insights_overall_rating=tostring(json_insights.overall_rating), insights_insights=todynamic(json_insights.insights)\n| project-away insights, json_insights",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Foundation_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('DomainTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())\n| extend json_summary = parse_json(summary)\n| extend summary_last_seen = tostring(json_summary.last_seen), summary_whois_asn = toreal(json_summary.whois.asn), summary_whois_as_name=tostring(json_summary.whois.as_name), summary_whois_net_name=tostring(json_summary.whois.net_name), summary_whois_org_name = tostring(json_summary.whois.org_name), summary_comms_total=toreal(json_summary.comms_total), summary_service_counts = tostring(json_summary.service_counts), summary_open_ports = tostring(json_summary.open_ports), summary_pdns = tostring(json_summary.pdns), summary_certs = tostring(json_summary.certs), summary_fingerprints = tostring(json_summary.fingerprints), summary_top_peers=tostring(json_summary.top_peers)\n| project-away summary, json_summary",
+                        "outputStream": "[concat('Custom-', parameters('DomainTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('AccountUsageTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())\n| extend json_ai_insights_usage = parse_json(ai_insights_usage), json_foundation_api_usage = parse_json(foundation_api_usage)\n| extend ai_insights_usage_used_queries = toreal(json_ai_insights_usage.used_queries), ai_insights_usage_remaining_queries =toreal(json_ai_insights_usage.remaining_queries), ai_insights_usage_query_limit = toreal(json_ai_insights_usage.query_limit), foundation_api_usage_used_queries = toreal(json_foundation_api_usage.used_queries), foundation_api_usage_remaining_queries = toreal(json_foundation_api_usage.remaining_queries), foundation_api_usage_query_limit= toreal(json_foundation_api_usage.query_limit)\n| project-away ai_insights_usage, foundation_api_usage, json_ai_insights_usage, json_foundation_api_usage",
+                        "outputStream": "[concat('Custom-', parameters('AccountUsageTableName'), '_CL')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('subRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Communications_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Fingerprints_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_OpenPorts_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_PDNS_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Summary_Certs_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Summary_Details_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Summary_Fingerprints_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Summary_OpenPorts_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_Summary_PDNS_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('IPTableName'), '_x509_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('IPTableName'), '_Communications')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "local",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "local_as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "proto",
+                                "type": "real"
+                            },
+                            {
+                                "name": "proto_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "local_ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "local_min_port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "local_max_port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "local_country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "local_tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "local_unique_ports",
+                                "type": "real"
+                            },
+                            {
+                                "name": "local_top_services",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "peer",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "peer_ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "peer_min_port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "peer_max_port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "peer_country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "peer_as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "peer_tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "peer_unique_ports",
+                                "type": "real"
+                            },
+                            {
+                                "name": "peer_top_services",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_Fingerprints')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fingerprint_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fingerprint",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "distinct_ips",
+                                "type": "real"
+                            },
+                            {
+                                "name": "active_days",
+                                "type": "real"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_OpenPorts')]": {
+                        "columns": [
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "service",
+                                "type": "string"
+                            },
+                            {
+                                "name": "banner",
+                                "type": "string"
+                            },
+                            {
+                                "name": "banner_sha1",
+                                "type": "string"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_PDNS')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name" :"tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "root",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tld",
+                                "type": "string"
+                            },
+                            {
+                                "name": "pdn_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "registrar",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain_created",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain_expires",
+                                "type": "string"
+                            },
+                            {
+                                "name": "nameservers",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "distinct_ips",
+                                "type": "real"
+                            },
+                            {
+                                "name": "active_days",
+                                "type": "real"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_Summary_Certs')]": {
+                        "columns": [
+                            {
+                                "name": "issuer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "issuer_common_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "common_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "subject",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "self_signed",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "not_before",
+                                "type": "string"
+                            },
+                            {
+                                "name": "not_after",
+                                "type": "string"
+                            },
+                            {
+                                "name": "valid_days",
+                                "type": "real"
+                            },
+                            {
+                                "name": "md5",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha1",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha256",
+                                "type": "string"
+                            },
+                            {
+                                "name": "css_color",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_Summary_Details')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "reverse_hostnames",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "whois",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "whois_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "total",
+                                "type": "real"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "geo_ip_cc",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "bgp_asn",
+                                "type": "real"
+                            },
+                            {
+                                "name": "bgp_asname",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_as_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_net_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "whois_org_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "pdns",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "fingerprints",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "open_ports",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "pdns_total",
+                                "type": "real"
+                            },
+                            {
+                                "name": "open_ports_total",
+                                "type": "real"
+                            },
+                            {
+                                "name": "open_ports_unique_ports",
+                                "type": "real"
+                            },
+                            {
+                                "name": "tag_timeline",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tag_timeline_data",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "insights",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "insights_overall_rating",
+                                "type": "string"
+                            },
+                            {
+                                "name": "insights_total",
+                                "type": "real"
+                            },
+                            {
+                                "name": "insights_insights",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tags_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags_name",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_Summary_Fingerprints')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "summary_fingerprint_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "signature",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_Summary_OpenPorts')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "inferred_service_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "real"
+                            },
+                            {
+                                "name": "protocol_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "service",
+                                "type": "string"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "css_color",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_Summary_PDNS')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "event_count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "css_color",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('IPTableName'), '_x509')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "issuer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "issuer_common_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "common_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "altnames",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "serial",
+                                "type": "string"
+                            },
+                            {
+                                "name": "subject",
+                                "type": "string"
+                            },
+                            {
+                                "name": "not_after",
+                                "type": "string"
+                            },
+                            {
+                                "name": "not_before",
+                                "type": "string"
+                            },
+                            {
+                                "name": "validity_period",
+                                "type": "string"
+                            },
+                            {
+                                "name": "md5",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha1",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha256",
+                                "type": "string"
+                            },
+                            {
+                                "name": "first_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "last_seen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "self_signed",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "country_codes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "as_info",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "count",
+                                "type": "real"
+                            },
+                            {
+                                "name": "start_date",
+                                "type": "string"
+                            },
+                            {
+                                "name": "end_date",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Communications')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_local=parse_json(local), json_peer=parse_json(peer)\n| extend local_as_info=todynamic(json_local.as_info), local_ip=tostring(json_local.ip), local_min_port=toreal(json_local.min_port), local_max_port=toreal(json_local.max_port), local_country_codes=todynamic(json_local.country_codes), local_tags=todynamic(json_local.tags), local_unique_ports=toreal(json_local.unique_ports), local_top_services=todynamic(json_local.top_services), peer_ip=tostring(json_peer.ip), peer_as_info=todynamic(json_peer.as_info), peer_min_port=toreal(json_peer.min_port), peer_max_port=toreal(json_peer.max_port), peer_country_codes=todynamic(json_peer.country_codes), peer_tags=todynamic(json_peer.tags), peer_unique_ports=toreal(json_peer.unique_ports), peer_top_services=todynamic(json_peer.top_services)\n| project-away json_local, json_peer, local, peer",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Communications_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Fingerprints')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Fingerprints_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_OpenPorts')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_OpenPorts_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_PDNS')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_PDNS_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Summary_Certs')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Summary_Certs_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Summary_Details')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_whois=parse_json(whois), json_pdns=parse_json(pdns), json_fingerprints=parse_json(fingerprints), json_open_ports=parse_json(open_ports), json_tag_timeline=parse_json(tag_timeline), json_insights=parse_json(insights)\n| extend whois_asn=toreal(json_whois.asn), whois_as_name=tostring(json_whois.as_name), whois_net_name=tostring(json_whois.net_name), whois_org_name=tostring(json_whois.org_name), pdns_total=toreal(json_pdns.total), open_ports_total=toreal(json_open_ports.total), open_ports_unique_ports=toreal(json_open_ports.unique_ports), tag_timeline_data=todynamic(json_tag_timeline.data), insights_overall_rating=tostring(json_insights.overall_rating), insights_total=toreal(json_insights.total), insights_insights=todynamic(json_insights.insights)\n| project-away whois, json_whois, pdns, json_pdns, fingerprints, json_fingerprints, open_ports, json_open_ports, tag_timeline, json_tag_timeline, insights, json_insights",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Summary_Details_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Summary_Fingerprints')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Summary_Fingerprints_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Summary_OpenPorts')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Summary_OpenPorts_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_Summary_PDNS')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_Summary_PDNS_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('IPTableName'), '_x509')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('IPTableName'), '_x509_CL')]"
+                    }
+                ]
+            }
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
@@ -275,7 +3167,7 @@
                 "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
-                    "linuxFxVersion": "python|3.11"
+                    "linuxFxVersion": "python|3.12"
                 }
             },
             "resources": [
@@ -292,7 +3184,6 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
                         "CymruScoutBaseURL": "[trim(parameters('TeamCymruScoutBaseURL'))]",
                         "AuthenticationType": "[parameters('AuthenticationType')]",
                         "TeamCymruScoutUsername": "[trim(parameters('UserName'))]",
@@ -304,15 +3195,16 @@
                         "AZURE_CLIENT_ID": "[trim(parameters('AzureClientID'))]",
                         "AZURE_CLIENT_SECRET": "[trim(parameters('AzureClientSecret'))]",
                         "AZURE_TENANT_ID": "[trim(parameters('TenantID'))]",
-                        "WorkspaceID": "[trim(parameters('WorkspaceID'))]",
-                        "WorkspaceKey": "[trim(parameters('WorkspaceKey'))]",
                         "IPTableName": "[trim(parameters('IPTableName'))]",
                         "DomainTableName": "[trim(parameters('DomainTableName'))]",
                         "AccountUsageTableName": "[trim(parameters('AccountUsageTableName'))]",
                         "LogLevel": "[parameters('LogLevel')]",
                         "Schedule": "[trim(parameters('Schedule'))]",
                         "AccountUsageSchedule": "[trim(parameters('AccountUsageSchedule'))]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-TeamCymruScout-functionapp"
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-TeamCymruScout310-functionapp",
+                        "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))).immutableId]",
+                        "AZURE_DATA_COLLECTION_RULE_ID_SUB_TABLES": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('subRuleName'))).immutableId]"
                     }
                 }
             ]
@@ -351,6 +3243,62 @@
             ],
             "properties": {
                 "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('dcrRoleId')]",
+            "properties": {
+                "assignableScopes": [
+                    "[resourceGroup().id]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('subRuleName'))]"
+                ],
+                "description": "Entra ID application access role",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Insights/Register/Action",
+                            "Microsoft.Support/*",
+                            "Microsoft.Resources/subscriptions/resourceGroups/read"
+                        ],
+                        "dataActions": [
+                            "Microsoft.Insights/Metrics/Write",
+                            "Microsoft.Insights/Telemetry/Write"
+                        ]
+                    }
+                ],
+                "roleName": "[variables('dcrRoleName')]",
+                "type": "customRole"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Main DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [
+                "[variables('dcrRoleId')]",
+                "[variables('mainRuleName')]"
+            ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectId')]"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Sub DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [
+                "[variables('dcrRoleId')]",
+                "[variables('subRuleName')]"
+            ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('subRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectId')]"
             }
         }
     ]
