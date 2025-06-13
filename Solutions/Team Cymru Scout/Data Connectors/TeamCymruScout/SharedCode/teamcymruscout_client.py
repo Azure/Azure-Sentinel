@@ -11,6 +11,8 @@ from tenacity import (
 )
 import inspect
 import json
+from azure.identity import ClientSecretCredential
+from azure.monitor.ingestion import LogsIngestionClient
 from requests.auth import HTTPBasicAuth
 from .logger import applogger
 from .teamcymruscout_exception import TeamCymruScoutException
@@ -61,7 +63,11 @@ class TeamCymruScout:
         self.session = requests.Session()
         self.session.headers["Content-Type"] = "application/json"
         self.auth = None
-        self.ms_sentinel_obj = MicrosoftSentinel()
+        self.creds = ClientSecretCredential(
+            tenant_id=consts.AZURE_TENANT_ID, client_id=consts.AZURE_CLIENT_ID, client_secret=consts.AZURE_CLIENT_SECRET
+        )
+        self.azure_client = LogsIngestionClient(consts.AZURE_DATA_COLLECTION_ENDPOINT, credential=self.creds)
+        self.ms_sentinel_obj = MicrosoftSentinel(self.azure_client)
         self.error_logs = "{}(method={}) {}"
         self.logs_starts_with = consts.LOGS_STARTS_WITH
         self.set_authorization_header()
@@ -198,18 +204,19 @@ class TeamCymruScout:
             )
             raise TeamCymruScoutException()
 
-    def send_data_to_sentinel(self, data, table_name, indicator_value="Account Usage"):
+    def send_data_to_sentinel(self, data, table_name, dcr_rule_id, indicator_value="Account Usage"):
         """
         To send the given data to the specified table in the Microsoft Sentinel.
 
         Args:
             data (Any): The data to be sent to the table.
             table_name (str): The name of the table in Microsoft Sentinel.
+            dcr_rule_id (str): The rule id of the data collection rule.
+            indicator_value (str, optional): The indicator value to be used while posting the data.
         """
         __method_name = inspect.currentframe().f_code.co_name
         applogger.debug("{}(method={}) Sending data to Sentinel.".format(self.logs_starts_with, __method_name))
-        body = json.dumps(data)
-        self.ms_sentinel_obj.post_data(body, table_name)
+        self.ms_sentinel_obj.post_data(data, table_name, dcr_rule_id)
         count = len(data) if isinstance(data, list) else 1
         applogger.info(
             "{}(method={}) Posted {} records into {} of Log Analytics Workspace for {}.".format(
