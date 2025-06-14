@@ -1,0 +1,42 @@
+id: 13260191-fb10-4a36-9ca1-2bbc0aaf77d0
+name: Malicious Emails with QR code Urls
+description: |
+  Identifies inbound emails containing QR code URLs associated with phishing, malware, or spam threats.
+description-detailed: |
+  This query detects inbound emails with QR code URLs linked to phishing, malware, or spam threats, helping security teams monitor QR-based attack vectors over time.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+    - EmailEvents
+    - EmailUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let TimeStart = startofday(ago(30d));
+  let TimeEnd = startofday(now());
+  let baseQuery = EmailEvents
+    | where Timestamp >= TimeStart and Timestamp <= TimeEnd
+    | where EmailDirection == "Inbound"
+    | join (
+        EmailUrlInfo
+        | where UrlLocation == "QRCode"
+    ) on NetworkMessageId;
+  let qrphishh = baseQuery
+    | where parse_json(DetectionMethods).Phish has "URL"
+    | make-series Count = count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+    | extend Details = "Phish QR Detection";
+  let qrmalww = baseQuery
+    | where parse_json(DetectionMethods).Malware has "URL"
+    | make-series Count = count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+    | extend Details = "Malware QR Detection";
+  let qrspamm = baseQuery
+    | where parse_json(DetectionMethods).Spam has "URL"
+    | make-series Count = count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+    | extend Details = "Spam QR Detection";
+  union qrphishh, qrmalww, qrspamm
+  //| render timechart // Uncomment to display as a timechart
+  //| render columnchart // Uncomment to display as a column chart
+version: 1.0.0
