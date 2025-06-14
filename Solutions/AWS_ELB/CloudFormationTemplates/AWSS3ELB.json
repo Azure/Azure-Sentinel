@@ -1,0 +1,620 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "Create S3 bucket with SQS queues to forward ALB, NLB access, and NLB flow logs to Sentinel.",
+	"Mappings": {
+    "RegionToELBAccountId": {
+        "us-east-1": { "AccountId": "127311923021" },
+        "us-east-2": { "AccountId": "033677994240" },
+        "us-west-1": { "AccountId": "027434742980" },
+        "us-west-2": { "AccountId": "797873946194" },
+        "af-south-1": { "AccountId": "098369216593" },
+        "ap-east-1": { "AccountId": "754344448648" },
+        "ap-southeast-3": { "AccountId": "589379963580" },
+        "ap-south-1": { "AccountId": "718504428378" },
+        "ap-northeast-3": { "AccountId": "383597477331" },
+        "ap-northeast-2": { "AccountId": "600734575887" },
+        "ap-southeast-1": { "AccountId": "114774131450" },
+        "ap-southeast-2": { "AccountId": "783225319266" },
+        "ap-northeast-1": { "AccountId": "582318560864" },
+        "ca-central-1": { "AccountId": "985666609251" },
+        "eu-central-1": { "AccountId": "054676820928" },
+        "eu-west-1": { "AccountId": "156460612806" },
+        "eu-west-2": { "AccountId": "652711504416" },
+        "eu-south-1": { "AccountId": "635631232127" },
+        "eu-west-3": { "AccountId": "009996457667" },
+        "eu-north-1": { "AccountId": "897822967062" },
+        "me-south-1": { "AccountId": "076674570225" },
+        "sa-east-1": { "AccountId": "507241528517" }
+    }
+	},
+	"Parameters": {
+		"BucketName": {
+			"Type": "String",
+			"AllowedPattern": "^[a-z0-9][a-z0-9-.]{1,61}[a-z0-9]$",
+			"Description": "S3 bucket name for ALB, NLB access, NLB flow logs and GLB Flow logs.",
+			"Default": "my-loadbalancer-logs-buckets"
+		},
+		"ALBAccessQueueName": {
+			"Type": "String",
+			"Default": "ALBLogsToSentinelQueue",
+			"Description": "SQS queue for ALB logs."
+		},
+		"NLBAccessQueueName": {
+			"Type": "String",
+			"Default": "NLBLogsToSentinelQueue",
+			"Description": "SQS queue for NLB access logs."
+		},
+		"NLBFlowQueueName": {
+			"Type": "String",
+			"Default": "NLBFlowLogsToSentinelQueue",
+			"Description": "SQS queue for NLB flow logs."
+		},
+		"GLBFlowQueueName": {
+			"Type": "String",
+			"Default": "GLBFlowLogsToSentinelQueue",
+			"Description": "SQS queue for GLB flow logs."
+		},
+		"IamRoleName": {
+			"Type": "String",
+			"AllowedPattern": "OIDC_[-_a-zA-Z0-9]+",
+			"Description": "IAM role name for Sentinel integration, it should be in the format OIDC_[-_a-zA-Z0-9]+",
+            "Default": "OIDC_RoleName"
+		},
+		"SentinelWorkspaceId": {
+			"Type": "String",
+			"Description": "Sentinel Workspace ID."
+		},
+		"CreateNewBucket": {
+			"Type": "String",
+			"AllowedValues": [
+				"true",
+				"false"
+			],
+			"Default": "true",
+			"Description": "Set to false to use an existing bucket."
+		}
+	},
+	"Conditions": {
+		"CreateNewBucketCondition": {
+			"Fn::Equals": [
+				{
+					"Ref": "CreateNewBucket"
+				},
+				"true"
+			]
+		}
+	},
+	"Resources": {
+		"ALBSQSQueue": {
+			"Type": "AWS::SQS::Queue",
+			"Properties": {
+				"QueueName": {
+					"Ref": "ALBAccessQueueName"
+				}
+			}
+		},
+		"NLBSQSQueue": {
+			"Type": "AWS::SQS::Queue",
+			"Properties": {
+				"QueueName": {
+					"Ref": "NLBAccessQueueName"
+				}
+			}
+		},
+		"NLBFlowLogsSQSQueue": {
+			"Type": "AWS::SQS::Queue",
+			"Properties": {
+				"QueueName": {
+					"Ref": "NLBFlowQueueName"
+				}
+			}
+		},
+		"GLBFlowLogsSQSQueue": {
+			"Type": "AWS::SQS::Queue",
+			"Properties": {
+				"QueueName": {
+					"Ref": "GLBFlowQueueName"
+				}
+			}
+		},
+		"ALBLogsBucket": {
+			"Type": "AWS::S3::Bucket",
+			"Condition": "CreateNewBucketCondition",
+			"Properties": {
+				"BucketName": {
+					"Ref": "BucketName"
+				},
+				"NotificationConfiguration": {
+					"QueueConfigurations": [
+						{
+							"Event": "s3:ObjectCreated:*",
+							"Queue": {
+								"Fn::GetAtt": [
+									"ALBSQSQueue",
+									"Arn"
+								]
+							},
+							"Filter": {
+								"S3Key": {
+									"Rules": [
+										{
+											"Name": "prefix",
+											"Value": "ALBLogs/"
+										}
+									]
+								}
+							}
+						},
+						{
+							"Event": "s3:ObjectCreated:*",
+							"Queue": {
+								"Fn::GetAtt": [
+									"NLBSQSQueue",
+									"Arn"
+								]
+							},
+							"Filter": {
+								"S3Key": {
+									"Rules": [
+										{
+											"Name": "prefix",
+											"Value": "NLBAccessLogs/"
+										}
+									]
+								}
+							}
+						},
+						{
+							"Event": "s3:ObjectCreated:*",
+							"Queue": {
+								"Fn::GetAtt": [
+									"NLBFlowLogsSQSQueue",
+									"Arn"
+								]
+							},
+							"Filter": {
+								"S3Key": {
+									"Rules": [
+										{
+											"Name": "prefix",
+											"Value": "NLBFlowLogs/"
+										}
+									]
+								}
+							}
+						},
+						{
+							"Event": "s3:ObjectCreated:*",
+							"Queue": {
+								"Fn::GetAtt": [
+									"GLBFlowLogsSQSQueue",
+									"Arn"
+								]
+							},
+							"Filter": {
+								"S3Key": {
+									"Rules": [
+										{
+											"Name": "prefix",
+											"Value": "GLBFlowLogs/"
+										}
+									]
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		"BucketPolicy": {
+			"Type": "AWS::S3::BucketPolicy",
+			"Condition": "CreateNewBucketCondition",
+			"DependsOn": "ALBLogsBucket",
+			"Properties": {
+				"Bucket": {
+					"Ref": "BucketName"
+				},
+				"PolicyDocument": {
+					"Id": "AWSLogDeliveryWrite",
+					"Statement": [
+						{
+							"Sid": "AWSLogDeliveryAclCheck",
+							"Effect": "Allow",
+							"Principal": {
+								"Service": "delivery.logs.amazonaws.com"
+							},
+							"Action": "s3:GetBucketAcl",
+							"Resource": {
+								"Fn::Sub": "arn:aws:s3:::${BucketName}"
+							},
+							"Condition": {
+								"ArnLike": {
+									"aws:SourceArn": {
+										"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+									}
+								},
+								"StringEquals": {
+									"aws:SourceAccount": {
+										"Ref": "AWS::AccountId"
+									}
+								}
+							}
+						},
+						{
+							"Sid": "AWSLogDeliveryWrite",
+							"Effect": "Allow",
+							"Principal": {
+								"Service": "delivery.logs.amazonaws.com"
+							},
+							"Action": "s3:PutObject",
+							"Resource": [
+								{
+									"Fn::Sub": "arn:aws:s3:::${BucketName}/NLBAccessLogs/AWSLogs/${AWS::AccountId}/*"
+								},
+								{
+									"Fn::Sub": "arn:aws:s3:::${BucketName}/NLBFlowLogs/AWSLogs/${AWS::AccountId}/*"
+								},
+								{
+									"Fn::Sub": "arn:aws:s3:::${BucketName}/GLBFlowLogs/AWSLogs/${AWS::AccountId}/*"
+								}
+							],
+							"Condition": {
+								"ArnLike": {
+									"aws:SourceArn": {
+										"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+									}
+								},
+								"StringEquals": {
+									"aws:SourceAccount": {
+										"Ref": "AWS::AccountId"
+									},
+									"s3:x-amz-acl": "bucket-owner-full-control"
+								}
+							}
+						},
+						{
+							"Effect": "Allow",
+							"Principal": {
+								"AWS": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:iam::",
+                      { "Fn::FindInMap": ["RegionToELBAccountId", { "Ref": "AWS::Region" }, "AccountId"] },
+                      ":root"
+                    ]
+                  ]
+                }
+							},
+							"Action": "s3:PutObject",
+							"Resource": [
+								{
+										"Fn::Sub": "arn:aws:s3:::${BucketName}/ALBLogs/*"
+									
+								}
+							]
+						}
+					],
+					"Version": "2012-10-17"
+				}
+			}
+		},
+		"ALBSQSQueuePolicy": {
+			"Type": "AWS::SQS::QueuePolicy",
+			"Properties": {
+				"Queues": [
+					{
+						"Ref": "ALBSQSQueue"
+					}
+				],
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Effect": "Allow",
+							"Principal": "*",
+							"Action": [
+								"SQS:ReceiveMessage",
+								"SQS:DeleteMessage",
+								"SQS:ChangeMessageVisibility"
+							],
+							"Resource": {
+								"Fn::GetAtt": [
+									"ALBSQSQueue",
+									"Arn"
+								]
+							}
+						},
+						{
+							"Effect": "Allow",
+							"Principal": {
+								"Service": "s3.amazonaws.com"
+							},
+							"Action": "SQS:SendMessage",
+							"Resource": {
+								"Fn::GetAtt": [
+									"ALBSQSQueue",
+									"Arn"
+								]
+							},
+							"Condition": {
+								"ArnLike": {
+									"aws:SourceArn": {
+										"Fn::Sub": "arn:aws:s3:::${BucketName}"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		"NLBSQSQueuePolicy": {
+			"Type": "AWS::SQS::QueuePolicy",
+			"Properties": {
+				"Queues": [
+					{
+						"Ref": "NLBSQSQueue"
+					}
+				],
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Effect": "Allow",
+							"Principal": "*",
+							"Action": [
+								"SQS:ReceiveMessage",
+								"SQS:DeleteMessage",
+								"SQS:ChangeMessageVisibility"
+							],
+							"Resource": {
+								"Fn::GetAtt": [
+									"NLBSQSQueue",
+									"Arn"
+								]
+							}
+						},
+						{
+							"Effect": "Allow",
+							"Principal": {
+								"Service": "s3.amazonaws.com"
+							},
+							"Action": "SQS:SendMessage",
+							"Resource": {
+								"Fn::GetAtt": [
+									"NLBSQSQueue",
+									"Arn"
+								]
+							},
+							"Condition": {
+								"ArnLike": {
+									"aws:SourceArn": {
+										"Fn::Sub": "arn:aws:s3:::${BucketName}"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		"NLBFlowLogsSQSQueuePolicy": {
+			"Type": "AWS::SQS::QueuePolicy",
+			"Properties": {
+				"Queues": [
+					{
+						"Ref": "NLBFlowLogsSQSQueue"
+					}
+				],
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Effect": "Allow",
+							"Principal": "*",
+							"Action": [
+								"SQS:ReceiveMessage",
+								"SQS:DeleteMessage",
+								"SQS:ChangeMessageVisibility"
+							],
+							"Resource": {
+								"Fn::GetAtt": [
+									"NLBFlowLogsSQSQueue",
+									"Arn"
+								]
+							}
+						},
+						{
+							"Effect": "Allow",
+							"Principal": {
+								"Service": "s3.amazonaws.com"
+							},
+							"Action": "SQS:SendMessage",
+							"Resource": {
+								"Fn::GetAtt": [
+									"NLBFlowLogsSQSQueue",
+									"Arn"
+								]
+							},
+							"Condition": {
+								"ArnLike": {
+									"aws:SourceArn": {
+										"Fn::Sub": "arn:aws:s3:::${BucketName}"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		"GLBFlowLogsSQSQueuePolicy": {
+			"Type": "AWS::SQS::QueuePolicy",
+			"Properties": {
+				"Queues": [
+					{
+						"Ref": "GLBFlowLogsSQSQueue"
+					}
+				],
+				"PolicyDocument": {
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Effect": "Allow",
+							"Principal": "*",
+							"Action": [
+								"SQS:ReceiveMessage",
+								"SQS:DeleteMessage",
+								"SQS:ChangeMessageVisibility"
+							],
+							"Resource": {
+								"Fn::GetAtt": [
+									"GLBFlowLogsSQSQueue",
+									"Arn"
+								]
+							}
+						},
+						{
+							"Effect": "Allow",
+							"Principal": {
+								"Service": "s3.amazonaws.com"
+							},
+							"Action": "SQS:SendMessage",
+							"Resource": {
+								"Fn::GetAtt": [
+									"GLBFlowLogsSQSQueue",
+									"Arn"
+								]
+							},
+							"Condition": {
+								"ArnLike": {
+									"aws:SourceArn": {
+										"Fn::Sub": "arn:aws:s3:::${BucketName}"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		"SentinelIntegrationRole": {
+			"Type": "AWS::IAM::Role",
+			"Properties": {
+				"RoleName": {
+					"Ref": "IamRoleName"
+				},
+				"AssumeRolePolicyDocument": {
+					"Fn::Sub": "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Principal\": {\"Federated\": \"arn:aws:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/\"},\"Action\": \"sts:AssumeRoleWithWebIdentity\",\"Condition\": {\"StringEquals\": {\"sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud\": \"api://1462b192-27f7-4cb9-8523-0f4ecb54b47e\",\"sts:RoleSessionName\": \"MicrosoftSentinel_${SentinelWorkspaceId}\"}}}]}"
+				},
+				"Policies": [
+					{
+						"PolicyName": "LoadBalancerLogsAccessPolicy",
+						"PolicyDocument": {
+							"Version": "2012-10-17",
+							"Statement": [
+								{
+									"Effect": "Allow",
+									"Action": [
+										"s3:GetObject",
+										"s3:ListBucket",
+										"s3:GetBucketAcl"
+									],
+									"Resource": [
+										{
+											"Fn::Sub": "arn:aws:s3:::${BucketName}"
+										},
+										{
+											"Fn::Sub": "arn:aws:s3:::${BucketName}/ALBLogs/*"
+										},
+										{
+											"Fn::Sub": "arn:aws:s3:::${BucketName}/NLBAccessLogs/*"
+										},
+										{
+											"Fn::Sub": "arn:aws:s3:::${BucketName}/NLBFlowLogs/*"
+										},
+										{
+											"Fn::Sub": "arn:aws:s3:::${BucketName}/GLBFlowLogs/*"
+										}
+									]
+								},
+								{
+									"Effect": "Allow",
+									"Action": "sqs:ReceiveMessage",
+									"Resource": [
+										{
+											"Fn::GetAtt": [
+												"ALBSQSQueue",
+												"Arn"
+											]
+										},
+										{
+											"Fn::GetAtt": [
+												"NLBSQSQueue",
+												"Arn"
+											]
+										},
+										{
+											"Fn::GetAtt": [
+												"NLBFlowLogsSQSQueue",
+												"Arn"
+											]
+										},
+										{
+											"Fn::GetAtt": [
+												"GLBFlowLogsSQSQueue",
+												"Arn"
+											]
+										}
+									]
+								}
+							]
+						}
+					}
+				]
+			}
+		}
+	},
+	"Outputs": {
+		"S3BucketName": {
+			"Value": {
+				"Ref": "BucketName"
+			},
+			"Description": "S3 bucket name for logs."
+		},
+		"ALBSQSQueueURL": {
+			"Value": {
+				"Ref": "ALBSQSQueue"
+			},
+			"Description": "ALB SQS queue URL."
+		},
+		"NLBSQSQueueURL": {
+			"Value": {
+				"Ref": "NLBSQSQueue"
+			},
+			"Description": "NLB access SQS queue URL."
+		},
+		"NLBFlowLogsSQSQueueURL": {
+			"Value": {
+				"Ref": "NLBFlowLogsSQSQueue"
+			},
+			"Description": "NLB flow logs SQS queue URL."
+		},
+		"GLBFlowLogsSQSQueueURL": {
+			"Value": {
+				"Ref": "GLBFlowLogsSQSQueue"
+			},
+			"Description": "GLB flow logs SQS queue URL."
+		},
+		"IAMRoleArn": {
+			"Value": {
+				"Fn::GetAtt": [
+					"SentinelIntegrationRole",
+					"Arn"
+				]
+			},
+			"Description": "IAM role ARN for Sentinel connector."
+		}
+	}
+}
