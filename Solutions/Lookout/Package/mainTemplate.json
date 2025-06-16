@@ -58,9 +58,9 @@
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "dataConnectorCCPVersion": "1.0.0",
-    "_dataConnectorContentIdConnectorDefinition1": "Lookout_ConnectorDefinition",
+    "_dataConnectorContentIdConnectorDefinition1": "LookoutStreaming_DataConnectorDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
-    "_dataConnectorContentIdConnections1": "Lookout_ConnectorDefinitionConnections",
+    "_dataConnectorContentIdConnections1": "LookoutStreaming_DataConnectorDefinitionConnections",
     "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
     "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
@@ -83,7 +83,7 @@
       ],
       "properties": {
         "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
-        "displayName": "Lookout Mobile Threat Detection Connector Old Endpoint",
+        "displayName": "Lookout Mobile Threat Detection Connector",
         "contentKind": "DataConnector",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -99,28 +99,28 @@
               "kind": "Customizable",
               "properties": {
                 "connectorUiConfig": {
-                  "id": "Lookout_ConnectorDefinition",
-                  "title": "Lookout Mobile Threat Detection Connector Old Endpoint",
+                  "id": "LookoutStreaming_DataConnectorDefinition",
+                  "title": "Lookout Mobile Threat Detection Connector",
                   "publisher": "Microsoft",
                   "descriptionMarkdown": "The [Lookout Mobile Threat Detection](https://lookout.com) data connector provides the capability to ingest events related to mobile security risks into Microsoft Sentinel through the Mobile Risk API. Refer to [API documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) for more information. This connector helps you examine potential security risks detected in mobile devices.",
-                  "graphQueriesTableName": "LookEventsV2_CL",
+                  "graphQueriesTableName": "LookoutMtdV2_CL",
                   "graphQueries": [
                     {
                       "metricName": "Total events received",
                       "legend": "Events",
-                      "baseQuery": "LookEventsV2_CL"
+                      "baseQuery": "LookoutMtdV2_CL"
                     }
                   ],
                   "sampleQueries": [
                     {
                       "description": "Lookout Mobile Threat Detection Events - All Activities.",
-                      "query": "LookEventsV2_CL\n | take 10"
+                      "query": "LookoutMtdV2_CL\n | take 10"
                     }
                   ],
                   "dataTypes": [
                     {
-                      "name": "LookEventsV2_CL",
-                      "lastDataReceivedQuery": "LookEventsV2_CL\n | summarize Time = max(TimeGenerated)"
+                      "name": "LookoutMtdV2_CL",
+                      "lastDataReceivedQuery": "LookoutMtdV2_CL\n | summarize Time = max(TimeGenerated)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -217,7 +217,7 @@
               }
             },
             {
-              "name": "LookoutOldEndpointDCR",
+              "name": "LookoutMtdDCR",
               "apiVersion": "2022-06-01",
               "type": "Microsoft.Insights/dataCollectionRules",
               "location": "[parameters('workspace-location')]",
@@ -225,34 +225,38 @@
               "properties": {
                 "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
                 "streamDeclarations": {
-                  "Custom-LookEventsV2_CL": {
+                  "Custom-LookoutMtdV2_CL": {
                     "columns": [
                       {
                         "name": "id",
                         "type": "string"
                       },
                       {
-                        "name": "eventTime",
-                        "type": "datetime"
+                        "name": "enterprise_guid",
+                        "type": "string"
                       },
                       {
-                        "name": "changeType",
-                        "type": "string"
+                        "name": "created_time",
+                        "type": "datetime"
                       },
                       {
                         "name": "type",
                         "type": "string"
                       },
                       {
-                        "name": "actor",
-                        "type": "dynamic"
+                        "name": "change_type",
+                        "type": "string"
                       },
                       {
-                        "name": "details",
+                        "name": "device",
                         "type": "dynamic"
                       },
                       {
                         "name": "target",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "actor",
                         "type": "dynamic"
                       }
                     ]
@@ -269,15 +273,65 @@
                 "dataFlows": [
                   {
                     "streams": [
-                      "Custom-LookEventsV2_CL"
+                      "Custom-LookoutMtdV2_CL"
                     ],
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | extend Id = tostring(id), ChangeType = tostring(changeType), EventTime = todatetime(eventTime), Type = tostring(type), ActorType = tostring(actor.type), ActorId = tostring(actor.id), DetailsType = tostring(details.type), DetailsId = tostring(details.id), DetailsAction = tostring(details.action), DetailsSeverity = tostring(details.severity), DetailsClassifications = details.classifications, DetailsAssessments = details.assessments, TargetType = tostring(target.type), TargetId = tostring(target.id), TargetClientType = tostring(target.clientType), TargetEmailAddress = tostring(target.emailAddress), TargetPlatform = tostring(target.platform), TargetOsVersion = tostring(target.osVersion), TargetManufacturer = tostring(target.manufacturer),TargetModel = tostring(target.model),TargetParentDeviceId = tostring(target.parentDeviceId),TargetProfileType = tostring(target.profileType), TimeGenerated = todatetime(eventTime) | project Id, ChangeType, EventTime, Type, ActorType, ActorId, DetailsType, DetailsId, DetailsAction, DetailsSeverity, DetailsClassifications, DetailsAssessments, TargetType, TargetId, TargetClientType, TargetEmailAddress, TargetPlatform, TargetOsVersion, TargetManufacturer, TargetModel, TargetParentDeviceId, TargetProfileType, TimeGenerated",
-                    "outputStream": "Custom-LookEventsV2_CL"
+                    "transformKql": "source | extend TimeGenerated = now()",
+                    "outputStream": "Custom-LookoutMtdV2_CL"
                   }
                 ]
+              }
+            },
+            {
+              "name": "LookoutMtdV2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "LookoutMtdV2_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "enterprise_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "created_time",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "change_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "device",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "target",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "actor",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
               }
             },
             {
@@ -405,28 +459,28 @@
       "kind": "Customizable",
       "properties": {
         "connectorUiConfig": {
-          "id": "Lookout_ConnectorDefinition",
-          "title": "Lookout Mobile Threat Detection Connector Old Endpoint",
+          "id": "LookoutStreaming_DataConnectorDefinition",
+          "title": "Lookout Mobile Threat Detection Connector",
           "publisher": "Microsoft",
           "descriptionMarkdown": "The [Lookout Mobile Threat Detection](https://lookout.com) data connector provides the capability to ingest events related to mobile security risks into Microsoft Sentinel through the Mobile Risk API. Refer to [API documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) for more information. This connector helps you examine potential security risks detected in mobile devices.",
-          "graphQueriesTableName": "LookEventsV2_CL",
+          "graphQueriesTableName": "LookoutMtdV2_CL",
           "graphQueries": [
             {
               "metricName": "Total events received",
               "legend": "Events",
-              "baseQuery": "LookEventsV2_CL"
+              "baseQuery": "LookoutMtdV2_CL"
             }
           ],
           "sampleQueries": [
             {
               "description": "Lookout Mobile Threat Detection Events - All Activities.",
-              "query": "LookEventsV2_CL\n | take 10"
+              "query": "LookoutMtdV2_CL\n | take 10"
             }
           ],
           "dataTypes": [
             {
-              "name": "LookEventsV2_CL",
-              "lastDataReceivedQuery": "LookEventsV2_CL\n | summarize Time = max(TimeGenerated)"
+              "name": "LookoutMtdV2_CL",
+              "lastDataReceivedQuery": "LookoutMtdV2_CL\n | summarize Time = max(TimeGenerated)"
             }
           ],
           "connectivityCriteria": [
@@ -532,7 +586,7 @@
       ],
       "properties": {
         "contentId": "[variables('_dataConnectorContentIdConnections1')]",
-        "displayName": "Lookout Mobile Threat Detection Connector Old Endpoint",
+        "displayName": "Lookout Mobile Threat Detection Connector",
         "contentKind": "ResourcesDataConnector",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -547,7 +601,7 @@
               "type": "securestring"
             },
             "connectorDefinitionName": {
-              "defaultValue": "Lookout Mobile Threat Detection Connector Old Endpoint",
+              "defaultValue": "Lookout Mobile Threat Detection Connector",
               "type": "securestring",
               "minLength": 1
             },
@@ -597,18 +651,18 @@
               }
             },
             {
-              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'LookoutOldEndpointPoller', parameters('guidValue'))]",
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'LookoutMtd_PollingConfig', parameters('guidValue'))]",
               "apiVersion": "2023-02-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
-              "kind": "RestApiPoller",
+              "kind": "SSE",
               "properties": {
-                "connectorDefinitionName": "Lookout_ConnectorDefinition",
-                "dataType": "LookEventsV2_CL",
+                "connectorDefinitionName": "LookoutStreaming_DataConnectorDefinition",
+                "dataType": "LookoutMtdV2_CL",
                 "dcrConfig": {
-                  "streamName": "Custom-LookEventsV2_CL",
                   "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
-                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-LookoutMtdV2_CL"
                 },
                 "auth": {
                   "type": "OAuth2",
@@ -624,19 +678,18 @@
                   "TokenEndpointQueryParameters": {}
                 },
                 "request": {
-                  "apiEndpoint": "https://api.lookout.com/events",
+                  "apiEndpoint": "https://api.lookout.com/mra/stream/v2/events",
                   "httpMethod": "GET",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-dd'T'HH:mm:ssXXX",
                   "rateLimitQps": 5,
                   "retryCount": 3,
+                  "logResponseContent": true,
+                  "startTimeAttributeName": "start_time",
                   "timeoutInSeconds": 60,
-                  "queryWindowInMin": 5,
-                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
                   "headers": {
-                    "Accept": "application/json",
+                    "Accept": "text/event-stream",
                     "User-Agent": "Scuba"
-                  },
-                  "queryParameters": {
-                    "eventType": "DEVICE,THREAT,AUDIT"
                   }
                 },
                 "response": {
@@ -644,13 +697,6 @@
                     "$.events"
                   ],
                   "format": "json"
-                },
-                "paging": {
-                  "pagingType": "PersistentToken",
-                  "nextPageTokenJsonPath": "$.streamPosition",
-                  "nextPageParaName": "streamPosition",
-                  "pageSize": 100,
-                  "pageSizeParameterName": "limit"
                 }
               }
             }
