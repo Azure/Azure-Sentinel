@@ -1,25 +1,22 @@
 id: ba4f7e56-a2f8-4a30-b848-200fdc7fc3a2
 name: Malicious Clicks allowed (click-through)
 description: |
-  Identifies users who clicked through malicious URLs despite Safe Links warnings.
-description-detailed: |
-  This query detects users who clicked through malicious URLs (phishing, malware, or spam) after Safe Links warnings, highlighting potential gaps in user awareness or policy enforcement. By default, results are limited to the top 10 users with the highest click-through counts to prioritize remediation; you can remove or adjust the limit to view all results.
-  Part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+  Identifies allowed click-through events on URLs categorized as malicious to help analysts track users who bypassed protection
+  Note: Time range is controlled by the portal's time picker; uncomment filters to focus on specific threat types
+  Based on Defender for Office 365 workbook: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
 requiredDataConnectors:
-- connectorId: MicrosoftThreatProtection
-  dataTypes:
-  - UrlClickEvents
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - UrlClickEvents
 tactics:
   - InitialAccess
 relevantTechniques:
   - T1566
 query: |
   UrlClickEvents
-  | where IsClickedThrough == true
-  | where ThreatTypes has_any ("Phish", "Malware", "Spam")
-  | summarize Count = count() by User = AccountUpn, ThreatType = tostring(ThreatTypes)
-  | sort by Count desc
-  | top 10 by Count  // Uncomment to visualize only the top 10; remove to see all results
-  //| render piechart // Uncomment to visualize user distribution
-  //| render columnchart // Uncomment to compare click-through rates
+  | where ActionType == "ClickAllowed"
+  // | where ThreatTypes has_any ("Malware", "Phish", "Spam")  // Uncomment to include only allowed clicks on URLs categorized as malicious
+  | summarize ClickCount = count(), (Timestamp, NetworkMessageId) = arg_max(Timestamp, NetworkMessageId) by AccountUpn, ThreatTypes
+  | sort by ClickCount desc
+  // | top 10 by ClickCount desc  // Uncomment or adjust N for summary/reporting use
 version: 1.0.0

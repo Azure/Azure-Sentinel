@@ -1,40 +1,36 @@
 id: 13260191-fb10-4a36-9ca1-2bbc0aaf77d0
 name: Malicious Emails with QR code Urls
 description: |
-  Identifies inbound emails containing QR code URLs associated with phishing, malware, or spam threats. This query detects inbound emails with QR code URLs linked to phishing, malware, or spam threats, helping security teams monitor QR-based attack vectors over time.
-  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+  Identifies delivered emails containing URLs extracted from QR codes that are categorized as malicious to help analysts track QR code-based threats
+  Note: Time range is controlled by the portal's time picker; adjust threat verdicts as needed for your context
+  Based on Defender for Office 365 QR code hunting blog: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/hunting-and-responding-to-qr-code-based-phishing-attacks-with-defender-for-offic/4074730
 requiredDataConnectors:
-- connectorId: MicrosoftThreatProtection
-  dataTypes:
-    - EmailEvents
-    - EmailUrlInfo
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - EmailEvents
+      - EmailUrlInfo
+      - UrlClickEvents
 tactics:
   - InitialAccess
 relevantTechniques:
   - T1566
 query: |
-  let TimeStart = startofday(ago(30d));
-  let TimeEnd = startofday(now());
-  let baseQuery = EmailEvents
-    | where Timestamp >= TimeStart and Timestamp <= TimeEnd
+  let DeliveredQRCodes = 
+    EmailEvents
     | where EmailDirection == "Inbound"
-    | join (
+    | where DeliveryAction == "Delivered"
+    | join kind=inner (
         EmailUrlInfo
         | where UrlLocation == "QRCode"
-    ) on NetworkMessageId;
-  let qrphishh = baseQuery
-    | where parse_json(DetectionMethods).Phish has "URL"
-    | make-series Count = count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
-    | extend Details = "Phish QR Detection";
-  let qrmalww = baseQuery
-    | where parse_json(DetectionMethods).Malware has "URL"
-    | make-series Count = count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
-    | extend Details = "Malware QR Detection";
-  let qrspamm = baseQuery
-    | where parse_json(DetectionMethods).Spam has "URL"
-    | make-series Count = count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
-    | extend Details = "Spam QR Detection";
-  union qrphishh, qrmalww, qrspamm
-  //| render timechart // Uncomment to display as a timechart
-  //| render columnchart // Uncomment to display as a column chart
+        | project Url, NetworkMessageId
+      ) on NetworkMessageId
+    | project NetworkMessageId, Url, SenderFromAddress, RecipientEmailAddress, Subject, Timestamp;
+  DeliveredQRCodes
+  | join kind=inner (
+      UrlClickEvents
+      | where ThreatTypes has_any ("Malware", "Phish", "Spam")
+      | project NetworkMessageId, Url, ThreatTypes
+    ) on NetworkMessageId, Url
+  | summarize EmailCount = count(), arg_max(Timestamp, SenderFromAddress, RecipientEmailAddress, Subject) by Url, ThreatTypes
+  | sort by EmailCount desc
 version: 1.0.0
