@@ -71,7 +71,7 @@ try {
     }
 
     # identify in active resource parameters
-    $resourceContent = $mainTemplateFileContent.resources | Where-Object { $_.type -eq 'Microsoft.OperationalInsights/workspaces/providers/contentTemplates' }
+    $resourceContent = $mainTemplateFileContent.resources | Where-Object { $_.type -eq 'Microsoft.OperationalInsights/workspaces/providers/contentTemplates' -and $_.properties.contentKind -eq "ResourcesDataConnector"  }
 
     if ($null -ne $resourceContent -and $resourceContent.Count -gt 0) {
       $resourceLevelInvalidFields = @();
@@ -80,7 +80,7 @@ try {
         foreach ($param in $parameters) {
             $type = $param.Value.type.ToLower()
 
-            if ($type -ne 'securestring' -and $type -ne 'object') {
+            if ($type -ne 'securestring' -and $type -ne 'object' -and $type -ne 'array') {
                 $resourceLevelInvalidFields += $param.Name
             }
         }
@@ -88,7 +88,7 @@ try {
 
       if ($resourceLevelInvalidFields.Count -gt 0) {
         $hasInvalidResourceParameterType = $true
-        Write-Host "Invalid resource level parameters field(s) type. Please update the 'type' value for below given list to 'securestring' or 'object'"
+        Write-Host "Invalid resource level parameters field(s) type. Please update the 'type' value for below given list to 'securestring', 'object' or 'array'."
         foreach ($item in $resourceLevelInvalidFields) {
           Write-Host "--> $item"
         }
