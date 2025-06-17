@@ -187,7 +187,7 @@ def create_dcr(schema,table,table_type):
     #suffic_num = str(random.randint(100,999))
     dcrname=table+"_DCR"+str(prnumber)
     request_object={ 
-            "location": "eastus", 			
+            "location": "eastus2euap", 			
             "properties": {
                 "streamDeclarations": {
                     "Custom-dcringest"+str(prnumber): {
@@ -307,12 +307,12 @@ def convert_data_type(schema_result, data_result):
 
 #main starting point of script
 
-workspace_id = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
-workspaceName = "ASIM-SchemaDataTester-GithubShared"
-resourceGroupName = "asim-schemadatatester-githubshared"
-subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
-dataCollectionEndpointname = "asim-schemadatatester-githubshared"
-endpoint_uri = "https://asim-schemadatatester-githubshared-uetl.eastus-1.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
+workspace_id = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
+workspaceName = "ASIM-SchemaDataTester-GithubShared-Canary"
+resourceGroupName = "asim-schemadatatester-githubshared-canary"
+subscriptionId = "419581d6-4853-49bd-83b6-d94bb8a77887"
+dataCollectionEndpointname = "ASIM-SchemaDataTester-GithubShared-Canary"
+endpoint_uri = "https://asim-schemadatatester-githubshared-canary-qa1f.eastus2euap-1.canary.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
 SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
 dcr_directory=[]
