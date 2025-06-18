@@ -20,6 +20,7 @@ API_TOKENS = configurations.get_api_tokens()
 XDR_HOST_URL = configurations.get_xdr_host_url()
 WB_LOG_TYPE = configurations.get_wb_log_type()
 RCA_TASK_LOG_TYPE = configurations.get_rca_task_log_type()
+IS_RCA_DISABLED = configurations.get_is_rca_disabled()
 
 logger = get_customized_json_logger()
 
@@ -88,6 +89,7 @@ def main(wbMsg: func.QueueMessage, rcaMsg: func.Out[typing.List[str]]) -> None:
         rca_raw_tasks = get_rca_task(
             token,
             workbench_id,
+            IS_RCA_DISABLED,
         )
 
         for task in rca_raw_tasks:

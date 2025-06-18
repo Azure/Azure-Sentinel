@@ -47,7 +47,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
   }
 
 function isPotentialConnectorJson(jsonFile: any) {
-  if(typeof jsonFile.id != "undefined" && typeof jsonFile.connectivityCriterias != "undefined")
+  if(typeof jsonFile.id != "undefined" && typeof jsonFile.connectivityCriterias != "undefined" && jsonFile.dataTypes.length > 0)
   {
     return true;
   }
