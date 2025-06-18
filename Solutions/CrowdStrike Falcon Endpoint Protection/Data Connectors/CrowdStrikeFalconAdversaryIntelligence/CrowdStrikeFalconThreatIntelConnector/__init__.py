@@ -220,6 +220,7 @@ def send_to_threat_intel(stix_batch):
         "Indicators": stix_batch,
     }
     response = requests.post(uri, data=json.dumps(body), headers=headers)
+    logging.info('{} Response from method -send_to_threat_intel :'.format(response))
 
     if response.status_code not in (200, 201):
         logging.error(f"Error Code: {response.status_code}")
@@ -239,12 +240,14 @@ def main(mytimer: func.TimerRequest):
     next_execution = datetime.now(timezone.utc) + timedelta(minutes=10)
 
     for ioc_batch, marker in fetch_crowdstrike_iocs():
+        logging.info('{} ioc_batch:'.format(ioc_batch))
         seconds_to_next_execution = next_execution - datetime.now(timezone.utc)
         logging.info(seconds_to_next_execution)
         if (
             seconds_to_next_execution.seconds > 60
         ):  # if next execution is 60 seconds away
             stix_batch = convert_to_stix(ioc_batch)
+            logging.info('{} stix_batch:'.format(stix_batch))
             send_to_threat_intel(stix_batch)
             CrowdStrike_State.post(marker)
             INDICATOR_COUNT += len(stix_batch)
