@@ -98,7 +98,11 @@ function GenerateSummaryRules($solutionName, $file, $rawData, $contentResourceDe
     }
 
     if ($summaryRuleMetadataDependencies.criteria.Count -eq 0) {
-        $summaryRuleMetadataDependencies.PSObject.Properties.Remove('criteria')
+        $summaryRuleMetadataDependencies.criteria += "[variables('TemplateEmptyArray')]"
+
+        if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+        }
     }
 
     $metadataDescription = "Description about $displayName - metadata"
