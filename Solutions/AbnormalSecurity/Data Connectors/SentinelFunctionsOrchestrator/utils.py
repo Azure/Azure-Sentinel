@@ -15,9 +15,21 @@ TIME_FORMAT_WITHMS = "%Y-%m-%dT%H:%M:%S.%fZ"
 def try_str_to_datetime(time: str) -> datetime:
     try:
         return datetime.strptime(time, TIME_FORMAT)
-    except Exception as _:
+    except Exception:
         pass
-    return datetime.strptime((time[:26] + 'Z') if len(time) > 26 else time, TIME_FORMAT_WITHMS)
+
+    # Try with milliseconds
+    try:
+        return datetime.strptime((time[:26] + 'Z') if len(time) > 26 else time, TIME_FORMAT_WITHMS)
+    except Exception:
+        pass
+        
+    # Try fromisoformat as a last resort
+    try:
+        return datetime.fromisoformat(time)
+    except Exception:
+        pass
+    raise ValueError(f"Could not parse datetime string: {time}")
 
 
 class TimeRange(BaseModel):
@@ -134,7 +146,7 @@ def compute_intervals(ctx: Context) -> List[OptionalEndTimeRange]:
 
 
 def should_use_v2_logic() -> bool:
-    return bool(os.environ.get("ABNORMAL_ENABLE_V2_LOGIC"))
+    return not bool(os.environ.get("ABNORMAL_DISABLE_V2_LOGIC"))
 
 
 def get_context(stored_date_time: str) -> Context:
