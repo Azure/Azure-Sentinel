@@ -1,0 +1,375 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "SpecterOps - security@specterops.io",
+    "comments": "Solution template for BloodHound"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "security@specterops.io",
+    "_email": "[variables('email')]",
+    "_solutionName": "BloodHound",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azurehoundenterprise.bloodhoundenterprise-azuresentinel",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "bloodhound",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "bloodhound",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "BloodHound data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Bloodhound",
+                  "publisher": "SpecterOps",
+                  "descriptionMarkdown": "The solution is designed to test solution package creation process.",
+                  "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Audit Logs",
+                      "legend": "Bloodhound Audit Logs",
+                      "baseQuery": "BloodHoundAuditLogs_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Bloodhound Audit Logs",
+                      "query": "BloodHoundAuditLogs_CL | top 10 by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "BloodHoundAuditLogs_CL",
+                      "lastDataReceivedQuery": "BloodHoundAuditLogs_CL"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "BloodHoundAuditLogs_CL"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workbooks",
+                        "permissionsDisplayText": "read and write permissions on the workbook are required.",
+                        "providerDisplayName": "Workbook",
+                        "scope": "Workbook",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Azure Functions permissions",
+                        "description": "Read and write permissions to Azure Functions to create and manage Function Apps are required. The Azure Function will handle data collection and processing from Bloodhound sources. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Bloodhound Data Access Permissions",
+                        "description": "Permissions to access Bloodhound's underlying data (e.g., Neo4j database credentials or read access to export directories) are required for the Azure Function to collect data. This typically involves configuring credentials within the Function App."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to Bloodhound (or its data sources) to pull logs into Microsoft Sentinel. This might result in additional data ingestion costs from Azure Functions. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workbook and Bloodhound access key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": "**STEP 1 - Configure Bloodhound for Data Export/Audit Logging (Hypothetical)**\n\nDepending on your Bloodhound deployment, you may need to configure it to allow external access to its audit logs or analysis results. This could involve:\n-   Enabling application-level audit logging within Bloodhound (if available).\n-   Configuring a mechanism to periodically export critical analysis results (e.g., dangerous attack paths) from the Neo4j database to a format consumable by Azure Functions (e.g., JSON, CSV).\n-   Ensuring network connectivity from your Azure Function to the Bloodhound instance or its data sources."
+                    },
+                    {
+                      "description": "**STEP 2 - Deploy the Azure Function using DeployToAzure button to create the table, dcr and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Bloodhound connector, a custom table needs to be created."
+                    },
+                    {
+                      "description": "This method provides an automated deployment of the Bloodhound connector using an ARM Template with Azure Functions.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://example.com/sentinel-bloodhound-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workbook Name**, **Bloodhound Data Source Connection String/Details**, and **Time Interval**.\n - The **Time Interval** specifies how frequently the Azure Function will attempt to pull data from Bloodhound (e.g., `PT5M` for 5 minutes). Adjust this based on your needs and the nature of Bloodhound's data updates.\n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy the Azure Function and associated resources.",
+                      "title": "Option 1 - Azure Resource Manager (ARM) Template with Azure Functions"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "BloodHound",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SpecterOps",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "SpecterOps",
+                  "email": "support@specterops.io",
+                  "tier": "Partner",
+                  "link": "https://bloodhoundenterprise.io/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Bloodhound",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "BloodHound",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "SpecterOps",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "SpecterOps",
+          "email": "support@specterops.io",
+          "tier": "Partner",
+          "link": "https://bloodhoundenterprise.io/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Bloodhound",
+          "publisher": "SpecterOps",
+          "descriptionMarkdown": "The solution is designed to test solution package creation process.",
+          "graphQueries": [
+            {
+              "metricName": "Total Audit Logs",
+              "legend": "Bloodhound Audit Logs",
+              "baseQuery": "BloodHoundAuditLogs_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "BloodHoundAuditLogs_CL",
+              "lastDataReceivedQuery": "BloodHoundAuditLogs_CL"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "BloodHoundAuditLogs_CL"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Bloodhound Audit Logs",
+              "query": "BloodHoundAuditLogs_CL | top 10 by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workbooks",
+                "permissionsDisplayText": "read and write permissions on the workbook are required.",
+                "providerDisplayName": "Workbook",
+                "scope": "Workbook",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Azure Functions permissions",
+                "description": "Read and write permissions to Azure Functions to create and manage Function Apps are required. The Azure Function will handle data collection and processing from Bloodhound sources. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Bloodhound Data Access Permissions",
+                "description": "Permissions to access Bloodhound's underlying data (e.g., Neo4j database credentials or read access to export directories) are required for the Azure Function to collect data. This typically involves configuring credentials within the Function App."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to Bloodhound (or its data sources) to pull logs into Microsoft Sentinel. This might result in additional data ingestion costs from Azure Functions. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workbook and Bloodhound access key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": "**STEP 1 - Configure Bloodhound for Data Export/Audit Logging (Hypothetical)**\n\nDepending on your Bloodhound deployment, you may need to configure it to allow external access to its audit logs or analysis results. This could involve:\n-   Enabling application-level audit logging within Bloodhound (if available).\n-   Configuring a mechanism to periodically export critical analysis results (e.g., dangerous attack paths) from the Neo4j database to a format consumable by Azure Functions (e.g., JSON, CSV).\n-   Ensuring network connectivity from your Azure Function to the Bloodhound instance or its data sources."
+            },
+            {
+              "description": "**STEP 2 - Deploy the Azure Function using DeployToAzure button to create the table, dcr and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Bloodhound connector, a custom table needs to be created."
+            },
+            {
+              "description": "This method provides an automated deployment of the Bloodhound connector using an ARM Template with Azure Functions.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://example.com/sentinel-bloodhound-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workbook Name**, **Bloodhound Data Source Connection String/Details**, and **Time Interval**.\n - The **Time Interval** specifies how frequently the Azure Function will attempt to pull data from Bloodhound (e.g., `PT5M` for 5 minutes). Adjust this based on your needs and the nature of Bloodhound's data updates.\n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy the Azure Function and associated resources.",
+              "title": "Option 1 - Azure Resource Manager (ARM) Template with Azure Functions"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "BloodHound",
+        "publisherDisplayName": "SpecterOps",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/BloodHound/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Bloodhound solution for Microsoft Sentinel enables you to ingest audit logs related to Bloodhound application usage (e.g., user logins, data ingestions, query executions) and potentially critical attack path summaries directly into Microsoft Sentinel. This allows you to monitor the operational security of your Bloodhound deployments and integrate its key findings with other security insights in your environment. The connector uses Azure Functions to pull logs from Bloodhound's data sources.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://specterops.io/wp-content/uploads/sites/3/2022/03/favicon-light.png?w=156\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "BloodHound",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "SpecterOps",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "SpecterOps",
+          "email": "support@specterops.io",
+          "tier": "Partner",
+          "link": "https://bloodhoundenterprise.io/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-06-16",
+        "lastPublishDate": "2025-06-16",
+        "providers": [
+          "SpecterOps"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
