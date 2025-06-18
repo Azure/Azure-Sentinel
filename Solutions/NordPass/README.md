@@ -71,4 +71,4 @@ Once you’ve deployed the solution, follow these steps to finalize the integrat
 ## Support & Troubleshooting
 If you encounter issues during deployment or need assistance, please use the resources below:
 - **NordPass Support:** [Contact Support](https://support.nordpass.com/hc/en-us/requests/new)
-- **Microsoft Azure Documentation:** [Azure Sentinel Documentation](https://docs.microsoft.com/en-us/azure/sentinel/)
+- **Microsoft Azure Documentation:** [Azure Sentinel Documentation](https://docs.microsoft.com/azure/sentinel/)
