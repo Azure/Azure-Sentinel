@@ -60,7 +60,11 @@ class WithSecureClient:
             return res_body["access_token"]
         else:
             log.info("Response=" + response.text)
-            log.info("Transaction-id=" + response.headers.get("X-Transaction"))
+            transaction_id = response.headers.get("X-Transaction")
+            if transaction_id is None:
+                log.info("Transaction-id not found in the response headers")
+            else:
+                log.info("Transaction-id=" + transaction_id)
             raise Exception("Authentication failed")
 
     def _get_events_after(self, auth_token, from_date, org_id=None):
