@@ -6,7 +6,7 @@ import os
 import time
 
 from ..exports_store import ExportsTableStore, ExportsTableNames
-from ..tenable_helper import TenableIO, TenableStatus, TenableExportType, update_checkpoint_for_last_chunk
+from ..tenable_helper import TenableIO, TenableStatus, TenableExportType
 from tenable.errors import APIError
 
 
@@ -32,7 +32,7 @@ def add_chunks_to_table(exportJobDetails, execution_start_time):
     exportJobId = exportJobDetails.get("exportJobId", "")
     start_time = exportJobDetails.get("start_time", 0)
     job_status = exportJobDetails.get("status", "")
-
+    last_chunk_id = None
     if len(chunks) > 0:
         vuln_table = ExportsTableStore(connection_string, vuln_export_table_name)
         update_checkpoint = False
@@ -43,7 +43,6 @@ def add_chunks_to_table(exportJobDetails, execution_start_time):
             logging.info(
                 f"{logs_starts_with} {function_name}: Function started: {time.time()-execution_start_time} seconds ago"
             )
-            update_checkpoint = update_checkpoint_for_last_chunk(chunk, chunks, job_status)
             chunk_dtls = vuln_table.get(exportJobId, str(chunk))
             if chunk_dtls:
                 current_chunk_status = chunk_dtls["jobStatus"]
@@ -52,6 +51,8 @@ def add_chunks_to_table(exportJobDetails, execution_start_time):
                     f" -- {exportJobId} {chunk}. Current status: {current_chunk_status}"
                 )
                 continue
+            if job_status.upper() == "FINISHED":
+                last_chunk_id = str(chunk)
             logging.info(f"{logs_starts_with} {function_name}: Chunk added to the table -- {exportJobId} {chunk}")
 
             vuln_table.merge(
@@ -63,6 +64,14 @@ def add_chunks_to_table(exportJobDetails, execution_start_time):
                     "updateCheckpoint": update_checkpoint,
                     "jobType": TenableExportType.vuln.value,
                     "ingestTimestamp": time.time(),
+                },
+            )
+        if last_chunk_id:
+            vuln_table.merge(
+                exportJobId,
+                last_chunk_id,
+                {
+                    "updateCheckpoint": True,
                 },
             )
     else:

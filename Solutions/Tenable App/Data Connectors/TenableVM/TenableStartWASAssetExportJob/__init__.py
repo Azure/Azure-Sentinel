@@ -34,7 +34,7 @@ def main(timestamp: int) -> str:
         f"{logs_starts_with} {function_name}: Requesting a new wAS Asset Export Job from Tenable for timestamp={timestamp}"
     )
     try:
-        job_id = tio.exports.assets_v2(updated_at=timestamp, chunk_size=1000, use_iterator=False, types=["webapp"])
+        job_id = tio.exports.assets_v2(updated_at=timestamp, chunk_size=100, use_iterator=False, types=["webapp"])
     except APIError as e:
         logging.warning(f"{logs_starts_with} {function_name}: Failure to create a new WAS asset export job.")
         logging.error(

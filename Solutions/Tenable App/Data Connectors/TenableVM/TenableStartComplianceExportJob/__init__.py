@@ -39,11 +39,11 @@ def main(timestamp: int) -> str:
     try:
         if timestamp == 0:
             logging.info(f"{logs_starts_with} {function_name}: Timestamp is 0. Fetching all compliance details")
-            job_id = tio.exports.compliance(use_iterator=False, num_findings=500, state=compliance_state)
+            job_id = tio.exports.compliance(use_iterator=False, num_findings=50, state=compliance_state)
         else:
             logging.info(f"{logs_starts_with} {function_name}: Fetching compliance details for timestamp: {timestamp}")
             job_id = tio.exports.compliance(
-                use_iterator=False, num_findings=500, indexed_at=timestamp, state=compliance_state
+                use_iterator=False, num_findings=50, indexed_at=timestamp, state=compliance_state
             )
     except APIError as e:
         logging.warning(

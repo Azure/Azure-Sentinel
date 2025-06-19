@@ -121,24 +121,3 @@ class TenableChunkPartitioner:
         logging.info(f"{logs_starts_with} {function_name}: Created {len(output_sub_chunks)} output sub-chunks.")
 
         return output_sub_chunks
-
-
-def update_checkpoint_for_last_chunk(chunk, chunks, job_status):
-    """
-    Check for last chunk from list of chunks.
-
-    Args:
-        chunk (int): chunk id
-        chunks (list): List of chunk ids
-        job_status (str): status of the job
-
-    Returns:
-        bool: Returns True if last chunk is found, otherwise False
-    """
-    if chunk == chunks[-1] and job_status.upper() == "FINISHED":
-        logging.info(
-            f"{logs_starts_with} {function_name}: Last chunk and job finished, set update checkpoint flag to true."
-        )
-        return True
-    else:
-        return False

@@ -33,11 +33,11 @@ def main(timestamp: int) -> object:
     logging.info(
         f"{logs_starts_with} {function_name}: Requesting a new Asset Export Job from Tenable for timestamp={timestamp}"
     )
-    # limiting chunk size to contain 1000 assets details. For some bigger
+    # limiting chunk size to contain 100 assets details. For some bigger
     # containers, each chunk is reported to be some hundreds of MBs resulting
     # into azure function crash due to OOM errors.
     try:
-        job_id = tio.exports.assets(updated_at=timestamp, chunk_size=1000, use_iterator=False)
+        job_id = tio.exports.assets(updated_at=timestamp, chunk_size=100, use_iterator=False)
     except APIError as e:
         logging.warning(f"{logs_starts_with} {function_name}: Failure to create a new asset export job.")
         logging.error(

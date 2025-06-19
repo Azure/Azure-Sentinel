@@ -10,7 +10,6 @@ from ..tenable_helper import (
     TenableIO,
     TenableStatus,
     TenableExportType,
-    update_checkpoint_for_last_chunk,
 )
 from tenable.errors import APIError
 
@@ -36,7 +35,7 @@ def add_chunks_to_table(export_job_details, execution_start_time):
     export_job_id = export_job_details.get("exportJobId", "")
     start_time = export_job_details.get("start_time", 0)
     job_status = export_job_details.get("status", "")
-
+    last_chunk_id = None
     if len(chunks) > 0:
         compliance_table = ExportsTableStore(connection_string, compliance_table_name)
         update_checkpoint = False
@@ -49,9 +48,6 @@ def add_chunks_to_table(export_job_details, execution_start_time):
                     f"{logs_starts_with} {function_name}: 9:30 mins executed hence terminating the function."
                 )
                 return
-            update_checkpoint = update_checkpoint_for_last_chunk(
-                chunk, chunks, job_status
-            )
             chunk_dtls = compliance_table.get(export_job_id, str(chunk))
             if chunk_dtls:
                 logging.info(
@@ -59,7 +55,8 @@ def add_chunks_to_table(export_job_details, execution_start_time):
                     f" -- {export_job_id} {chunk}. Current status: {chunk_dtls["jobStatus"]}"
                 )
                 continue
-
+            if job_status.upper() == "FINISHED":
+                last_chunk_id = str(chunk)
             logging.info(
                 f"{logs_starts_with} {function_name}: Chunk added to the table -- {export_job_id} {chunk}"
             )
@@ -72,6 +69,14 @@ def add_chunks_to_table(export_job_details, execution_start_time):
                     "updateCheckpoint": update_checkpoint,
                     "jobType": TenableExportType.compliance.value,
                     "ingestTimestamp": time.time(),
+                },
+            )
+        if last_chunk_id:
+            compliance_table.merge(
+                export_job_id,
+                last_chunk_id,
+                {
+                    "updateCheckpoint": True,
                 },
             )
     else:
