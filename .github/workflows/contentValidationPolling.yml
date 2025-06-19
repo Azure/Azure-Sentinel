@@ -1,0 +1,106 @@
+
+name: PR Validation for Polling file
+
+on:
+  pull_request_target:
+    branches:
+      - doNotMerge-ContentValidationCCP
+    types: [opened, synchronize]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  CLIENT_ID: ${{ secrets.AZURE_CONTENT_VALIDATION_CLIENT_ID }}
+  API_BASE: https://sentintel-content-dev-fue4ashcg9fnfge9.canadacentral-01.azurewebsites.net/
+
+jobs:
+  pr-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - name: Get changed JSON files and contents to send to API endpoint
+        id: prepare_json_files
+        run: |
+          echo "Collecting changed JSON files:"
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          mapfile -t files < <(git diff --name-only "$BASE" "$HEAD" | grep '\.json$')
+          echo "Changed JSON files:"
+          for file in "${files[@]}"; do
+            echo "$file"
+          done
+
+          filtered_files=()
+          for file in "${files[@]}"; do
+            if [[ "$file" =~ [Pp][Oo][Ll][Ll] ]]; then
+              filtered_files+=("$file")
+            fi
+          done
+
+          echo "Polling JSON files:"
+          for file in "${filtered_files[@]}"; do
+            echo "$file"
+          done
+
+          if [ ${#filtered_files[@]} -eq 0 ]; then
+            echo "No JSON files with 'poll' in the name changed in this PR."
+            echo "JSON_PAYLOAD_PATH=empty" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          json_array="["
+          for file in "${filtered_files[@]}"; do
+            if [ -f "$file" ]; then
+              if jq -e . "$file" > /dev/null 2>&1; then
+                content=$(jq -c . < "$file")
+                json_array+="{"filename": "${file}", "content": $content},"
+              else
+                echo "❌ Invalid JSON structure in file: $file"
+                exit 1
+              fi
+            fi
+          done
+          json_array="${json_array%,}]"
+          echo "$json_array" > files_payload.json
+          echo "JSON_PAYLOAD_PATH=files_payload.json" >> $GITHUB_ENV
+
+      - name: Request OIDC token from GitHub
+        if: env.JSON_PAYLOAD_PATH != 'empty'
+        id: fetch_token
+        run: |
+          raw=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"     "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://${CLIENT_ID}")
+          token=$(echo "$raw" | jq -r '.value')
+          echo "TOKEN=$token" >> $GITHUB_ENV
+
+      - name: Send GET request to check if API is live
+        if: env.JSON_PAYLOAD_PATH != 'empty'
+        id: check_api
+        run: |
+          response=$(curl -s -H "Authorization: Bearer $TOKEN" "$API_BASE/")
+          echo "$response" | jq . || true
+      - name: Send POST request with JSON payload
+        if: env.JSON_PAYLOAD_PATH != 'empty' && env.SKIP_POST != 'true'
+        run: |
+          echo "Sending JSON payload to API"
+
+          response=$(curl -s -X POST "$API_BASE/" -H "Authorization: Bearer $TOKEN"  -H "Content-Type: application/json"   --data-binary "@$JSON_PAYLOAD_PATH")
+
+          result_status=$(echo "$response" | jq -r '.status // empty')
+          message=$(echo "$response" | jq -r '.message // "No message provided"')
+
+          if [ "$result_status" != "passed" ]; then
+            echo -e " ❌ Validation failed: $message"
+            exit 1
+          fi
+
+          echo "✅ $message"
