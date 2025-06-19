@@ -98,7 +98,10 @@ function GenerateSummaryRules($solutionName, $file, $rawData, $contentResourceDe
     }
 
     if ($summaryRuleMetadataDependencies.criteria.Count -eq 0) {
-        $summaryRuleMetadataDependencies.criteria += "[variables('TemplateEmptyArray')]"
+        # If no criteria, then point it to [variables('TemplateEmptyArray')] to avoid errors in ARM TTK for empty array i.e []
+        $summaryRuleMetadataDependencies.PSObject.Properties.Remove('criteria')
+        $summaryRuleMetadataDependencies | Add-Member -NotePropertyName "criteria" -NotePropertyValue ""
+        $summaryRuleMetadataDependencies.criteria = "[variables('TemplateEmptyArray')]"
 
         if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
