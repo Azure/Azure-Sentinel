@@ -30,7 +30,7 @@ The Illumio Saas Codeless Connector for Microsoft Sentinel enables seamless inte
 - Proceed by clicking **Next**, then **Submit** to initiate the stack creation.
 - Wait until the status of the first stack (OIDC Web Identity Provider) changes to **"CREATE_COMPLETE"**.
 - Once completed, repeat the same steps to deploy the second template **(AWS Resource Creation Template)** using CloudFormation.
-- Upon successful stack creation, make a note of the **SQS Queue URL** and **Role ARN** available in the CloudFormation stack outputs.
+- Upon successful stack creation, make a note of the **SQS Queue URL** and **Sentinel Role ARN** available in the CloudFormation stack outputs.
 
 <a name = "logs">
 
