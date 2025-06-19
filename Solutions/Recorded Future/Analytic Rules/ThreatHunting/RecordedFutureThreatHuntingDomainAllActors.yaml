@@ -6,7 +6,7 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligenceUploadIndicatorsAPI
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
 queryFrequency: 15m
 queryPeriod: 1d
 triggerOperator: gt
@@ -17,7 +17,7 @@ tactics:
 relevantTechniques:
   - T1566
   - T1568
-customDetails: 
+customDetails:
   ActorInformation: RecordedFuturePortalLink
 incidentConfiguration:
   createIncident: true
@@ -30,36 +30,37 @@ eventGroupingSettings:
   aggregationKind: AlertPerResult
 alertDetailsOverride:
   alertDisplayNameFormat: '{{Description}}'
-  alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{DomainName}} from the {{Type}} table.\n'
+  alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{Domain}} from the {{Type}} table.\n'
   alertDynamicProperties:
     - alertProperty: AlertLink
       value: RecordedFuturePortalLink
 query: |
   let ioc_lookBack = 1d;
-  // The source table (imDns) can be replaced by any infrastructure table containing domain/dns data.
-  // The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns  
-  imDns
+  // The source table (_Im_Dns) is an ASIM parser table, but can be replaced by any infrastructure table containing domain/dns data.
+  // The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns
+  _Im_Dns
   | where isnotempty(Domain)
   | extend lowerDomain=tolower(Domain)
   | join kind=inner (
-  ThreatIntelligenceIndicator
+  ThreatIntelIndicators
   // Only look at Domain IOCs
-  | where isnotempty(DomainName)
+  | where ObservableKey == 'domain-name:value'
+  | where isnotempty(ObservableValue)
   // Only look at Recorded Future Threat Hunt Indicators.
-  | where Description startswith "Recorded Future - Threat Hunt"
-  // Only work with the latest indicators  
+  | where Data.description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators
   | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  | extend lowerDomain=tolower(DomainName)
-  ) on lowerDomain 
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | extend lowerDomain=tolower(ObservableValue)
+  ) on lowerDomain
   // select column from the source table to match with Recorded Future $left.Domain
-  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
-  | project DomainName, Description, Type, TimeGenerated, RecordedFuturePortalLink
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']
+  | project Domain=ObservableValue, Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink
 entityMappings:
   - entityType: DNS
     fieldMappings:
       - identifier: DomainName
         columnName: Domain
-version: 1.0.4
+version: 1.1.0
 kind: Scheduled
