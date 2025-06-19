@@ -23,7 +23,18 @@ Deploy this playbook to run manually on alerts or attach it to an **analytics ru
 
 ## Post Deployment Instructions
 
-**1. Assign Microsoft Sentinel Responder Role to Playbook**
+**1. Authorize Connections**
+
+After deployment, authorize all connections:
+
+1. Click the Microsoft Sentinel connection resource
+2. Click edit API connection
+3. Click Authorize
+4. Sign in
+5. Click Save
+Repeat steps for all connections.
+
+**2. Assign Microsoft Sentinel Responder Role to Playbook**
 
 This playbook uses a managed identity, which must have the Microsoft Sentinel Responder role assigned in the Sentinel instances to enable adding comments.
 
@@ -35,7 +46,7 @@ This playbook uses a managed identity, which must have the Microsoft Sentinel Re
 6. In the Role drop-down list, select the role 'Microsoft Sentinel Responder'.
 7. Click Save to assign the role.
 
-**2. Only for Alert Triggered Playbooks - Assign the Log Analytics Reader Role to Playbook**
+**3. Only for Alert Triggered Playbooks - Assign the Log Analytics Reader Role to Playbook**
 
 Alert triggered playbooks need to read data from Log Analytics workspace, assign the Log Analytics Reader role to its managed identity:
 
@@ -46,7 +57,7 @@ Alert triggered playbooks need to read data from Log Analytics workspace, assign
 5. In the Members tab, select **Managed identity** and choose the playbook's managed identity.
 6. Click **Review + assign** to complete.
 
-**3. Attach the Alert Triggered Playbook to an Automation Rule**
+**4. Attach the Alert Triggered Playbook to an Automation Rule**
 
 To run the playbook automatically:
 
@@ -58,7 +69,7 @@ To run the playbook automatically:
 
 For more details, see the [official documentation on automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules).
 
-**4. Configure Analytics Rules to run Playbook**
+**5. Configure Analytics Rules to run Playbook**
 
 To ensure this playbook is triggered by alerts/incidents containing URL entities, configure your analytics rules as follows:
 
