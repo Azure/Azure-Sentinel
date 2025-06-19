@@ -3,7 +3,6 @@
 import logging
 import os
 from datetime import timedelta
-import time
 
 import azure.durable_functions as df
 
@@ -82,7 +81,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     """
     logging.info(f"{logs_starts_with} {function_name}: Started main orchestrator")
     logging.info(
-        f"{logs_starts_with} {function_name}: instance id: f{context.instance_id} at {context.current_utc_datetime}"
+        f"{logs_starts_with} {function_name}: instance id: {context.instance_id} at {context.current_utc_datetime}"
     )
     first_run = context.get_input()
     if first_run is not None and "isFirstRun" in first_run and first_run["isFirstRun"]:
@@ -113,7 +112,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     logging.info(
         f"{logs_starts_with} {function_name}: Checkpoint timestamp value for assets: {assets_timestamp}"
     )
-    asset_start_time = int(time.time())
+    asset_start_time = int(context.current_utc_datetime.timestamp())
     asset_export_job_id = yield context.call_activity(start_asset_job_name, assets_timestamp)
     logging.info(f"{logs_starts_with} {function_name}: Retrieved a new asset job ID")
     logging.info(
@@ -138,7 +137,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     logging.info(
         f"{logs_starts_with} {function_name}: Checkpoint timestamp value for vulns: {vulns_timestamp}"
     )
-    vulns_start_time = int(time.time())
+    vulns_start_time = int(context.current_utc_datetime.timestamp())
     vuln_export_job_id = yield context.call_activity(start_vuln_job_name, vulns_timestamp)
     logging.info(f"{logs_starts_with} {function_name}: Retrieved a new vuln job ID")
     logging.info(
@@ -161,7 +160,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         logging.info(
             f"{logs_starts_with} {function_name}: Checkpoint timestamp value for compliance: {compliance_timestamp}"
         )
-        compliance_start_time = int(time.time())
+        compliance_start_time = int(context.current_utc_datetime.timestamp())
         compliance_export_job_id = yield context.call_activity(start_compliance_job_name, compliance_timestamp)
         logging.info(f"{logs_starts_with} {function_name}: Retrieved a new compliance job ID")
         logging.info(
@@ -192,7 +191,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         logging.info(
             f"{logs_starts_with} {function_name}: Checkpoint timestamp value for was_asset: {was_asset_timestamp}"
         )
-        was_asset_start_time = int(time.time())
+        was_asset_start_time = int(context.current_utc_datetime.timestamp())
         was_asset_export_job_id = yield context.call_activity(start_was_asset_job_name, was_asset_timestamp)
         logging.info(f"{logs_starts_with} {function_name}: Retrieved a new WAS assets job ID")
         logging.info(
@@ -223,7 +222,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         logging.info(
             f"{logs_starts_with} {function_name}: Checkpoint timestamp value for was_vulns: {was_vulns_timestamp}"
         )
-        was_vulns_start_time = int(time.time())
+        was_vulns_start_time = int(context.current_utc_datetime.timestamp())
         was_vulns_export_job_id = yield context.call_activity(start_was_vuln_job_name, was_vulns_timestamp)
         logging.info(f"{logs_starts_with} {function_name}: Retrieved a new WAS Vulnerability job ID")
         logging.info(
@@ -232,10 +231,8 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         )
 
         logging.info(f"{logs_starts_with} {function_name}: Filter by time for WAS Vulnerability: {was_vulns_timestamp}")
-        stats_store.merge(
-            was_vulns_export_job_id,
-            "prime",
-            {
+        job_types.append("was_vuln")
+        was_vuln_stats_data = {
                 "status": TenableStatus.processing.value,
                 "exportType": TenableExportType.was_vuln.value,
                 "failedChunks": "",
@@ -243,8 +240,8 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
                 "totalChunksCount": 0,
                 "jobTimestamp": was_vulns_timestamp,
                 "startedAt": context.current_utc_datetime.timestamp(),
-            },
-        )
+        }
+        update_stats_table(was_vulns_export_job_id, was_vuln_stats_data)
         logging.info(f"{logs_starts_with} {function_name}: Saved {was_vulns_export_job_id} to stats table.")
     else:
         logging.info(
@@ -337,8 +334,9 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     process_data(results, job_types)
 
     next_check = context.current_utc_datetime + timedelta(minutes=export_schedule_minutes)
+    logging.info(f"{logs_starts_with} {function_name}: Next check at time: {next_check}")
     yield context.create_timer(next_check)
-    context.continue_as_new(None)
+    yield context.continue_as_new(None)
 
 
 main = df.Orchestrator.create(orchestrator_function)

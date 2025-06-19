@@ -195,24 +195,40 @@ def update_chunk_count_for_job(chunk, jobs_with_finished_chunks, job_id):
         jobs_with_finished_chunks[job_id] += 1
 
 
-def main(sortedChunks: str):
+def update_checkpoint_for_last_chunk(update_checkpoint, start_time):
     """
-    Download and Ingest Chunks data into log analytics workspace in MS Sentinel.
-
-    This function takes sorted Chunks, Download it's data and ingest into log analytics workspace.
+    Update the checkpoint for the last chunk of Asset data.
 
     Args:
-        sortedChunks (str): A JSON string containing a sorted list of chunks.
+        update_checkpoint (bool): Whether to update the checkpoint.
+        start_time (int): The Unix timestamp of the start time of the execution.
+    """
+    if update_checkpoint:
+        logging.info(f"{logs_starts_with} {function_name}: Updating Assets checkpoint to value: {start_time}")
+        checkpoint_table = ExportsTableStore(connection_string, checkpoint_table_name)
+        checkpoint_table.merge("assets", "timestamp", {"assets_timestamp": start_time})
+
+
+def download_and_process_chunks(sorted_chunks, execution_start_time, jobs_with_finished_chunks):
+    """
+    Download and process chunks of Asset data from Tenable.
+
+    This function takes a list of sorted chunks, and for each chunk it downloads the
+    associated data from Tenable and sends it to Azure Sentinel. The function also
+    updates a checkpoint table with the latest timestamp for the chunk.
+
+    Args:
+        sorted_chunks (list): A list of dictionaries where each dictionary contains the
+            PartitionKey, RowKey, startTime, and updateCheckpoint of a chunk.
+        execution_start_time (int): The start time of the function execution.
+        jobs_with_finished_chunks (dict): A dictionary where the keys are the job_id and
+            the values are the number of chunks finished for that job.
 
     Returns:
-        A JSON string containing the number of chunks processed per job id.
+        A tuple containing a boolean indicating whether the function was successful and
+        the updated jobs_with_finished_chunks dictionary.
     """
-    execution_start_time = time.time()
-    chunk_ids_data = json.loads(sortedChunks)
-    jobs_with_finished_chunks = {}
-    previous_job_id = None
-    status = True
-    for chunk in chunk_ids_data:
+    for chunk in sorted_chunks:
         if int(time.time()) >= execution_start_time + MAX_EXECUTION_TIME:
             logging.info(f"{logs_starts_with} {function_name}: 9:30 mins executed hence terminating the function.")
             break
@@ -226,11 +242,9 @@ def main(sortedChunks: str):
                 f"{logs_starts_with} {function_name}: Failure to retrieve asset data from Tenable."
                 " Returning to orchestrator."
             )
-            return status, json.dumps(jobs_with_finished_chunks)
-        if update_checkpoint:
-            logging.info(f"{logs_starts_with} {function_name}: Updating Assets checkpoint to value: {start_time}")
-            checkpoint_table = ExportsTableStore(connection_string, checkpoint_table_name)
-            checkpoint_table.merge("assets", "timestamp", {"assets_timestamp": start_time})
+            return status, jobs_with_finished_chunks
+
+        update_checkpoint_for_last_chunk(update_checkpoint, start_time)
         if chunk_data is None:
             logging.info(
                 f"{logs_starts_with} {function_name}: Not able to download data for the chunk : {chunk_id} Continuing to next chunk."
@@ -244,15 +258,51 @@ def main(sortedChunks: str):
             assets_table.update_if_found(job_id, str(chunk_id), {"jobStatus": TenableStatus.finished.value})
             continue
         update_count = send_chunk_details_to_sentinel(job_id, chunk_id, chunk_data, execution_start_time)
-        if previous_job_id is not None and job_id != previous_job_id:
-            logging.info(
-                f"{logs_starts_with} {function_name}: Completed downloading and processing of "
-                f"{jobs_with_finished_chunks[previous_job_id]} chunks for job id: {previous_job_id}"
-            )
-            previous_job_id = job_id
         if not update_count:
             continue
         update_chunk_count_for_job(chunk, jobs_with_finished_chunks, job_id)
+    return status, jobs_with_finished_chunks
+
+
+def main(name: str):
+    """
+    Download and Ingest Chunks data into log analytics workspace in MS Sentinel.
+
+    This function takes sorted Chunks, Download it's data and ingest into log analytics workspace.
+
+    Args:
+        name (str): Default parameter added.
+
+    Returns:
+        A JSON string containing the number of chunks processed per job id.
+    """
+    execution_start_time = time.time()
+    jobs_with_finished_chunks = {}
+    status = True
+    queued_chunks_list = []
+    while True:
+        if int(time.time()) >= execution_start_time + MAX_EXECUTION_TIME:
+            logging.info(f"{logs_starts_with} {function_name}: 9:30 mins executed hence terminating the function.")
+            break
+
+        queued_chunks = assets_table.query_for_all_queued_chunks()
+        queued_chunks_list = list(queued_chunks)
+        logging.info(f"{logs_starts_with} {function_name}: Number of queued chunks: {len(queued_chunks_list)}")
+        if len(queued_chunks_list) == 0:
+            logging.info(
+                f"{logs_starts_with} {function_name}: No more chunks found to process. Returning back to orchestrator..."
+            )
+            return status, json.dumps(jobs_with_finished_chunks)
+
+        sorted_chunks = sorted(queued_chunks_list, key=lambda e: e["ingestTimestamp"])
+        status, jobs_with_finished_chunks = download_and_process_chunks(sorted_chunks, execution_start_time, jobs_with_finished_chunks)
+        if not status:
+            logging.info(
+                f"{logs_starts_with} {function_name}: Failure to retrieve asset data from Tenable."
+                " Returning to orchestrator."
+            )
+            return status, json.dumps(jobs_with_finished_chunks)
+
     logging.info(
         f"{logs_starts_with} {function_name}: Completed downloading and processing of"
         f" chunks available in {assets_table_name} table."

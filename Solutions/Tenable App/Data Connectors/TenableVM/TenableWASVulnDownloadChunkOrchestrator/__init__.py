@@ -10,32 +10,15 @@ from datetime import timedelta
 from ..exports_store import (
     ExportsTableStore,
     ExportsTableNames,
-    list_tables_in_storage_account,
 )
 
 connection_string = os.environ["AzureWebJobsStorage"]
 was_vuln_table_name = ExportsTableNames.TenableWASVulnExportTable.value
 was_vuln_table = ExportsTableStore(connection_string, was_vuln_table_name)
 download_chunk_schedule_minutes = 1
-retry_interval = 5
-
 logs_starts_with = "TenableVM"
 function_name = "TenableWASVulnDownloadChunkOrchestrator"
 was_vuln_download_and_process_chunk_activity_name = "TenableWASVulnDownloadAndProcessChunks"
-
-
-def check_table_exist():
-    """Check if the WAS Vuln table exists in the storage account.
-
-    Returns:
-        True if the table exists, False otherwise.
-    """
-    tables = list_tables_in_storage_account(connection_string)
-    for table in tables:
-        if table.name == was_vuln_table_name:
-            logging.info(f"{logs_starts_with} {function_name}: {was_vuln_table_name} table exists.")
-            return True
-    return False
 
 
 def orchestrator_function(context: df.DurableOrchestrationContext):
@@ -59,40 +42,14 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         f"{logs_starts_with} {function_name}: instance id: {context.instance_id} at {context.current_utc_datetime}"
     )
     jobs_with_finished_chunks = {}
-    flag = check_table_exist()
-    global download_chunk_schedule_minutes
-    if not flag:
-        logging.info(
-            f"{logs_starts_with} {function_name}:{was_vuln_table_name} table is not created."
-            " waiting for next execution."
+
+    download_chunk_schedule_minutes = 1
+    status, jobs_with_finished_chunks = yield context.call_activity(
+            was_vuln_download_and_process_chunk_activity_name
         )
-        next_check = context.current_utc_datetime + timedelta(minutes=download_chunk_schedule_minutes)
-        yield context.create_timer(next_check)
-        context.continue_as_new(None)
-    while True:
-        download_chunk_schedule_minutes = 1
-        queued_chunks = was_vuln_table.query_for_all_queued_chunks()
-        queued_chunks_list = list(queued_chunks)
-        logging.info(f"{logs_starts_with} {function_name}: Number of queued chunks: {len(queued_chunks_list)}")
-        if len(queued_chunks_list) == 0:
-            logging.info(
-                f"{logs_starts_with} {function_name}: No more chunks found to process. Going to sleep for 1 minute..."
-            )
-            break
-        sorted_chunks = sorted(queued_chunks_list, key=lambda e: e["ingestTimestamp"])
-
-        str_activity_data = json.dumps(sorted_chunks)
-
-        status, jobs_with_finished_chunks = yield context.call_activity(
-            was_vuln_download_and_process_chunk_activity_name, str_activity_data
-        )
-        if not status:
-            download_chunk_schedule_minutes = retry_interval
-            logging.error(
-                f"{logs_starts_with} {function_name}: Activity failed with status code "
-                f"401 or 403. Sleeping for {download_chunk_schedule_minutes} minutes...")
-            break
-
+    logging.info(f"{logs_starts_with} {function_name}: Activity status: {status}")
+    logging.info(f"{logs_starts_with} {function_name}: Jobs with finished chunks: {jobs_with_finished_chunks}")
+    if jobs_with_finished_chunks:
         try:
             jobs_with_finished_chunks = json.loads(jobs_with_finished_chunks)
         except json.JSONDecodeError as json_err:
@@ -101,10 +58,15 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
             )
             raise Exception(json_err)
         logging.info(f"{logs_starts_with} {function_name}: Number of finished chunks by job id: {jobs_with_finished_chunks}")
+    if not status:
+        logging.error(
+            f"{logs_starts_with} {function_name}: Activity failed with status code "
+            f"401 or 403. Sleeping for {download_chunk_schedule_minutes} minutes...")
 
     next_check = context.current_utc_datetime + timedelta(minutes=download_chunk_schedule_minutes)
+    logging.info(f"{logs_starts_with} {function_name}: Will check next at time: {next_check}")
     yield context.create_timer(next_check)
-    context.continue_as_new(None)
+    yield context.continue_as_new(None)
 
 
 main = df.Orchestrator.create(orchestrator_function)

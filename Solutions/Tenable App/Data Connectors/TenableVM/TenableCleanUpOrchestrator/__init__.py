@@ -30,7 +30,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
 
     next_check = context.current_utc_datetime + timedelta(minutes=cleanup_schedule_minutes)
     yield context.create_timer(next_check)
-    context.continue_as_new(None)
+    yield context.continue_as_new(None)
 
 
 main = df.Orchestrator.create(orchestrator_function)

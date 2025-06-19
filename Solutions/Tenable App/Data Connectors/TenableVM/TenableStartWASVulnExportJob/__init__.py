@@ -48,7 +48,7 @@ def main(timestamp: int) -> str:
         try:
             job_id = tio.exports.was(
                 use_iterator=False,
-                num_assets=500,
+                num_assets=50,
                 indexed_at=timestamp,
                 severity=SEVERITIES[SEVERITIES.index(severity.upper()):],
                 state=["OPEN", "REOPENED", "FIXED"],
@@ -61,9 +61,8 @@ def main(timestamp: int) -> str:
                     e.response}"
             )
             raise Exception(
-                f"{logs_starts_with} {function_name}: Creating an WAS vuln export job from Tenable failed with error code {
-                    e.code}, reason: {
-                    e.response}"
+                f"{logs_starts_with} {function_name}: Creating an WAS vuln export job from Tenable failed with error code"
+                f"{e.code}, reason: {e.response}"
             )
     else:
         logging.warning(
@@ -77,7 +76,7 @@ def main(timestamp: int) -> str:
         try:
             job_id = tio.exports.was(
                 use_iterator=False,
-                num_assets=500,
+                num_assets=50,
                 indexed_at=timestamp,
                 severity=SEVERITIES,
                 state=["OPEN", "REOPENED", "FIXED"],

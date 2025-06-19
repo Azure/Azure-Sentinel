@@ -46,7 +46,7 @@ def main(timestamp: int) -> object:
         try:
             job_id = tio.exports.vulns(
                 last_found=timestamp,
-                num_assets=500,
+                num_assets=50,
                 severity=SEVERITIES,
                 use_iterator=False,
                 state=["FIXED", "OPEN", "REOPENED"],
@@ -75,7 +75,7 @@ def main(timestamp: int) -> object:
         try:
             job_id = tio.exports.vulns(
                 last_found=timestamp,
-                num_assets=500,
+                num_assets=50,
                 severity=SEVERITIES,
                 use_iterator=False,
                 state=["FIXED", "OPEN", "REOPENED"],
