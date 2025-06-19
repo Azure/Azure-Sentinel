@@ -1,5 +1,5 @@
 
-name: PR Validation for Polling files
+name: PR Validation for Polling file
 
 on:
   pull_request_target:
@@ -63,7 +63,7 @@ jobs:
             if [ -f "$file" ]; then
               if jq -e . "$file" > /dev/null 2>&1; then
                 content=$(jq -c . < "$file")
-                json_array+="{"filename": "${file}", "content": $content},"
+                json_array+="{\"filename\": \"${file}\", \"content\": $content},"
               else
                 echo "❌ Invalid JSON structure in file: $file"
                 exit 1
@@ -71,11 +71,15 @@ jobs:
             fi
           done
           json_array="${json_array%,}]"
+
+          # 🔍 Debug echo
+          echo "Constructed JSON array: $json_array"
+
           echo "$json_array" > files_payload.json
           echo "JSON_PAYLOAD_PATH=files_payload.json" >> $GITHUB_ENV
 
       - name: Request OIDC token from GitHub
-        if: env.JSON_PAYLOAD_PATH != 'empty'
+        if: ${{ env.JSON_PAYLOAD_PATH != 'empty' }}
         id: fetch_token
         run: |
           raw=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"     "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://${CLIENT_ID}")
@@ -83,13 +87,14 @@ jobs:
           echo "TOKEN=$token" >> $GITHUB_ENV
 
       - name: Send GET request to check if API is live
-        if: env.JSON_PAYLOAD_PATH != 'empty'
+        if: ${{ env.JSON_PAYLOAD_PATH != 'empty' }}
         id: check_api
         run: |
           response=$(curl -s -H "Authorization: Bearer $TOKEN" "$API_BASE/")
           echo "$response" | jq . || true
+
       - name: Send POST request with JSON payload
-        if: env.JSON_PAYLOAD_PATH != 'empty' && env.SKIP_POST != 'true'
+        if: ${{ env.JSON_PAYLOAD_PATH != 'empty' }}
         run: |
           echo "Sending JSON payload to API"
 
