@@ -31,13 +31,12 @@ query: |
   let list_tlds = 
       ThreatIntelIndicators
       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-      | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+      | where IndicatorType == "domain-name"
       | extend DomainName = tolower(ObservableValue)
       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-      | where isnotempty(DomainName)
       | where TimeGenerated >= ago(ioc_lookBack)
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-      | where IsActive == true and ValidUntil > now()
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
       | extend DomainName = tolower(DomainName)
       | extend parts = split(DomainName, '.')
       | extend tld = parts[(array_length(parts)-1)]
@@ -47,13 +46,12 @@ query: |
       ThreatIntelIndicators
       // Filter to pick up only IOC's that contain the entities we want (in this case, DomainName)
       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-      | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+      | where IndicatorType == "domain-name"
       | extend DomainName = tolower(ObservableValue)
       | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-      | where isnotempty(DomainName)
       | where TimeGenerated >= ago(ioc_lookBack)
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-      | where IsActive == true and ValidUntil > now()
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
       | extend TI_DomainEntity = DomainName
       | extend IndicatorId = tostring(split(Id, "--")[2]);
   Domain_Indicators
@@ -104,5 +102,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: PA_Url
-version: 1.4.2
+version: 1.4.3
 kind: Scheduled

@@ -32,7 +32,6 @@ query: |
     | where TimeGenerated >= ago(dt_lookBack)
     | where ActionType !has "ConnectionFailed"
     | extend Domain = tostring(parse_url(tolower(RemoteUrl)).Host)
-    | extend TI_Domain = Domain
     | where isnotempty(Domain)
     | project-rename DeviceNetworkEvents_TimeGenerated = TimeGenerated;
   let DeviceNetworkEventDomains = DeviceNetworkEvents_
@@ -40,24 +39,21 @@ query: |
     | summarize make_list(Domain);
   ThreatIntelIndicators
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-  | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+  | where IndicatorType == "domain-name"
   | extend DomainName = tolower(ObservableValue)
-  | extend TI_DomainEntity = DomainName
-  | where isnotempty(DomainName)
   | where TimeGenerated >= ago(ioc_lookBack)
-  | extend TI_Domain = tolower(DomainName)
   | extend IndicatorId = tostring(split(Id, "--")[2])
-  | where TI_Domain in (DeviceNetworkEventDomains)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | where DomainName in (DeviceNetworkEventDomains)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   | extend Description = tostring(parse_json(Data).description)
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
-  | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type, TI_Domain
-  | join kind=innerunique (DeviceNetworkEvents_) on $left.TI_Domain == $right.Domain
+  | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
+  | join kind=innerunique (DeviceNetworkEvents_) on $left.DomainName == $right.Domain
   | where DeviceNetworkEvents_TimeGenerated < ValidUntil
-  | summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated, *) by IndicatorId, TI_Domain
-  | project DeviceNetworkEvents_TimeGenerated, IndicatorId, TI_Domain, Url = RemoteUrl, Confidence, Description, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, RemoteIP, RemotePort
+  | summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated, *) by IndicatorId
+  | project DeviceNetworkEvents_TimeGenerated, IndicatorId, Url = RemoteUrl, Confidence, Description, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, RemoteIP, RemotePort
   | extend Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])
   | extend timestamp = DeviceNetworkEvents_TimeGenerated, UserPrincipalName = InitiatingProcessAccountUpn
 entityMappings:
@@ -79,5 +75,5 @@ entityMappings:
     fieldMappings:
       - identifier: CommandLine
         columnName: InitiatingProcessCommandLine
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled
