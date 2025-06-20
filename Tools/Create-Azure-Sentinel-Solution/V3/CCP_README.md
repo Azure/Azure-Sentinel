@@ -46,19 +46,30 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
   - To generate multiple instances of a single ARM template resource, you can use a `comma separated` string in the `description` field, as shown below. This approach allows the packaging tool to automatically insert a `copy` object with the appropriate `name` and `count` properties. It also adds a `variable` named `commaSeparatedArray`, which uses the expression `[[split(parameters('<your parameter name here>'), ',')]]` to split the input string into an array.
 
     - The following is part of the Data connector definition:<br/>
-        <img src="./ccpimages/commaSeparatedTypes.png" alt="In data connector definition file" width="600" height="250"><br/>
+        <img src="./ccpimages/commaSeparatedTypes.png" alt="In data connector definition file" width="600" height="250"/><br/>
 
     - The following is part of the Data Connector poller:<br/>
 
-        <img src="./ccpimages/metricType.png" alt="In data connector poller file" width="600" height="110"><br/>
+        <img src="./ccpimages/metricType.png" alt="In data connector poller file" width="600" height="110"/><br/>
 
     - The following content is automatically updated by the packaging tool into the mainTemplate poller section. This helps showing separate record into gridview after connect of connector:<br/>
 
-        <img src="./ccpimages/metricTypeInMainTemplate.png" alt="In mainTemplate poller content metrictype" width="600" height="90"><br/>
+        <img src="./ccpimages/metricTypeInMainTemplate.png" alt="In mainTemplate poller content metrictype" width="600" height="90"/><br/>
 
     - The following content is automatically inserted by the packaging tool into the mainTemplate poller section:<br/>
 
-        <img src="./ccpimages/copyObject.png" alt="In mainTemplate poller content" width="600" height="90"><br/>
+        <img src="./ccpimages/copyObject.png" alt="In mainTemplate poller content" width="600" height="90"/><br/>
+
+  - If you have a `dropdown` field like below for which you want to dynamically use its respective data collection rule and table then follow below. This is applicable for `"kind": "AmazonWebServicesS3"` only.<br/>
+    - In `Data connector definition` file:<br/>
+
+      <img src="./ccpimages/dropdownOptions.png" alt="In data connector definition" width="400" height="400"/><br/>
+
+    - In `Data connector poller` file use any of the `streamName` as a default from your `data collection rule` file which will be replaced by packaging tool like below:<br/>
+        - In `data collection poller`, streamName should have a default value `"streamName": "Custom-CarbonBlackAlertsStream"`:<br/>
+
+        - In `mainTemplate` file:<br/>
+        <img src="./ccpimages/dropdownStreamName.png" alt="In data connector poller" width="600" height="250"/><br/>
 
   - InstructionSteps can be basic/oauth or of other types and keep rest of the key value pairs as is.
   - Keep rest all properties of the file as is.
