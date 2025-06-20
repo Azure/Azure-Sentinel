@@ -29,7 +29,6 @@ query: |
   let ioc_lookBack = 14d;  // Define the time range to look back for threat intelligence indicators (14 days)
   // Create a list of top-level domains (TLDs) from the threat feed for later validation
   let list_tlds = ThreatIntelligenceIndicator
-    
     | where TimeGenerated > ago(ioc_lookBack)
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
     | where Active and (ExpirationDateTime > now() or isempty(ExpirationDateTime))
@@ -46,12 +45,11 @@ query: |
     | where TimeGenerated >= ago(ioc_lookBack)
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
     | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
-    | extend TI_DomainEntity = DomainName
     | extend IndicatorId = tostring(split(Id, "--")[2])
     | extend Url = iff(ObservableKey == "url:value", ObservableValue, "");
   // Join the threat intelligence indicators with syslog data on matching domain entities
   Domain_Indicators
-  | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type, TI_DomainEntity
+  | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
     | join kind=innerunique (
       Syslog
       | where TimeGenerated > ago(dt_lookBack)
@@ -64,14 +62,14 @@ query: |
       // Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
       | where tld in~ (list_tlds)
       | extend Syslog_TimeGenerated = TimeGenerated
-    ) on $left.TI_DomainEntity==$right.domain
+    ) on $left.DomainName==$right.domain
     | where Syslog_TimeGenerated < ValidUntil
     // Retrieve the latest syslog timestamp for each indicator and domain combination
     | summarize Syslog_TimeGenerated = arg_max(Syslog_TimeGenerated, *) by IndicatorId, domain
     // Select the desired columns for the final result set
     | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
     | extend Description = tostring(parse_json(Data).description)
-    | project Syslog_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, domain, HostIP, Type, TI_DomainEntity, Url
+    | project Syslog_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, domain, HostIP, Type, DomainName, Url
     // Extract the hostname from the Computer field
     | extend HostName = tostring(split(Computer, '.', 0)[0])
     // Extract the DNS domain from the Computer field
