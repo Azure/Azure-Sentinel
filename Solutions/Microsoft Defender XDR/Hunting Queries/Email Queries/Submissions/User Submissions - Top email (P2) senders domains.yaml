@@ -1,0 +1,32 @@
+id: 385aca1d-2135-40c6-af8e-030c9e086cf5
+name: User Email Submissions (FN) - Top Inbound P2 Senders domains
+description: |
+  This query visualises top sender domains of inbound emails submitted as false negatives by users.
+description-detailed: |
+  This query visualises top sender domains of inbound emails submitted as false negatives by users.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let TotalInboundbySender = EmailEvents
+  | where EmailDirection =="Inbound"
+  | summarize count() by SenderFromDomain;
+  CloudAppEvents 
+  | where ActionType == "UserSubmission" 
+  | extend SubmissionType = tostring((parse_json(RawEventData)).SubmissionType),SubmissionContentType=tostring((parse_json(RawEventData)).SubmissionContentType),RecipientObjectId=AccountObjectId,NetworkMessageId=tostring((parse_json(RawEventData).ObjectId))
+  | where SubmissionContentType == "Mail" and SubmissionType in ("1","0")
+  | join EmailEvents on NetworkMessageId, RecipientObjectId
+  | where EmailDirection == "Inbound"
+  | summarize UserSubmissions=count() by SenderFromDomain
+  | join TotalInboundbySender on SenderFromDomain
+  | extend UserSubmissions_Percentage = todouble(round(UserSubmissions / todouble(count_) * 100, 2))
+  | project SenderFromDomain, UserSubmissions, TotalInboundEmail=count_,UserSubmissions_Percentage
+  | top 10 by UserSubmissions desc
+version: 1.0.0
