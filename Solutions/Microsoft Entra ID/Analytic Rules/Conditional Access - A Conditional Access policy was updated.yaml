@@ -1,0 +1,63 @@
+﻿id: ccca6b88-a7b6-41c9-9be2-fc3daeb65b26
+name: Conditional Access - A Conditional Access policy was updated
+version: 1.0.0
+kind: Scheduled
+description: A Conditional Access policy was updated in Entra ID.
+severity: Informational
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+relevantTechniques:
+- T1562
+query: |+
+  // A Conditional Access policy was updated.
+  AuditLogs
+  | where OperationName == "Update conditional access policy"
+  | extend
+      policy = tostring(TargetResources[0].displayName),
+      modifiedBy = tostring(InitiatedBy.user.userPrincipalName),
+      oldPolicy = tostring(TargetResources[0].modifiedProperties[0].oldValue),
+      newPolicy = tostring(TargetResources[0].modifiedProperties[0].newValue)
+  | extend
+      accountName = tostring(split(modifiedBy, "@")[0]),
+      upnSuffix = tostring(split(modifiedBy, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      policy,
+      modifiedBy,
+      accountName,
+      upnSuffix,
+      oldPolicy,
+      newPolicy,
+      Result
+
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: accountName
+  - identifier: UPNSuffix
+    columnName: upnSuffix
+suppressionEnabled: false
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+

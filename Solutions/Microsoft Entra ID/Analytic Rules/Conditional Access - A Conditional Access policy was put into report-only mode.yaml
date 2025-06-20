@@ -1,0 +1,61 @@
+﻿id: 5588de32-73b1-40b9-bddc-4d9e74051859
+name: Conditional Access - A Conditional Access policy was put into report-only mode
+version: 1.0.0
+kind: Scheduled
+description: A Conditional Access policy was put into report-only mode in Entra ID.
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+relevantTechniques:
+  - T1562.007
+query: |+
+  // A Conditional Access policy was put into report-only mode.
+  AuditLogs
+  | where OperationName in ("Update conditional access policy")
+  | extend stateOld = extractjson("$.state", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+  | extend stateNew = extractjson("$.state", tostring(TargetResources[0].modifiedProperties[0].newValue))
+  | where stateOld == "enabled" and stateNew == "enabledForReportingButNotEnforced"
+  | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+  | extend accountName = tostring(split(modifiedBy, "@")[0])
+  | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      policy = TargetResources[0].displayName,
+      modifiedBy,
+      accountName,
+      upnSuffix,
+      result = Result,
+      stateOld,
+      stateNew
+  | order by TimeGenerated desc
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: accountName
+  - identifier: UPNSuffix
+    columnName: upnSuffix
+suppressionEnabled: false
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5m
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+
