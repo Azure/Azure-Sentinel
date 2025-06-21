@@ -1,36 +1,25 @@
 id: 13260191-fb10-4a36-9ca1-2bbc0aaf77d0
 name: Malicious Emails with QR code Urls
 description: |
-  Identifies delivered emails containing URLs extracted from QR codes that are categorized as malicious to help analysts track QR code-based threats
-  Note: Time range is controlled by the portal's time picker; adjust threat verdicts as needed for your context
-  Based on Defender for Office 365 QR code hunting blog: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/hunting-and-responding-to-qr-code-based-phishing-attacks-with-defender-for-offic/4074730
+  Visualises emails containing QR code URLs that have been detected as malicious, helping analysts identify QR code-based attack campaigns.
+  Based on Defender for Office 365 workbook: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
 requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
-      - EmailEvents
       - EmailUrlInfo
-      - UrlClickEvents
+      - EmailEvents
 tactics:
   - InitialAccess
 relevantTechniques:
   - T1566
 query: |
-  let DeliveredQRCodes = 
-    EmailEvents
-    | where EmailDirection == "Inbound"
-    | where DeliveryAction == "Delivered"
-    | join kind=inner (
-        EmailUrlInfo
-        | where UrlLocation == "QRCode"
-        | project Url, NetworkMessageId
-      ) on NetworkMessageId
-    | project NetworkMessageId, Url, SenderFromAddress, RecipientEmailAddress, Subject, Timestamp;
-  DeliveredQRCodes
+  EmailUrlInfo
+  | where UrlLocation == "QRCode"
   | join kind=inner (
-      UrlClickEvents
-      | where ThreatTypes has_any ("Malware", "Phish", "Spam")
-      | project NetworkMessageId, Url, ThreatTypes
-    ) on NetworkMessageId, Url
-  | summarize EmailCount = count(), arg_max(Timestamp, SenderFromAddress, RecipientEmailAddress, Subject) by Url, ThreatTypes
-  | sort by EmailCount desc
+      EmailEvents
+      | where isnotempty(ThreatTypes)
+      | project NetworkMessageId, ThreatTypes
+  ) on NetworkMessageId
+  | summarize count() by ThreatTypes
+  | render piechart
 version: 1.0.0
