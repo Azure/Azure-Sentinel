@@ -1,10 +1,11 @@
 id: 6f606826-b995-4a8d-8c2c-ee08e3d1194a
-name: Top 10 External Senders
+name: Top 10 External Senders (Spam)
 description: |
-  Identifies the top 10 external domains sending inbound emails.
-  Important: Replace REPLACEWITHYOURDOMAININQUOTES with your internal domain(s) in quotes, e.g. "contoso.com", "contoso.onmicrosoft.com".
-  Note: Time Range is controlled by the portal's time picker.
-  Based on concepts from the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+  Identifies the top 10 external sender addresses delivering inbound emails classified as spam.
+  To exclude your own organization's domains (including subdomains), add a filter after the spam filter, e.g.:
+    | where SenderFromAddress !contains ".yourdomain.com"
+  (Replace "yourdomain.com" with your actual domain.)
+  Based on Defender for Office 365 workbook: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
 requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
@@ -16,8 +17,10 @@ relevantTechniques:
 query: |
   EmailEvents
   | where EmailDirection == "Inbound"
-  | extend SenderFromDomain = tostring(split(SenderFromAddress, "@")[1])
-  | where SenderFromDomain !endswith REPLACEWITHYOURDOMAININQUOTES
-  | summarize (Timestamp, ReportId) = arg_max(Timestamp, ReportId), Count = count() by SenderFromDomain
-  | top 10 by Count
+  | where ThreatTypes has "Spam"
+  //| where SenderFromAddress !contains ".yourdomain.com"
+  | summarize count() by SenderFromAddress
+  | sort by count_ desc
+  | top 10 by count_
+  | render piechart
 version: 1.0.0
