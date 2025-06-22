@@ -49,3 +49,13 @@ To enable log forwarding from Illumio to an Amazon S3 bucket, follow the steps o
 - After the stack has been successfully deployed, return to the Illumio console.
 - Click **Save and Test Connection** to validate the integration.
 - A `Connection Successful` message should confirm that the log forwarding setup is complete.
+- Navigate to the **Traffic** page.
+- Execute the desired query to retrieve relevant traffic logs.
+- Click **Export**, then select **Export to Connector**.
+- Choose **CSV** as the export format.
+- Select the previously configured S3 bucket.
+- Specify the export **prefix** as `IllumioFlowLogs`.
+- Click **Test Connection** to verify connectivity.
+- Finally, click **Save**.
+
+Once completed, Illumio traffic data will be successfully exported to the specified S3 bucket.
