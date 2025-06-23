@@ -355,6 +355,7 @@ for file in parser_yaml_files:
     SampleDataUrl = sample_data_url+SampleDataFile
     print(f"Sample data log file reading from url: {SampleDataUrl}")
     response = requests.get(SampleDataUrl)
+    print(f"Sample data log response: {response.text}")
     if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
             file.write(response.content)
