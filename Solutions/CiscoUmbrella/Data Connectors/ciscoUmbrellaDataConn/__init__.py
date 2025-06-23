@@ -394,8 +394,83 @@ class UmbrellaClient:
                         try:
                             event['Destination List IDs'] = row[31]
                         except IndexError:
-                            pass                                         
-
+                            pass
+                        try:                                         
+                            event['Isolate Action'] = row[32]
+                        except IndexError:
+                            pass
+                        try:
+                            event['File Action'] = row[33]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Warn Status'] = row[34]
+                        except IndexError:
+                            pass    
+                        try:
+                            event['Forwarding Method'] = row[35]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Producer'] = row[36]
+                        except IndexError:
+                            pass
+                        try:
+                            event['MSP Organization ID'] = row[37]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Geo Location Of Blocked Destination Countries'] = row[38]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Application IDs'] = row[39]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Host Name'] = row[40]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Data Center'] = row[41]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Egress'] = row[42]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Server Name'] = row[43]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Time Based Rule'] = row[44]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Security Overridden'] = row[45]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Detected Response File Type'] = row[46]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Warn Categories'] = row[47]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Organization ID'] = row[48]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Application Entity Name'] = row[49]
+                        except IndexError:
+                            pass
+                        try:
+                            event['Application Entity Category'] = row[50]
+                        except IndexError:
+                            pass
                         int_fields = [
                             'requestSize',
                             'responseSize',
@@ -443,6 +518,18 @@ class UmbrellaClient:
                         pass
                     try:
                         event['Blocked Categories'] = row[12].split(',')
+                    except IndexError:
+                        pass
+                    try:
+                        event['Rule ID'] = row[13]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination Countries'] = row[14]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Organization ID'] = row[15]
                     except IndexError:
                         pass
                 else:
