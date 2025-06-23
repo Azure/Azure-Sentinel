@@ -1,22 +1,26 @@
 import datetime
 import os
 import croniter
+from datetime import UTC, datetime
+
 from ..utils.import_logic import run_import_loop
 from .models.connection import GuardicoreConnection
-from datetime import UTC, datetime
+
 
 async def main(name: str):
     connections_last_time = int(name)
-    scheduled_run = os.environ.get("Schedule", "*/10 * * * *")
+    scheduled_run = os.environ.get("Schedule", "*/20 * * * *")
 
-    previous_iteration_timestamp =\
-        croniter.croniter(scheduled_run, datetime.now(tz=UTC)).get_prev(datetime).timestamp() * 1000
+    cron = croniter.croniter(scheduled_run, datetime.now(tz=UTC))
+    cron.get_prev(datetime)  # skip prev
+    before_prev_iteration_timestamp = cron.get_prev(datetime).timestamp() * 1000
+
     if connections_last_time == 0:
-        connections_last_time = previous_iteration_timestamp
+        connections_last_time = before_prev_iteration_timestamp
 
     last_connection_time = int(connections_last_time)
-    if last_connection_time < previous_iteration_timestamp:
-        last_connection_time = previous_iteration_timestamp
+    if last_connection_time < before_prev_iteration_timestamp:
+        last_connection_time = before_prev_iteration_timestamp
 
     return await run_import_loop(
         destination_table='GuardicoreConnections',
