@@ -93,8 +93,8 @@ def convert_data_csv_to_json(csv_file):
     with open(csv_file, 'r', encoding='utf-8-sig') as file:
         reader = csv.DictReader(file)
         for row in reader:
+            print(f"row details - {row}" )
             table_name = row['Type']
-            print("row details" {row})
             # Convert each value in the row to its appropriate type
             processed_row = {key: convert_value(value) for key, value in row.items()}
             data.append(processed_row)
