@@ -88,7 +88,8 @@ def main(mytimer: func.TimerRequest) -> None:
         'dlp': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dlp', queue_size=10000, bulks_number=10),  # Added DLP
         'ravpn': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ravpnlogs', queue_size=10000, bulks_number=10),
         'audit': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_audit', queue_size=10000, bulks_number=10),
-        'ztna': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ztna', queue_size=10000, bulks_number=10)
+        'ztna': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ztna', queue_size=10000, bulks_number=10),
+        'intrusion': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_intrusion', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -111,6 +112,8 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel = sentinel_dict['audit']
             elif 'ztnalogs' in key.lower():  # Added ZTNA
                 sentinel = sentinel_dict['ztna']
+            elif 'intrusionlogs' in key.lower():  # Added Intrusion
+                sentinel = sentinel_dict['intrusion']
             else:
                 # skip files of unknown types
                 continue
@@ -250,7 +253,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs', 'dlplogs', 'ravpnlogs', 'auditlogs', 'ztnalogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs', 'dlplogs', 'ravpnlogs', 'auditlogs', 'ztnalogs', 'intrusionlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -854,6 +857,59 @@ class UmbrellaClient:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'ztnalogs'
                 yield event
+
+    def parse_csv_intrusion(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 29:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'identities': row[1],
+                        'identity types': row[2],
+                        'generator id': row[3],
+                        'signature ID': row[4],
+                        'signature message': row[5],
+                        'signature List ID': row[6],
+                        'severity': row[7],
+                        'attack classification': row[8],
+                        'CVEs': row[9],
+                        'IP protocol': row[10],
+                        'session ID': row[11],
+                        'source IP': row[12],
+                        'source port': row[13],
+                        'destination IP': row[14],
+                        'destination Port': row[15],
+                        'action': row[16]
+                    }
+                    try:
+                        event['operation mode'] = row[17]
+                    except IndexError:
+                        pass
+                    try:
+                        event['policy resource ID'] = row[18]
+                    except IndexError:
+                        pass
+                    try:
+                        event['direction'] = row[19]
+                    except IndexError:
+                        pass
+                    try:
+                        event['firewall rule ID'] = row[20]
+                    except IndexError:
+                        pass
+                    try:
+                        event['IPS config type'] = row[21]
+                    except IndexError:
+                        pass
+                    try:
+                        event['AWS region'] = row[22]
+                    except IndexError:
+                        pass
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'ztnalogs'
+                yield event
     
     def parse_csv_fw(self, csv_file):
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
@@ -908,6 +964,8 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_audit
             elif 'ztnalogs' in key.lower():  # Added ZTNA logs
                 parser_func = self.parse_csv_ztna
+            elif 'intrusionlogs' in key.lower():  # Added Intrusion logs
+                parser_func = self.parse_csv_intrusion
             if parser_func:
                 file_events = 0
                 for event in parser_func(csv_file):
