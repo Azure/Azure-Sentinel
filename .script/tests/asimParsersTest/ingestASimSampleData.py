@@ -93,7 +93,6 @@ def convert_data_csv_to_json(csv_file):
     with open(csv_file, 'r', encoding='utf-8-sig') as file:
         reader = csv.DictReader(file)
         for row in reader:
-            print(f"row details - {row}" )
             table_name = row['Type']
             # Convert each value in the row to its appropriate type
             processed_row = {key: convert_value(value) for key, value in row.items()}
@@ -355,7 +354,6 @@ for file in parser_yaml_files:
     SampleDataUrl = sample_data_url+SampleDataFile
     print(f"Sample data log file reading from url: {SampleDataUrl}")
     response = requests.get(SampleDataUrl)
-    print(f"Sample data log response: {response.text}")
     if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
             file.write(response.content)
