@@ -1,4 +1,4 @@
-# Release Notes for Open Systems Logs API Solution for Microsoft Sentinel
+# Release Notes for Open Systems Solution for Microsoft Sentinel
 
 ## Version 0.1.0 - May 12, 2025
 
