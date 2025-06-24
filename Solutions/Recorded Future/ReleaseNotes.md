@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
-|-------------|--------------------------------|---------------------------------------------|
-| 3.2.15       |  12-03-2025                    | Fixed descritpion of **Playbooks**.	|
+|-------------|--------------------------------|---------------------------------------------| 3.2.16       |  08-05-2025                    | Updated **workbooks**, **analytic rules** and **hunting queries** to new `ThreatIntelIndicators` schema. Removed deprecated **analytic rules**. Updated documentation to reflect changes.	|
+| 3.2.15       |  12-03-2025                    | Fixed description of **Playbooks**.	|
 | 3.2.14       |  30-01-2025                    | Fix the name of `IntelligenceCloud` parameter in `RecordedFuture-CustomConnector` + other minor renames.	|
 | 3.2.13       |  08-01-2025                    | Removed Custom Entity mappings from **Analytic rules**.	|
 | 3.2.12       |  28-11-2024                    | Fix API connection bug in RecordedFuture-AlertImporter **Playbook**. |
