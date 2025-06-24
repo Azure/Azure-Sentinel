@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for M365 Defender for EndPoint.
 
-This ASIM parser supports normalizing endpoint authentication events, collected by Microsoft 365 Defender for Endpoint, stored in the  DeviceLogonEvents table, to the ASIM Authentication schema.
+This ASIM parser supports normalizing endpoint authentication events, collected by Microsoft  365 Defender for Endpoint, stored in the  DeviceLogonEvents table, to the ASIM Authentication schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
