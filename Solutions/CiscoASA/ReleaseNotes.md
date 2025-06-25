@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.5       | 25-04-2025                     | Removed Legacy **Data Connector**   					  					  |
 | 3.0.4       | 22-05-2024                     | Updated connectivity criteria for **Data Connector**   					  |
 | 3.0.3       | 14-03-2024                     | Change the connectivity criteria to use the resource graph and not LA data   |
 | 3.0.2       | 07-03-2024                     | New AMA based connector is now in public preview							  |
