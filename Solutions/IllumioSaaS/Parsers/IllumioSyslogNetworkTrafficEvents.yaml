@@ -7,36 +7,100 @@ Category: Microsoft Sentinel Parser
 FunctionName: IllumioSyslogNetworkTrafficEvents
 FunctionAlias: IllumioSyslogNetworkTrafficEvents
 FunctionQuery: |
-  Syslog
-  | where SyslogMessage has 'illumio_pce/collector'
-  | extend JsonPayload = extract(@"\{.*\}", 0, SyslogMessage)
-  | where isnotempty(JsonPayload)
-  | extend ParsedJson = parse_json(JsonPayload)
+  let IllumioFlowView = view () {
+    Syslog
+    | where SyslogMessage has 'illumio_pce/collector'
+    | extend JsonPayload = extract(@"\{.*\}", 0, SyslogMessage)
+    | where isnotempty(JsonPayload)
+    | extend ParsedJson = parse_json(JsonPayload)
+    | extend 
+      TimeGenerated = todatetime(ParsedJson.timestamp),
+      tdms = toint(ParsedJson.tdms),
+      ddms = toint(ParsedJson.ddms),
+      pn = tostring(ParsedJson.pn),
+      un = tostring(ParsedJson.un),
+      src_ip = tostring(ParsedJson.src_ip),
+      dst_ip = tostring(ParsedJson.dst_ip),
+      class = tostring(ParsedJson.class),
+      proto = toint(ParsedJson.proto),
+      dst_port = toint(ParsedJson.dst_port),
+      flow_count = toint(ParsedJson['count']),
+      dir = tostring(ParsedJson.dir),    
+      dst_hostname = tostring(ParsedJson.dst_hostname),
+      network = tostring(ParsedJson.network),
+      org_id = toint(ParsedJson.org_id),
+      state = tostring(ParsedJson.state),
+      pd_qualifier = toint(ParsedJson.pd_qualifier),
+      pd = toint(ParsedJson.pd),
+      src_hostname = tostring(ParsedJson.src_hostname),    
+      src_href = tostring(ParsedJson.src_href),
+      dst_href = tostring(ParsedJson.dst_href),
+      src_labels = todynamic(ParsedJson.src_labels),
+      dst_labels = todynamic(ParsedJson.dst_labels),
+      interval_sec = toint(ParsedJson.interval_sec),
+      pce_fqdn = tostring(ParsedJson.pce_fqdn),
+      version = toint(ParsedJson.version),
+      Type = 'Illumio Syslog Network Traffic Events'
+  };
+  let IllumioFlowV2View = view () {
+    IllumioFlowEventsV2_CL
+    | extend 
+      Type = 'Illumio POC Network Traffic Events',
+      TimeGenerated = todatetime(column_ifexists('TimeGenerated', '')),
+      src_ip = column_ifexists('SrcIP', ''),
+      dst_ip = column_ifexists('DstIP', ''),
+      proto = toint(column_ifexists('', '')),
+      dst_port = toint(column_ifexists('DstPort', '')),
+      dst_hostname = column_ifexists('DstName', ''),
+      src_hostname = column_ifexists('SrcName', ''),
+      src_labels = todynamic(column_ifexists('SrcLabels', '')),
+      dst_labels = todynamic(column_ifexists('DstLabels', '')),
+      tdms = toint(column_ifexists('', '')),
+      ddms = toint(column_ifexists('', '')),
+      pn = column_ifexists('', ''),
+      un = column_ifexists('', ''),
+      class = column_ifexists('', ''),
+      flow_count = toint(column_ifexists('', '')),
+      dir = column_ifexists('', ''),
+      network = column_ifexists('', ''),
+      org_id = toint(column_ifexists('', '')),
+      state = column_ifexists('', ''),
+      pd_qualifier = toint(column_ifexists('', '')),
+      pd = toint(column_ifexists('', '')),
+      src_href = column_ifexists('', ''),
+      dst_href = column_ifexists('', ''),
+      interval_sec = toint(column_ifexists('', '')),
+      pce_fqdn = column_ifexists('', ''),
+      version = toint(column_ifexists('', ''))
+  };
+  union isfuzzy=true
+  (IllumioFlowView),
+  (IllumioFlowV2View)
   | project
-    TimeGenerated = todatetime(ParsedJson.timestamp),
-    tdms = toint(ParsedJson.tdms),
-    ddms = toint(ParsedJson.ddms),
-    pn = tostring(ParsedJson.pn),
-    un = tostring(ParsedJson.un),
-    src_ip = tostring(ParsedJson.src_ip),
-    dst_ip = tostring(ParsedJson.dst_ip),
-    class = tostring(ParsedJson.class),
-    proto = toint(ParsedJson.proto),
-    dst_port = toint(ParsedJson.dst_port),
-    flow_count = toint(ParsedJson['count']),
-    dir = tostring(ParsedJson.dir),    
-    dst_hostname = tostring(ParsedJson.dst_hostname),
-    network = tostring(ParsedJson.network),
-    org_id = toint(ParsedJson.org_id),
-    state = tostring(ParsedJson.state),
-    pd_qualifier = toint(ParsedJson.pd_qualifier),
-    pd = toint(ParsedJson.pd),
-    src_hostname = tostring(ParsedJson.src_hostname),    
-    src_href = tostring(ParsedJson.src_href),
-    dst_href = tostring(ParsedJson.dst_href),
-    src_labels = todynamic(ParsedJson.src_labels),
-    dst_labels = todynamic(ParsedJson.dst_labels),
-    interval_sec = toint(ParsedJson.interval_sec),
-    pce_fqdn = tostring(ParsedJson.pce_fqdn),
-    version = toint(ParsedJson.version),
-    Type = 'Illumio Syslog Network Traffic Events'
+    TimeGenerated,
+    tdms,
+    ddms,
+    pn,
+    un,
+    src_ip,
+    dst_ip,
+    class,
+    proto,
+    dst_port,
+    flow_count,
+    dir,
+    dst_hostname,
+    network,
+    org_id,
+    state,
+    pd_qualifier,
+    pd,
+    src_hostname,
+    src_href,
+    dst_href,
+    src_labels,
+    dst_labels,
+    interval_sec,
+    pce_fqdn,
+    version,
+    Type
