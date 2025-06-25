@@ -140,7 +140,7 @@
                   "type": 2,
                   "description": "Log Table to correlate IPs Against",
                   "isRequired": true,
-                  "query": "search * \n| where TimeGenerated {IP_Logs_Time_Range:query}\n| summarize count() by $table \n| sort by count_ desc \n| where $table != \"ThreatIntelligenceIndicator\" \n| project $table\n",
+                  "query": "search * \n| where TimeGenerated {IP_Logs_Time_Range:query}\n| summarize count() by $table \n| sort by count_ desc \n| where $table != \"ThreatIntelIndicators\" \n| project $table\n",
                   "queryType": 0,
                   "resourceType": "microsoft.operationalinsights/workspaces",
                   "value": "NetScreen_Firewall_CL"
@@ -239,7 +239,7 @@
                   "type": 2,
                   "description": "Which IP Risk List do you want to correlate against",
                   "isRequired": true,
-                  "query": "ThreatIntelligenceIndicator\n| where isnotempty(NetworkIP)\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where Description contains \"Recorded Future\"\n//| summarize count() by Description\n| distinct Description\n| project output = strcat('\"', Description, '\"')\n",
+                  "query": "ThreatIntelIndicators\n| where ObservableKey == 'ipv4-addr:value'\n |where isnotempty(ObservableValue)\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where Data.description contains \"Recorded Future\"\n//| summarize count() by Data.description\n| distinct tostring(Data.description)\n| project output = strcat('\"', Data_description, '\"')\n",
                   "queryType": 0,
                   "resourceType": "microsoft.operationalinsights/workspaces",
                   "value": "\"Recorded Future - IP - Actively Communicating C&C Server\""
@@ -280,7 +280,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| join (\r\n    {IP_Logs_Table:value}\r\n    | where TimeGenerated {IP_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend IP_TimeGenerated = TimeGenerated\r\n)\r\non $left.NetworkIP == $right.{IP_Logs_Field:value}\r\n| summarize Correlation_Matches=count() by bin(IP_TimeGenerated, 1d)\r\n| render barchart",
+              "query": "ThreatIntelIndicators\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Data.description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| join (\r\n    {IP_Logs_Table:value}\r\n    | where TimeGenerated {IP_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend IP_TimeGenerated = TimeGenerated\r\n)\r\non $left.ObservableValue == $right.{IP_Logs_Field:value}\r\n| summarize Correlation_Matches=count() by bin(IP_TimeGenerated, 1d)\r\n| render barchart",
               "size": 0,
               "title": "Detected IPs Per Day",
               "noDataMessage": "No detected IPs",
@@ -316,7 +316,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| join (\r\n    {IP_Logs_Table:value}\r\n    | where TimeGenerated {IP_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend IP_TimeGenerated = TimeGenerated\r\n)\r\non $left.NetworkIP == $right.{IP_Logs_Field:value}\r\n| project [\"Risk Score\"]=ConfidenceScore, IP=NetworkIP, Detected=format_datetime(TimeGenerated, 'yyyy-MM-dd HH:mm:ss'), [\"Log Created\"]=format_datetime(IP_TimeGenerated, 'yyyy-MM-dd HH:mm:ss'), [\"Threat Classification\"]=ThreatType\r\n| summarize [\"Log Created\"]=max([\"Log Created\"]) by IP, [\"Risk Score\"], Detected, [\"Threat Classification\"]\r\n| project [\"Risk Score\"], IP, Detected, [\"Log Created\"], [\"Threat Classification\"]\r\n| sort by [\"Risk Score\"] desc",
+              "query": "ThreatIntelIndicators\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Data.description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| join (\r\n    {IP_Logs_Table:value}\r\n    | where TimeGenerated {IP_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend IP_TimeGenerated = TimeGenerated\r\n)\r\non $left.ObservableValue == $right.{IP_Logs_Field:value}\r\n| project [\"Risk Score\"]=Confidence, IP=ObservableValue, Detected=format_datetime(TimeGenerated, 'yyyy-MM-dd HH:mm:ss'), [\"Log Created\"]=format_datetime(IP_TimeGenerated, 'yyyy-MM-dd HH:mm:ss'), [\"Threat Classification\"]=tostring(Data.indicator_types)\r\n| summarize [\"Log Created\"]=max([\"Log Created\"]) by IP, [\"Risk Score\"], Detected, [\"Threat Classification\"]\r\n| project [\"Risk Score\"], IP, Detected, [\"Log Created\"], [\"Threat Classification\"]\r\n| sort by [\"Risk Score\"] desc",
               "size": 0,
               "title": "Detected IPs",
               "noDataMessage": "No detected IPs",
@@ -392,7 +392,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| join (\r\n    {IP_Logs_Table:value}\r\n    | where TimeGenerated {IP_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend IP_TimeGenerated = TimeGenerated\r\n)\r\non $left.NetworkIP == $right.{IP_Logs_Field:value}\r\n| project Risk=ConfidenceScore, NetworkIP, ThreatType, Tags\r\n| extend Evidence=parse_json(Tags)[0]\r\n| mv-expand Evidence = parse_json(tostring(Evidence))\r\n| extend Rule=Evidence['Rule']\r\n| summarize count() by tostring(Rule)\r\n| sort by count_ desc",
+              "query": "ThreatIntelIndicators\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Data.description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| join (\r\n    {IP_Logs_Table:value}\r\n    | where TimeGenerated {IP_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend IP_TimeGenerated = TimeGenerated\r\n)\r\non $left.ObservableValue == $right.{IP_Logs_Field:value}\r\n| project Risk=Confidence, ObservableValue, Data.indicator_types, Tags\r\n| extend Evidence=parse_json(Tags)\r\n| mv-expand Evidence = parse_json(tostring(Evidence))\r\n// Capitalize the first letter in each rule, the we get the rule from 'Evidence['rule']'\r\n| extend Rule=strcat(toupper(substring(Evidence['rule'], 0, 1)), substring(Evidence['rule'], 1))\r\n| summarize count() by tostring(Rule)\r\n| sort by count_ desc",
               "size": 0,
               "title": "Top Triggered Risk Rules",
               "noDataMessage": "No triggered Risk Rules",
@@ -424,7 +424,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ThreatIntelligenceIndicator\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where Description contains {RF_Risk_list:value}\n| where NetworkIP == \"{MaliciousIPMatch}\"\n| where isnotempty(Tags)\n//| where ExpirationDateTime > now()\n| extend Evidence=parse_json(Tags)[0]\n| take 1\n| mv-expand Evidence = parse_json(tostring(Evidence))\n| project Rules = Evidence['Rule'], Criticality = Evidence['Criticality'], Evidence_String = Evidence['EvidenceString']\n| sort by toint(Criticality) desc",
+              "query": "ThreatIntelIndicators\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where Data.description contains {RF_Risk_list:value}\n| where ObservableValue == \"{MaliciousIPMatch}\"\n| where isnotempty(Tags)\n//| where ExpirationDateTime > now()\n| extend Evidence=parse_json(Tags)\n| take 1\n| mv-expand Evidence = parse_json(tostring(Evidence))\n// Capitalize the first letter in each rule, the we get the rule from 'Evidence['rule']'\r\n | project Rule=strcat(toupper(substring(Evidence['rule'], 0, 1)), substring(Evidence['rule'], 1)), Criticality = Evidence['criticality'], Evidence_String = Evidence['evidencestring']\n| sort by toint(Criticality) desc",
               "size": 1,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",

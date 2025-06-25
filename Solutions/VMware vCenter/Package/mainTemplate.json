@@ -41,7 +41,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "VMware vCenter",
-    "_solutionVersion": "3.0.4",
+    "_solutionVersion": "3.0.5",
     "solutionId": "azuresentinel.azure-sentinel-solution-vcenter",
     "_solutionId": "[variables('solutionId')]",
     "workbookVersion1": "1.0.0",
@@ -84,7 +84,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "vCenter Workbook with template version 3.0.4",
+        "description": "vCenter Workbook with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -141,7 +141,7 @@
                       "kind": "DataType"
                     },
                     {
-                      "contentId": "VMwarevCenter",
+                      "contentId": "CustomLogsAma",
                       "kind": "DataConnector"
                     }
                   ]
@@ -172,7 +172,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "vCenter Data Parser with template version 3.0.4",
+        "description": "vCenter Data Parser with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -189,7 +189,7 @@
                 "displayName": "vCenter",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "vCenter",
-                "query": "let vCenter_Login =() {\n    vcenter_CL\n    | where Message has (\"UserLoginSessionEvent\")\n    | parse Message  with * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity \"]\" * \"[User \" DomainName:string \"\\\\\" Username:string \"@\" SourceIP \" logged in as \" UserAgent:string \"]\" *\n};\nlet vCenter_Logout =() {\n    vcenter_CL\n    | where Message has (\"UserLogoutSessionEvent\")\n    | parse Message with * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity \"]\" * \"[User\" DomainName:string \"\\\\\" Username:string \"@\" SourceIP \" logged out (login time:\" LoginTime:string \", number of API invocations: \" APIInvocationCount:int \", user agent:\" UserAgent:string \")]\" *\n};\nlet vCenter_Role=() {\n    vcenter_CL\n    | where Message has_any(\"RoleAddedEvent\",\"RoleRemovedEvent\")\n    | parse Message with * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"]\" * \"[New role \" RoleName:string \" \" Operation:string  \"]\" *\n};\nlet vCenter_RoleModified=() {\n    vcenter_CL\n    | where Message has (\"RoleUpdatedEvent\")\n    | parse Message with * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"]\" * \"Previous name: \" OldRoleName:string \", new name \"NewRoleName:string \" Added privileges: \" AddedPriviledges:string \" Removed privileges: \" RemovedPriviledges:string \"]\" *\n};\nunion vCenter_Login,vCenter_Logout,vCenter_Role,vCenter_RoleModified\n| extend ClientIP = SourceIP\n",
+                "query": "let vCenter_Login =() {\n    vcenter_CL\n    | where Message has (\"UserLoginSessionEvent\")\n    | parse Message with * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"]\" * \"[User \" DomainAndUser:string \"@\" SourceIP:string \" logged in as \" UserAgent:string \"]\" *\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n    | project-away DomainAndUser\n};\nlet vCenter_Logout =() {\n    vcenter_CL\n    | where Message has (\"UserLogoutSessionEvent\")\n    | parse Message with * \"Event [\" EventId: string \"] [1-1] [\" EventTime: datetime \"] [\" EventType: string \"] [\" EventSeverity:string \"]\" * \"[User \" DomainAndUser:string \"@\" SourceIP \" logged out (login time:\" LoginTime: string \", number of API invocations: \" APIInvocationCount: string \", user agent:\" UserAgent: string \")]\" *\n    | extend APIInvocationCount = toint(replace(',', '', APIInvocationCount))\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n| extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n    Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n| project-away DomainAndUser\n};\nlet vCenter_RoleAdded=() {\n    vcenter_CL\n    | where Message has_any(\"RoleAddedEvent\")\n    | parse Message with * \" \" * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"] [\" DomainAndUser:string \"]\" * \" role \" RoleName:string \" \" Operation:string  \"]\" *\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n    | project-away DomainAndUser\n};\nlet vCenter_RoleRemoved=() {\n    vcenter_CL\n    | where Message has_any(\"RoleRemovedEvent\")\n    | parse Message with * \" \" * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"] [\" DomainAndUser:string \"]\" * \"[Role \" RoleName:string \" \" Operation:string  \"]\" *\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n    | project-away DomainAndUser\n};\nlet vCenter_RoleModified=() {\n    vcenter_CL\n    | where Message has (\"RoleUpdatedEvent\")\n    | parse Message with * \" \" * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"] [\" DomainAndUser:string \"]\" * \"Previous name: \" OldRoleName:string \", new name: \" NewRoleName:string \".\" * \"Added privileges: \" AddedPriviledges:string \". \" * \"Removed privileges: \" RemovedPriviledges:string \".]\" *\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n    | project-away DomainAndUser\n};\nunion vCenter_Login,vCenter_Logout,vCenter_RoleAdded,vCenter_RoleRemoved,vCenter_RoleModified\n| extend ClientIP = SourceIP\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -254,7 +254,7 @@
         "displayName": "vCenter",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "vCenter",
-        "query": "let vCenter_Login =() {\n    vcenter_CL\n    | where Message has (\"UserLoginSessionEvent\")\n    | parse Message  with * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity \"]\" * \"[User \" DomainName:string \"\\\\\" Username:string \"@\" SourceIP \" logged in as \" UserAgent:string \"]\" *\n};\nlet vCenter_Logout =() {\n    vcenter_CL\n    | where Message has (\"UserLogoutSessionEvent\")\n    | parse Message with * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity \"]\" * \"[User\" DomainName:string \"\\\\\" Username:string \"@\" SourceIP \" logged out (login time:\" LoginTime:string \", number of API invocations: \" APIInvocationCount:int \", user agent:\" UserAgent:string \")]\" *\n};\nlet vCenter_Role=() {\n    vcenter_CL\n    | where Message has_any(\"RoleAddedEvent\",\"RoleRemovedEvent\")\n    | parse Message with * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"]\" * \"[New role \" RoleName:string \" \" Operation:string  \"]\" *\n};\nlet vCenter_RoleModified=() {\n    vcenter_CL\n    | where Message has (\"RoleUpdatedEvent\")\n    | parse Message with * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"]\" * \"Previous name: \" OldRoleName:string \", new name \"NewRoleName:string \" Added privileges: \" AddedPriviledges:string \" Removed privileges: \" RemovedPriviledges:string \"]\" *\n};\nunion vCenter_Login,vCenter_Logout,vCenter_Role,vCenter_RoleModified\n| extend ClientIP = SourceIP\n",
+        "query": "let vCenter_Login =() {\n    vcenter_CL\n    | where Message has (\"UserLoginSessionEvent\")\n    | parse Message with * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"]\" * \"[User \" DomainAndUser:string \"@\" SourceIP:string \" logged in as \" UserAgent:string \"]\" *\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n    | project-away DomainAndUser\n};\nlet vCenter_Logout =() {\n    vcenter_CL\n    | where Message has (\"UserLogoutSessionEvent\")\n    | parse Message with * \"Event [\" EventId: string \"] [1-1] [\" EventTime: datetime \"] [\" EventType: string \"] [\" EventSeverity:string \"]\" * \"[User \" DomainAndUser:string \"@\" SourceIP \" logged out (login time:\" LoginTime: string \", number of API invocations: \" APIInvocationCount: string \", user agent:\" UserAgent: string \")]\" *\n    | extend APIInvocationCount = toint(replace(',', '', APIInvocationCount))\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n| extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n    Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n| project-away DomainAndUser\n};\nlet vCenter_RoleAdded=() {\n    vcenter_CL\n    | where Message has_any(\"RoleAddedEvent\")\n    | parse Message with * \" \" * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"] [\" DomainAndUser:string \"]\" * \" role \" RoleName:string \" \" Operation:string  \"]\" *\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n    | project-away DomainAndUser\n};\nlet vCenter_RoleRemoved=() {\n    vcenter_CL\n    | where Message has_any(\"RoleRemovedEvent\")\n    | parse Message with * \" \" * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"] [\" DomainAndUser:string \"]\" * \"[Role \" RoleName:string \" \" Operation:string  \"]\" *\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n    | project-away DomainAndUser\n};\nlet vCenter_RoleModified=() {\n    vcenter_CL\n    | where Message has (\"RoleUpdatedEvent\")\n    | parse Message with * \" \" * \" \" * \" \" Hostname:string \"vpxd\" * \"Event [\" EventId:string \"] [1-1] [\" EventTime:datetime \"] [\" EventType:string \"] [\" EventSeverity:string \"] [\" DomainAndUser:string \"]\" * \"Previous name: \" OldRoleName:string \", new name: \" NewRoleName:string \".\" * \"Added privileges: \" AddedPriviledges:string \". \" * \"Removed privileges: \" RemovedPriviledges:string \".]\" *\n    | extend DomainAndUser = split(DomainAndUser,'\\\\')\n    | extend DomainName = iff(array_length(DomainAndUser) > 1, DomainAndUser[0], \"\"),\n        Username = iff(array_length(DomainAndUser) > 1, DomainAndUser[1], DomainAndUser[0])\n    | project-away DomainAndUser\n};\nunion vCenter_Login,vCenter_Logout,vCenter_RoleAdded,vCenter_RoleRemoved,vCenter_RoleModified\n| extend ClientIP = SourceIP\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -304,7 +304,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "vCenter-Root impersonation_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "vCenter-Root impersonation_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -332,10 +332,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CustomLogsAma",
                     "dataTypes": [
                       "vcenter_CL"
-                    ],
-                    "connectorId": "CustomLogsAma"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -346,13 +346,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "user",
                         "identifier": "Name"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -408,7 +408,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "vCenterRootLogin_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "vCenterRootLogin_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -436,10 +436,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CustomLogsAma",
                     "dataTypes": [
                       "vcenter_CL"
-                    ],
-                    "connectorId": "CustomLogsAma"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -451,13 +451,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "SourceIP",
                         "identifier": "Address"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -509,7 +509,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.4",
+        "version": "3.0.5",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "VMware vCenter",
