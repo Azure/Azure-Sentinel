@@ -145,9 +145,9 @@
                   "name": "Hash_Logs_Table",
                   "label": "Hash Logs Table",
                   "type": 2,
-                  "description": "Log Table to correlate Domains Against",
+                  "description": "Log Table to correlate Hashes Against",
                   "isRequired": true,
-                  "query": "search \"*\" \n| where TimeGenerated {Hash_Logs_Time_Range:query}\n| summarize count() by $table | sort by count_ desc | where $table != \"ThreatIntelligenceIndicator\" | project $table\n",
+                  "query": "search \"*\" \n| where TimeGenerated {Hash_Logs_Time_Range:query}\n| summarize count() by $table | sort by count_ desc | where $table != \"ThreatIntelIndicators\" | project $table\n",
                   "queryType": 0,
                   "resourceType": "microsoft.operationalinsights/workspaces",
                   "value": "EndpointProtection_HASH_CL"
@@ -158,7 +158,7 @@
                   "name": "Hash_Logs_Field",
                   "label": "Log Field with Hashes",
                   "type": 2,
-                  "description": "Select the field containing the Domain Name that you want to correlate against",
+                  "description": "Select the field containing the Hash that you want to correlate against",
                   "isRequired": true,
                   "query": "{Hash_Logs_Table:value}\n| getschema\n| where DataType == \"System.String\"\n| project ColumnName",
                   "queryType": 0,
@@ -244,9 +244,9 @@
                   "name": "RF_Risk_list",
                   "label": "Risk List",
                   "type": 2,
-                  "description": "Which Domain Risk List do you want to correlate against",
+                  "description": "Which Hash Risk List do you want to correlate against",
                   "isRequired": true,
-                  "query": "ThreatIntelligenceIndicator\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where isnotempty(FileHashValue)\n| where Description contains \"Recorded Future\"\n| summarize count() by Description\n| project output = strcat('\"', Description, '\"')\n",
+                  "query": "ThreatIntelIndicators\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where ObservableKey contains'file:hashes'\n| where isnotempty(ObservableValue)\n| where Data.description contains \"Recorded Future\"\n| summarize count() by tostring(Data.description)\n| project output = strcat('\"', Data_description, '\"')\n",
                   "queryType": 0,
                   "resourceType": "microsoft.operationalinsights/workspaces",
                   "value": "\"Recorded Future - HASH - Observed in Underground Virus Testing Sites\""
@@ -273,7 +273,7 @@
           {
             "type": 1,
             "content": {
-              "json": "\n### Guide: Detected Domains Per Day\n\nThe chart displays the number of correlation detections per day between domain logs and Recorded Future's domain Risk lists.",
+              "json": "\n### Guide: Detected Hashes Per Day\n\nThe chart displays the number of correlation detections per day between hash logs and Recorded Future's hash Risk lists.",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -287,7 +287,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query} \r\n| where Description == {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| extend FileHashValue = tolower(FileHashValue)\r\n| join (\r\n    {Hash_Logs_Table:value}\r\n    | where TimeGenerated {Hash_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend Hash_TimeGenerated = TimeGenerated\r\n)\r\non $left.FileHashValue == $right.{Hash_Logs_Field:value}\r\n| summarize Correlation_Matches=count() by bin(Hash_TimeGenerated, 1d)\r\n| render barchart",
+              "query": "ThreatIntelIndicators\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query} \r\n| where Data.description == {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| extend ObservableValue = tolower(ObservableValue)\r\n| join (\r\n    {Hash_Logs_Table:value}\r\n    | where TimeGenerated {Hash_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend Hash_TimeGenerated = TimeGenerated\r\n)\r\non $left.ObservableValue == $right.{Hash_Logs_Field:value}\r\n| summarize Correlation_Matches=count() by bin(Hash_TimeGenerated, 1d)\r\n| render barchart",
               "size": 0,
               "title": "Detected File Hashes Per Day",
               "noDataMessage": "No detected hashes",
@@ -323,7 +323,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| extend FileHashValue = tolower(FileHashValue)\r\n| join (\r\n    {Hash_Logs_Table:value}\r\n    | where TimeGenerated {Hash_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend Hash_TimeGenerated = TimeGenerated\r\n)\r\non $left.FileHashValue == $right.{Hash_Logs_Field:value}\r\n| project [\"Risk Score\"]=ConfidenceScore, Hash=FileHashValue, Detected = format_datetime(TimeGenerated, 'yyyy-MM-dd HH:mm:ss'), [\"Log Created\"] = format_datetime(Hash_TimeGenerated, 'yyyy-MM-dd HH:mm:ss'), [\"Threat Classification\"]=ThreatType\r\n| summarize [\"Log Created\"]=max([\"Log Created\"]) by Hash, [\"Risk Score\"], Detected, [\"Threat Classification\"]\r\n| project [\"Risk Score\"], Hash, Detected, [\"Log Created\"], [\"Threat Classification\"]\r\n| sort by [\"Risk Score\"] desc\r\n",
+              "query": "ThreatIntelIndicators\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Data.description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| extend ObservableValue = tolower(ObservableValue)\r\n| join (\r\n    {Hash_Logs_Table:value}\r\n    | where TimeGenerated {Hash_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend Hash_TimeGenerated = TimeGenerated\r\n)\r\non $left.ObservableValue == $right.{Hash_Logs_Field:value}\r\n| project [\"Risk Score\"]=Confidence, Hash=ObservableValue, Detected = format_datetime(TimeGenerated, 'yyyy-MM-dd HH:mm:ss'), [\"Log Created\"] = format_datetime(Hash_TimeGenerated, 'yyyy-MM-dd HH:mm:ss'), [\"Threat Classification\"]=tostring(Data.indicator_types)\r\n| summarize [\"Log Created\"]=max([\"Log Created\"]) by Hash, [\"Risk Score\"], Detected, [\"Threat Classification\"]\r\n| project [\"Risk Score\"], Hash, Detected, [\"Log Created\"], [\"Threat Classification\"]\r\n| sort by [\"Risk Score\"] desc\r\n",
               "size": 0,
               "title": "Detected Hashes",
               "noDataMessage": "No detected hashes",
@@ -380,7 +380,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| extend FileHashValue = tolower(FileHashValue)\r\n| join (\r\n    {Hash_Logs_Table:value}\r\n    | where TimeGenerated {Hash_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend Hash_TimeGenerated = TimeGenerated\r\n)\r\non $left.FileHashValue == $right.{Hash_Logs_Field:value}\r\n| project Risk=ConfidenceScore, FileHashValue, ThreatType, Tags\r\n| extend Evidence=parse_json(Tags)[0]\r\n| mv-expand Evidence = parse_json(tostring(Evidence))\r\n| extend Rule=Evidence['Rule']\r\n| summarize count() by tostring(Rule)\r\n| sort by count_ desc\r\n\r\n",
+              "query": "ThreatIntelIndicators\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Data.description contains {RF_Risk_list:value}\r\n| where isnotempty(Tags)\r\n| extend ObservableValue = tolower(ObservableValue)\r\n| join (\r\n    {Hash_Logs_Table:value}\r\n    | where TimeGenerated {Hash_Logs_Time_Range:query}\r\n    // renaming time column so it is clear the log this came from\r\n    | extend Hash_TimeGenerated = TimeGenerated\r\n)\r\non $left.ObservableValue == $right.{Hash_Logs_Field:value}\r\n| project Risk=Confidence, ObservableValue, Data.indicator_types, Tags\r\n| extend Evidence=parse_json(Tags)\r\n| mv-expand Evidence = parse_json(tostring(Evidence))\r\n// Capitalize the first letter in each rule, the we get the rule from 'Evidence['rule']'\r\n| extend Rule=strcat(toupper(substring(Evidence['rule'], 0, 1)), substring(Evidence['rule'], 1))| summarize count() by tostring(Rule)\r\n| sort by count_ desc\r\n\r\n",
               "size": 0,
               "title": "Top Triggered Risk Rules",
               "noDataMessage": "No triggered Risk Rules",
@@ -418,7 +418,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ThreatIntelligenceIndicator\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where Description contains {RF_Risk_list:value}\n| extend FileHashValue = tolower(FileHashValue)\n| where FileHashValue == \"{MaliciousHashMatch}\"\n| where isnotempty(Tags)\n//| where ExpirationDateTime > now()\n| extend Evidence=parse_json(Tags)[0]\n| take 1\n| mv-expand Evidence = parse_json(tostring(Evidence))\n| project Rules = Evidence['Rule'], Criticality = Evidence['Criticality'], Evidence_String = Evidence['EvidenceString']\n| sort by toint(Criticality) desc",
+              "query": "ThreatIntelIndicators\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where Data.description contains {RF_Risk_list:value}\n| extend ObservableValue = tolower(ObservableValue)\n| where ObservableValue == \"{MaliciousHashMatch}\"\n| where isnotempty(Tags)\n//| where ExpirationDateTime > now()\n| extend Evidence=parse_json(Tags)\n| take 1\n| mv-expand Evidence = parse_json(tostring(Evidence))\n// Capitalize the first letter in each rule, the we get the rule from 'Evidence['rule']'\r\n | project Rule=strcat(toupper(substring(Evidence['rule'], 0, 1)), substring(Evidence['rule'], 1)), Criticality = Evidence['criticality'], Evidence_String = Evidence['evidencestring']\n| sort by toint(Criticality) desc",
               "size": 1,
               "noDataMessage": "No evidence details to show",
               "queryType": 0,
