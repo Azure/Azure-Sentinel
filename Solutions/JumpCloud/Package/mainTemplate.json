@@ -1,0 +1,1516 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for JumpCloud"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "JumpCloud",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-JumpCloud",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "JumpCloudMultiRule",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "JumpCloudMultiRuleConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "JumpCloud (using REST API)-Preview",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "JumpCloudMultiRule",
+                  "title": "JumpCloud (using REST API)-Preview",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The [JumpCloud](https://jumpcloud.com) connector allows you to easily connect your JumpCloud organization events to Microsoft Sentinel. The data connector uses the [JumpCloud REST API](https://jumpcloud.com/api) to fetch logs and supports DCR-based ingestion time transformations that parse the received data and ingest into custom table(JumpCloud_CL) in your Log Analytics workspace.",
+                  "graphQueriesTableName": "JumpCloud_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Get Events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of JumpCloud Events",
+                      "query": "{{graphQueriesTableName}}\n  | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n       | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "JumpCloud REST API Key",
+                        "description": "Enable API access in JumpCloud and generate API Key. Please refer to JumpCloud official [documentation](https://jumpcloud.com/api) for more information."
+                      },
+                      {
+                        "name": "JumpCloud Organization Id",
+                        "description": "Obtain your JumpCloud organization id to fetch events. Follow the steps in the [documentation](https://jumpcloud.com/api) to obtain the Organization Id using the JumpCloud API Key obtained in previous step."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Currently, this connector allows to ingest events from the following [JumpCloud REST API](https://jumpcloud.com/api) endpoint: \n 1. [Get Organization Events](https://jumpcloud.com/api) \n>This connector parses events into JumpCloud_CL Table.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "label": "Organization Id",
+                            "placeholder": "OrganizationId",
+                            "type": "text",
+                            "name": "organization"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "API Key",
+                            "placeholder": "ApiKey",
+                            "type": "securestring",
+                            "name": "apiKey"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Event Types",
+                            "placeholder": "directory;radius;sso;systems;ldap;mdm",
+                            "type": "text",
+                            "requestObjectKey": "queryParametersTemplate",
+                            "name": "eventtypes"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ],
+                      "title": "Connect JumpCloud events to Microsoft Sentinel"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "JumpCloudDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-JumpCloud_API": {
+                    "columns": [
+                      {
+                        "name": "timestamp",
+                        "type": "datetime",
+                        "description": "Timestamp of when the event occurred (UTC)."
+                      },
+                      {
+                        "name": "correlation",
+                        "type": "string",
+                        "description": "Details for a background process or parent event that can be used to correlate related events."
+                      },
+                      {
+                        "name": "resource",
+                        "type": "string",
+                        "description": "Resource that changed or attempted the login."
+                      },
+                      {
+                        "name": "system_group",
+                        "type": "string",
+                        "description": "string that contains the closest device/system group involved in the event."
+                      },
+                      {
+                        "name": "system",
+                        "type": "string",
+                        "description": "The string that describes the system."
+                      },
+                      {
+                        "name": "target_resource",
+                        "type": "string",
+                        "description": "Target resource involved in the event."
+                      },
+                      {
+                        "name": "event_type",
+                        "type": "string",
+                        "description": "Event type."
+                      },
+                      {
+                        "name": "useragent",
+                        "type": "string",
+                        "description": "User agent information for the browser that submitted the request."
+                      },
+                      {
+                        "name": "auth_method",
+                        "type": "string",
+                        "description": "Session = console, api-key = api-key."
+                      },
+                      {
+                        "name": "geoip",
+                        "type": "string",
+                        "description": "Geo IP information for the IP address that made the request."
+                      },
+                      {
+                        "name": "mfa",
+                        "type": "boolean",
+                        "description": "Denotes whether MFA was used on an authentication attempt."
+                      },
+                      {
+                        "name": "mfa_meta",
+                        "type": "string",
+                        "description": "string that contains metadata around MFA authentication such as the type of MFA."
+                      },
+                      {
+                        "name": "eventType",
+                        "type": "string",
+                        "description": "Type of the event"
+                      },
+                      {
+                        "name": "provider",
+                        "type": "string",
+                        "description": "The org ID of the provider if the org is a provider org."
+                      },
+                      {
+                        "name": "success",
+                        "type": "boolean",
+                        "description": "Denotes whether a login attempt was successful."
+                      },
+                      {
+                        "name": "message_chain",
+                        "type": "string",
+                        "description": "Results detail for each event."
+                      },
+                      {
+                        "name": "error_message",
+                        "type": "string",
+                        "description": "Error details."
+                      },
+                      {
+                        "name": "idm_client_id",
+                        "type": "string",
+                        "description": "The client ID for the Identity Management integration."
+                      },
+                      {
+                        "name": "application",
+                        "type": "string",
+                        "description": "Information for the application that the event was initiated for."
+                      },
+                      {
+                        "name": "auth_context",
+                        "type": "string",
+                        "description": "string for authentication context including factors used, device information, and policies applied."
+                      },
+                      {
+                        "name": "service",
+                        "type": "string",
+                        "description": "Service that the event originated from."
+                      },
+                      {
+                        "name": "organization",
+                        "type": "string",
+                        "description": "Organization that the user belongs to."
+                      },
+                      {
+                        "name": "association",
+                        "type": "string",
+                        "description": "string that describes a change in association, such as adding a user to a group."
+                      },
+                      {
+                        "name": "client_ip",
+                        "type": "string",
+                        "description": "IP address that the request came from."
+                      },
+                      {
+                        "name": "initiated_by",
+                        "type": "string",
+                        "description": "string that describes who initiated the request."
+                      },
+                      {
+                        "name": "changes",
+                        "type": "string",
+                        "description": "List of changes made in the request. You cannot search on the contents of this field."
+                      },
+                      {
+                        "name": "id",
+                        "type": "string",
+                        "description": "Unique ID for the event"
+                      },
+                      {
+                        "name": "category",
+                        "type": "string",
+                        "description": "Category of alert"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string",
+                        "description": "Severity of alert."
+                      },
+                      {
+                        "name": "username",
+                        "type": "string",
+                        "description": "Username provided for the alert service call."
+                      },
+                      {
+                        "name": "user_agent",
+                        "type": "string",
+                        "description": "User agent information for the browser that submitted the request."
+                      },
+                      {
+                        "name": "version",
+                        "type": "string",
+                        "description": "The schema version for the document object."
+                      },
+                      {
+                        "name": "idp_initiated",
+                        "type": "boolean",
+                        "description": "Returns true if the request was initiated from the Identity Provider (JumpCloud). Returns false if the auth was initiated from the service provider."
+                      },
+                      {
+                        "name": "nas_mfa_state",
+                        "type": "string",
+                        "description": "Disabled: No MFA required. Enabled: MFA is required if the user is configured for MFA. Required: MFA is required unless the user is excluded and not configured for MFA. Always: MFA always required."
+                      },
+                      {
+                        "name": "auth_type",
+                        "type": "string",
+                        "description": "Authentication type."
+                      },
+                      {
+                        "name": "eap_type",
+                        "type": "string",
+                        "description": "EAP type."
+                      },
+                      {
+                        "name": "outer",
+                        "type": "string",
+                        "description": "Object for outer."
+                      },
+                      {
+                        "name": "system_timestamp",
+                        "type": "datetime",
+                        "description": "Local system time."
+                      },
+                      {
+                        "name": "message",
+                        "type": "string",
+                        "description": "Log message associated with a login attempt."
+                      },
+                      {
+                        "name": "src_ip",
+                        "type": "string",
+                        "description": "IP address the login request came from."
+                      },
+                      {
+                        "name": "process_name",
+                        "type": "string",
+                        "description": "Process that initiated a login attempt."
+                      },
+                      {
+                        "name": "app_management_source",
+                        "type": "string",
+                        "description": "The JumpCloud method of configuring and installing the application."
+                      },
+                      {
+                        "name": "windows_meta",
+                        "type": "string",
+                        "description": "Information about Windows authentications including whether the login had elevated privileges and the logon type."
+                      },
+                      {
+                        "name": "connection_id",
+                        "type": "string",
+                        "description": "Unique id for every LDAP connection."
+                      },
+                      {
+                        "name": "operation_number",
+                        "type": "int",
+                        "description": "All operation requests and operation result pairs are given incremental operation numbers beginning with operation_number=0 to identify the distinct operations being performed."
+                      },
+                      {
+                        "name": "dn",
+                        "type": "string",
+                        "description": "Distinguished name (DN) provided for authentication."
+                      },
+                      {
+                        "name": "mech",
+                        "type": "string",
+                        "description": "The authentication method used. Either simple or SASL."
+                      },
+                      {
+                        "name": "start_tls",
+                        "type": "boolean",
+                        "description": "The starttls protocol that was used to open the LDAP connection."
+                      },
+                      {
+                        "name": "tls_established",
+                        "type": "boolean",
+                        "description": "The LDAPS protocol that was used to open the LDAP connection."
+                      },
+                      {
+                        "name": "error_code",
+                        "type": "int",
+                        "description": "Result code."
+                      },
+                      {
+                        "name": "oid",
+                        "type": "string",
+                        "description": "LDAP object identifier."
+                      },
+                      {
+                        "name": "base",
+                        "type": "string",
+                        "description": "The base of the subtree in which the search is to be constrained."
+                      },
+                      {
+                        "name": "scope",
+                        "type": "int",
+                        "description": "The search scope. This specifies the portion of the target subtree that should be considered."
+                      },
+                      {
+                        "name": "deref",
+                        "type": "int",
+                        "description": "The alias dereferencing behavior, which indicates how the server should treat any aliases encountered while processing the search."
+                      },
+                      {
+                        "name": "filter",
+                        "type": "string",
+                        "description": "The filter criteria for the search with the scope."
+                      },
+                      {
+                        "name": "attr",
+                        "type": "string",
+                        "description": "A set of attributes to be returned to the client."
+                      },
+                      {
+                        "name": "number_of_results",
+                        "type": "int",
+                        "description": "Number of rows returned from the search."
+                      },
+                      {
+                        "name": "auth_meta",
+                        "type": "string",
+                        "description": "Object for authentication context including factors used, device information if cert was present, push device information if JumpCloud Protect was a factor, and policies that were applied."
+                      },
+                      {
+                        "name": "mdm_type",
+                        "type": "string",
+                        "description": "The type of MDM service."
+                      },
+                      {
+                        "name": "device_object_id",
+                        "type": "string",
+                        "description": "Unique ID for the device."
+                      },
+                      {
+                        "name": "device_manager_object_id",
+                        "type": "string",
+                        "description": "Unique ID for the device manager."
+                      },
+                      {
+                        "name": "windows_device_uuid",
+                        "type": "string",
+                        "description": "Unique ID for the windows device."
+                      },
+                      {
+                        "name": "command_uuid",
+                        "type": "string",
+                        "description": "Unique ID for the command."
+                      },
+                      {
+                        "name": "request_type",
+                        "type": "string",
+                        "description": "The type of command."
+                      },
+                      {
+                        "name": "command",
+                        "type": "string",
+                        "description": "The executed command."
+                      },
+                      {
+                        "name": "status",
+                        "type": "string",
+                        "description": "The command result: Acknowledged, Error, CommandFormatError, and Idle."
+                      },
+                      {
+                        "name": "error_chain",
+                        "type": "string",
+                        "description": "Raw error details as reported by the MDM device."
+                      },
+                      {
+                        "name": "result",
+                        "type": "string",
+                        "description": "Description of the end result of the event"
+                      },
+                      {
+                        "name": "name",
+                        "type": "string",
+                        "description": "The name of the notification channel."
+                      },
+                      {
+                        "name": "description",
+                        "type": "string",
+                        "description": "The description of the notification channel."
+                      },
+                      {
+                        "name": "channel_object_id",
+                        "type": "string",
+                        "description": "Unique ID for the notification channel."
+                      },
+                      {
+                        "name": "config",
+                        "type": "string",
+                        "description": "The configuration of the notification channel."
+                      },
+                      {
+                        "name": "referrer_object_id",
+                        "type": "string",
+                        "description": "Unique ID for the referrer."
+                      },
+                      {
+                        "name": "referrer_type",
+                        "type": "string",
+                        "description": "The type of referrer."
+                      },
+                      {
+                        "name": "object_storage_item_object_id",
+                        "type": "string",
+                        "description": "Unique ID for the object storage item."
+                      },
+                      {
+                        "name": "object_storage_item_version_object_id",
+                        "type": "string",
+                        "description": "Unique ID for the object storage item version."
+                      },
+                      {
+                        "name": "object_storage_item_version_name",
+                        "type": "string",
+                        "description": "Name of the object storage item."
+                      },
+                      {
+                        "name": "object_storage_item_version_size",
+                        "type": "int",
+                        "description": "Size of the object storage item's version in bytes."
+                      },
+                      {
+                        "name": "object_storage_item_version_sha_256_sum",
+                        "type": "string",
+                        "description": "Object storage item version's SHA-256 sum."
+                      },
+                      {
+                        "name": "total_software_item_count",
+                        "type": "int",
+                        "description": "Total count of object storage items with a SOFTWARE_APP referrer type for the organization."
+                      },
+                      {
+                        "name": "total_space_used",
+                        "type": "int",
+                        "description": "Total sum of object storage items."
+                      },
+                      {
+                        "name": "system_object_id",
+                        "type": "string",
+                        "description": "Unique ID for the system associated with the request."
+                      },
+                      {
+                        "name": "detail",
+                        "type": "string",
+                        "description": "Log message associated with an alert event."
+                      },
+                      {
+                        "name": "pid",
+                        "type": "string",
+                        "description": "Partner ID of the MSP."
+                      },
+                      {
+                        "name": "access_request_id",
+                        "type": "string",
+                        "description": "Access request ID."
+                      },
+                      {
+                        "name": "workflow",
+                        "type": "string",
+                        "description": "Workflow object with id name type and description."
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-JumpCloud_API"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source\r\n| extend \r\n TimeGenerated = timestamp | extend Type=\"JumpCloud_CL\"",
+                    "outputStream": "Custom-JumpCloud_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "JumpCloud_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "JumpCloud_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "Timestamp of when the event occurred (UTC)."
+                    },
+                    {
+                      "name": "correlation",
+                      "type": "string",
+                      "description": "Details for a background process or parent event that can be used to correlate related events."
+                    },
+                    {
+                      "name": "resource",
+                      "type": "string",
+                      "description": "Resource that changed or attempted the login."
+                    },
+                    {
+                      "name": "system_group",
+                      "type": "string",
+                      "description": "string that contains the closest device/system group involved in the event."
+                    },
+                    {
+                      "name": "system",
+                      "type": "string",
+                      "description": "The string that describes the system."
+                    },
+                    {
+                      "name": "target_resource",
+                      "type": "string",
+                      "description": "Target resource involved in the event."
+                    },
+                    {
+                      "name": "event_type",
+                      "type": "string",
+                      "description": "Event type."
+                    },
+                    {
+                      "name": "useragent",
+                      "type": "string",
+                      "description": "User agent information for the browser that submitted the request."
+                    },
+                    {
+                      "name": "auth_method",
+                      "type": "string",
+                      "description": "Session = console, api-key = api-key."
+                    },
+                    {
+                      "name": "geoip",
+                      "type": "string",
+                      "description": "Geo IP information for the IP address that made the request."
+                    },
+                    {
+                      "name": "mfa",
+                      "type": "boolean",
+                      "description": "Denotes whether MFA was used on an authentication attempt."
+                    },
+                    {
+                      "name": "mfa_meta",
+                      "type": "string",
+                      "description": "string that contains metadata around MFA authentication such as the type of MFA."
+                    },
+                    {
+                      "name": "eventType",
+                      "type": "string",
+                      "description": "Type of the event"
+                    },
+                    {
+                      "name": "provider",
+                      "type": "string",
+                      "description": "The org ID of the provider if the org is a provider org."
+                    },
+                    {
+                      "name": "success",
+                      "type": "boolean",
+                      "description": "Denotes whether a login attempt was successful."
+                    },
+                    {
+                      "name": "message_chain",
+                      "type": "string",
+                      "description": "Results detail for each event."
+                    },
+                    {
+                      "name": "error_message",
+                      "type": "string",
+                      "description": "Error details."
+                    },
+                    {
+                      "name": "idm_client_id",
+                      "type": "string",
+                      "description": "The client ID for the Identity Management integration."
+                    },
+                    {
+                      "name": "application",
+                      "type": "string",
+                      "description": "Information for the application that the event was initiated for."
+                    },
+                    {
+                      "name": "auth_context",
+                      "type": "string",
+                      "description": "string for authentication context including factors used, device information, and policies applied."
+                    },
+                    {
+                      "name": "service",
+                      "type": "string",
+                      "description": "Service that the event originated from."
+                    },
+                    {
+                      "name": "organization",
+                      "type": "string",
+                      "description": "Organization that the user belongs to."
+                    },
+                    {
+                      "name": "association",
+                      "type": "string",
+                      "description": "string that describes a change in association, such as adding a user to a group."
+                    },
+                    {
+                      "name": "client_ip",
+                      "type": "string",
+                      "description": "IP address that the request came from."
+                    },
+                    {
+                      "name": "initiated_by",
+                      "type": "string",
+                      "description": "string that describes who initiated the request."
+                    },
+                    {
+                      "name": "changes",
+                      "type": "string",
+                      "description": "List of changes made in the request. You cannot search on the contents of this field."
+                    },
+                    {
+                      "name": "id",
+                      "type": "string",
+                      "description": "Unique ID for the event"
+                    },
+                    {
+                      "name": "category",
+                      "type": "string",
+                      "description": "Category of alert"
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string",
+                      "description": "Severity of alert."
+                    },
+                    {
+                      "name": "username",
+                      "type": "string",
+                      "description": "Username provided for the alert service call."
+                    },
+                    {
+                      "name": "user_agent",
+                      "type": "string",
+                      "description": "User agent information for the browser that submitted the request."
+                    },
+                    {
+                      "name": "version",
+                      "type": "string",
+                      "description": "The schema version for the document object."
+                    },
+                    {
+                      "name": "idp_initiated",
+                      "type": "boolean",
+                      "description": "Returns true if the request was initiated from the Identity Provider (JumpCloud). Returns false if the auth was initiated from the service provider."
+                    },
+                    {
+                      "name": "nas_mfa_state",
+                      "type": "string",
+                      "description": "Disabled: No MFA required. Enabled: MFA is required if the user is configured for MFA. Required: MFA is required unless the user is excluded and not configured for MFA. Always: MFA always required."
+                    },
+                    {
+                      "name": "auth_type",
+                      "type": "string",
+                      "description": "Authentication type."
+                    },
+                    {
+                      "name": "eap_type",
+                      "type": "string",
+                      "description": "EAP type."
+                    },
+                    {
+                      "name": "outer",
+                      "type": "string",
+                      "description": "Object for outer."
+                    },
+                    {
+                      "name": "system_timestamp",
+                      "type": "datetime",
+                      "description": "Local system time."
+                    },
+                    {
+                      "name": "message",
+                      "type": "string",
+                      "description": "Log message associated with a login attempt."
+                    },
+                    {
+                      "name": "src_ip",
+                      "type": "string",
+                      "description": "IP address the login request came from."
+                    },
+                    {
+                      "name": "process_name",
+                      "type": "string",
+                      "description": "Process that initiated a login attempt."
+                    },
+                    {
+                      "name": "app_management_source",
+                      "type": "string",
+                      "description": "The JumpCloud method of configuring and installing the application."
+                    },
+                    {
+                      "name": "windows_meta",
+                      "type": "string",
+                      "description": "Information about Windows authentications including whether the login had elevated privileges and the logon type."
+                    },
+                    {
+                      "name": "connection_id",
+                      "type": "string",
+                      "description": "Unique id for every LDAP connection."
+                    },
+                    {
+                      "name": "operation_number",
+                      "type": "int",
+                      "description": "All operation requests and operation result pairs are given incremental operation numbers beginning with operation_number=0 to identify the distinct operations being performed."
+                    },
+                    {
+                      "name": "dn",
+                      "type": "string",
+                      "description": "Distinguished name (DN) provided for authentication."
+                    },
+                    {
+                      "name": "mech",
+                      "type": "string",
+                      "description": "The authentication method used. Either simple or SASL."
+                    },
+                    {
+                      "name": "start_tls",
+                      "type": "boolean",
+                      "description": "The starttls protocol that was used to open the LDAP connection."
+                    },
+                    {
+                      "name": "tls_established",
+                      "type": "boolean",
+                      "description": "The LDAPS protocol that was used to open the LDAP connection."
+                    },
+                    {
+                      "name": "error_code",
+                      "type": "int",
+                      "description": "Result code."
+                    },
+                    {
+                      "name": "oid",
+                      "type": "string",
+                      "description": "LDAP object identifier."
+                    },
+                    {
+                      "name": "base",
+                      "type": "string",
+                      "description": "The base of the subtree in which the search is to be constrained."
+                    },
+                    {
+                      "name": "scope",
+                      "type": "int",
+                      "description": "The search scope. This specifies the portion of the target subtree that should be considered."
+                    },
+                    {
+                      "name": "deref",
+                      "type": "int",
+                      "description": "The alias dereferencing behavior, which indicates how the server should treat any aliases encountered while processing the search."
+                    },
+                    {
+                      "name": "filter",
+                      "type": "string",
+                      "description": "The filter criteria for the search with the scope."
+                    },
+                    {
+                      "name": "attr",
+                      "type": "string",
+                      "description": "A set of attributes to be returned to the client."
+                    },
+                    {
+                      "name": "number_of_results",
+                      "type": "int",
+                      "description": "Number of rows returned from the search."
+                    },
+                    {
+                      "name": "auth_meta",
+                      "type": "string",
+                      "description": "Object for authentication context including factors used, device information if cert was present, push device information if JumpCloud Protect was a factor, and policies that were applied."
+                    },
+                    {
+                      "name": "mdm_type",
+                      "type": "string",
+                      "description": "The type of MDM service."
+                    },
+                    {
+                      "name": "device_object_id",
+                      "type": "string",
+                      "description": "Unique ID for the device."
+                    },
+                    {
+                      "name": "device_manager_object_id",
+                      "type": "string",
+                      "description": "Unique ID for the device manager."
+                    },
+                    {
+                      "name": "windows_device_uuid",
+                      "type": "string",
+                      "description": "Unique ID for the windows device."
+                    },
+                    {
+                      "name": "command_uuid",
+                      "type": "string",
+                      "description": "Unique ID for the command."
+                    },
+                    {
+                      "name": "request_type",
+                      "type": "string",
+                      "description": "The type of command."
+                    },
+                    {
+                      "name": "command",
+                      "type": "string",
+                      "description": "The executed command."
+                    },
+                    {
+                      "name": "status",
+                      "type": "string",
+                      "description": "The command result: Acknowledged, Error, CommandFormatError, and Idle."
+                    },
+                    {
+                      "name": "error_chain",
+                      "type": "string",
+                      "description": "Raw error details as reported by the MDM device."
+                    },
+                    {
+                      "name": "result",
+                      "type": "string",
+                      "description": "Description of the end result of the event"
+                    },
+                    {
+                      "name": "name",
+                      "type": "string",
+                      "description": "The name of the notification channel."
+                    },
+                    {
+                      "name": "description",
+                      "type": "string",
+                      "description": "The description of the notification channel."
+                    },
+                    {
+                      "name": "channel_object_id",
+                      "type": "string",
+                      "description": "Unique ID for the notification channel."
+                    },
+                    {
+                      "name": "config",
+                      "type": "string",
+                      "description": "The configuration of the notification channel."
+                    },
+                    {
+                      "name": "referrer_object_id",
+                      "type": "string",
+                      "description": "Unique ID for the referrer."
+                    },
+                    {
+                      "name": "referrer_type",
+                      "type": "string",
+                      "description": "The type of referrer."
+                    },
+                    {
+                      "name": "object_storage_item_object_id",
+                      "type": "string",
+                      "description": "Unique ID for the object storage item."
+                    },
+                    {
+                      "name": "object_storage_item_version_object_id",
+                      "type": "string",
+                      "description": "Unique ID for the object storage item version."
+                    },
+                    {
+                      "name": "object_storage_item_version_name",
+                      "type": "string",
+                      "description": "Name of the object storage item."
+                    },
+                    {
+                      "name": "object_storage_item_version_size",
+                      "type": "int",
+                      "description": "Size of the object storage item's version in bytes."
+                    },
+                    {
+                      "name": "object_storage_item_version_sha_256_sum",
+                      "type": "string",
+                      "description": "Object storage item version's SHA-256 sum."
+                    },
+                    {
+                      "name": "total_software_item_count",
+                      "type": "int",
+                      "description": "Total count of object storage items with a SOFTWARE_APP referrer type for the organization."
+                    },
+                    {
+                      "name": "total_space_used",
+                      "type": "int",
+                      "description": "Total sum of object storage items."
+                    },
+                    {
+                      "name": "system_object_id",
+                      "type": "string",
+                      "description": "Unique ID for the system associated with the request."
+                    },
+                    {
+                      "name": "detail",
+                      "type": "string",
+                      "description": "Log message associated with an alert event."
+                    },
+                    {
+                      "name": "pid",
+                      "type": "string",
+                      "description": "Partner ID of the MSP."
+                    },
+                    {
+                      "name": "access_request_id",
+                      "type": "string",
+                      "description": "Access request ID."
+                    },
+                    {
+                      "name": "workflow",
+                      "type": "string",
+                      "description": "Workflow object with id name type and description."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "JumpCloudMultiRule",
+          "title": "JumpCloud (using REST API)-Preview",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The [JumpCloud](https://jumpcloud.com) connector allows you to easily connect your JumpCloud organization events to Microsoft Sentinel. The data connector uses the [JumpCloud REST API](https://jumpcloud.com/api) to fetch logs and supports DCR-based ingestion time transformations that parse the received data and ingest into custom table(JumpCloud_CL) in your Log Analytics workspace.",
+          "graphQueriesTableName": "JumpCloud_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Get Events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of JumpCloud Events",
+              "query": "{{graphQueriesTableName}}\n  | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n       | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "JumpCloud REST API Key",
+                "description": "Enable API access in JumpCloud and generate API Key. Please refer to JumpCloud official [documentation](https://jumpcloud.com/api) for more information."
+              },
+              {
+                "name": "JumpCloud Organization Id",
+                "description": "Obtain your JumpCloud organization id to fetch events. Follow the steps in the [documentation](https://jumpcloud.com/api) to obtain the Organization Id using the JumpCloud API Key obtained in previous step."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Currently, this connector allows to ingest events from the following [JumpCloud REST API](https://jumpcloud.com/api) endpoint: \n 1. [Get Organization Events](https://jumpcloud.com/api) \n>This connector parses events into JumpCloud_CL Table.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "label": "Organization Id",
+                    "placeholder": "OrganizationId",
+                    "type": "text",
+                    "name": "organization"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "API Key",
+                    "placeholder": "ApiKey",
+                    "type": "securestring",
+                    "name": "apiKey"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "Event Types",
+                    "placeholder": "directory;radius;sso;systems;ldap;mdm",
+                    "type": "text",
+                    "requestObjectKey": "queryParametersTemplate",
+                    "name": "eventtypes"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ],
+              "title": "Connect JumpCloud events to Microsoft Sentinel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "JumpCloud (using REST API)-Preview",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "JumpCloud (using REST API)-Preview",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "organization": {
+              "defaultValue": "organization",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiKey": {
+              "defaultValue": "apiKey",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "eventtypes": {
+              "defaultValue": "eventtypes",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'JumpCloudAPIRequest', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "JumpCloudMultiRule",
+                "dataType": "JumpCloud_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-JumpCloud_API",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apiKey')]",
+                  "ApiKeyName": "x-api-key"
+                },
+                "request": {
+                  "apiEndpoint": "https://api.jumpcloud.com/insights/directory/v1/events",
+                  "httpMethod": "POST",
+                  "queryParameters": {
+                    "perPage": 1000
+                  },
+                  "IsPostPayloadJson": true,
+                  "queryParametersTemplate": "[[concat('{\"service\": [\"', parameters('eventtypes'), '\"], \"start_time\": \"{_QueryWindowStartTime}\", \"end_time\": \"{_QueryWindowEndTime}\" }')]",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "t0",
+                  "endTimeAttributeName": "t1",
+                  "rateLimitQps": 2,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "x-org-id": "[[parameters('organization')]"
+                  }
+                },
+                "paging": {
+                  "pagingType": "LinkHeader",
+                  "linkHeaderRelLinkName": "rel=next"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "JumpCloud",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/JumpCloud/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Testing JumpCloud Solution</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "JumpCloud",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-07-12",
+        "providers": [
+          "JumpCloud"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
