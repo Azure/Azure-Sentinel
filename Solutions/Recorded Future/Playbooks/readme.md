@@ -1,9 +1,9 @@
 [<img alt="Recorded Future" src="Enrichment\RecordedFuture-IOC_Enrichment\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
 # Recorded Future Intelligence for Microsoft Sentinel
 
-## Prerequisites  
+## Prerequisites
 
-### Solution Dependencies  
+### Solution Dependencies
 
 The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be installed for indicators to be forwarded to Microsoft Sentinel ThreatIntelligenceIndicator log table. The Threat Intelligence Solution contains both the new **Threat Intelligence Upload Indicators API** and the _deprecated_ **Threat Intelligence Platforms Data Connector**.
 
@@ -13,15 +13,17 @@ The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be
 
 Microsoft article that describes roles and permissions in Microsoft Sentinel <a href="https://learn.microsoft.com/en-us/azure/sentinel/roles" target="_blank">Roles and permissions in Microsoft Sentinel</a>
 
-- During installation, the person performing the installations of the playbooks require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level, 
+- During installation, the person performing the installations of the playbooks require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level,
 
-- If you use <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">managed identity</a> authorization for playbook (**Recommended**). The user performing the installation needs to have the role of **Owner (highest level)** or **Role Based Access Control Administrator** on resource group level. 
+- If you use <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">managed identity</a> authorization for playbook (**Recommended**). The user performing the installation needs to have the role of **Owner (highest level)** or **Role Based Access Control Administrator** on resource group level.
 
 - The users that are to interact with **Microsoft Sentinel** require _**Microsoft Sentinel Contributor**_ permissions
 
- 
+<a id="api-key"></a>
 ### Recorded Future API Key
 Recorded Future requires API keys to communicate with our API. To obtain API keys. <a href="https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta" target="_blank">Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here</a> or visit <a href="https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens" target="_blank">Recorded Future Requesting API Tokens</a> (Require Recorded Future Login) and request API token for ```Recorded Future for Microsoft Sentinel``` or/and ```Recorded Future Sandbox for Microsoft Sentinel```.
+
+The Recorded Future Sandbox integration requires **BOTH** a API key for ```Recorded Future Sandbox for Microsoft Sentinel``` **AND** a ```Recorded Future for Microsoft Sentinel``` API key that is different than the one used in the ```Recorded Future for Microsoft Sentinel``` integration. They need to both be input in their respective places.
 
 <details>
 <summary>Expand to see API request form</summary>
@@ -33,7 +35,7 @@ or\
 
 ### Connectors
 The Recorded Future solution uses the following connectors:
-- **/recordedfuturev2** - <a href="https://learn.microsoft.com/en-us/connectors/recordedfuturev2/" target="_blank">Microsoft power platform connector</a>. 
+- **/recordedfuturev2** - <a href="https://learn.microsoft.com/en-us/connectors/recordedfuturev2/" target="_blank">Microsoft power platform connector</a>.
 
 - **/RecordedFuture-CustomConnector** - [RecordedFuture-CustomConnector](Connectors/RecordedFuture-CustomConnector/readme.md)
 
@@ -67,14 +69,14 @@ It is possible to install specific playbooks as specified in the [Playbooks](#pl
 
 1. Locate the `Recorded Future Intelligence` in Microsoft Sentinel Content Hub.
 ![](Images/2023-04-18-08-39-58.png)
-Press **Install**  and continue to configure the solution. 
+Press **Install**  and continue to configure the solution.
 
-> [!NOTE] 
-> The Content Hub installation provides templates and you have to create playbooks, workbooks, and analytic rules based on the templates. 
+> [!NOTE]
+> The Content Hub installation provides templates and you have to create playbooks, workbooks, and analytic rules based on the templates.
 
 ![](Images/2023-11-20-12-13-25.png)
 
-When installing playbooks from templates, read the description and look for dependencies that have to be installed. 
+When installing playbooks from templates, read the description and look for dependencies that have to be installed.
 
 Example, install a custom connector that is included in the solution together with the playbook. Read the documentation for each playbook in sub folders listed [here](#playbooks)
 
@@ -85,11 +87,11 @@ After pressing the "Create Playbook" specify Subscription, Resource Group and Wo
 ![](Images/2023-04-18-08-43-42.png)
 
 # Playbooks
-Some playbooks are not included in the Content Hub Solution and can be installed from this README. It is stated in the description of each playbook as **'Included in Solution: Yes/No'**. Playbooks not included in the Content Hub installation are provided as previews or examples of how to automate use cases.   
+Some playbooks are not included in the Content Hub Solution and can be installed from this README. It is stated in the description of each playbook as **'Included in Solution: Yes/No'**. Playbooks not included in the Content Hub installation are provided as previews or examples of how to automate use cases.  
 
 <a id="playbooks"></a>
 ## Playbooks
-Consider your organizational use cases and install the corresponding playbooks to fit your needs. For examples and explanations of the use cases, see the [Key Features](../readme.md#key-features) section. 
+Consider your organizational use cases and install the corresponding playbooks to fit your needs. For examples and explanations of the use cases, see the [Key Features](../readme.md#key-features) section.
 
 |Use case| Playbook |
 |-|-|
@@ -101,10 +103,10 @@ Consider your organizational use cases and install the corresponding playbooks t
 | Custom connectors | [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md) |
 | Deprecated playbooks | [Deprecated Risk List Playbooks](Deprecated/readme.md) |
 
-<a id="connectors-authorization"></a>
+<a id="connector-authorization"></a>
 ## Connector Authorization
 
-Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type. 
+Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type.
 
 Below are guides that a tailored to our recommended authorization flow, depending on organizational rules, the flow might be different. Please consult with your Azure administrator in those cases.
 
@@ -120,7 +122,7 @@ After a logic app has been installed, the **Recorded Future Connector V2** needs
 3. Click on **_RecordedFuture-ConnectorV2_**
 4. Click on **_General_** in the left menu on the newly opened section
 5. Click on **_Edit API Connection_**
-6. Paste the **Recorded Future API Key** and click **_Save_**   
+6. Paste the **Recorded Future API Key** and click **_Save_**
 
 ![apiconnection](Images/apiconnection.png)
 
@@ -131,7 +133,7 @@ After a logic app has been installed, the **Recorded Future Connector V2** needs
 
 <br>
 
-The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner (with highest permissions)** or **Role Based Access Control Administrator** on resource group level. 
+The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner (with highest permissions)** or **Role Based Access Control Administrator** on resource group level.
 
 For more detailed information check out this Micrsoft <a href="https://learn.microsoft.com/en-us/azure/logic-apps/authenticate-with-managed-identity?tabs=consumption" target="_blank">guide</a>
 
@@ -168,7 +170,7 @@ Workbook templates are installed as part of the Solution and and can be saved an
 ![Workbooks](Images/workbook.png)
 </details>
 
-The Recorded Future Solutions contains the following Workbooks. Note that workbooks have dependencies on corresponding Playbooks configured and running. 
+The Recorded Future Solutions contains the following Workbooks. Note that workbooks have dependencies on corresponding Playbooks configured and running.
 |Use Case|Workbook Name| Playbook dependency|
 |-|-|-|
 |SOC Efficiency|Alerts Overview|Alert-Importer|
@@ -181,47 +183,45 @@ The Recorded Future Solutions contains the following Workbooks. Note that workbo
 |Threat Hunt |Malware Threat Hunting|Threat Hunt Playbooks|
 
 # Analytic Rules
-Recorded Future Solution includes Analytic Rule templates. That can be configured to trigger alerts related to our imported risk lists och threat hunts.
+Recorded Future Solution includes Threat Hunt Analytic Rule templates. Which can be used in conjunction with Microsoft's out of the box analytic rules. The Analytic Rules can be configured to trigger alerts related to our imported risk lists and threat hunts.
+
+To operationalize  Recorded Future threat intelligence, we recommend deploying Microsoft's out of the box threat TI analytic rules, which Recorded Future is fully compatible with. You can find these rules in your Sentinel instance under `Configuration -> Analytics -> Rule Templates`. Searching for rules that start with "TI Map" will bring up all Microsoft out of the box intelligence rules. You should search for rules that use tables that contain relevant log data and then deploy them. Once deployed, this rules will automatically correlate Recorded Future Threat Intelligence against your internal telemetry.
+
 <details>
 <summary>Expand image</summary>
 
 ![Analyticrule](Images/analyticrules.png)
 </details>
 
-When creating Analytic Rules from templates, modify the provided KQL to match you infrastructure. The KQL query below is an example where the ASIM imNetworkSession table can be exchanged for any table containing outgoing IP traffic in your infrastructure. 
+When creating Analytic Rules from templates, modify the provided KQL to match you infrastructure. The KQL query below is an example where the ASIM imNetworkSession table can be exchanged for any table containing outgoing IP traffic in your infrastructure.
 
 ```JS
-let ioc_lookBack = 1d;
-// The source table (ASimNetworkSessionLogs) can be replaced by any infrastructure table containing ip data.
-// The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns  
-imNetworkSession
-| where isnotempty(DstIpAddr)
-| join kind=inner (
-ThreatIntelligenceIndicator
-// Only look for IOCs
-| where isnotempty(NetworkIP)
-// Only look at Recorded Future Threat Hunt Indicators.
-| where Description startswith "Recorded Future - Threat Hunt"
-// Only work with the latest indicators  
-| where TimeGenerated >= ago(ioc_lookBack)
-| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-| where Active == true and ExpirationDateTime > now()
-) on $left.DstIpAddr == $right.NetworkIP
-// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.DstIpAddr
-| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
-| project NetworkIP, Description, Type, TimeGenerated, RecordedFuturePortalLink
+  let ioc_lookBack = 1d;
+  // The source table (_Im_NetworkSession) is a ASIM parser table, but can be replaced by any infrastructure table containing ip data.
+  // The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns
+  _Im_NetworkSession
+  | where isnotempty(DstIpAddr)
+  | join kind=inner (
+  ThreatIntelIndicators
+  // Only look for IOCs
+  | where ObservableKey == 'ipv4-addr:value'
+  | where isnotempty(ObservableValue)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Data.description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  ) on $left.DstIpAddr == $right.ObservableValue
+  // select column from the source table to match with Recorded Future ThreatIntelIndicators $left.DstIpAddr
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']
+  | project NetworkIP=ObservableValue, Data.description, Type, TimeGenerated, RecordedFuturePortalLink
 ```
 
-The following Analytic rules are provided in the Solution. All of them requires configuration and adaption to your infrastructure. 
+The following Analytic rules are provided in the Solution. All of them requires configuration and adaption to your infrastructure.
 
 |User Case|Analytic Rule|
 |-|-|
-|Detect|DomainMalwareC2inDNSEvents|
-|Detect|DomainMalwareC2inSyslogEvents|
-|Detect|HashObservedInUndergroundinCommonSecurityLog|
-|Detect|IPMalwareC2inAzureActivityEvents|
-|Detect|IPMalwareC2inDNSEvents|
-|Detect|UrlReportedbyInsiktGroupinSyslogEvents|
 |Threat Hunt|RecordedFutureThreatHuntingHashAllActors|
 |Threat Hunt|RecordedFutureThreatHuntingIPAllActors|
 |Threat Hunt|RecordedFutureThreatHuntingDomainAllActors|
@@ -229,30 +229,30 @@ The following Analytic rules are provided in the Solution. All of them requires 
 
 
 # Upgrade from previous versions
-Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.  
+Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.
 
 ### From version 2.4
-We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. Going forward, install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Use the same risk lists being downloaded today, same cadence, and use the same description using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting. 
+We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. Going forward, install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Use the same risk lists being downloaded today, same cadence, and use the same description using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting.
 
 Our support will end when Microsoft shut down the underlying API. More information can be found on <a href="https://learn.microsoft.com/en-us/azure/sentinel/understand-threat-intelligence#add-threat-indicators-to-microsoft-sentinel-with-the-threat-intelligence-platforms-data-connector" target="_blank">Microsoft Learn</a> (No end date has communicated from Microsoft at this point November 2023).
 
 ### From version 1
-If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Install the new all IndicatorImport and enrichment -playbooks. Select a different name than the once already installed and reauthenticate them. Configure the IndicatorImport playbooks to pull your selection of risk lists. After validating that the new playbooks works as expected you can deactivate the V1 versions. 
+If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Install the new all IndicatorImport and enrichment -playbooks. Select a different name than the once already installed and reauthenticate them. Configure the IndicatorImport playbooks to pull your selection of risk lists. After validating that the new playbooks works as expected you can deactivate the V1 versions.
 
 # Troubleshooting
 
 ## Query Risk Lists
-After successfully running and importing one or more Risk Lists it is possible to query the imported data in your Log Analytics Workspace. 
+After successfully running and importing one or more Risk Lists it is possible to query the imported data in your Log Analytics Workspace.
 
-Example queries:  
-``` sql 
+Example queries:
+``` sql
 //  List 10 rows from ThreatIntelligenceIndicator log imported from Recorded Future
 ThreatIntelligenceIndicator
 | where Description contains "Recorded Future"
 | take 10
 
-// List 10 rows from ThreatIntelligenceIndicator log imported from the  
-// IP - Actively Communicating C&C Server Risk List 
+// List 10 rows from ThreatIntelligenceIndicator log imported from the
+// IP - Actively Communicating C&C Server Risk List
 ThreatIntelligenceIndicator
 |where Description == "Recorded Future - IP - Actively Communicating C&C Server"
 | take 10
@@ -284,11 +284,11 @@ When reporting issues or errors to Recorded Future on logic apps. Please include
 
 ![alt text](Images/LogicAppVersion.png)
 
-# Known Issues 
+# Known Issues
 
 ## Version 3.0
 Microsoft Sentinel playbook upgrade experience can result in the following error: ```Cannot read properties of null (reading 'parameters')```
 ![](Images/2023-09-13-19-16-24.png)
 
-A workaround is to reinstall and overwrite the playbooks from the template in Playbook Template tab and not using the upgrade wizard. Before overwriting an active playbook make note of the risk list downloaded, the description, cadence of downloading. 
+A workaround is to reinstall and overwrite the playbooks from the template in Playbook Template tab and not using the upgrade wizard. Before overwriting an active playbook make note of the risk list downloaded, the description, cadence of downloading.
 ![](Images/2023-09-13-19-24-54.png)
