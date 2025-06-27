@@ -1,7 +1,7 @@
 Parser:
   Title: File Event ASIM parser for Microsoft Windows Events
-  Version: '0.1.3'
-  LastUpdated: Oct 31, 2023
+  Version: '0.2.0'
+  LastUpdated: Jul 23, 2024
 Product:
   Name: Microsoft Windows Events
 Normalization:
@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
+  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) logs ingested in 'WindowsEvent' table to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
 ParserName: ASimFileEventMicrosoftWindowsEvents
 EquivalentBuiltInParser: _ASim_FileEvent_MicrosoftWindowsEvents
 ParserParams:
@@ -49,7 +49,7 @@ ParserQuery: |
     'S-1-5-18', 'Local System', 'Simple',
     'S-1-0-0', 'Nobody', 'Simple'
   ];
-  union isfuzzy=false (WindowsEvent
+  WindowsEvent
   | where EventID == 4663 
     and EventData.ObjectType == "File"
     and EventData.ObjectName !startswith @"\Device\"
@@ -65,13 +65,8 @@ ParserQuery: |
     , SubjectAccount = tostring(EventData.SubjectAccount)
     , SubjectLogonId = tostring(EventData.SubjectLogonId)
     , HandleId = tostring(EventData.HandleId)
-  )
-  , (SecurityEvent
-  | where not(disabled)
-  | where EventID == 4663 
-    and ObjectType == "File"
-    and ObjectName !startswith @"\Device\"
-  | project TimeGenerated, EventID, AccessMask, ProcessName, SubjectUserSid, AccountType, Computer, ObjectName, ProcessId, SubjectUserName, SubjectAccount, SubjectLogonId, HandleId)
+    , Type
+  | extend ActorUserIdType="SID", TargetFilePathType="Windows Local"
   | lookup EventTypeLookup on AccessMask
   | lookup UserTypeLookup on AccountType
   | lookup KnownSIDs on $left.SubjectUserSid == $right.sid
@@ -101,5 +96,6 @@ ParserQuery: |
     , ActorWindowsUsername = ActorUsername
     , User = ActorUsername
     , ActorUserSid = ActorUserId
+  | project-away AccessMask,ActorWindowsUsername,FileSessionId,SubjectAccount,SubjectUserName,TargetFilePathFormat
   };
   Parser (disabled = disabled)

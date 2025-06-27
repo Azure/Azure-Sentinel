@@ -15,6 +15,7 @@ This playbook provides an end to end example of the collection of Ransomware Ano
     * RubrikFilesetRansomwareDiscovery
     * RubrikRansomwareDiscoveryAndFileRecovery
     * RubrikRansomwareDiscoveryAndVMRecovery
+    * RubrikFileObjectContextAnalysis
 
 ### Deployment instructions
 

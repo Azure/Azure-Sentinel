@@ -1,19 +1,19 @@
 Parser:
   Title: DNS activity ASIM parser for Sysmon for Windows
-  Version: '0.4'
-  LastUpdated: Jan 3 2023
+  Version: '0.5.1'
+  LastUpdated: Jul 19, 2024
 Product:
   Name: Microsoft Windows Events Sysmon
 Normalization:
   Schema: Dns
-  Version: '0.1.6'
+  Version: '0.1.7'
 References:
 - Title: ASIM DNS Schema
   Link: https://aka.ms/ASimDnsDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Sysmon for Windows DNS logs (event number 22),collected using the Log Analytics agent, to the ASIM Dns normalized schema.<br>The parser supports events collected to both the Event and WindowsEvent tables.The parser supports events collected to both the Event and WindowsEvent tables.
+  This ASIM parser supports normalizing Sysmon for Windows DNS logs (event number 22) logs ingested in 'Event' table  to the ASIM Dns normalized schema.
 ParserName: ASimDnsMicrosoftSysmon
 EquivalentBuiltInParser: _ASim_Dns_MicrosoftSysmon
 ParserParams:
@@ -49,7 +49,7 @@ ParserQuery: |
       ];
     let ParsedDnsEvent_Event =(disabled:bool=false) {
         Event | where not(disabled)
-        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type , _ItemId 
         | where Source == "Microsoft-Windows-Sysmon" and EventID==22
         | project-away Source, EventID
         | parse-kv EventData as (
@@ -75,28 +75,7 @@ ParserQuery: |
             SrcUsername = User
         | project-away EventData
     };
-    let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
-        WindowsEvent | where not(disabled)
-        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId,  Provider, Type // , _ItemId 
-        | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
-        | project-away Provider, EventID      
-        | extend 
-            RuleName = tostring(EventData.RuleName),
-            EventEndTime = todatetime(EventData.UtcTime),
-            SrcProcessGuid = tostring(EventData.ProcessGuid),
-            // extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
-            SrcProcessId = tostring(EventData.ProcessId),  
-            DnsQuery = tostring(EventData.QueryName),
-            DnsResponseCode = toint(EventData.QueryStatus),
-            DnsResponseName = tostring(EventData.QueryResults),
-            SrcProcessName = tostring(EventData.Image),
-            SrcUsername = tostring(EventData.User)
-        | project-away EventData
-        | parse SrcProcessGuid with '{' SrcProcessGuid '}'
-    };
-    union isfuzzy=true 
-        //ParsedDnsEvent_Event(disabled), 
-        ParsedDnsEvent_WindowsEvent(disabled)
+    ParsedDnsEvent_Event(disabled)
       | lookup RCodeTable on DnsResponseCode
       | project-rename 
           DvcHostname = Computer,
@@ -119,7 +98,8 @@ ParserQuery: |
           RuleName = iff (RuleName == "-", "", RuleName),
           DnsResponseName = iff (DnsResponseName == "-", "", DnsResponseName),
           DnsResponseCodeName = iff (DnsResponseCodeName == "", "NA", DnsResponseCodeName),
-          DvcIdType = iff (DvcId != "", "AzureResourceId", "")
+          DvcIdType = iff (DvcId != "", "AzureResourceId", ""),
+          EventUid = _ItemId
       // -- Aliases
       | extend 
           EventResultDetails = DnsResponseCodeName,
@@ -133,5 +113,6 @@ ParserQuery: |
           Process = SrcProcessName,
           Rule = RuleName,
           DvcAzureResourceId = DvcId
+          | project-away DvcAzureResourceId
     };
     parser(disabled=disabled)

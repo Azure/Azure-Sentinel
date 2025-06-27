@@ -1,0 +1,54 @@
+id: 385234b7-d96c-4dc3-9c0e-ceb46048d487
+name: Dataverse - Identity management changes without MFA
+description: This query is used to show privileged identity administration operations
+  in Dataverse made by accounts that signed in without using MFA
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T0819
+  - T1078.004
+query: |
+  let event_types = dynamic(['Associate', 'Disassociate', 'Create', 'Delete', 'Upsert', 'Update']);
+  let excluded_accounts = dynamic(['cdsusermanagement@onmicrosoft.com', 'unknown', 'powervirtualagentsprod@onmicrosoft.com']);
+  SigninLogs
+  | where AuthenticationRequirement == "singleFactorAuthentication"
+  | where ResourceIdentity == "00000007-0000-0000-c000-000000000000" or AppId == "00000007-0000-0000-c000-000000000000"
+  | where ResultType == 0
+  | summarize by UserId = tolower(UserPrincipalName)
+  | join kind=inner (DataverseActivity
+      | where EntityName =~ 'systemuser' and Message in (event_types)
+      | project TimeGenerated, UserId = tolower(UserId), ClientIp, InstanceUrl, OriginalObjectId
+      | where UserId !in (excluded_accounts))
+      on UserId
+  | extend CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      OriginalObjectId,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - columnName: CloudAppId
+        identifier: AppId
+  - entityType: Account
+    fieldMappings:
+      - columnName: UPNSuffix
+        identifier: UPNSuffix
+      - columnName: AccountName
+        identifier: Name
+version: 3.2.0

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/ASimDnsInfobloxBloxOne')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Dns ASIM parser for Infoblox BloxOne",
+        "category": "ASIM",
+        "FunctionAlias": "ASimDnsInfobloxBloxOne",
+        "query": "let EventSeverityLookup = datatable(LogSeverity:string, EventSeverity:string) [ \"0\", \"Low\", \"1\", \"Low\", \"2\", \"Low\", \"3\", \"Low\", \"4\", \"Medium\", \"5\", \"Medium\", \"6\", \"Medium\", \"7\", \"High\", \"8\", \"High\", \"9\", \"High\", \"10\", \"High\" ]; let DnsQueryTypeLookup = datatable(DnsQueryTypeName:string, DnsQueryType:int) [ \"A\", 1, \"NS\", 2, \"MD\", 3, \"MF\", 4, \"CNAME\", 5, \"SOA\", 6, \"MB\", 7, \"MG\", 8, \"MR\", 9, \"NULL\", 10, \"WKS\", 11, \"PTR\", 12, \"HINFO\", 13, \"MINFO\", 14, \"MX\", 15, \"TXT\", 16, \"RP\", 17, \"AFSDB\", 18, \"X25\", 19, \"ISDN\", 20, \"RT\", 21, \"NSAP\", 22, \"NSAPPTR\", 23, \"SIG\", 24, \"KEY\", 25, \"PX\", 26, \"GPOS\", 27, \"AAAA\", 28, \"LOC\", 29, \"NXT\", 30, \"EID\", 31, \"NIMLOC\", 32, \"SRV\", 33, \"ATMA\", 34, \"NAPTR\", 35, \"KX\", 36, \"CERT\", 37, \"A6\", 38, \"DNAME\", 39, \"SINK\", 40, \"OPT\", 41, \"APL\", 42, \"DS\", 43, \"SSHFP\", 44, \"IPSECKEY\", 45, \"RRSIG\", 46, \"NSEC\", 47, \"DNSKEY\", 48, \"DHCID\", 49, \"NSEC3\", 50, \"NSEC3PARAM\", 51, \"TLSA\", 52, \"SMIMEA\", 53, \"HIP\", 55, \"NINFO\", 56, \"RKEY\", 57, \"TALINK\", 58, \"CDS\", 59, \"CDNSKEY\", 60, \"OPENPGPKEY\", 61, \"CSYNC\", 62, \"ZONEMD\", 63, \"SVCB\", 64, \"HTTPS\", 65, \"SPF\", 99, \"UINFO\", 100, \"UID\", 101, \"GID\", 102, \"UNSPEC\", 103, \"TKEY\", 249, \"TSIG\", 250, \"IXFR\", 251, \"MAILB\", 253, \"MAILA\", 254, \"ANY\", 255, \"URI\", 256, \"CAA\", 257, \"TA\", 32768, \"DLV\", 32769 ]; let DnsResponseCodeLookup = datatable(EventResultDetails:string, DnsResponseCode:int) [ \"NOERROR\", 0, \"FORMERR\", 1, \"SERVFAIL\", 2, \"NXDOMAIN\", 3, \"NOTIMPL\", 4, \"REFUSED\", 5, \"YXDOMAIN\", 6, \"YXRRSET\", 7, \"NXRRSET\", 8, \"NOTAUTH\", 9, \"NOTZONE\", 10, \"DSOTYPENI\", 11, \"RESERVED12\", 12, \"RESERVED13\", 13, \"RESERVED14\", 14, \"RESERVED15\", 15, \"BADVERS\", 16, \"BADKEY\", 17, \"BADTIME\", 18, \"BADMODE\", 19, \"BADNAME\", 20, \"BADALG\", 21, \"BADTRUNC\", 22, \"BADCOOKIE\", 23, ]; let parser = (disabled:bool=false) { CommonSecurityLog | where not(disabled) and DeviceVendor == \"Infoblox\" and DeviceEventClassID has \"DNS\" | parse-kv AdditionalExtensions as (InfobloxDNSRCode:string, InfobloxDNSQType:string, InfobloxDNSQFlags:string) with (pair_delimiter=\";\", kv_delimiter=\"=\") | project-rename EventResultDetails = InfobloxDNSRCode, DnsQueryTypeName = InfobloxDNSQType, DnsFlags = InfobloxDNSQFlags | extend DnsQueryTypeName = tostring(split(DnsQueryTypeName, ' ')[0]) | lookup EventSeverityLookup on LogSeverity | lookup DnsQueryTypeLookup on DnsQueryTypeName | lookup DnsResponseCodeLookup on EventResultDetails | invoke _ASIM_ResolveDvcFQDN('DeviceName') | project-rename DnsQuery = DestinationDnsDomain, DvcIpAddr = DeviceAddress, SrcIpAddr = SourceIP, EventMessage = Message, EventOriginalSeverity = LogSeverity, EventOriginalType = DeviceEventClassID, SrcUsername = SourceUserName, SrcPortNumber = SourcePort, EventUid = _ItemId | extend Dvc = coalesce(DvcHostname, DvcIpAddr), EventEndTime = TimeGenerated, EventResult = iff(EventResultDetails == \"NOERROR\", \"Success\", \"Failure\"), DnsQuery = iff(substring(DnsQuery, strlen(DnsQuery) - 1, 1) == \".\", substring(DnsQuery, 0, strlen(DnsQuery) - 1), DnsQuery), EventStartTime = TimeGenerated, Src = SrcIpAddr, SrcUsernameType = _ASIM_GetUsernameType(SrcUsername), DnsResponseCodeName = EventResultDetails, IpAddr = SrcIpAddr, User = SrcUsername | extend Domain = DnsQuery | extend EventCount = toint(1), EventSchema = \"Dns\", EventSchemaVersion = \"0.1.7\", EventProduct = \"BloxOne\", EventVendor = \"Infoblox\", EventType = \"Query\", DnsQueryClass = toint(1), DnsQueryClassName = \"IN\" | project-away Source*, Destination*, Device*, AdditionalExtensions, CommunicationDirection, EventOutcome, Protocol, SimplifiedDeviceAction, ExternalID, EndTime, FieldDevice*, Flex*, File*, Old*, MaliciousIP*, OriginalLogSeverity, Process*, ReceivedBytes, SentBytes, Remote*, Request*, StartTime, TenantId, ReportReferenceLink, ReceiptTime, Indicator*, _ResourceId, ThreatConfidence, ThreatDescription, ThreatSeverity, Computer, ApplicationProtocol, ExtID, Reason }; parser(disabled=disabled)",
+        "version": 1,
+        "functionParameters": "disabled:bool=False"
+      }
+    }
+  ]
+}

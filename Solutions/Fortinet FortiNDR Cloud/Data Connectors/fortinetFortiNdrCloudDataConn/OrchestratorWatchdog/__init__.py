@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import azure.durable_functions as df
 import azure.functions as func
+import FncRestClient
 from azure.durable_functions.models import DurableOrchestrationStatus
 from errors import InputError
 from fnc.fnc_client import FncClient
@@ -124,8 +125,9 @@ def get_detection_args():
 
     # Create detection client to get context for history
     # and real time detections
+    rest_client = FncRestClient.FncSentinelRestClient()
     detection_client = FncClient.get_api_client(
-        name=INTEGRATION_NAME, api_token=API_TOKEN, domain=DOMAIN
+        name=INTEGRATION_NAME, api_token=API_TOKEN, domain=DOMAIN, rest_client=rest_client
     )
     h_context, context = detection_client.get_splitted_context(
         args=detection_args)

@@ -97,7 +97,7 @@ def customize_workbench_json(clp_id, workbench_detail, workbench_record):
         xdr_log[column] = workbench_detail[column] if column in workbench_detail else ""
 
     xdr_log["xdrCustomerID"] = clp_id
-    xdr_log["impactScope_Summary"] = json.dumps(workbench_record["impactScope"])
+    xdr_log["impactScope_Summary"] = json.dumps(workbench_detail["impactScope"])
     xdr_log = process_workbench_impact_scope(xdr_log)
     xdr_log = process_workbench_indicators(xdr_log)
 

@@ -67,6 +67,16 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
  * dependentDomainSolutionIds: (Optional property) If a solution is dependent on other domain solutions then use its solution id. This solutionId is a combination of publisherId.offerId. If there are multiple domain solutions then specify in comma separated values like below.
   eg: "dependentDomainSolutionIds": [ "azuresentinel.azure-sentinel-solution-paloaltopanos",
     "azuresentinel.azure-sentinel-solution-squidproxy"]
+  * StaticDataConnectorIds: Optional Array Property: Specify which data connector should be of StaticUI connector kind. If this property is not present then by default it will treat data connector as GenericUI kind. If you want to create a StaticUI data connector then specify the value of "id" property from data connector in this array property.
+  eg 1 For single static data connector: 
+    "StaticDataConnectorIds": [ "AzureActivity" ]
+  eg 2 For multiple static data connector:  
+  "StaticDataConnectorIds": [
+    "ThreatIntelligenceTaxii",
+		"ThreatIntelligence",
+		"ThreatIntelligenceUploadIndicatorsAPI",
+		"MicrosoftDefenderThreatIntelligence"
+  ]
  */
 {
   "Name": "{SolutionName}",
@@ -93,12 +103,12 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": true, // Default should be true
-  "Is1PConnector": false
+  "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify. 
 }
 
 ```
 
-#### **Example of Input File: Solution_McAfeePO.json**
+#### **Example of Input File: Solution_CiscoUmbrella.json**
 
 ```json
 {
@@ -161,7 +171,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "SolutionMetadata.json",
   "TemplateSpec": true, // Default should be true
-  "Is1PConnector": false
+  "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify.
 }
 ```
 

@@ -1,0 +1,2024 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Infoblox-IPAM-Lookup",
+        "description": "The playbook will retrieve IP entities from an incident, call an API to obtain IPAM lookup data, and add this data, along with IP space and subnet information, as a comment on the incident.",
+        "prerequisites": [
+            "1. User must have a valid Infoblox API Key."
+        ],
+        "postDeployment": [
+            "**a. Assign Role to add comment in incident**",
+            "Assign role to this playbook.",    
+            "1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add","2. Add role assignment",
+            "3. Assignment type: Job function roles -> Add 'Microsoft Sentinel Contributor' as a Role",
+            "4. Members: select managed identity for assigned access to and add your logic app as member",
+            "5. Click on review+assign",
+            "**b. Configurations in Microsoft Sentinel**",
+            "1. In Microsoft sentinel, analytical rules should be configured to trigger an incident which has Entities Mapping available for IP.",
+            "2. To manually run the playbook on a particular incident follow the below steps:",
+            "a. Go to Microsoft Sentinel -> <your workspace> -> Incidents",
+            "b. Select an incident.",
+            "c. In the right pane, click on Actions, and from the dropdown select the 'Run Playbook' option.",
+            "d. Click on the Run button beside this playbook."
+        ],
+        "entities": ["IP"],
+        "tags": ["Infoblox", "IPAM", "IP", "Lookup"],
+        "lastUpdateTime": "2024-07-19T16:15:48.355Z",
+        "support": {
+            "tier": "Community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Infoblox"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Infoblox-IPAM-Lookup",
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Please do not keep 'Playbook Name' parameter empty, else you will receive validation failure"
+            }
+        },
+        "Infoblox API Key": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter Infoblox API Key"
+            }
+        },
+        "Infoblox Base Url": {
+            "type": "string",
+            "defaultValue": "https://csp.infoblox.com",
+            "metadata": {
+                "description": "Enter Base URL for your Infoblox instance. (e.g. https://csp.infoblox.com)"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "API Key": {
+                            "defaultValue": "[trim(parameters('Infoblox API Key'))]",
+                            "type": "String"
+                        },
+                        "BaseUrl": {
+                            "type": "String",
+                            "defaultValue": "[trim(parameters('Infoblox Base Url'))]"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_To_Terminate_Execution_If_Error_Occurred_While_Fetching_IPs_Data": {
+                            "actions": {
+                                "Terminate_Due_To_Error_Occured_While_API_Failure": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "message": "@variables('error_message')"
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_IP_Address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('api_failure_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_Execution_If_No_IPs_Found": {
+                            "actions": {
+                                "Add_Comment_To_Incident_No_IPs_Found": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>No IPs found associated with incident.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Terminate_Due_To_No_IPs_Found_Associated_With_Incident_Entities": {
+                                    "runAfter": {
+                                        "Add_Comment_To_Incident_No_IPs_Found": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "message": "No IPs found associated with incident."
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_Error_False_While_Fetching_IP_Details_From_API": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_Each_IP_Address": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Condition_To_Verify_If_IP_Address_is_Empty": {
+                                    "actions": {
+                                        "Condition_To_Verify_Comments_Count_Does_Not_Exceeded_To_100": {
+                                            "actions": {
+                                                "Add_Comment_To_Incident_For_Empty_IP_Address_Found": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>Empty IP Address found.</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Increment_Comments_Count_For_Empty_IP_Address": {
+                                                    "runAfter": {
+                                                        "Add_Comment_To_Incident_For_Empty_IP_Address_Found": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "IncrementVariable",
+                                                    "inputs": {
+                                                        "name": "no_of_comments",
+                                                        "value": 1
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Condition_To_Verify_That_Incident_Has_99_Comment": {
+                                                        "actions": {
+                                                            "Add_Comment_That_Limit_Has_Been_Exceeded_To_100": {
+                                                                "runAfter": {},
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "body": {
+                                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                        "message": "<p>Comment limit to an incident has been breached.</p>"
+                                                                    },
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "path": "/Incidents/Comment"
+                                                                }
+                                                            },
+                                                            "Increment_Number_Of_Comments_For_Exceeded_Limit": {
+                                                                "runAfter": {
+                                                                    "Add_Comment_That_Limit_Has_Been_Exceeded_To_100": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "IncrementVariable",
+                                                                "inputs": {
+                                                                    "name": "no_of_comments",
+                                                                    "value": 1
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@variables('no_of_comments')",
+                                                                        99
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "less": [
+                                                            "@variables('no_of_comments')",
+                                                            99
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Condition_To_Verify_If_IP_Lookup_Information_Fetched_Successfully": {
+                                                "actions": {
+                                                    "Condition_To_Verify_IP_Lookup_Results_Are_Empty": {
+                                                        "actions": {
+                                                            "Condition_To_Verify_That_Incident_Comment_Does_Not_Reach_Limit": {
+                                                                "actions": {
+                                                                    "Add_Comment_To_Incident_For_No_Results_Found_For_IP_Address": {
+                                                                        "runAfter": {},
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "body": {
+                                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                "message": "<p>No IPAM Lookup Results Found For IP: @{items('For_Each_IP_Address')?['Address']}</p>"
+                                                                            },
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "path": "/Incidents/Comment"
+                                                                        }
+                                                                    },
+                                                                    "Increment_Comments_Count": {
+                                                                        "runAfter": {
+                                                                            "Add_Comment_To_Incident_For_No_Results_Found_For_IP_Address": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "IncrementVariable",
+                                                                        "inputs": {
+                                                                            "name": "no_of_comments",
+                                                                            "value": 1
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {},
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "Condition_To_Verify_That_Incident_Comment_Count_Reach_To_99": {
+                                                                            "actions": {
+                                                                                "Add_Comment_That_Limit_Has_Been_Exceeded_To_100_(2)": {
+                                                                                    "runAfter": {},
+                                                                                    "type": "ApiConnection",
+                                                                                    "inputs": {
+                                                                                        "body": {
+                                                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                            "message": "<p>Comment limit to an incident has been breached.</p>"
+                                                                                        },
+                                                                                        "host": {
+                                                                                            "connection": {
+                                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method": "post",
+                                                                                        "path": "/Incidents/Comment"
+                                                                                    }
+                                                                                },
+                                                                                "Increment_Comment_Count_To_100": {
+                                                                                    "runAfter": {
+                                                                                        "Add_Comment_That_Limit_Has_Been_Exceeded_To_100_(2)": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "IncrementVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "no_of_comments",
+                                                                                        "value": 1
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {},
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "equals": [
+                                                                                            "@variables('no_of_comments')",
+                                                                                            99
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "type": "If"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "less": [
+                                                                                "@variables('no_of_comments')",
+                                                                                99
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "Parse_JSON_For_IP_Lookup_Data": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Condition_To_Comment_For_Whole_API_Response_Of_One_IP": {
+                                                                    "actions": {
+                                                                        "Add_Comment_To_Incident_For_Whole_API_Response_Of_One_IP_Traversed_(V3)": {
+                                                                            "runAfter": {},
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "body": {
+                                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                    "message": "<p>@{variables('incident_comment')}</p>"
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "post",
+                                                                                "path": "/Incidents/Comment"
+                                                                            }
+                                                                        },
+                                                                        "Increment_Number_Of_Comments_For_Whole_API_Response_Of_One_IP": {
+                                                                            "runAfter": {
+                                                                                "Add_Comment_To_Incident_For_Whole_API_Response_Of_One_IP_Traversed_(V3)": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "IncrementVariable",
+                                                                            "inputs": {
+                                                                                "name": "no_of_comments",
+                                                                                "value": 1
+                                                                            }
+                                                                        },
+                                                                        "Reset_HTML_Table_For_Whole_API_Response_Of_One_IP": {
+                                                                            "runAfter": {
+                                                                                "Reset_Incident_Comment_For_Whole_API_Response_Of_One_IP": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "html_table",
+                                                                                "value": "@{null}"
+                                                                            }
+                                                                        },
+                                                                        "Reset_Incident_Comment_For_Whole_API_Response_Of_One_IP": {
+                                                                            "runAfter": {
+                                                                                "Increment_Number_Of_Comments_For_Whole_API_Response_Of_One_IP": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "incident_comment",
+                                                                                "value": "@{null}"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "For_Each_IP_Lookup_Result": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "less": [
+                                                                                    "@variables('no_of_comments')",
+                                                                                    99
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "not": {
+                                                                                    "equals": [
+                                                                                        "@variables('incident_comment')",
+                                                                                        "@null"
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "For_Each_IP_Lookup_Result": {
+                                                                    "foreach": "@body('Parse_JSON_For_IP_Lookup_Data')?['results']",
+                                                                    "actions": {
+                                                                        "Append_End_String_Of_HTML_Table": {
+                                                                            "runAfter": {
+                                                                                "Condition_To_Verify_Subnet_Id_Empty": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "AppendToStringVariable",
+                                                                            "inputs": {
+                                                                                "name": "html_table",
+                                                                                "value": "</tbody></table></p>"
+                                                                            }
+                                                                        },
+                                                                        "Append_HTML_Table_Record_To_HTML_Table": {
+                                                                            "runAfter": {
+                                                                                "Append_End_String_Of_HTML_Table": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "AppendToStringVariable",
+                                                                            "inputs": {
+                                                                                "name": "html_table",
+                                                                                "value": "@variables('html_table_record')"
+                                                                            }
+                                                                        },
+                                                                        "Append_to_Human_Readable_Tags": {
+                                                                            "runAfter": {},
+                                                                            "type": "AppendToStringVariable",
+                                                                            "inputs": {
+                                                                                "name": "Human_Readable_Tags",
+                                                                                "value": "@replace(replace(replace(replace(replace(string(items('For_Each_IP_Lookup_Result')?['tags']),'\"',''),'{',''),'}',''),':',' : '),',',variables('new_line'))"
+                                                                            }
+                                                                        },
+                                                                        "Condition_To_Verify_Comment_Exceeded_More_Than_30000_Characters_Limit": {
+                                                                            "actions": {
+                                                                                "Set_Incident_Comment": {
+                                                                                    "runAfter": {},
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "incident_comment",
+                                                                                        "value": "@variables('html_table')"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "Append_HTML_Table_Record_To_HTML_Table": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "else": {
+                                                                                "actions": {
+                                                                                    "Condition_To_Verify_Comment_Count_Does_Not_Exceeded_To_100": {
+                                                                                        "actions": {
+                                                                                            "Add_Comment_To_Incident": {
+                                                                                                "runAfter": {},
+                                                                                                "type": "ApiConnection",
+                                                                                                "inputs": {
+                                                                                                    "body": {
+                                                                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                                        "message": "<p>@{variables('incident_comment')}</p>"
+                                                                                                    },
+                                                                                                    "host": {
+                                                                                                        "connection": {
+                                                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "method": "post",
+                                                                                                    "path": "/Incidents/Comment"
+                                                                                                }
+                                                                                            },
+                                                                                            "Increment_Number_Of_Comment": {
+                                                                                                "runAfter": {
+                                                                                                    "Add_Comment_To_Incident": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "IncrementVariable",
+                                                                                                "inputs": {
+                                                                                                    "name": "no_of_comments",
+                                                                                                    "value": 1
+                                                                                                }
+                                                                                            },
+                                                                                            "Reset_HTML_Table": {
+                                                                                                "runAfter": {
+                                                                                                    "Reset_Incident_Comment": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "SetVariable",
+                                                                                                "inputs": {
+                                                                                                    "name": "html_table",
+                                                                                                    "value": "@{null}"
+                                                                                                }
+                                                                                            },
+                                                                                            "Reset_Incident_Comment": {
+                                                                                                "runAfter": {
+                                                                                                    "Increment_Number_Of_Comment": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "SetVariable",
+                                                                                                "inputs": {
+                                                                                                    "name": "incident_comment",
+                                                                                                    "value": "@{null}"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "runAfter": {},
+                                                                                        "else": {
+                                                                                            "actions": {
+                                                                                                "Condition_To_Verify_That_Incident_Has_99_Comments": {
+                                                                                                    "actions": {
+                                                                                                        "Add_Comment_That_Limit_Has_Been_Exceeded_To_100_(3)": {
+                                                                                                            "runAfter": {},
+                                                                                                            "type": "ApiConnection",
+                                                                                                            "inputs": {
+                                                                                                                "body": {
+                                                                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                                                    "message": "<p>Comment limit to an incident has been breached.</p>"
+                                                                                                                },
+                                                                                                                "host": {
+                                                                                                                    "connection": {
+                                                                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "method": "post",
+                                                                                                                "path": "/Incidents/Comment"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "Increment_Incident_Comment": {
+                                                                                                            "runAfter": {
+                                                                                                                "Add_Comment_That_Limit_Has_Been_Exceeded_To_100_(3)": [
+                                                                                                                    "Succeeded"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "IncrementVariable",
+                                                                                                            "inputs": {
+                                                                                                                "name": "no_of_comments",
+                                                                                                                "value": 1
+                                                                                                            }
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "runAfter": {},
+                                                                                                    "expression": {
+                                                                                                        "and": [
+                                                                                                            {
+                                                                                                                "equals": [
+                                                                                                                    "@variables('no_of_comments')",
+                                                                                                                    99
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "type": "If"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "expression": {
+                                                                                            "and": [
+                                                                                                {
+                                                                                                    "less": [
+                                                                                                        "@variables('no_of_comments')",
+                                                                                                        99
+                                                                                                    ]
+                                                                                                }
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "If"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "less": [
+                                                                                            "@length(variables('html_table'))",
+                                                                                            30000
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "type": "If"
+                                                                        },
+                                                                        "Condition_To_Verify_IP_Space_Id_Is_Empty": {
+                                                                            "actions": {},
+                                                                            "runAfter": {
+                                                                                "Set_IP_Space": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "else": {
+                                                                                "actions": {
+                                                                                    "Condition_To_Verify_IP_Space_Lookup_Is_Success_Or_Not": {
+                                                                                        "actions": {
+                                                                                            "Condition_To_Verify_That_IP_Space_Lookup_Result_is_Empty": {
+                                                                                                "actions": {},
+                                                                                                "runAfter": {
+                                                                                                    "Parse_JSON_For_IP_Space_Lookup_Data": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "else": {
+                                                                                                    "actions": {
+                                                                                                        "Append_IP_Space_Name_To_HTML_Table": {
+                                                                                                            "runAfter": {},
+                                                                                                            "type": "AppendToStringVariable",
+                                                                                                            "inputs": {
+                                                                                                                "name": "html_table_record",
+                                                                                                                "value": "<tr><td>IP Space</td><td style=\"text-align:left\">@{body('Parse_JSON_For_IP_Space_Lookup_Data')?['result']?['name']}</td></tr>"
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "expression": {
+                                                                                                    "and": [
+                                                                                                        {
+                                                                                                            "equals": [
+                                                                                                                "@empty(body('Parse_JSON_For_IP_Space_Lookup_Data')?['result'])",
+                                                                                                                "@true"
+                                                                                                            ]
+                                                                                                        }
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "If"
+                                                                                            },
+                                                                                            "Parse_JSON_For_IP_Space_Lookup_Data": {
+                                                                                                "runAfter": {},
+                                                                                                "type": "ParseJson",
+                                                                                                "inputs": {
+                                                                                                    "content": "@body('HTTP_Request_To_Lookup_Information_For_An_IP_Space_')",
+                                                                                                    "schema": {
+                                                                                                        "properties": {
+                                                                                                            "result": {
+                                                                                                                "properties": {
+                                                                                                                    "asm_config": {
+                                                                                                                        "properties": {
+                                                                                                                            "asm_threshold": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "enable": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "enable_notification": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "forecast_period": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "growth_factor": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "growth_type": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "history": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "min_total": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "min_unused": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "reenable_date": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "asm_scope_flag": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "comment": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "compartment_id": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "created_at": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_client_update": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_conflict_resolution_mode": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_domain": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_generate_name": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "ddns_generated_prefix": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_send_updates": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "ddns_ttl_percent": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "ddns_update_on_renew": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "ddns_use_conflict_resolution": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "default_realms": {
+                                                                                                                        "type": "array"
+                                                                                                                    },
+                                                                                                                    "dhcp_config": {
+                                                                                                                        "properties": {
+                                                                                                                            "abandoned_reclaim_time": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "abandoned_reclaim_time_v6": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "allow_unknown": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "allow_unknown_v6": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "echo_client_id": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "filters": {
+                                                                                                                                "type": "array"
+                                                                                                                            },
+                                                                                                                            "filters_large_selection": {
+                                                                                                                                "type": "array"
+                                                                                                                            },
+                                                                                                                            "filters_v6": {
+                                                                                                                                "type": "array"
+                                                                                                                            },
+                                                                                                                            "ignore_client_uid": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "ignore_list": {
+                                                                                                                                "type": "array"
+                                                                                                                            },
+                                                                                                                            "lease_time": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "lease_time_v6": {
+                                                                                                                                "type": "integer"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "dhcp_options": {
+                                                                                                                        "items": {
+                                                                                                                            "properties": {
+                                                                                                                                "group": {},
+                                                                                                                                "option_code": {
+                                                                                                                                    "type": "string"
+                                                                                                                                },
+                                                                                                                                "option_value": {
+                                                                                                                                    "type": "string"
+                                                                                                                                },
+                                                                                                                                "type": {
+                                                                                                                                    "type": "string"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "type": "object"
+                                                                                                                        },
+                                                                                                                        "type": "array"
+                                                                                                                    },
+                                                                                                                    "dhcp_options_v6": {
+                                                                                                                        "type": "array"
+                                                                                                                    },
+                                                                                                                    "header_option_filename": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "header_option_server_address": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "header_option_server_name": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "hostname_rewrite_char": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "hostname_rewrite_enabled": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "hostname_rewrite_regex": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "id": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "inheritance_sources": {},
+                                                                                                                    "name": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "tags": {},
+                                                                                                                    "threshold": {
+                                                                                                                        "properties": {
+                                                                                                                            "enabled": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "high": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "low": {
+                                                                                                                                "type": "integer"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "updated_at": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "utilization": {
+                                                                                                                        "properties": {
+                                                                                                                            "abandon_utilization": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "abandoned": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "dynamic": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "free": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "static": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "total": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "used": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "utilization": {
+                                                                                                                                "type": "integer"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "utilization_v6": {
+                                                                                                                        "properties": {
+                                                                                                                            "abandoned": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "dynamic": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "static": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "total": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "used": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "vendor_specific_option_option_space": {}
+                                                                                                                },
+                                                                                                                "type": "object"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "type": "object"
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "runAfter": {
+                                                                                            "HTTP_Request_To_Lookup_Information_For_An_IP_Space_": [
+                                                                                                "Succeeded",
+                                                                                                "Failed"
+                                                                                            ]
+                                                                                        },
+                                                                                        "else": {
+                                                                                            "actions": {
+                                                                                                "Set_Error_Message_For_IP_Space_API_Failure": {
+                                                                                                    "runAfter": {},
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "error_message_ip_space",
+                                                                                                        "value": "IP Space API request failed with status code:@{outputs('HTTP_Request_To_Lookup_Information_For_An_IP_Space_')['statusCode']}  and error message: @{body('HTTP_Request_To_Lookup_Information_For_An_IP_Space_')}"
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "expression": {
+                                                                                            "and": [
+                                                                                                {
+                                                                                                    "equals": [
+                                                                                                        "@outputs('HTTP_Request_To_Lookup_Information_For_An_IP_Space_')['statusCode']",
+                                                                                                        200
+                                                                                                    ]
+                                                                                                }
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "If"
+                                                                                    },
+                                                                                    "HTTP_Request_To_Lookup_Information_For_An_IP_Space_": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "Http",
+                                                                                        "inputs": {
+                                                                                            "headers": {
+                                                                                                "Authorization": "Token @{parameters('API Key')}"
+                                                                                            },
+                                                                                            "method": "GET",
+                                                                                            "uri": "@{variables('base_url')}/api/ddi/v1/@{variables('ip_space_id')}"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "equals": [
+                                                                                            "@empty(variables('ip_space_id'))",
+                                                                                            "@true"
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "type": "If"
+                                                                        },
+                                                                        "Condition_To_Verify_Subnet_Id_Empty": {
+                                                                            "actions": {},
+                                                                            "runAfter": {
+                                                                                "Set_Subnet": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "else": {
+                                                                                "actions": {
+                                                                                    "Condition_To_Verify_Subnet_Lookup_Is_Success_Or_Not": {
+                                                                                        "actions": {
+                                                                                            "Condition_For_Subnet_Lookup_Result_is_Empty": {
+                                                                                                "actions": {},
+                                                                                                "runAfter": {
+                                                                                                    "Parse_JSON_For_Subnet_Lookup_Data": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "else": {
+                                                                                                    "actions": {
+                                                                                                        "Append_Subnet_Name_To_HTML_Table": {
+                                                                                                            "runAfter": {},
+                                                                                                            "type": "AppendToStringVariable",
+                                                                                                            "inputs": {
+                                                                                                                "name": "html_table_record",
+                                                                                                                "value": "<tr><td>Subnet Name</td><td style=\"text-align:left\">@{body('Parse_JSON_For_Subnet_Lookup_Data')?['result']?['name']}</td></tr>\n<tr><td>Subnet</td><td style=\"text-align:left\">@{body('Parse_JSON_For_Subnet_Lookup_Data')?['result']?['address']}/@{body('Parse_JSON_For_Subnet_Lookup_Data')?['result']?['cidr']}</td></tr>"
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "expression": {
+                                                                                                    "and": [
+                                                                                                        {
+                                                                                                            "equals": [
+                                                                                                                "@empty(body('Parse_JSON_For_Subnet_Lookup_Data')?['result'])",
+                                                                                                                "@true"
+                                                                                                            ]
+                                                                                                        }
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "If"
+                                                                                            },
+                                                                                            "Parse_JSON_For_Subnet_Lookup_Data": {
+                                                                                                "runAfter": {},
+                                                                                                "type": "ParseJson",
+                                                                                                "inputs": {
+                                                                                                    "content": "@body('HTTP_Request_To_Lookup_Information_For_Subnet')",
+                                                                                                    "schema": {
+                                                                                                        "properties": {
+                                                                                                            "result": {
+                                                                                                                "properties": {
+                                                                                                                    "address": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "asm_config": {
+                                                                                                                        "properties": {
+                                                                                                                            "asm_threshold": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "enable": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "enable_notification": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "forecast_period": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "growth_factor": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "growth_type": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "history": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "min_total": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "min_unused": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "reenable_date": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "asm_scope_flag": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "cidr": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "comment": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "compartment_id": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "created_at": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_client_update": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_conflict_resolution_mode": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_domain": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_generate_name": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "ddns_generated_prefix": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ddns_send_updates": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "ddns_ttl_percent": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "ddns_update_on_renew": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "ddns_use_conflict_resolution": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "dhcp_config": {
+                                                                                                                        "properties": {
+                                                                                                                            "abandoned_reclaim_time": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "abandoned_reclaim_time_v6": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "allow_unknown": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "allow_unknown_v6": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "echo_client_id": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "filters": {
+                                                                                                                                "type": "array"
+                                                                                                                            },
+                                                                                                                            "filters_large_selection": {
+                                                                                                                                "type": "array"
+                                                                                                                            },
+                                                                                                                            "filters_v6": {
+                                                                                                                                "type": "array"
+                                                                                                                            },
+                                                                                                                            "ignore_client_uid": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "ignore_list": {
+                                                                                                                                "type": "array"
+                                                                                                                            },
+                                                                                                                            "lease_time": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "lease_time_v6": {
+                                                                                                                                "type": "integer"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "dhcp_host": {},
+                                                                                                                    "dhcp_options": {
+                                                                                                                        "type": "array"
+                                                                                                                    },
+                                                                                                                    "dhcp_utilization": {
+                                                                                                                        "properties": {
+                                                                                                                            "dhcp_free": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "dhcp_total": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "dhcp_used": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "dhcp_utilization": {
+                                                                                                                                "type": "integer"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "disable_dhcp": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "discovery_attrs": {},
+                                                                                                                    "discovery_metadata": {},
+                                                                                                                    "federated_realms": {
+                                                                                                                        "type": "array"
+                                                                                                                    },
+                                                                                                                    "federation": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "header_option_filename": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "header_option_server_address": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "header_option_server_name": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "hostname_rewrite_char": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "hostname_rewrite_enabled": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "hostname_rewrite_regex": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "id": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "inheritance_assigned_hosts": {
+                                                                                                                        "type": "array"
+                                                                                                                    },
+                                                                                                                    "inheritance_parent": {},
+                                                                                                                    "inheritance_sources": {},
+                                                                                                                    "name": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "parent": {},
+                                                                                                                    "protocol": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "rebind_time": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "renew_time": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "space": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "tags": {},
+                                                                                                                    "threshold": {
+                                                                                                                        "properties": {
+                                                                                                                            "enabled": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "high": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "low": {
+                                                                                                                                "type": "integer"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "updated_at": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "usage": {
+                                                                                                                        "items": {
+                                                                                                                            "type": "string"
+                                                                                                                        },
+                                                                                                                        "type": "array"
+                                                                                                                    },
+                                                                                                                    "utilization": {
+                                                                                                                        "properties": {
+                                                                                                                            "abandon_utilization": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "abandoned": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "dynamic": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "free": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "static": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "total": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "used": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "utilization": {
+                                                                                                                                "type": "integer"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    },
+                                                                                                                    "utilization_v6": {
+                                                                                                                        "properties": {
+                                                                                                                            "abandoned": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "dynamic": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "static": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "total": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "used": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "type": "object"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "type": "object"
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "runAfter": {
+                                                                                            "HTTP_Request_To_Lookup_Information_For_Subnet": [
+                                                                                                "Succeeded",
+                                                                                                "Failed"
+                                                                                            ]
+                                                                                        },
+                                                                                        "else": {
+                                                                                            "actions": {
+                                                                                                "Set_Error_Message_For_Subnet_API_Failure": {
+                                                                                                    "runAfter": {},
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "error_message_subnet",
+                                                                                                        "value": "IP Space API request failed with status code:@{outputs('HTTP_Request_To_Lookup_Information_For_Subnet')['statusCode']}  and error message:@{body('HTTP_Request_To_Lookup_Information_For_Subnet')}"
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "expression": {
+                                                                                            "and": [
+                                                                                                {
+                                                                                                    "equals": [
+                                                                                                        "@outputs('HTTP_Request_To_Lookup_Information_For_Subnet')['statusCode']",
+                                                                                                        200
+                                                                                                    ]
+                                                                                                }
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "If"
+                                                                                    },
+                                                                                    "HTTP_Request_To_Lookup_Information_For_Subnet": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "Http",
+                                                                                        "inputs": {
+                                                                                            "headers": {
+                                                                                                "Authorization": "Token @{parameters('API Key')}"
+                                                                                            },
+                                                                                            "method": "GET",
+                                                                                            "uri": "@{variables('base_url')}/api/ddi/v1/@{variables('subnet_id')}"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "equals": [
+                                                                                            "@empty(variables('subnet_id'))",
+                                                                                            "@true"
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "type": "If"
+                                                                        },
+                                                                        "Set_HTML_Table": {
+                                                                            "runAfter": {
+                                                                                "Append_to_Human_Readable_Tags": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "html_table_record",
+                                                                                "value": "<p style=\"height:0px\"><table><tbody>\n<tr><th colspan=\"2\">IPAM Lookup For IP:@{items('For_Each_IP_Lookup_Result')?['address']}</th></tr>\n<tr><td>Address</td><td style=\"text-align:left\">@{items('For_Each_IP_Lookup_Result')?['address']}</td></tr>\n<tr><td>DHCP Client HostName</td><td style=\"text-align:left\">@{items('For_Each_IP_Lookup_Result')?['dhcp_info']?['client_hostname']}</td></tr>\n<tr><td>DHCP Client Mac Address</td><td style=\"text-align:left\">@{items('For_Each_IP_Lookup_Result')?['dhcp_info']?['client_hwaddr']}</td></tr>\n<tr><td>DHCP Fingerprint</td><td style=\"text-align:left\">@{items('For_Each_IP_Lookup_Result')?['dhcp_info']?['fingerprint']}</td></tr>\n<tr><td>Host</td><td style=\"text-align:left\">@{items('For_Each_IP_Lookup_Result')?['host']}</td></tr>\n<tr><td>Tags</td><td style=\"text-align:left\">@{variables('human_readable_tags')}</td></tr>\n<tr><td>Comment</td><td style=\"text-align:left\">@{items('For_Each_IP_Lookup_Result')?['comment']}</td></tr>"
+                                                                            }
+                                                                        },
+                                                                        "Set_IP_Space": {
+                                                                            "runAfter": {
+                                                                                "Set_HTML_Table": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "ip_space_id",
+                                                                                "value": "@items('For_Each_IP_Lookup_Result')?['space']"
+                                                                            }
+                                                                        },
+                                                                        "Set_Subnet": {
+                                                                            "runAfter": {
+                                                                                "Condition_To_Verify_IP_Space_Id_Is_Empty": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "subnet_id",
+                                                                                "value": "@items('For_Each_IP_Lookup_Result')?['parent']"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {},
+                                                                    "type": "Foreach"
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@empty(body('Parse_JSON_For_IP_Lookup_Data')?['results'])",
+                                                                        "@true"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "Parse_JSON_For_IP_Lookup_Data": {
+                                                        "runAfter": {
+                                                            "Set_Error_False_For_API_Failure": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "ParseJson",
+                                                        "inputs": {
+                                                            "content": "@body('HTTP_Request_To_Lookup_Information_About_An_IP_Address')",
+                                                            "schema": {
+                                                                "properties": {
+                                                                    "results": {
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "address": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "comment": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "compartment_id": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "created_at": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "dhcp_info": {
+                                                                                    "properties": {
+                                                                                        "client_hostname": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "client_hwaddr": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "client_id": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "end": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "fingerprint": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "iaid": {
+                                                                                            "type": "integer"
+                                                                                        },
+                                                                                        "lease_type": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "preferred_lifetime": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "remain": {
+                                                                                            "type": "integer"
+                                                                                        },
+                                                                                        "start": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "state": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "state_ts": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "disable_dhcp": {
+                                                                                    "type": "boolean"
+                                                                                },
+                                                                                "discovery_attrs": {
+                                                                                    "properties": {
+                                                                                        "ip_address": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "network": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "os": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "discovery_metadata": {
+                                                                                    "properties": {
+                                                                                        "first_discovered_timestamp": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "last_discovered_timestamp": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "host": {
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "hwaddr": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "id": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "interface": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "names": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "name": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "name",
+                                                                                            "type"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "parent": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "protocol": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "range": {
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "space": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "state": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "tags": {
+                                                                                    "properties": {
+                                                                                        "nios/grid_name": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "nios/import_timestamp": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "nios/imported": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "updated_at": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "usage": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "address",
+                                                                                "comment",
+                                                                                "compartment_id",
+                                                                                "created_at",
+                                                                                "dhcp_info",
+                                                                                "disable_dhcp",
+                                                                                "discovery_attrs",
+                                                                                "discovery_metadata",
+                                                                                "host",
+                                                                                "hwaddr",
+                                                                                "id",
+                                                                                "interface",
+                                                                                "names",
+                                                                                "parent",
+                                                                                "protocol",
+                                                                                "range",
+                                                                                "space",
+                                                                                "state",
+                                                                                "tags",
+                                                                                "updated_at",
+                                                                                "usage"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Set_Error_False_For_API_Failure": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "api_failure_error",
+                                                            "value": "@false"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "HTTP_Request_To_Lookup_Information_About_An_IP_Address": [
+                                                        "Succeeded",
+                                                        "Failed"
+                                                    ]
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Set_Error_Message_For_IPAM_API_Failure": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "error_message",
+                                                                "value": "IPAM API request failed with status code:@{outputs('HTTP_Request_To_Lookup_Information_About_An_IP_Address')['statusCode']}  and error message:  for ip @{items('For_Each_IP_Address')?['Address']}"
+                                                            }
+                                                        },
+                                                        "Set_Error_True_For_API_Failure": {
+                                                            "runAfter": {
+                                                                "Set_Error_Message_For_IPAM_API_Failure": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "api_failure_error",
+                                                                "value": "@true"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@outputs('HTTP_Request_To_Lookup_Information_About_An_IP_Address')['statusCode']",
+                                                                200
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            },
+                                            "HTTP_Request_To_Lookup_Information_About_An_IP_Address": {
+                                                "runAfter": {},
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "headers": {
+                                                        "Authorization": "Token @{parameters('API Key')}"
+                                                    },
+                                                    "method": "GET",
+                                                    "queries": {
+                                                        "_filter": "address=='@{items('For_Each_IP_Address')?['Address']}'"
+                                                    },
+                                                    "uri": "@{variables('base_url')}/api/ddi/v1/ipam/address"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(items('For_Each_IP_Address')?['Address'])",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Terminate_Execution_If_No_IPs_Found": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Initialize_Base_URL": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "@parameters('BaseUrl')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_False_While_Fetching_IP_Details_From_API": {
+                            "runAfter": {
+                                "Initialize_Error_Message_For_Subnet_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "api_failure_error",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_Message": {
+                            "runAfter": {
+                                "Initialize_New_Line": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "error_message",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_Message_For_IP_Space_Name": {
+                            "runAfter": {
+                                "Initialize_Error_Message": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "error_message_ip_space",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_Message_For_Subnet_ID": {
+                            "runAfter": {
+                                "Initialize_Error_Message_For_IP_Space_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "error_message_subnet",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_HTML_Table": {
+                            "runAfter": {
+                                "Initialize_Number_Of_Comments": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "html_table",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_HTML_Table_Record": {
+                            "runAfter": {
+                                "Initialize_HTML_Table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "html_table_record",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Human_Readable_Tags": {
+                            "runAfter": {
+                                "Initialize_Subnet_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "human_readable_tags",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_IP_Space_Id": {
+                            "runAfter": {
+                                "Initialize_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip_space_id",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Incident_Comment": {
+                            "runAfter": {
+                                "Initialize_HTML_Table_Record": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_comment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_New_Line": {
+                            "runAfter": {
+                                "Initialize_Human_Readable_Tags": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "new_line",
+                                        "type": "string",
+                                        "value": "\n"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Number_Of_Comments": {
+                            "runAfter": {
+                                "Initialize_Base_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "no_of_comments",
+                                        "type": "integer",
+                                        "value": "@length(triggerBody()?['object']?['properties']?['Comments'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Subnet_Id": {
+                            "runAfter": {
+                                "Initialize_IP_Space_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "subnet_id",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Infoblox-IPAM-Lookup",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

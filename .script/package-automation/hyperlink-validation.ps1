@@ -42,7 +42,7 @@ try {
         }
     }
     catch {
-        Write-Host "Error occured in ReadFileContent. Error details : $_"
+        Write-Host "Error occurred in ReadFileContent. Error details : $_"
         return $null;
     }
 }
@@ -111,7 +111,7 @@ foreach($item in $filteredFiles)
 $exclusionList = @(".py$",".png$",".jpg$",".jpeg$",".conf$", ".svg$", ".html$", ".ps1$", ".psd1$", "requirements.txt$", "host.json$", "proxies.json$", "/function.json$", ".xml$", ".zip$", ".md$")
 $filterOutExclusionList = $finalFilteredFiles | Where-Object { $_ -notmatch ($exclusionList -join '|')  }
 
-$exclusionDomainList = @("&&sudo","schema.management","schemas.microsoft","twitter.com")
+$exclusionDomainList = @("&&sudo","schema.management","schemas.microsoft","twitter.com", "s-platform.api.opendns.com", "github.com", "azure.microsoft.com", "sts.windows.net", "oauth2.googleapis.com", "monitoring.googleapis.com")
 
 foreach ($currentFile in $filterOutExclusionList)
 {
@@ -156,6 +156,6 @@ if($global:counterInvalid -gt 0)
 	exit 1
 }
 } catch {
-  Write-Host "Error Occured in Hyperlink Validation file!. Error Details: $_"
+  Write-Host "Error Occurred in Hyperlink Validation file!. Error Details: $_"
   exit 1
 }

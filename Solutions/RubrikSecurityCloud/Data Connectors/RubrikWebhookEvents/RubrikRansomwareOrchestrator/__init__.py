@@ -13,14 +13,14 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     Returns:
         str: result of Activity function
     """
-    applogger.debug(
+    applogger.info(
         "{} RansomwareOrchestrator function called!".format(LOGS_STARTS_WITH)
     )
     json_data = context.get_input()
     result1 = yield context.call_activity(
         "RubrikActivity", {"data": json_data, "log_type": RANSOMWARE_LOG_TYPE}
     )
-    applogger.debug(
+    applogger.info(
         "{} RansomwareOrchestrator function completed!".format(LOGS_STARTS_WITH)
     )
     return result1

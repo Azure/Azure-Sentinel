@@ -3,7 +3,8 @@ name: Anomalous login followed by Teams action
 description: |
   'Detects anomalous IP address usage by user accounts and then checks to see if a suspicious Teams action is performed.
   Query calculates IP usage Delta for each user account and selects accounts where a delta >= 90% is observed between the most and least used IP.
-  To further reduce results the query performs a prevalence check on the lowest used IP's country, only keeping IP's where the country is unusual for the tenant (dynamic ranges)
+  To further reduce results the query performs a prevalence check on the lowest used IP's country, only keeping IP's where the country is unusual for the tenant (dynamic ranges). 
+  Please note,  if the initial logic of prevalence to find suspicious logon activity is noisy then consider adding filtering based on Location. 
   Finally the user accounts activity within Teams logs is checked for suspicious commands (modifying user privileges or admin actions) during the period the suspicious IP was active.'
 severity: Medium
 requiredDataConnectors:
@@ -67,6 +68,7 @@ query: |
       OfficeActivity
       | where TimeGenerated > ago(queryfrequency)
       | where Operation in~ ("TeamsAdminAction", "MemberAdded", "MemberRemoved", "MemberRoleChanged", "AppInstalled", "BotAddedToTeam")
+      | where not (Operation in~ ("MemberAdded", "MemberRemoved") and CommunicationType in~ ("GroupChat", "OneonOne")) // These events have been noisy and are related to initiaing chat conversation and not admin operations.
       | project OperationTimeGenerated = TimeGenerated, UserId = tolower(UserId), Operation
       | join kind = inner(
           userIpDelta
@@ -113,7 +115,7 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SuspiciousIP
-version: 1.1.1
+version: 1.1.2
 kind: Scheduled
 metadata:
     source:

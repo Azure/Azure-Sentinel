@@ -1,5 +1,5 @@
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
+$global:workspaceId = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
 
 # ANSI escape code for green text
 $green = "`e[32m"
@@ -50,16 +50,20 @@ function run {
     # Iterate over the lines
     foreach ($line in $modifiedFilesStatusLines) {
         # Split the line into status and file name
-        $status, $file = $line -split "\t", 2
+        $parts = $line -split "\t"
+        # Assigning the first part to $status and the last part to $file
+        $status = $parts[0]
+        $file = $parts[-1]  # -1 index refers to the last element
         # Check if the file is a YAML file
         if ($file -like "*.yaml") {
             # Add the file name and status to the array
             $global:modifiedFiles += New-Object PSObject -Property @{
                 Name = $file
-                Status = switch ($status) {
+                Status = switch -Regex ($status) {
                     "A" { "Added" }
                     "M" { "Modified" }
                     "D" { "Deleted" }
+                    "R" { "Renamed" }
                     default { "Unknown" }
                 }
             }
@@ -88,9 +92,9 @@ function testSchema([string] $ParserFile) {
         }
     }
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
-    if ($parsersAsObject.Parsers) {
+    if ($parsersAsObject.Parsers -or ($parsersAsObject.ParserName -like "*Empty")){
         Write-Host "***************************************************"
-        Write-Host "${yellow}The parser '$functionName' is a union parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
+        Write-Host "${yellow}The parser '$functionName' is a union or empty parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
@@ -111,7 +115,8 @@ function testParser([Parser] $parser) {
     
     Write-Host "***************************************************"
     Write-Host "${yellow}Running 'Data' tests for '$($parser.Name)' parser${reset}"
-    $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
+    # Test with only last 30 minutes of data.
+    $dataTest = "$parserAsletStatement`r`n$letStatementName | where TimeGenerated >= ago(30min) | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
 }
@@ -151,7 +156,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 elseif ($Errorcount -gt 0) {
                     $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
                     Write-Host "::error:: $FinalMessage"
-                    # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
+                    throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
                     Write-Host "${green}$FinalMessage${reset}"
@@ -163,7 +168,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
     } catch {
         Write-Host "::error::  -- $_"
         Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
-        #throw $_ # Commented out to allow the script to continue running
+        throw $_ # Commented out to allow the script to continue running
     }
 }
 
