@@ -59,6 +59,7 @@ query: |
     // Picking up only IOC's that contain the entities we want
     //extract key part of kv pair
     | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+    | extend IndicatorId = tostring(split(Id, "--")[2])
     | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
     | extend DomainName = ObservableValue
     | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
@@ -66,7 +67,7 @@ query: |
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | extend ThreatList = tostring(parse_json(Data).indicator_types[0])
     | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
     | where IsActive == true and ValidUntil > now();
   let Domains = DomainTIs | where isnotempty(DomainName) |summarize NDomains=dcount(DomainName), DomainsList=make_set(DomainName) 
     | project DomainList = iff(NDomains > HAS_ANY_MAX, dynamic([]), DomainsList);
@@ -79,7 +80,7 @@ query: |
   | where DNS_TimeGenerated < ValidUntil
   | extend Description = tostring(parse_json(Data).description)
   | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-  | project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence, DNS_TimeGenerated, Dvc, SrcIpAddr, Domain, DnsQuery, DnsQueryType, Url
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ValidUntil, Confidence, DNS_TimeGenerated, Dvc, SrcIpAddr, Domain, DnsQuery, DnsQueryType, Url
   | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
   | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
 entityMappings:
@@ -108,12 +109,11 @@ customDetails:
   Description: Description
   ActivityGroupNames: ActivityGroupNames
   IndicatorId: IndicatorId
-  ThreatType: ThreatType
-  ExpirationDateTime: ExpirationDateTime
+  ExpirationDateTime: ValidUntil
   ConfidenceScore: Confidence
   DNSRequestTime: DNS_TimeGenerated
   SourceIPAddress: SrcIpAddr
   DnsQuery: DnsQuery
   QueryType: DnsQueryType
-version: 1.2.0
+version: 1.2.1
 kind: Scheduled
