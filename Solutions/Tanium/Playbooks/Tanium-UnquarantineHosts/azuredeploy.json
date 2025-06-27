@@ -142,27 +142,6 @@
                         }
                     },
                     "actions": {
-                        "Add_Issued_Actions_to_Incident": {
-                            "runAfter": {
-                                "Create_HTML_table_of_issued_actions": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": {
-                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>ISSUED TANIUM ACTIONS<br>\n@{body('Create_HTML_table_of_issued_actions')}</p>"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/Incidents/Comment"
-                            }
-                        },
                         "Add_comment_to_incident_-_hosts_that_will_be_targeted": {
                             "runAfter": {
                                 "Create_HTML_table_of_matched_endpoints": [
@@ -199,6 +178,12 @@
                             "runAfter": {
                                 "Apply_unquarantine_action_to_Linux_endpoints": [
                                     "Succeeded"
+                                ],
+                                "Apply_unquarantine_action_to_Windows_endpoints": [
+                                    "Succeeded"
+                                ],
+                                "Apply_unquarantine_action_to_macOS_endpoints": [
+                                    "Succeeded"
                                 ]
                             },
                             "expression": {
@@ -213,7 +198,50 @@
                             },
                             "type": "If",
                             "else": {
-                                "actions": {}
+                                "actions": {
+                                    "Create_HTML_table_of_issued_actions": {
+                                        "type": "Table",
+                                        "inputs": {
+                                            "from": "@variables('issuedActions')",
+                                            "format": "HTML",
+                                            "columns": [
+                                                {
+                                                    "header": "action id",
+                                                    "value": "@item()?['id']"
+                                                },
+                                                {
+                                                    "header": "name",
+                                                    "value": "@item()?['name']"
+                                                },
+                                                {
+                                                    "header": "status",
+                                                    "value": "@item()?['status']"
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "Add_Issued_Actions_to_Incident": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p class=\"editor-paragraph\">ISSUED TANIUM ACTIONS</p><p class=\"editor-paragraph\">@{body('Create_HTML_table_of_issued_actions')}</p>"
+                                            },
+                                            "path": "/Incidents/Comment"
+                                        },
+                                        "runAfter": {
+                                            "Create_HTML_table_of_issued_actions": [
+                                                "SUCCEEDED"
+                                            ]
+                                        }
+                                    }
+                                }
                             }
                         },
                         "Collect_action_results_for_each_issued_action": {
@@ -563,7 +591,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_action_results": [
+                                "Wait_for_the_max_expire_seconds_from_the_issued_actions": [
                                     "Succeeded"
                                 ]
                             },
@@ -586,32 +614,6 @@
                                 "from": "@variables('knownActionResults')"
                             }
                         },
-                        "Create_HTML_table_of_issued_actions": {
-                            "runAfter": {
-                                "Exit_early_if_no_unquarantine_actions_were_successfully_issued": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Table",
-                            "inputs": {
-                                "columns": [
-                                    {
-                                        "header": "action id",
-                                        "value": "@item()?['id']"
-                                    },
-                                    {
-                                        "header": "name",
-                                        "value": "@item()?['name']"
-                                    },
-                                    {
-                                        "header": "status",
-                                        "value": "@item()?['status']"
-                                    }
-                                ],
-                                "format": "HTML",
-                                "from": "@variables('issuedActions')"
-                            }
-                        },
                         "Create_HTML_table_of_matched_endpoints": {
                             "runAfter": {
                                 "Flatten_API_Gateway_endpoints": [
@@ -626,8 +628,8 @@
                         },
                         "Create_HTML_table_of_unknown_action_results": {
                             "runAfter": {
-                                "Create_HTML_table_of_action_results": [
-                                    "Succeeded"
+                                "Collect_action_results_for_each_issued_action": [
+                                    "SUCCEEDED"
                                 ]
                             },
                             "type": "Table",
@@ -702,13 +704,13 @@
                         },
                         "Flatten_API_Gateway_endpoints": {
                             "runAfter": {
-                                "Parse_the_array_endpoints": [
+                                "Parse_endpoints_array": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "JavaScriptCode",
                             "inputs": {
-                                "code": "var e = workflowContext.actions.Parse_the_array_endpoints.outputs.body;\r\n\r\nfunction sensorReadings(r) {\r\n\treturn r.columns.map(c => {\r\n\t\tif (c.sensor && c.sensor.name) {\r\n\t\t\treturn { name: [c.sensor.name, c.name].join(' - '), value: c.values.join(' ') };\r\n\t\t} else {\r\n\t\t\treturn { name: c.name, value: c.values.join(' ') };\r\n\t\t}\r\n\t});\r\n}\r\n\r\nfunction flatten(obj, pk = '') {\r\n\tif (pk !== '') pk += ' ';\r\n\tlet flat = {};\r\n\tObject.keys(obj).forEach((key) => {\r\n\t\tif (key === 'sensorReadings') {\r\n\t\t\tsensorReadings(obj[key]).forEach((r) => {\r\n\t\t\t\tflat[r.name] = r.value;\r\n\t\t\t});\r\n\t\t} else {\r\n\t\t\tif (typeof obj[key] === 'object' && obj[key] !== null) {\r\n\t\t\t\tObject.assign(flat, flatten(obj[key], pk + key));\r\n\t\t\t} else {\r\n\t\t\t\tflat[pk + key] = obj[key];\r\n\t\t\t}\r\n\t\t}\r\n\t});\r\n\treturn flat;\r\n}\r\n\r\nreturn e.map(function(e) { return flatten(e.node); });"
+                                "code": "var e = workflowContext.actions.Parse_endpoints_array.outputs.body;\r\n\r\nfunction sensorReadings(r) {\r\n\treturn r.columns.map(c => {\r\n\t\tif (c.sensor && c.sensor.name) {\r\n\t\t\treturn { name: [c.sensor.name, c.name].join(' - '), value: c.values.join(' ') };\r\n\t\t} else {\r\n\t\t\treturn { name: c.name, value: c.values.join(' ') };\r\n\t\t}\r\n\t});\r\n}\r\n\r\nfunction flatten(obj, pk = '') {\r\n\tif (pk !== '') pk += ' ';\r\n\tlet flat = {};\r\n\tObject.keys(obj).forEach((key) => {\r\n\t\tif (key === 'sensorReadings') {\r\n\t\t\tsensorReadings(obj[key]).forEach((r) => {\r\n\t\t\t\tflat[r.name] = r.value;\r\n\t\t\t});\r\n\t\t} else {\r\n\t\t\tif (typeof obj[key] === 'object' && obj[key] !== null) {\r\n\t\t\t\tObject.assign(flat, flatten(obj[key], pk + key));\r\n\t\t\t} else {\r\n\t\t\t\tflat[pk + key] = obj[key];\r\n\t\t\t}\r\n\t\t}\r\n\t});\r\n\treturn flat;\r\n}\r\n\r\nreturn e.map(function(e) { return flatten(e.node); });"
                             }
                         },
                         "For_each_host_on_the_incident": {
@@ -740,7 +742,7 @@
                                             }
                                         ]
                                     },
-                                    "description": "Compose the filter for the current incident host to be used to get the quarantine package"
+                                    "description": "Compose the filter for the current incident host to be used to get the unquarantine package"
                                 },
                                 "Parse_endpoint_JSON_data": {
                                     "type": "ParseJson",
@@ -824,7 +826,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_allComputersGroupId": [
+                                "Set_allComputersGroupId": [
                                     "Succeeded"
                                 ]
                             },
@@ -857,6 +859,24 @@
                         "Get_the_\"All_Computers\"_group": {
                             "runAfter": {
                                 "Initialize_list_of_unknown_action_results": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_list_of_issued_actions": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_allComputersGroupId": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_unquarantine_package_parameters": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_the_filter_for_macOS_endpoint(s)": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_the_filter_for_Windows_endpoint(s)": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_the_filter_for_Linux_endpoint(s)": [
                                     "Succeeded"
                                 ]
                             },
@@ -1113,7 +1133,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Apply_unquarantine_action_to_macOS_endpoints": [
+                                "For_each_host_on_the_incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -1387,62 +1407,6 @@
                                 "actions": {}
                             }
                         },
-                        "If_action_results": {
-                            "actions": {
-                                "Add_comment_to_incident_-_known_action_results": {
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_action_results')}</p>"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/Incidents/Comment"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "If_action_results_and_unknown_action_results": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "else": {
-                                "actions": {
-                                    "Add_comment_to_incident_-_unknown_action_results": {
-                                        "type": "ApiConnection",
-                                        "inputs": {
-                                            "body": {
-                                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_unknown_action_results')}</p>"
-                                            },
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                }
-                                            },
-                                            "method": "post",
-                                            "path": "/Incidents/Comment"
-                                        }
-                                    }
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "greater": [
-                                            "@length(variables('knownActionResults'))",
-                                            0
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
-                        },
                         "If_action_results_and_unknown_action_results": {
                             "actions": {
                                 "Add_comment_to_incident_-_known_and_unknown_action_results": {
@@ -1460,23 +1424,70 @@
                                         "method": "post",
                                         "path": "/Incidents/Comment"
                                     }
-                                },
-                                "Terminate_2": {
-                                    "runAfter": {
-                                        "Add_comment_to_incident_-_known_and_unknown_action_results": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Terminate",
-                                    "inputs": {
-                                        "runStatus": "Succeeded"
-                                    }
                                 }
                             },
                             "runAfter": {
                                 "Create_HTML_table_of_unknown_action_results": [
                                     "Succeeded"
+                                ],
+                                "Create_HTML_table_of_action_results": [
+                                    "SUCCEEDED"
                                 ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "If_action_results": {
+                                        "actions": {
+                                            "Add_comment_to_incident_-_known_action_results": {
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_action_results')}</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        },
+                                        "expression": {
+                                            "and": [
+                                                {
+                                                    "greater": [
+                                                        "@length(variables('knownActionResults'))",
+                                                        0
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "type": "If",
+                                        "else": {
+                                            "actions": {
+                                                "Add_comment_to_incident_-_unknown_action_results": {
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_unknown_action_results')}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             },
                             "expression": {
                                 "and": [
@@ -1494,10 +1505,7 @@
                                     }
                                 ]
                             },
-                            "type": "If",
-                            "else": {
-                                "actions": {}
-                            }
+                            "type": "If"
                         },
                         "Apply_unquarantine_action_to_macOS_endpoints": {
                             "actions": {
@@ -1735,7 +1743,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Apply_unquarantine_action_to_Windows_endpoints": [
+                                "For_each_host_on_the_incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -1756,7 +1764,7 @@
                         },
                         "Initialize_API_Query": {
                             "runAfter": {
-                                "Initialize_unquarantine_package_parameters": [
+                                "Exit_early_if_incident_has_no_hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -1775,6 +1783,9 @@
                             "runAfter": {
                                 "Initialize_Endpoint_Source_to_TDS": [
                                     "Succeeded"
+                                ],
+                                "Set_Endpoint_Filter": [
+                                    "Succeeded"
                                 ]
                             },
                             "type": "InitializeVariable",
@@ -1790,7 +1801,7 @@
                         },
                         "Initialize_API_Response": {
                             "runAfter": {
-                                "Get_General_Host_Info": [
+                                "Exit_early_if_incident_has_no_hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -1799,8 +1810,7 @@
                                 "variables": [
                                     {
                                         "name": "apiResponse",
-                                        "type": "object",
-                                        "value": "@body('Get_General_Host_Info')"
+                                        "type": "object"
                                     }
                                 ]
                             }
@@ -1855,26 +1865,9 @@
                                 "actions": {}
                             }
                         },
-                        "Initialize_cursor": {
-                            "runAfter": {
-                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "cursor",
-                                        "type": "string",
-                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_Endpoint_Filter": {
                             "runAfter": {
-                                "Initialize_API_Query": [
+                                "Exit_early_if_incident_has_no_hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -1888,25 +1881,9 @@
                                 ]
                             }
                         },
-                        "Initialize_the_filter_for_Linux_endpoint(s)": {
-                            "runAfter": {
-                                "Initialize_the_filter_for_Windows_endpoint(s)": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "linuxEndpointFilters",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_the_name_of_the_Linux_unquarantine_package": {
                             "runAfter": {
-                                "Initialize_the_name_of_the_MacOS_unquarantine_package": [
+                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
                                     "Succeeded"
                                 ]
                             },
@@ -1923,7 +1900,7 @@
                         },
                         "Initialize_the_name_of_the_MacOS_unquarantine_package": {
                             "runAfter": {
-                                "Initialize_the_name_of_the_Windows_unquarantine_package": [
+                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
                                     "Succeeded"
                                 ]
                             },
@@ -1940,7 +1917,7 @@
                         },
                         "Initialize_Endpoint_Source_to_TDS": {
                             "runAfter": {
-                                "Set_Endpoint_Filter": [
+                                "Exit_early_if_incident_has_no_hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -1957,25 +1934,9 @@
                                 ]
                             }
                         },
-                        "Initialize_the_filter_for_Windows_endpoint(s)": {
-                            "runAfter": {
-                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "windowsEndpointFilters",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_the_name_of_the_Windows_unquarantine_package": {
                             "runAfter": {
-                                "Exit_early_if_incident_has_no_hosts": [
+                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
                                     "Succeeded"
                                 ]
                             },
@@ -1990,59 +1951,9 @@
                                 ]
                             }
                         },
-                        "Initialize_action_results": {
-                            "runAfter": {
-                                "Wait_for_the_max_expire_seconds_from_the_issued_actions": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "knownActionResults",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_allComputersGroupId": {
-                            "runAfter": {
-                                "Get_the_\"All_Computers\"_group": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "allComputersGroupId",
-                                        "type": "string",
-                                        "value": "@{body('Get_the_\"All_Computers\"_group')?['data']?['id']}"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_endpoints_array": {
-                            "runAfter": {
-                                "Initialize_cursor": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "endpoints",
-                                        "type": "array",
-                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['edges']"
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_list_of_issued_actions": {
                             "runAfter": {
-                                "Initialize_the_filter_for_macOS_endpoint(s)": [
+                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
                                     "Succeeded"
                                 ]
                             },
@@ -2056,25 +1967,9 @@
                                 ]
                             }
                         },
-                        "Initialize_the_filter_for_macOS_endpoint(s)": {
-                            "runAfter": {
-                                "Initialize_the_filter_for_Linux_endpoint(s)": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "macOsEndpointFilters",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_unquarantine_package_parameters": {
                             "runAfter": {
-                                "Initialize_the_name_of_the_Linux_unquarantine_package": [
+                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
                                     "Succeeded"
                                 ]
                             },
@@ -2091,7 +1986,7 @@
                         },
                         "Initialize_list_of_unknown_action_results": {
                             "runAfter": {
-                                "Initialize_list_of_issued_actions": [
+                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
                                     "Succeeded"
                                 ]
                             },
@@ -2242,7 +2137,10 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_endpoints_array": [
+                                "Set_cursor": [
+                                    "Succeeded"
+                                ],
+                                "Set_endpoints_list": [
                                     "Succeeded"
                                 ]
                             },
@@ -2327,7 +2225,7 @@
                                 }
                             }
                         },
-                        "Parse_the_array_endpoints": {
+                        "Parse_endpoints_array": {
                             "runAfter": {
                                 "Loop_Paginated_Response_if_has_multiple_pages": [
                                     "Succeeded"
@@ -2345,6 +2243,15 @@
                         "Get_General_Host_Info": {
                             "runAfter": {
                                 "Initialize_API_Variables": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_API_Query": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_cursor": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_endpoints_array": [
                                     "Succeeded"
                                 ]
                             },
@@ -2372,8 +2279,8 @@
                         },
                         "Select_expire_seconds": {
                             "runAfter": {
-                                "Add_Issued_Actions_to_Incident": [
-                                    "Succeeded"
+                                "Initialize_action_results": [
+                                    "SUCCEEDED"
                                 ]
                             },
                             "type": "Select",
@@ -2448,7 +2355,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_API_Response": [
+                                "Set_apiResponse": [
                                     "Succeeded"
                                 ]
                             },
@@ -2480,6 +2387,166 @@
                                     "count": "@max(body('Select_expire_seconds'))",
                                     "unit": "Second"
                                 }
+                            }
+                        },
+                        "Initialize_cursor": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "cursor",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_API_Response": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_endpoints_array": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "endpoints",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Exit_early_if_incident_has_no_hosts": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Set_apiResponse": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "apiResponse",
+                                "value": "@body('Get_General_Host_Info')"
+                            },
+                            "runAfter": {
+                                "Get_General_Host_Info": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Set_cursor": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "cursor",
+                                "value": "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                            },
+                            "runAfter": {
+                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Set_endpoints_list": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "endpoints",
+                                "value": "@body('Parse_API_response')?['data']?['endpoints']?['edges']"
+                            },
+                            "runAfter": {
+                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_allComputersGroupId": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "allComputersGroupId",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_the_filter_for_Windows_endpoint(s)": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "windowsEndpointFilters",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_the_name_of_the_Windows_unquarantine_package": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_the_filter_for_Linux_endpoint(s)": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "linuxEndpointFilters",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_the_name_of_the_Linux_unquarantine_package": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_the_filter_for_macOS_endpoint(s)": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "macOsEndpointFilters",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_the_name_of_the_MacOS_unquarantine_package": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Set_allComputersGroupId": {
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "allComputersGroupId",
+                                "value": "@body('Get_the_\"All_Computers\"_group')?['data']?['id']"
+                            },
+                            "runAfter": {
+                                "Get_the_\"All_Computers\"_group": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_action_results": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "knownActionResults",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Exit_early_if_no_unquarantine_actions_were_successfully_issued": [
+                                    "Succeeded"
+                                ]
                             }
                         }
                     },
