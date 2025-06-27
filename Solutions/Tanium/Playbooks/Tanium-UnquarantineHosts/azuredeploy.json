@@ -142,7 +142,7 @@
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V3)_2": {
+                        "Add_Issued_Actions_to_Incident": {
                             "runAfter": {
                                 "Create_HTML_table_of_issued_actions": [
                                     "Succeeded"
@@ -184,10 +184,9 @@
                                 "path": "/Incidents/Comment"
                             }
                         },
-                        "Check_issued_actions": {
+                        "Exit_early_if_no_unquarantine_actions_were_successfully_issued": {
                             "actions": {
                                 "Terminate_-_no_actions_were_successfully_issued": {
-                                    "runAfter": {},
                                     "type": "Terminate",
                                     "inputs": {
                                         "runError": {
@@ -198,7 +197,7 @@
                                 }
                             },
                             "runAfter": {
-                                "If_Linux_endpoints": [
+                                "Apply_unquarantine_action_to_Linux_endpoints": [
                                     "Succeeded"
                                 ]
                             },
@@ -212,13 +211,15 @@
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
                         "Collect_action_results_for_each_issued_action": {
                             "foreach": "@variables('issuedActions')",
                             "actions": {
                                 "Get_action_result": {
-                                    "runAfter": {},
                                     "type": "Http",
                                     "inputs": {
                                         "headers": {
@@ -242,7 +243,6 @@
                                             "foreach": "@body('Parse_action_result')",
                                             "actions": {
                                                 "Append_to_action_results": {
-                                                    "runAfter": {},
                                                     "type": "AppendToArrayVariable",
                                                     "inputs": {
                                                         "name": "knownActionResults",
@@ -250,7 +250,6 @@
                                                     }
                                                 }
                                             },
-                                            "runAfter": {},
                                             "type": "Foreach"
                                         }
                                     },
@@ -274,7 +273,6 @@
                                                 }
                                             },
                                             "Compose_unknown_action_result": {
-                                                "runAfter": {},
                                                 "type": "Compose",
                                                 "inputs": {
                                                     "action id": "@item()?['id']",
@@ -590,7 +588,7 @@
                         },
                         "Create_HTML_table_of_issued_actions": {
                             "runAfter": {
-                                "Check_issued_actions": [
+                                "Exit_early_if_no_unquarantine_actions_were_successfully_issued": [
                                     "Succeeded"
                                 ]
                             },
@@ -652,10 +650,9 @@
                                 "path": "/entities/host"
                             }
                         },
-                        "Exit_early_if_no_hosts_are_found": {
+                        "Exit_early_if_incident_has_no_hosts": {
                             "actions": {
-                                "Add_comment_to_incident_(V3)": {
-                                    "runAfter": {},
+                                "Add_comment__-_no_hosts_found": {
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
@@ -671,9 +668,9 @@
                                         "path": "/Incidents/Comment"
                                     }
                                 },
-                                "Terminate": {
+                                "Exit_early": {
                                     "runAfter": {
-                                        "Add_comment_to_incident_(V3)": [
+                                        "Add_comment__-_no_hosts_found": [
                                             "Succeeded"
                                         ]
                                     },
@@ -698,7 +695,10 @@
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
                         "Flatten_API_Gateway_endpoints": {
                             "runAfter": {
@@ -711,7 +711,7 @@
                                 "code": "var e = workflowContext.actions.Parse_endpoints_array.outputs.body;\r\n\r\nfunction sensorReadings(r) {\r\n\treturn r.columns.map(c => {\r\n\t\tif (c.sensor && c.sensor.name) {\r\n\t\t\treturn { name: [c.sensor.name, c.name].join(' - '), value: c.values.join(' ') };\r\n\t\t} else {\r\n\t\t\treturn { name: c.name, value: c.values.join(' ') };\r\n\t\t}\r\n\t});\r\n}\r\n\r\nfunction flatten(obj, pk = '') {\r\n\tif (pk !== '') pk += ' ';\r\n\tlet flat = {};\r\n\tObject.keys(obj).forEach((key) => {\r\n\t\tif (key === 'sensorReadings') {\r\n\t\t\tsensorReadings(obj[key]).forEach((r) => {\r\n\t\t\t\tflat[r.name] = r.value;\r\n\t\t\t});\r\n\t\t} else {\r\n\t\t\tif (typeof obj[key] === 'object' && obj[key] !== null) {\r\n\t\t\t\tObject.assign(flat, flatten(obj[key], pk + key));\r\n\t\t\t} else {\r\n\t\t\t\tflat[pk + key] = obj[key];\r\n\t\t\t}\r\n\t\t}\r\n\t});\r\n\treturn flat;\r\n}\r\n\r\nreturn e.map(function(e) { return flatten(e.node); });"
                             }
                         },
-                        "For_each_endpoint": {
+                        "For_each_host_on_the_incident": {
                             "foreach": "@variables('endpoints')",
                             "actions": {
                                 "Compose_endpoint_filter_for_packages": {
@@ -742,10 +742,9 @@
                                     }
                                 },
                                 "Parse_endpoint_JSON_data": {
-                                    "runAfter": {},
                                     "type": "ParseJson",
                                     "inputs": {
-                                        "content": "@items('For_each_endpoint')",
+                                        "content": "@items('For_each_host_on_the_incident')",
                                         "schema": {
                                             "properties": {
                                                 "node": {
@@ -783,7 +782,6 @@
                                             "case": "Linux",
                                             "actions": {
                                                 "Append_to_Linux_endpoint_filters": {
-                                                    "runAfter": {},
                                                     "type": "AppendToArrayVariable",
                                                     "inputs": {
                                                         "name": "linuxEndpointFilters",
@@ -796,7 +794,6 @@
                                             "case": "Mac",
                                             "actions": {
                                                 "Append_to_macOS_endpoint_filters": {
-                                                    "runAfter": {},
                                                     "type": "AppendToArrayVariable",
                                                     "inputs": {
                                                         "name": "macOsEndpointFilters",
@@ -809,7 +806,6 @@
                                             "case": "Windows",
                                             "actions": {
                                                 "Append_to_Windows_endpoint_filters": {
-                                                    "runAfter": {},
                                                     "type": "AppendToArrayVariable",
                                                     "inputs": {
                                                         "name": "windowsEndpointFilters",
@@ -827,7 +823,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_all_computers_id": [
+                                "Initialize_allComputersGroupId": [
                                     "Succeeded"
                                 ]
                             },
@@ -858,7 +854,7 @@
                         },
                         "Get_the_\"All_Computers\"_group": {
                             "runAfter": {
-                                "Initialize_unknown_action_results": [
+                                "Initialize_list_of_unknown_action_results": [
                                     "Succeeded"
                                 ]
                             },
@@ -879,21 +875,20 @@
                                 }
                             }
                         },
-                        "If_Linux_endpoints": {
+                        "Apply_unquarantine_action_to_Linux_endpoints": {
                             "actions": {
                                 "Check_Linux_issued_action_result": {
                                     "actions": {
                                         "Append_Linux_issued_action_result_to_issued_actions": {
-                                            "runAfter": {},
                                             "type": "AppendToArrayVariable",
                                             "inputs": {
                                                 "name": "issuedActions",
-                                                "value": "@body('Issue_Linux_action')?['data']"
+                                                "value": "@body('Issue_Linux_unquarantine_action')?['data']"
                                             }
                                         }
                                     },
                                     "runAfter": {
-                                        "Issue_Linux_action": [
+                                        "Issue_Linux_unquarantine_action": [
                                             "Succeeded"
                                         ]
                                     },
@@ -901,13 +896,16 @@
                                         "and": [
                                             {
                                                 "equals": [
-                                                    "@outputs('Issue_Linux_action')['statusCode']",
+                                                    "@outputs('Issue_Linux_unquarantine_action')['statusCode']",
                                                     200
                                                 ]
                                             }
                                         ]
                                     },
-                                    "type": "If"
+                                    "type": "If",
+                                    "else": {
+                                        "actions": {}
+                                    }
                                 },
                                 "Compose_Linux_action": {
                                     "runAfter": {
@@ -952,8 +950,7 @@
                                         "sub_groups": "@variables('linuxEndpointFilters')"
                                     }
                                 },
-                                "Get_Linux_package": {
-                                    "runAfter": {},
+                                "Get_Linux_unquarantine_package": {
                                     "type": "Http",
                                     "inputs": {
                                         "headers": {
@@ -971,7 +968,7 @@
                                         }
                                     }
                                 },
-                                "Issue_Linux_action": {
+                                "Issue_Linux_unquarantine_action": {
                                     "runAfter": {
                                         "Compose_Linux_action": [
                                             "Succeeded"
@@ -997,13 +994,13 @@
                                 },
                                 "Parse_Linux_package_json": {
                                     "runAfter": {
-                                        "Get_Linux_package": [
+                                        "Get_Linux_unquarantine_package": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "ParseJson",
                                     "inputs": {
-                                        "content": "@body('Get_Linux_package')",
+                                        "content": "@body('Get_Linux_unquarantine_package')",
                                         "schema": {
                                             "properties": {
                                                 "data": {
@@ -1114,7 +1111,7 @@
                                 }
                             },
                             "runAfter": {
-                                "If_macOS_endpoints": [
+                                "Apply_unquarantine_action_to_macOS_endpoints": [
                                     "Succeeded"
                                 ]
                             },
@@ -1128,23 +1125,25 @@
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
-                        "If_Windows_endpoints": {
+                        "Apply_unquarantine_action_to_Windows_endpoints": {
                             "actions": {
                                 "Check_Windows_issued_action_result": {
                                     "actions": {
                                         "Append_Windows_issued_action_result_to_issued_actions": {
-                                            "runAfter": {},
                                             "type": "AppendToArrayVariable",
                                             "inputs": {
                                                 "name": "issuedActions",
-                                                "value": "@body('Issue_Windows_action')?['data']"
+                                                "value": "@body('Issue_Windows_unquarantine_action')?['data']"
                                             }
                                         }
                                     },
                                     "runAfter": {
-                                        "Issue_Windows_action": [
+                                        "Issue_Windows_unquarantine_action": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1152,13 +1151,16 @@
                                         "and": [
                                             {
                                                 "equals": [
-                                                    "@outputs('Issue_Windows_action')['statusCode']",
+                                                    "@outputs('Issue_Windows_unquarantine_action')['statusCode']",
                                                     200
                                                 ]
                                             }
                                         ]
                                     },
-                                    "type": "If"
+                                    "type": "If",
+                                    "else": {
+                                        "actions": {}
+                                    }
                                 },
                                 "Compose_Windows_action_package_declaration": {
                                     "runAfter": {
@@ -1203,8 +1205,7 @@
                                         "target_group": "@outputs('Compose_Windows_target_group')"
                                     }
                                 },
-                                "Get_Windows_package": {
-                                    "runAfter": {},
+                                "Get_Windows_unquarantine_package": {
                                     "type": "Http",
                                     "inputs": {
                                         "headers": {
@@ -1222,7 +1223,7 @@
                                         }
                                     }
                                 },
-                                "Issue_Windows_action": {
+                                "Issue_Windows_unquarantine_action": {
                                     "runAfter": {
                                         "Compose_windows_action": [
                                             "Succeeded"
@@ -1248,13 +1249,13 @@
                                 },
                                 "Parse_Windows_package_json": {
                                     "runAfter": {
-                                        "Get_Windows_package": [
+                                        "Get_Windows_unquarantine_package": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "ParseJson",
                                     "inputs": {
-                                        "content": "@body('Get_Windows_package')",
+                                        "content": "@body('Get_Windows_unquarantine_package')",
                                         "schema": {
                                             "properties": {
                                                 "data": {
@@ -1365,7 +1366,7 @@
                                 }
                             },
                             "runAfter": {
-                                "For_each_endpoint": [
+                                "For_each_host_on_the_incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -1379,12 +1380,14 @@
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
                         "If_action_results": {
                             "actions": {
-                                "Add_comment_to_incident_(V3)_-_action_results": {
-                                    "runAfter": {},
+                                "Add_comment_to_incident_-_known_action_results": {
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
@@ -1408,8 +1411,7 @@
                             },
                             "else": {
                                 "actions": {
-                                    "Add_comment_to_incident_(V3)_-_unknown_action_results": {
-                                        "runAfter": {},
+                                    "Add_comment_to_incident_-_unknown_action_results": {
                                         "type": "ApiConnection",
                                         "inputs": {
                                             "body": {
@@ -1441,8 +1443,7 @@
                         },
                         "If_action_results_and_unknown_action_results": {
                             "actions": {
-                                "Add_comment_to_incident_(V3)_-_known_and_unknown_action_results": {
-                                    "runAfter": {},
+                                "Add_comment_to_incident_-_known_and_unknown_action_results": {
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
@@ -1460,7 +1461,7 @@
                                 },
                                 "Terminate_2": {
                                     "runAfter": {
-                                        "Add_comment_to_incident_(V3)_-_known_and_unknown_action_results": [
+                                        "Add_comment_to_incident_-_known_and_unknown_action_results": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1491,23 +1492,25 @@
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
-                        "If_macOS_endpoints": {
+                        "Apply_unquarantine_action_to_macOS_endpoints": {
                             "actions": {
                                 "Check_macOS_issued_action_result": {
                                     "actions": {
                                         "Append_macOS_issued_action_result_to_issued_actions": {
-                                            "runAfter": {},
                                             "type": "AppendToArrayVariable",
                                             "inputs": {
                                                 "name": "issuedActions",
-                                                "value": "@body('Issue_macOS_action')?['data']"
+                                                "value": "@body('Issue_macOS_unquarantine_action')?['data']"
                                             }
                                         }
                                     },
                                     "runAfter": {
-                                        "Issue_macOS_action": [
+                                        "Issue_macOS_unquarantine_action": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1515,13 +1518,16 @@
                                         "and": [
                                             {
                                                 "equals": [
-                                                    "@body('Issue_macOS_action')",
+                                                    "@body('Issue_macOS_unquarantine_action')",
                                                     200
                                                 ]
                                             }
                                         ]
                                     },
-                                    "type": "If"
+                                    "type": "If",
+                                    "else": {
+                                        "actions": {}
+                                    }
                                 },
                                 "Compose_macOS_action": {
                                     "runAfter": {
@@ -1566,8 +1572,7 @@
                                         "sub_groups": "@variables('macOsEndpointFilters')"
                                     }
                                 },
-                                "Get_macOS_package": {
-                                    "runAfter": {},
+                                "Get_macOS_unquarantine_package": {
                                     "type": "Http",
                                     "inputs": {
                                         "headers": {
@@ -1585,7 +1590,7 @@
                                         }
                                     }
                                 },
-                                "Issue_macOS_action": {
+                                "Issue_macOS_unquarantine_action": {
                                     "runAfter": {
                                         "Compose_macOS_action": [
                                             "Succeeded"
@@ -1611,13 +1616,13 @@
                                 },
                                 "Parse_macOS_package_json": {
                                     "runAfter": {
-                                        "Get_macOS_package": [
+                                        "Get_macOS_unquarantine_package": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "ParseJson",
                                     "inputs": {
-                                        "content": "@body('Get_macOS_package')",
+                                        "content": "@body('Get_macOS_unquarantine_package')",
                                         "schema": {
                                             "properties": {
                                                 "data": {
@@ -1728,7 +1733,7 @@
                                 }
                             },
                             "runAfter": {
-                                "If_Windows_endpoints": [
+                                "Apply_unquarantine_action_to_Windows_endpoints": [
                                     "Succeeded"
                                 ]
                             },
@@ -1742,11 +1747,14 @@
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
-                        "Initialize_API_Gateway_Query": {
+                        "Initialize_API_Query": {
                             "runAfter": {
-                                "Initialize_package_parameters": [
+                                "Initialize_unquarantine_package_parameters": [
                                     "Succeeded"
                                 ]
                             },
@@ -1761,7 +1769,7 @@
                                 ]
                             }
                         },
-                        "Initialize_API_Gateway_Query_Variables": {
+                        "Initialize_API_Variables": {
                             "runAfter": {
                                 "Initialize_Tanium_Endpoint_Source_to_TDS": [
                                     "Succeeded"
@@ -1778,9 +1786,9 @@
                                 ]
                             }
                         },
-                        "Initialize_API_Gateway_Response": {
+                        "Initialize_API_Response": {
                             "runAfter": {
-                                "Query_API_Gateway": [
+                                "Get_General_Host_Info": [
                                     "Succeeded"
                                 ]
                             },
@@ -1790,15 +1798,14 @@
                                     {
                                         "name": "apiResponse",
                                         "type": "object",
-                                        "value": "@body('Query_API_Gateway')"
+                                        "value": "@body('Get_General_Host_Info')"
                                     }
                                 ]
                             }
                         },
-                        "Stop_If_Tanium_Has_No_Hosts_From_Incident": {
+                        "Exit_early_If_Tanium_Has_No_Data_for_Incident": {
                             "actions": {
-                                "Add_comment_to_incident_(V3)_3": {
-                                    "runAfter": {},
+                                "Add_comment__-_no_data_in_Tanium": {
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
@@ -1814,9 +1821,9 @@
                                         "path": "/Incidents/Comment"
                                     }
                                 },
-                                "Terminate_no_hosts_in_Tanium": {
+                                "Exit_early__-_no_data_in_Tanium": {
                                     "runAfter": {
-                                        "Add_comment_to_incident_(V3)_3": [
+                                        "Add_comment__-_no_data_in_Tanium": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1827,7 +1834,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Parse_API_Gateway_response": [
+                                "Parse_API_response": [
                                     "Succeeded"
                                 ]
                             },
@@ -1835,17 +1842,20 @@
                                 "and": [
                                     {
                                         "equals": [
-                                            "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
+                                            "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
                                             "@null"
                                         ]
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
-                        "Initialize_API_Gateway_query_cursor": {
+                        "Initialize_cursor": {
                             "runAfter": {
-                                "Stop_If_Tanium_Has_No_Hosts_From_Incident": [
+                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -1855,14 +1865,14 @@
                                     {
                                         "name": "cursor",
                                         "type": "string",
-                                        "value": "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
                                     }
                                 ]
                             }
                         },
                         "Initialize_Endpoint_Filter": {
                             "runAfter": {
-                                "Initialize_API_Gateway_Query": [
+                                "Initialize_API_Query": [
                                     "Succeeded"
                                 ]
                             },
@@ -1876,9 +1886,9 @@
                                 ]
                             }
                         },
-                        "Initialize_Linux_endpoint_filters": {
+                        "Initialize_the_filter_for_Linux_endpoint(s)": {
                             "runAfter": {
-                                "Initialize_Windows_endpoint_filters": [
+                                "Initialize_the_filter_for_Windows_endpoint(s)": [
                                     "Succeeded"
                                 ]
                             },
@@ -1892,9 +1902,9 @@
                                 ]
                             }
                         },
-                        "Initialize_Linux_package_name": {
+                        "Initialize_the_name_of_the_Linux_unquarantine_package": {
                             "runAfter": {
-                                "Initialize_MacOS_package_name": [
+                                "Initialize_the_name_of_the_MacOS_unquarantine_package": [
                                     "Succeeded"
                                 ]
                             },
@@ -1909,9 +1919,9 @@
                                 ]
                             }
                         },
-                        "Initialize_MacOS_package_name": {
+                        "Initialize_the_name_of_the_MacOS_unquarantine_package": {
                             "runAfter": {
-                                "Initialize_Windows_package_name": [
+                                "Initialize_the_name_of_the_Windows_unquarantine_package": [
                                     "Succeeded"
                                 ]
                             },
@@ -1945,7 +1955,7 @@
                                 ]
                             }
                         },
-                        "Initialize_Windows_endpoint_filters": {
+                        "Initialize_the_filter_for_Windows_endpoint(s)": {
                             "runAfter": {
                                 "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
                                     "Succeeded"
@@ -1961,9 +1971,9 @@
                                 ]
                             }
                         },
-                        "Initialize_Windows_package_name": {
+                        "Initialize_the_name_of_the_Windows_unquarantine_package": {
                             "runAfter": {
-                                "Exit_early_if_no_hosts_are_found": [
+                                "Exit_early_if_incident_has_no_hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -1994,7 +2004,7 @@
                                 ]
                             }
                         },
-                        "Initialize_all_computers_id": {
+                        "Initialize_allComputersGroupId": {
                             "runAfter": {
                                 "Get_the_\"All_Computers\"_group": [
                                     "Succeeded"
@@ -2013,7 +2023,7 @@
                         },
                         "Initialize_endpoints_array": {
                             "runAfter": {
-                                "Initialize_API_Gateway_query_cursor": [
+                                "Initialize_cursor": [
                                     "Succeeded"
                                 ]
                             },
@@ -2023,14 +2033,14 @@
                                     {
                                         "name": "endpoints",
                                         "type": "array",
-                                        "value": "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['edges']"
+                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['edges']"
                                     }
                                 ]
                             }
                         },
-                        "Initialize_issued_actions": {
+                        "Initialize_list_of_issued_actions": {
                             "runAfter": {
-                                "Initialize_macOS_endpoint_filters": [
+                                "Initialize_the_filter_for_macOS_endpoint(s)": [
                                     "Succeeded"
                                 ]
                             },
@@ -2044,9 +2054,9 @@
                                 ]
                             }
                         },
-                        "Initialize_macOS_endpoint_filters": {
+                        "Initialize_the_filter_for_macOS_endpoint(s)": {
                             "runAfter": {
-                                "Initialize_Linux_endpoint_filters": [
+                                "Initialize_the_filter_for_Linux_endpoint(s)": [
                                     "Succeeded"
                                 ]
                             },
@@ -2060,9 +2070,9 @@
                                 ]
                             }
                         },
-                        "Initialize_package_parameters": {
+                        "Initialize_unquarantine_package_parameters": {
                             "runAfter": {
-                                "Initialize_Linux_package_name": [
+                                "Initialize_the_name_of_the_Linux_unquarantine_package": [
                                     "Succeeded"
                                 ]
                             },
@@ -2077,9 +2087,9 @@
                             },
                             "description": "The un-quarantine packages have no parameters"
                         },
-                        "Initialize_unknown_action_results": {
+                        "Initialize_list_of_unknown_action_results": {
                             "runAfter": {
-                                "Initialize_issued_actions": [
+                                "Initialize_list_of_issued_actions": [
                                     "Succeeded"
                                 ]
                             },
@@ -2093,15 +2103,14 @@
                                 ]
                             }
                         },
-                        "Paginate_API_Gateway_query_if_needed": {
+                        "Loop_Paginated_Response_if_has_multiple_pages": {
                             "actions": {
-                                "Until_there_are_no_more_pages_in_the_API_gateway_response": {
+                                "Until_no_more_pages": {
                                     "actions": {
                                         "For_each_endpoint_in_paginated_API_Gateway_response": {
-                                            "foreach": "@body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['edges']",
+                                            "foreach": "@body('Parse_page')?['data']?['endpoints']?['edges']",
                                             "actions": {
                                                 "Append_endpoint_to_endpoints": {
-                                                    "runAfter": {},
                                                     "type": "AppendToArrayVariable",
                                                     "inputs": {
                                                         "name": "endpoints",
@@ -2110,7 +2119,7 @@
                                                 }
                                             },
                                             "runAfter": {
-                                                "Update_API_Gateway_query_cursor": [
+                                                "Update_cursor_to_next_page": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -2121,9 +2130,9 @@
                                                 }
                                             }
                                         },
-                                        "Paginate_API_Gateway": {
+                                        "Get_next_page": {
                                             "runAfter": {
-                                                "Update_API_Gateway_query_variables": [
+                                                "Update_cursor_for_next_page": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -2148,15 +2157,15 @@
                                                 }
                                             }
                                         },
-                                        "Parse_paginated_API_Gateway_response": {
+                                        "Parse_page": {
                                             "runAfter": {
-                                                "Paginate_API_Gateway": [
+                                                "Get_next_page": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "ParseJson",
                                             "inputs": {
-                                                "content": "@body('Paginate_API_Gateway')",
+                                                "content": "@body('Get_next_page')",
                                                 "schema": {
                                                     "properties": {
                                                         "data": {
@@ -2199,20 +2208,19 @@
                                                 }
                                             }
                                         },
-                                        "Update_API_Gateway_query_cursor": {
+                                        "Update_cursor_to_next_page": {
                                             "runAfter": {
-                                                "Parse_paginated_API_Gateway_response": [
+                                                "Parse_page": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "SetVariable",
                                             "inputs": {
                                                 "name": "cursor",
-                                                "value": "@body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                                "value": "@body('Parse_page')?['data']?['endpoints']?['pageInfo']?['endCursor']"
                                             }
                                         },
-                                        "Update_API_Gateway_query_variables": {
-                                            "runAfter": {},
+                                        "Update_cursor_for_next_page": {
                                             "type": "SetVariable",
                                             "inputs": {
                                                 "name": "apiQuery",
@@ -2220,8 +2228,7 @@
                                             }
                                         }
                                     },
-                                    "runAfter": {},
-                                    "expression": "@equals(body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage'], false)",
+                                    "expression": "@equals(body('Parse_page')?['data']?['endpoints']?['pageInfo']?['hasNextPage'],false)",
                                     "limit": {
                                         "count": 60,
                                         "timeout": "PT1H"
@@ -2238,15 +2245,18 @@
                                 "and": [
                                     {
                                         "equals": [
-                                            "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
+                                            "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
                                             "@true"
                                         ]
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
-                        "Parse_API_Gateway_response": {
+                        "Parse_API_response": {
                             "runAfter": {
                                 "Switch_to_TS_from_TDS_if_needed": [
                                     "Succeeded"
@@ -2314,7 +2324,7 @@
                         },
                         "Parse_endpoints_array": {
                             "runAfter": {
-                                "Paginate_API_Gateway_query_if_needed": [
+                                "Loop_Paginated_Response_if_has_multiple_pages": [
                                     "Succeeded"
                                 ]
                             },
@@ -2327,9 +2337,9 @@
                             },
                             "description": "We need an action's output to use in the JavaScript code since it can't read from a variable"
                         },
-                        "Query_API_Gateway": {
+                        "Get_General_Host_Info": {
                             "runAfter": {
-                                "Initialize_API_Gateway_Query_Variables": [
+                                "Initialize_API_Variables": [
                                     "Succeeded"
                                 ]
                             },
@@ -2356,7 +2366,7 @@
                         },
                         "Select_expire_seconds": {
                             "runAfter": {
-                                "Add_comment_to_incident_(V3)_2": [
+                                "Add_Issued_Actions_to_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -2386,7 +2396,6 @@
                                         },
                                         "method": "POST",
                                         "uri": "@parameters('TaniumApiGatewayApi')"
-
                                     },
                                     "runtimeConfiguration": {
                                         "secureData": {
@@ -2396,8 +2405,7 @@
                                         }
                                     }
                                 },
-                                "Set_Tanium_Endpoint_Source_to_TS": {
-                                    "runAfter": {},
+                                "Change_Endpoint_Source_to_TS": {
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "endpointSource",
@@ -2422,7 +2430,7 @@
                                 },
                                 "Update_API_Query_variables_to_get_new_source": {
                                     "runAfter": {
-                                        "Set_Tanium_Endpoint_Source_to_TS": [
+                                        "Change_Endpoint_Source_to_TS": [
                                             "Succeeded"
                                         ]
                                     },
@@ -2434,7 +2442,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_API_Gateway_Response": [
+                                "Initialize_API_Response": [
                                     "Succeeded"
                                 ]
                             },
@@ -2442,13 +2450,16 @@
                                 "and": [
                                     {
                                         "contains": [
-                                            "@string(body('Query_API_Gateway'))",
+                                            "@string(body('Get_General_Host_Info'))",
                                             "must refer to an existing sensor"
                                         ]
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
                         "Wait_for_the_max_expire_seconds_from_the_issued_actions": {
                             "runAfter": {
