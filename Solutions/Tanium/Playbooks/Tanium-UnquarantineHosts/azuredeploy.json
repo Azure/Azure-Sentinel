@@ -142,27 +142,6 @@
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_-_hosts_that_will_be_targeted": {
-                            "runAfter": {
-                                "Create_HTML_table_of_matched_endpoints": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": {
-                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>Preparing to issue quarantine actions targeting these endpoints associated with this incident<br>\n@{body('Create_HTML_table_of_matched_endpoints')}</p>"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/Incidents/Comment"
-                            }
-                        },
                         "Exit_early_if_no_unquarantine_actions_were_successfully_issued": {
                             "actions": {
                                 "Terminate_-_no_actions_were_successfully_issued": {
@@ -244,400 +223,6 @@
                                 }
                             }
                         },
-                        "Collect_action_results_for_each_issued_action": {
-                            "foreach": "@variables('issuedActions')",
-                            "actions": {
-                                "Get_action_result": {
-                                    "type": "Http",
-                                    "inputs": {
-                                        "headers": {
-                                            "Content-Type": "application/json",
-                                            "session": "@parameters('TaniumApiToken')"
-                                        },
-                                        "method": "GET",
-                                        "uri": "@{concat(parameters('TaniumActionResultDataUrlFragment'), items('Collect_action_results_for_each_issued_action')?['id'])}"
-                                    },
-                                    "runtimeConfiguration": {
-                                        "secureData": {
-                                            "properties": [
-                                                "inputs"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "If_action_result_could_be_determined": {
-                                    "actions": {
-                                        "For_each_action_result_set": {
-                                            "foreach": "@body('Parse_action_result')",
-                                            "actions": {
-                                                "Append_to_action_results": {
-                                                    "type": "AppendToArrayVariable",
-                                                    "inputs": {
-                                                        "name": "knownActionResults",
-                                                        "value": "@item()"
-                                                    }
-                                                }
-                                            },
-                                            "type": "Foreach"
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Parse_action_result": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "Append_to_unknown_action_results": {
-                                                "runAfter": {
-                                                    "Compose_unknown_action_result": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "type": "AppendToArrayVariable",
-                                                "inputs": {
-                                                    "name": "unknownActionResults",
-                                                    "value": "@outputs('Compose_unknown_action_result')"
-                                                }
-                                            },
-                                            "Compose_unknown_action_result": {
-                                                "type": "Compose",
-                                                "inputs": {
-                                                    "action id": "@item()?['id']",
-                                                    "status": "Completed with unknown result"
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "greater": [
-                                                    "@length(outputs('Parse_action_result')['body'])",
-                                                    0
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type": "If"
-                                },
-                                "Parse_action_result": {
-                                    "runAfter": {
-                                        "Parse_current_issued_action": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "JavaScriptCode",
-                                    "inputs": {
-                                        "code": "var action_results = workflowContext.actions.Get_action_result.outputs.body.data;\r\nvar action_id = workflowContext.actions.Parse_current_issued_action.outputs.body.id;\r\nvar columns = action_results.result_sets[0].columns.map(c => c.name);\r\nvar robjects = [];\r\n\r\naction_results.result_sets.forEach(function(rs) {\r\n\trs.rows.forEach(function(row) {\r\n\t\tlet robject = {'action id': action_id};\r\n\t\tcolumns.forEach(function(c, i) {\r\n\t\t\trobject[c] = row.data[i][0].text;\r\n\t\t});\r\n\t\trobjects.push(robject);\r\n\t});\r\n});\r\n\r\nreturn robjects;"
-                                    }
-                                },
-                                "Parse_current_issued_action": {
-                                    "runAfter": {
-                                        "Get_action_result": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@items('Collect_action_results_for_each_issued_action')",
-                                        "schema": {
-                                            "properties": {
-                                                "action_group": {
-                                                    "properties": {
-                                                        "id": {
-                                                            "type": "integer"
-                                                        },
-                                                        "name": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "approver": {
-                                                    "properties": {
-                                                        "id": {
-                                                            "type": "integer"
-                                                        },
-                                                        "name": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "comment": {
-                                                    "type": "string"
-                                                },
-                                                "creation_time": {
-                                                    "type": "string"
-                                                },
-                                                "distribute_seconds": {
-                                                    "type": "integer"
-                                                },
-                                                "expiration_time": {
-                                                    "type": "string"
-                                                },
-                                                "expire_seconds": {
-                                                    "type": "integer"
-                                                },
-                                                "history_saved_question": {
-                                                    "properties": {
-                                                        "id": {
-                                                            "type": "integer"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "id": {
-                                                    "type": "integer"
-                                                },
-                                                "name": {
-                                                    "type": "string"
-                                                },
-                                                "package_spec": {
-                                                    "properties": {
-                                                        "available_time": {
-                                                            "type": "string"
-                                                        },
-                                                        "command": {
-                                                            "type": "string"
-                                                        },
-                                                        "command_timeout": {
-                                                            "type": "integer"
-                                                        },
-                                                        "content_set": {
-                                                            "properties": {
-                                                                "id": {
-                                                                    "type": "integer"
-                                                                },
-                                                                "name": {
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "creation_time": {
-                                                            "type": "string"
-                                                        },
-                                                        "deleted_flag": {
-                                                            "type": "boolean"
-                                                        },
-                                                        "display_name": {
-                                                            "type": "string"
-                                                        },
-                                                        "expire_seconds": {
-                                                            "type": "integer"
-                                                        },
-                                                        "hidden_flag": {
-                                                            "type": "boolean"
-                                                        },
-                                                        "id": {
-                                                            "type": "integer"
-                                                        },
-                                                        "last_modified_by": {
-                                                            "type": "string"
-                                                        },
-                                                        "last_update": {
-                                                            "type": "string"
-                                                        },
-                                                        "mod_user": {
-                                                            "properties": {
-                                                                "display_name": {
-                                                                    "type": "string"
-                                                                },
-                                                                "domain": {
-                                                                    "type": "string"
-                                                                },
-                                                                "id": {
-                                                                    "type": "integer"
-                                                                },
-                                                                "name": {
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "modification_time": {
-                                                            "type": "string"
-                                                        },
-                                                        "name": {
-                                                            "type": "string"
-                                                        },
-                                                        "parameter_definition": {
-                                                            "type": "string"
-                                                        },
-                                                        "process_group_flag": {
-                                                            "type": "boolean"
-                                                        },
-                                                        "skip_lock_flag": {
-                                                            "type": "boolean"
-                                                        },
-                                                        "source_hash": {
-                                                            "type": "string"
-                                                        },
-                                                        "verify_expire_seconds": {
-                                                            "type": "integer"
-                                                        },
-                                                        "verify_group": {
-                                                            "properties": {
-                                                                "id": {
-                                                                    "type": "integer"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "verify_group_id": {
-                                                            "type": "integer"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "saved_action": {
-                                                    "properties": {
-                                                        "id": {
-                                                            "type": "integer"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "skip_lock_flag": {
-                                                    "type": "boolean"
-                                                },
-                                                "start_time": {
-                                                    "type": "string"
-                                                },
-                                                "status": {
-                                                    "type": "string"
-                                                },
-                                                "stopped_flag": {
-                                                    "type": "boolean"
-                                                },
-                                                "target_group": {
-                                                    "properties": {
-                                                        "id": {
-                                                            "type": "integer"
-                                                        },
-                                                        "name": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "user": {
-                                                    "properties": {
-                                                        "creation_time": {
-                                                            "type": "string"
-                                                        },
-                                                        "deleted_flag": {
-                                                            "type": "boolean"
-                                                        },
-                                                        "display_name": {
-                                                            "type": "string"
-                                                        },
-                                                        "domain": {
-                                                            "type": "string"
-                                                        },
-                                                        "effective_group_id": {
-                                                            "type": "integer"
-                                                        },
-                                                        "external_flag": {
-                                                            "type": "integer"
-                                                        },
-                                                        "group_id": {
-                                                            "type": "integer"
-                                                        },
-                                                        "id": {
-                                                            "type": "integer"
-                                                        },
-                                                        "last_login": {
-                                                            "type": "string"
-                                                        },
-                                                        "locked_out": {
-                                                            "type": "integer"
-                                                        },
-                                                        "mod_user": {
-                                                            "properties": {
-                                                                "display_name": {
-                                                                    "type": "string"
-                                                                },
-                                                                "domain": {
-                                                                    "type": "string"
-                                                                },
-                                                                "id": {
-                                                                    "type": "integer"
-                                                                },
-                                                                "name": {
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "modification_time": {
-                                                            "type": "string"
-                                                        },
-                                                        "name": {
-                                                            "type": "string"
-                                                        },
-                                                        "previous_login": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                }
-                                            },
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Wait_for_the_max_expire_seconds_from_the_issued_actions": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach",
-                            "runtimeConfiguration": {
-                                "concurrency": {
-                                    "repetitions": 1
-                                }
-                            }
-                        },
-                        "Create_HTML_table_of_action_results": {
-                            "runAfter": {
-                                "Collect_action_results_for_each_issued_action": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Table",
-                            "inputs": {
-                                "format": "HTML",
-                                "from": "@variables('knownActionResults')"
-                            }
-                        },
-                        "Create_HTML_table_of_matched_endpoints": {
-                            "runAfter": {
-                                "Flatten_API_Gateway_endpoints": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Table",
-                            "inputs": {
-                                "format": "HTML",
-                                "from": "@body('Flatten_API_Gateway_endpoints')"
-                            }
-                        },
-                        "Create_HTML_table_of_unknown_action_results": {
-                            "runAfter": {
-                                "Collect_action_results_for_each_issued_action": [
-                                    "SUCCEEDED"
-                                ]
-                            },
-                            "type": "Table",
-                            "inputs": {
-                                "format": "HTML",
-                                "from": "@variables('unknownActionResults')"
-                            }
-                        },
                         "Get_Hosts_From_Incident": {
                             "runAfter": {},
                             "type": "ApiConnection",
@@ -701,137 +286,6 @@
                             "else": {
                                 "actions": {}
                             }
-                        },
-                        "Flatten_API_Gateway_endpoints": {
-                            "runAfter": {
-                                "Parse_endpoints_array": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "JavaScriptCode",
-                            "inputs": {
-                                "code": "var e = workflowContext.actions.Parse_endpoints_array.outputs.body;\r\n\r\nfunction sensorReadings(r) {\r\n\treturn r.columns.map(c => {\r\n\t\tif (c.sensor && c.sensor.name) {\r\n\t\t\treturn { name: [c.sensor.name, c.name].join(' - '), value: c.values.join(' ') };\r\n\t\t} else {\r\n\t\t\treturn { name: c.name, value: c.values.join(' ') };\r\n\t\t}\r\n\t});\r\n}\r\n\r\nfunction flatten(obj, pk = '') {\r\n\tif (pk !== '') pk += ' ';\r\n\tlet flat = {};\r\n\tObject.keys(obj).forEach((key) => {\r\n\t\tif (key === 'sensorReadings') {\r\n\t\t\tsensorReadings(obj[key]).forEach((r) => {\r\n\t\t\t\tflat[r.name] = r.value;\r\n\t\t\t});\r\n\t\t} else {\r\n\t\t\tif (typeof obj[key] === 'object' && obj[key] !== null) {\r\n\t\t\t\tObject.assign(flat, flatten(obj[key], pk + key));\r\n\t\t\t} else {\r\n\t\t\t\tflat[pk + key] = obj[key];\r\n\t\t\t}\r\n\t\t}\r\n\t});\r\n\treturn flat;\r\n}\r\n\r\nreturn e.map(function(e) { return flatten(e.node); });"
-                            }
-                        },
-                        "For_each_host_on_the_incident": {
-                            "foreach": "@variables('endpoints')",
-                            "actions": {
-                                "Compose_endpoint_filter_for_packages": {
-                                    "runAfter": {
-                                        "Parse_endpoint_JSON_data": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Compose",
-                                    "inputs": {
-                                        "and_flag": true,
-                                        "filters": [
-                                            {
-                                                "operator": "Equal",
-                                                "sensor": {
-                                                    "name": "Computer Name"
-                                                },
-                                                "value": "@body('Parse_endpoint_JSON_data')?['node']?['name']"
-                                            },
-                                            {
-                                                "operator": "RegexMatch",
-                                                "sensor": {
-                                                    "name": "IP Address"
-                                                },
-                                                "value": "@body('Parse_endpoint_JSON_data')?['node']?['ipAddress']"
-                                            }
-                                        ]
-                                    },
-                                    "description": "Compose the filter for the current incident host to be used to get the unquarantine package"
-                                },
-                                "Parse_endpoint_JSON_data": {
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@items('For_each_host_on_the_incident')",
-                                        "schema": {
-                                            "properties": {
-                                                "node": {
-                                                    "properties": {
-                                                        "ipAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "name": {
-                                                            "type": "string"
-                                                        },
-                                                        "os": {
-                                                            "properties": {
-                                                                "platform": {
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                }
-                                            },
-                                            "type": "object"
-                                        }
-                                    }
-                                },
-                                "Switch": {
-                                    "runAfter": {
-                                        "Compose_endpoint_filter_for_packages": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "cases": {
-                                        "Linux": {
-                                            "case": "Linux",
-                                            "actions": {
-                                                "Append_to_Linux_endpoint_filters": {
-                                                    "type": "AppendToArrayVariable",
-                                                    "inputs": {
-                                                        "name": "linuxEndpointFilters",
-                                                        "value": "@outputs('Compose_endpoint_filter_for_packages')"
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        "Mac": {
-                                            "case": "Mac",
-                                            "actions": {
-                                                "Append_to_macOS_endpoint_filters": {
-                                                    "type": "AppendToArrayVariable",
-                                                    "inputs": {
-                                                        "name": "macOsEndpointFilters",
-                                                        "value": "@outputs('Compose_endpoint_filter_for_packages')"
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        "Windows": {
-                                            "case": "Windows",
-                                            "actions": {
-                                                "Append_to_Windows_endpoint_filters": {
-                                                    "type": "AppendToArrayVariable",
-                                                    "inputs": {
-                                                        "name": "windowsEndpointFilters",
-                                                        "value": "@outputs('Compose_endpoint_filter_for_packages')"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "default": {
-                                        "actions": {}
-                                    },
-                                    "expression": "@body('Parse_endpoint_JSON_data')?['node']?['os']?['platform']",
-                                    "type": "Switch"
-                                }
-                            },
-                            "runAfter": {
-                                "Set_allComputersGroupId": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach",
-                            "description": "Loop through each host that was on the incident and where Tanium had data about the host"
                         },
                         "Build_Endpoint_Filter_from_Hosts": {
                             "inputs": {
@@ -1133,7 +587,7 @@
                                 }
                             },
                             "runAfter": {
-                                "For_each_host_on_the_incident": [
+                                "Generate_the_endpoints_filters_for_each_OS_package": [
                                     "Succeeded"
                                 ]
                             },
@@ -1388,7 +842,7 @@
                                 }
                             },
                             "runAfter": {
-                                "For_each_host_on_the_incident": [
+                                "Generate_the_endpoints_filters_for_each_OS_package": [
                                     "Succeeded"
                                 ]
                             },
@@ -1406,106 +860,6 @@
                             "else": {
                                 "actions": {}
                             }
-                        },
-                        "If_action_results_and_unknown_action_results": {
-                            "actions": {
-                                "Add_comment_to_incident_-_known_and_unknown_action_results": {
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_action_results')}<br>\n<br>\n@{body('Create_HTML_table_of_unknown_action_results')}</p>"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/Incidents/Comment"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Create_HTML_table_of_unknown_action_results": [
-                                    "Succeeded"
-                                ],
-                                "Create_HTML_table_of_action_results": [
-                                    "SUCCEEDED"
-                                ]
-                            },
-                            "else": {
-                                "actions": {
-                                    "If_action_results": {
-                                        "actions": {
-                                            "Add_comment_to_incident_-_known_action_results": {
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "body": {
-                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_action_results')}</p>"
-                                                    },
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "path": "/Incidents/Comment"
-                                                }
-                                            }
-                                        },
-                                        "expression": {
-                                            "and": [
-                                                {
-                                                    "greater": [
-                                                        "@length(variables('knownActionResults'))",
-                                                        0
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        "type": "If",
-                                        "else": {
-                                            "actions": {
-                                                "Add_comment_to_incident_-_unknown_action_results": {
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "body": {
-                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                            "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_unknown_action_results')}</p>"
-                                                        },
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "path": "/Incidents/Comment"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "greater": [
-                                            "@length(variables('knownActionResults'))",
-                                            0
-                                        ]
-                                    },
-                                    {
-                                        "greater": [
-                                            "@length(variables('unknownActionResults'))",
-                                            0
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
                         },
                         "Apply_unquarantine_action_to_macOS_endpoints": {
                             "actions": {
@@ -1743,7 +1097,7 @@
                                 }
                             },
                             "runAfter": {
-                                "For_each_host_on_the_incident": [
+                                "Generate_the_endpoints_filters_for_each_OS_package": [
                                     "Succeeded"
                                 ]
                             },
@@ -1815,56 +1169,6 @@
                                 ]
                             }
                         },
-                        "Exit_early_If_Tanium_Has_No_Data_for_Incident": {
-                            "actions": {
-                                "Add_comment__-_no_data_in_Tanium": {
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>No data found in Tanium for hosts.</p>"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/Incidents/Comment"
-                                    }
-                                },
-                                "Exit_early__-_no_data_in_Tanium": {
-                                    "runAfter": {
-                                        "Add_comment__-_no_data_in_Tanium": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Terminate",
-                                    "inputs": {
-                                        "runStatus": "Succeeded"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Parse_API_response": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
-                                            "@null"
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If",
-                            "else": {
-                                "actions": {}
-                            }
-                        },
                         "Initialize_Endpoint_Filter": {
                             "runAfter": {
                                 "Exit_early_if_incident_has_no_hosts": [
@@ -1883,7 +1187,7 @@
                         },
                         "Initialize_the_name_of_the_Linux_unquarantine_package": {
                             "runAfter": {
-                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
+                                "Get_information_about_incident_hosts_from_Tanium": [
                                     "Succeeded"
                                 ]
                             },
@@ -1900,7 +1204,7 @@
                         },
                         "Initialize_the_name_of_the_MacOS_unquarantine_package": {
                             "runAfter": {
-                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
+                                "Get_information_about_incident_hosts_from_Tanium": [
                                     "Succeeded"
                                 ]
                             },
@@ -1936,7 +1240,7 @@
                         },
                         "Initialize_the_name_of_the_Windows_unquarantine_package": {
                             "runAfter": {
-                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
+                                "Get_information_about_incident_hosts_from_Tanium": [
                                     "Succeeded"
                                 ]
                             },
@@ -1953,7 +1257,7 @@
                         },
                         "Initialize_list_of_issued_actions": {
                             "runAfter": {
-                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
+                                "Get_information_about_incident_hosts_from_Tanium": [
                                     "Succeeded"
                                 ]
                             },
@@ -1969,7 +1273,7 @@
                         },
                         "Initialize_unquarantine_package_parameters": {
                             "runAfter": {
-                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
+                                "Get_information_about_incident_hosts_from_Tanium": [
                                     "Succeeded"
                                 ]
                             },
@@ -1986,7 +1290,7 @@
                         },
                         "Initialize_list_of_unknown_action_results": {
                             "runAfter": {
-                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
+                                "Get_information_about_incident_hosts_from_Tanium": [
                                     "Succeeded"
                                 ]
                             },
@@ -1998,395 +1302,6 @@
                                         "type": "array"
                                     }
                                 ]
-                            }
-                        },
-                        "Loop_Paginated_Response_if_has_multiple_pages": {
-                            "actions": {
-                                "Until_no_more_pages": {
-                                    "actions": {
-                                        "For_each_endpoint_in_paginated_API_Gateway_response": {
-                                            "foreach": "@body('Parse_page')?['data']?['endpoints']?['edges']",
-                                            "actions": {
-                                                "Append_endpoint_to_endpoints": {
-                                                    "type": "AppendToArrayVariable",
-                                                    "inputs": {
-                                                        "name": "endpoints",
-                                                        "value": "@items('For_each_endpoint_in_paginated_API_Gateway_response')"
-                                                    }
-                                                }
-                                            },
-                                            "runAfter": {
-                                                "Update_cursor_to_next_page": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "Foreach",
-                                            "runtimeConfiguration": {
-                                                "concurrency": {
-                                                    "repetitions": 1
-                                                }
-                                            }
-                                        },
-                                        "Get_next_page": {
-                                            "runAfter": {
-                                                "Update_cursor_for_next_page": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "Http",
-                                            "inputs": {
-                                                "body": {
-                                                    "query": "@variables('apiQuery')",
-                                                    "variables": "@json(variables('apiVariables'))"
-                                                },
-                                                "headers": {
-                                                    "Content-Type": "application/json",
-                                                    "session": "@parameters('TaniumApiToken')"
-                                                },
-                                                "method": "POST",
-                                                "uri": "@parameters('TaniumApiGatewayApi')"
-                                            },
-                                            "runtimeConfiguration": {
-                                                "secureData": {
-                                                    "properties": [
-                                                        "inputs"
-                                                    ]
-                                                }
-                                            }
-                                        },
-                                        "Parse_page": {
-                                            "runAfter": {
-                                                "Get_next_page": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ParseJson",
-                                            "inputs": {
-                                                "content": "@body('Get_next_page')",
-                                                "schema": {
-                                                    "properties": {
-                                                        "data": {
-                                                            "properties": {
-                                                                "endpoints": {
-                                                                    "properties": {
-                                                                        "edges": {
-                                                                            "items": {
-                                                                                "properties": {
-                                                                                    "node": {
-                                                                                        "type": "object"
-                                                                                    }
-                                                                                },
-                                                                                "required": [
-                                                                                    "node"
-                                                                                ],
-                                                                                "type": "object"
-                                                                            },
-                                                                            "type": "array"
-                                                                        },
-                                                                        "pageInfo": {
-                                                                            "properties": {
-                                                                                "endCursor": {
-                                                                                    "type": [
-                                                                                        "string",
-                                                                                        "null"
-                                                                                    ]
-                                                                                },
-                                                                                "hasNextPage": {
-                                                                                    "type": "boolean"
-                                                                                }
-                                                                            },
-                                                                            "type": "object"
-                                                                        }
-                                                                    },
-                                                                    "type": "object"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                }
-                                            }
-                                        },
-                                        "Update_cursor_to_next_page": {
-                                            "runAfter": {
-                                                "Parse_page": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "cursor",
-                                                "value": "@body('Parse_page')?['data']?['endpoints']?['pageInfo']?['endCursor']"
-                                            }
-                                        },
-                                        "Update_cursor_for_next_page": {
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "apiQuery",
-                                                "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"endCursor\": \"@{variables('cursor')}\"\n}"
-                                            }
-                                        }
-                                    },
-                                    "expression": "@equals(body('Parse_page')?['data']?['endpoints']?['pageInfo']?['hasNextPage'],false)",
-                                    "limit": {
-                                        "count": 60,
-                                        "timeout": "PT1H"
-                                    },
-                                    "type": "Until"
-                                }
-                            },
-                            "runAfter": {
-                                "Set_cursor": [
-                                    "Succeeded"
-                                ],
-                                "Set_endpoints_list": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
-                                            "@true"
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If",
-                            "else": {
-                                "actions": {}
-                            }
-                        },
-                        "Parse_API_response": {
-                            "runAfter": {
-                                "Switch_to_TS_from_TDS_if_needed": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@variables('apiResponse')",
-                                "schema": {
-                                    "properties": {
-                                        "data": {
-                                            "properties": {
-                                                "endpoints": {
-                                                    "properties": {
-                                                        "edges": {
-                                                            "items": {
-                                                                "properties": {
-                                                                    "node": {
-                                                                        "properties": {},
-                                                                        "type": "object"
-                                                                    }
-                                                                },
-                                                                "required": [
-                                                                    "node"
-                                                                ],
-                                                                "type": "object"
-                                                            },
-                                                            "type": "array"
-                                                        },
-                                                        "pageInfo": {
-                                                            "properties": {
-                                                                "endCursor": {
-                                                                    "type": "string"
-                                                                },
-                                                                "hasNextPage": {
-                                                                    "type": "boolean"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                }
-                                            },
-                                            "type": "object"
-                                        },
-                                        "errors": {
-                                            "items": {
-                                                "properties": {
-                                                    "message": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "required": [
-                                                    "message"
-                                                ],
-                                                "type": "object"
-                                            },
-                                            "type": "array"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        },
-                        "Parse_endpoints_array": {
-                            "runAfter": {
-                                "Loop_Paginated_Response_if_has_multiple_pages": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@variables('endpoints')",
-                                "schema": {
-                                    "type": "array"
-                                }
-                            },
-                            "description": "We need an action's output to use in the JavaScript code since it can't read from a variable"
-                        },
-                        "Get_General_Host_Info": {
-                            "runAfter": {
-                                "Initialize_API_Variables": [
-                                    "Succeeded"
-                                ],
-                                "Initialize_API_Query": [
-                                    "Succeeded"
-                                ],
-                                "Initialize_cursor": [
-                                    "Succeeded"
-                                ],
-                                "Initialize_endpoints_array": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "body": {
-                                    "query": "@variables('apiQuery')",
-                                    "variables": "@json(variables('apiVariables'))"
-                                },
-                                "headers": {
-                                    "Content-Type": "application/json",
-                                    "session": "@parameters('TaniumApiToken')"
-                                },
-                                "method": "POST",
-                                "uri": "@parameters('TaniumApiGatewayApi')"
-                            },
-                            "runtimeConfiguration": {
-                                "secureData": {
-                                    "properties": [
-                                        "inputs"
-                                    ]
-                                }
-                            },
-                            "description": "Get information about the incident hosts from Tanium."
-                        },
-                        "Select_expire_seconds": {
-                            "runAfter": {
-                                "Initialize_action_results": [
-                                    "SUCCEEDED"
-                                ]
-                            },
-                            "type": "Select",
-                            "inputs": {
-                                "from": "@variables('issuedActions')",
-                                "select": "@int(item()?['expire_seconds'])"
-                            }
-                        },
-                        "Switch_to_TS_from_TDS_if_needed": {
-                            "actions": {
-                                "Requery_the_API_Gateway": {
-                                    "runAfter": {
-                                        "Update_API_Query_variables_to_get_new_source": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Http",
-                                    "inputs": {
-                                        "body": {
-                                            "query": "@variables('apiQuery')",
-                                            "variables": "@json(variables('apiVariables'))"
-                                        },
-                                        "headers": {
-                                            "Content-Type": "application/json",
-                                            "session": "@parameters('TaniumApiToken')"
-                                        },
-                                        "method": "POST",
-                                        "uri": "@parameters('TaniumApiGatewayApi')"
-                                    },
-                                    "runtimeConfiguration": {
-                                        "secureData": {
-                                            "properties": [
-                                                "inputs"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "Change_Endpoint_Source_to_TS": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "endpointSource",
-                                        "value": {
-                                            "ts": {
-                                                "stableWaitTime": 30
-                                            }
-                                        }
-                                    }
-                                },
-                                "Update_API_Gateway_Response": {
-                                    "runAfter": {
-                                        "Requery_the_API_Gateway": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "apiResponse",
-                                        "value": "@body('Requery_the_API_Gateway')"
-                                    }
-                                },
-                                "Update_API_Query_variables_to_get_new_source": {
-                                    "runAfter": {
-                                        "Change_Endpoint_Source_to_TS": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "apiVariables",
-                                        "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"incidentHosts\": {\n    \"any\": true,\n    \"filters\": @{variables('endpointFilters')}\n  }\n}"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Set_apiResponse": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "contains": [
-                                            "@string(body('Get_General_Host_Info'))",
-                                            "must refer to an existing sensor"
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If",
-                            "else": {
-                                "actions": {}
-                            },
-                            "description": "Switch from asking the Tanium Server for information to using the Tanium Data Service."
-                        },
-                        "Wait_for_the_max_expire_seconds_from_the_issued_actions": {
-                            "runAfter": {
-                                "Select_expire_seconds": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Wait",
-                            "inputs": {
-                                "interval": {
-                                    "count": "@max(body('Select_expire_seconds'))",
-                                    "unit": "Second"
-                                }
                             }
                         },
                         "Initialize_cursor": {
@@ -2421,42 +1336,6 @@
                                 ]
                             }
                         },
-                        "Set_apiResponse": {
-                            "type": "SetVariable",
-                            "inputs": {
-                                "name": "apiResponse",
-                                "value": "@body('Get_General_Host_Info')"
-                            },
-                            "runAfter": {
-                                "Get_General_Host_Info": [
-                                    "Succeeded"
-                                ]
-                            }
-                        },
-                        "Set_cursor": {
-                            "type": "SetVariable",
-                            "inputs": {
-                                "name": "cursor",
-                                "value": "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
-                            },
-                            "runAfter": {
-                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
-                                    "Succeeded"
-                                ]
-                            }
-                        },
-                        "Set_endpoints_list": {
-                            "type": "SetVariable",
-                            "inputs": {
-                                "name": "endpoints",
-                                "value": "@body('Parse_API_response')?['data']?['endpoints']?['edges']"
-                            },
-                            "runAfter": {
-                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
-                                    "Succeeded"
-                                ]
-                            }
-                        },
                         "Initialize_allComputersGroupId": {
                             "type": "InitializeVariable",
                             "inputs": {
@@ -2468,7 +1347,7 @@
                                 ]
                             },
                             "runAfter": {
-                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": [
+                                "Get_information_about_incident_hosts_from_Tanium": [
                                     "Succeeded"
                                 ]
                             }
@@ -2546,6 +1425,1144 @@
                             "runAfter": {
                                 "Exit_early_if_no_unquarantine_actions_were_successfully_issued": [
                                     "Succeeded"
+                                ]
+                            }
+                        },
+                        "Get_information_about_incident_hosts_from_Tanium": {
+                            "type": "Scope",
+                            "description": "Gets the information about the incident hosts from Tanium and adds a comment to sentinel listing the host to be targeted",
+                            "actions": {
+                                "Get_General_Host_Info": {
+                                    "type": "Http",
+                                    "description": "Get information about the incident hosts from Tanium.",
+                                    "inputs": {
+                                        "uri": "@parameters('TaniumApiGatewayApi')",
+                                        "method": "POST",
+                                        "headers": {
+                                            "Content-Type": "application/json",
+                                            "session": "@parameters('TaniumApiToken')"
+                                        },
+                                        "body": {
+                                            "query": "@variables('apiQuery')",
+                                            "variables": "@json(variables('apiVariables'))"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Set_apiResponse": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "apiResponse",
+                                        "value": "@body('Get_General_Host_Info')"
+                                    },
+                                    "runAfter": {
+                                        "Get_General_Host_Info": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Switch_to_TS_from_TDS_if_needed": {
+                                    "type": "If",
+                                    "description": "Switch from asking the Tanium Server for information to using the Tanium Data Service.",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@string(body('Get_General_Host_Info'))",
+                                                    "must refer to an existing sensor"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Requery_the_API_Gateway": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "@parameters('TaniumApiGatewayApi')",
+                                                "method": "POST",
+                                                "headers": {
+                                                    "Content-Type": "application/json",
+                                                    "session": "@parameters('TaniumApiToken')"
+                                                },
+                                                "body": {
+                                                    "query": "@variables('apiQuery')",
+                                                    "variables": "@json(variables('apiVariables'))"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Update_API_Query_variables_to_get_new_source": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "runtimeConfiguration": {
+                                                "secureData": {
+                                                    "properties": [
+                                                        "inputs"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "Change_Endpoint_Source_to_TS": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "endpointSource",
+                                                "value": {
+                                                    "ts": {
+                                                        "stableWaitTime": 30
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Update_API_Gateway_Response": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "apiResponse",
+                                                "value": "@body('Requery_the_API_Gateway')"
+                                            },
+                                            "runAfter": {
+                                                "Requery_the_API_Gateway": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Update_API_Query_variables_to_get_new_source": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "apiVariables",
+                                                "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"incidentHosts\": {\n    \"any\": true,\n    \"filters\": @{variables('endpointFilters')}\n  }\n}"
+                                            },
+                                            "runAfter": {
+                                                "Change_Endpoint_Source_to_TS": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Set_apiResponse": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Parse_API_response": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@variables('apiResponse')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "endpoints": {
+                                                            "properties": {
+                                                                "edges": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "node": {
+                                                                                "properties": {},
+                                                                                "type": "object"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "node"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "pageInfo": {
+                                                                    "properties": {
+                                                                        "endCursor": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "hasNextPage": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "errors": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "message": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "message"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Switch_to_TS_from_TDS_if_needed": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
+                                                    "@null"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Add_comment__-_no_data_in_Tanium": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>No data found in Tanium for hosts.</p>"
+                                                },
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Exit_early__-_no_data_in_Tanium": {
+                                            "type": "Terminate",
+                                            "inputs": {
+                                                "runStatus": "Succeeded"
+                                            },
+                                            "runAfter": {
+                                                "Add_comment__-_no_data_in_Tanium": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Parse_API_response": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Set_cursor": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "cursor",
+                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                    },
+                                    "runAfter": {
+                                        "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Set_endpoints_list": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "endpoints",
+                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['edges']"
+                                    },
+                                    "runAfter": {
+                                        "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Loop_Paginated_Response_if_has_multiple_pages": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Until_no_more_pages": {
+                                            "type": "Until",
+                                            "expression": "@equals(body('Parse_page')?['data']?['endpoints']?['pageInfo']?['hasNextPage'],false)",
+                                            "limit": {
+                                                "count": 60,
+                                                "timeout": "PT1H"
+                                            },
+                                            "actions": {
+                                                "For_each_endpoint_in_paginated_API_Gateway_response": {
+                                                    "type": "Foreach",
+                                                    "foreach": "@body('Parse_page')?['data']?['endpoints']?['edges']",
+                                                    "actions": {
+                                                        "Append_endpoint_to_endpoints": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "endpoints",
+                                                                "value": "@items('For_each_endpoint_in_paginated_API_Gateway_response')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Update_cursor_to_next_page": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "concurrency": {
+                                                            "repetitions": 1
+                                                        }
+                                                    }
+                                                },
+                                                "Get_next_page": {
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "@parameters('TaniumApiGatewayApi')",
+                                                        "method": "POST",
+                                                        "headers": {
+                                                            "Content-Type": "application/json",
+                                                            "session": "@parameters('TaniumApiToken')"
+                                                        },
+                                                        "body": {
+                                                            "query": "@variables('apiQuery')",
+                                                            "variables": "@json(variables('apiVariables'))"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Update_cursor_for_next_page": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "secureData": {
+                                                            "properties": [
+                                                                "inputs"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_page": {
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_next_page')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "data": {
+                                                                    "properties": {
+                                                                        "endpoints": {
+                                                                            "properties": {
+                                                                                "edges": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "node": {
+                                                                                                "type": "object"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "node"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "pageInfo": {
+                                                                                    "properties": {
+                                                                                        "endCursor": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "hasNextPage": {
+                                                                                            "type": "boolean"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Get_next_page": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                },
+                                                "Update_cursor_to_next_page": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "cursor",
+                                                        "value": "@body('Parse_page')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_page": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                },
+                                                "Update_cursor_for_next_page": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "apiQuery",
+                                                        "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"endCursor\": \"@{variables('cursor')}\"\n}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Set_cursor": [
+                                            "SUCCEEDED"
+                                        ],
+                                        "Set_endpoints_list": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Parse_endpoints_array": {
+                                    "type": "ParseJson",
+                                    "description": "We need an action's output to use in the JavaScript code since it can't read from a variable",
+                                    "inputs": {
+                                        "content": "@variables('endpoints')",
+                                        "schema": {
+                                            "type": "array"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Loop_Paginated_Response_if_has_multiple_pages": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Flatten_API_Gateway_endpoints": {
+                                    "type": "JavaScriptCode",
+                                    "inputs": {
+                                        "code": "var e = workflowContext.actions.Parse_endpoints_array.outputs.body;\r\n\r\nfunction sensorReadings(r) {\r\n\treturn r.columns.map(c => {\r\n\t\tif (c.sensor && c.sensor.name) {\r\n\t\t\treturn { name: [c.sensor.name, c.name].join(' - '), value: c.values.join(' ') };\r\n\t\t} else {\r\n\t\t\treturn { name: c.name, value: c.values.join(' ') };\r\n\t\t}\r\n\t});\r\n}\r\n\r\nfunction flatten(obj, pk = '') {\r\n\tif (pk !== '') pk += ' ';\r\n\tlet flat = {};\r\n\tObject.keys(obj).forEach((key) => {\r\n\t\tif (key === 'sensorReadings') {\r\n\t\t\tsensorReadings(obj[key]).forEach((r) => {\r\n\t\t\t\tflat[r.name] = r.value;\r\n\t\t\t});\r\n\t\t} else {\r\n\t\t\tif (typeof obj[key] === 'object' && obj[key] !== null) {\r\n\t\t\t\tObject.assign(flat, flatten(obj[key], pk + key));\r\n\t\t\t} else {\r\n\t\t\t\tflat[pk + key] = obj[key];\r\n\t\t\t}\r\n\t\t}\r\n\t});\r\n\treturn flat;\r\n}\r\n\r\nreturn e.map(function(e) { return flatten(e.node); });"
+                                    },
+                                    "runAfter": {
+                                        "Parse_endpoints_array": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Create_HTML_table_of_matched_endpoints": {
+                                    "type": "Table",
+                                    "inputs": {
+                                        "from": "@body('Flatten_API_Gateway_endpoints')",
+                                        "format": "HTML"
+                                    },
+                                    "runAfter": {
+                                        "Flatten_API_Gateway_endpoints": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Add_comment_to_incident_-_hosts_that_will_be_targeted": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>Preparing to issue quarantine actions targeting these endpoints associated with this incident<br>\n@{body('Create_HTML_table_of_matched_endpoints')}</p>"
+                                        },
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Create_HTML_table_of_matched_endpoints": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_API_Variables": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_API_Query": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_cursor": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_endpoints_array": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Generate_the_endpoints_filters_for_each_OS_package": {
+                            "type": "Scope",
+                            "description": "Generates a filter each for Windows, Mac & Linux to be used by our requests to apply the unquarantine package to the endpoints",
+                            "actions": {
+                                "For_each_host_on_the_incident": {
+                                    "type": "Foreach",
+                                    "description": "Loop through each host that was on the incident and where Tanium had data about the host",
+                                    "foreach": "@variables('endpoints')",
+                                    "actions": {
+                                        "Compose_endpoint_filter_for_packages": {
+                                            "type": "Compose",
+                                            "description": "Compose the filter for the current incident host to be used to get the unquarantine package",
+                                            "inputs": {
+                                                "and_flag": true,
+                                                "filters": [
+                                                    {
+                                                        "operator": "Equal",
+                                                        "sensor": {
+                                                            "name": "Computer Name"
+                                                        },
+                                                        "value": "@body('Parse_endpoint_JSON_data')?['node']?['name']"
+                                                    },
+                                                    {
+                                                        "operator": "RegexMatch",
+                                                        "sensor": {
+                                                            "name": "IP Address"
+                                                        },
+                                                        "value": "@body('Parse_endpoint_JSON_data')?['node']?['ipAddress']"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Parse_endpoint_JSON_data": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Parse_endpoint_JSON_data": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('For_each_host_on_the_incident')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "node": {
+                                                            "properties": {
+                                                                "ipAddress": {
+                                                                    "type": "string"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "os": {
+                                                                    "properties": {
+                                                                        "platform": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Switch": {
+                                            "type": "Switch",
+                                            "expression": "@body('Parse_endpoint_JSON_data')?['node']?['os']?['platform']",
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "cases": {
+                                                "Linux": {
+                                                    "actions": {
+                                                        "Append_to_Linux_endpoint_filters": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "linuxEndpointFilters",
+                                                                "value": "@outputs('Compose_endpoint_filter_for_packages')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "case": "Linux"
+                                                },
+                                                "Mac": {
+                                                    "actions": {
+                                                        "Append_to_macOS_endpoint_filters": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "macOsEndpointFilters",
+                                                                "value": "@outputs('Compose_endpoint_filter_for_packages')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "case": "Mac"
+                                                },
+                                                "Windows": {
+                                                    "actions": {
+                                                        "Append_to_Windows_endpoint_filters": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "windowsEndpointFilters",
+                                                                "value": "@outputs('Compose_endpoint_filter_for_packages')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "case": "Windows"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Compose_endpoint_filter_for_packages": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Set_allComputersGroupId": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Check_results_of_quarantine_action": {
+                            "type": "Scope",
+                            "actions": {
+                                "Select_expire_seconds": {
+                                    "type": "Select",
+                                    "inputs": {
+                                        "from": "@variables('issuedActions')",
+                                        "select": "@int(item()?['expire_seconds'])"
+                                    }
+                                },
+                                "Wait_for_the_max_expire_seconds_from_the_issued_actions": {
+                                    "type": "Wait",
+                                    "inputs": {
+                                        "interval": {
+                                            "count": "@max(body('Select_expire_seconds'))",
+                                            "unit": "Second"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Select_expire_seconds": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Collect_action_results_for_each_issued_action": {
+                                    "type": "Foreach",
+                                    "foreach": "@variables('issuedActions')",
+                                    "actions": {
+                                        "Get_action_result": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "@{concat(parameters('TaniumActionResultDataUrlFragment'), items('Collect_action_results_for_each_issued_action')?['id'])}",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Content-Type": "application/json",
+                                                    "session": "@parameters('TaniumApiToken')"
+                                                }
+                                            },
+                                            "runtimeConfiguration": {
+                                                "secureData": {
+                                                    "properties": [
+                                                        "inputs"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "If_action_result_could_be_determined": {
+                                            "type": "If",
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(outputs('Parse_action_result')['body'])",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "actions": {
+                                                "For_each_action_result_set": {
+                                                    "type": "Foreach",
+                                                    "foreach": "@body('Parse_action_result')",
+                                                    "actions": {
+                                                        "Append_to_action_results": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "knownActionResults",
+                                                                "value": "@item()"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Append_to_unknown_action_results": {
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "unknownActionResults",
+                                                            "value": "@outputs('Compose_unknown_action_result')"
+                                                        },
+                                                        "runAfter": {
+                                                            "Compose_unknown_action_result": [
+                                                                "Succeeded"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "Compose_unknown_action_result": {
+                                                        "type": "Compose",
+                                                        "inputs": {
+                                                            "action id": "@item()?['id']",
+                                                            "status": "Completed with unknown result"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_action_result": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Parse_action_result": {
+                                            "type": "JavaScriptCode",
+                                            "inputs": {
+                                                "code": "var action_results = workflowContext.actions.Get_action_result.outputs.body.data;\r\nvar action_id = workflowContext.actions.Parse_current_issued_action.outputs.body.id;\r\nvar columns = action_results.result_sets[0].columns.map(c => c.name);\r\nvar robjects = [];\r\n\r\naction_results.result_sets.forEach(function(rs) {\r\n\trs.rows.forEach(function(row) {\r\n\t\tlet robject = {'action id': action_id};\r\n\t\tcolumns.forEach(function(c, i) {\r\n\t\t\trobject[c] = row.data[i][0].text;\r\n\t\t});\r\n\t\trobjects.push(robject);\r\n\t});\r\n});\r\n\r\nreturn robjects;"
+                                            },
+                                            "runAfter": {
+                                                "Parse_current_issued_action": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Parse_current_issued_action": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('Collect_action_results_for_each_issued_action')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "action_group": {
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "approver": {
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "comment": {
+                                                            "type": "string"
+                                                        },
+                                                        "creation_time": {
+                                                            "type": "string"
+                                                        },
+                                                        "distribute_seconds": {
+                                                            "type": "integer"
+                                                        },
+                                                        "expiration_time": {
+                                                            "type": "string"
+                                                        },
+                                                        "expire_seconds": {
+                                                            "type": "integer"
+                                                        },
+                                                        "history_saved_question": {
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "package_spec": {
+                                                            "properties": {
+                                                                "available_time": {
+                                                                    "type": "string"
+                                                                },
+                                                                "command": {
+                                                                    "type": "string"
+                                                                },
+                                                                "command_timeout": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "content_set": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "creation_time": {
+                                                                    "type": "string"
+                                                                },
+                                                                "deleted_flag": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "display_name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "expire_seconds": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "hidden_flag": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "last_modified_by": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_update": {
+                                                                    "type": "string"
+                                                                },
+                                                                "mod_user": {
+                                                                    "properties": {
+                                                                        "display_name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "domain": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "id": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "modification_time": {
+                                                                    "type": "string"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "parameter_definition": {
+                                                                    "type": "string"
+                                                                },
+                                                                "process_group_flag": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "skip_lock_flag": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "source_hash": {
+                                                                    "type": "string"
+                                                                },
+                                                                "verify_expire_seconds": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "verify_group": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "verify_group_id": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "saved_action": {
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "skip_lock_flag": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "start_time": {
+                                                            "type": "string"
+                                                        },
+                                                        "status": {
+                                                            "type": "string"
+                                                        },
+                                                        "stopped_flag": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "target_group": {
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "user": {
+                                                            "properties": {
+                                                                "creation_time": {
+                                                                    "type": "string"
+                                                                },
+                                                                "deleted_flag": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "display_name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "domain": {
+                                                                    "type": "string"
+                                                                },
+                                                                "effective_group_id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "external_flag": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "group_id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "id": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "last_login": {
+                                                                    "type": "string"
+                                                                },
+                                                                "locked_out": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "mod_user": {
+                                                                    "properties": {
+                                                                        "display_name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "domain": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "id": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "modification_time": {
+                                                                    "type": "string"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "previous_login": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Get_action_result": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Wait_for_the_max_expire_seconds_from_the_issued_actions": [
+                                            "SUCCEEDED"
+                                        ]
+                                    },
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "Create_HTML_table_of_action_results": {
+                                    "type": "Table",
+                                    "inputs": {
+                                        "from": "@variables('knownActionResults')",
+                                        "format": "HTML"
+                                    },
+                                    "runAfter": {
+                                        "Collect_action_results_for_each_issued_action": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Create_HTML_table_of_unknown_action_results": {
+                                    "type": "Table",
+                                    "inputs": {
+                                        "from": "@variables('unknownActionResults')",
+                                        "format": "HTML"
+                                    },
+                                    "runAfter": {
+                                        "Collect_action_results_for_each_issued_action": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "If_action_results_and_unknown_action_results": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(variables('knownActionResults'))",
+                                                    0
+                                                ]
+                                            },
+                                            {
+                                                "greater": [
+                                                    "@length(variables('unknownActionResults'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Add_comment_to_incident_-_known_and_unknown_action_results": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_action_results')}<br>\n<br>\n@{body('Create_HTML_table_of_unknown_action_results')}</p>"
+                                                },
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "If_action_results": {
+                                                "type": "If",
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "greater": [
+                                                                "@length(variables('knownActionResults'))",
+                                                                0
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "actions": {
+                                                    "Add_comment_to_incident_-_known_action_results": {
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "body": {
+                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_action_results')}</p>"
+                                                            },
+                                                            "path": "/Incidents/Comment"
+                                                        }
+                                                    }
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Add_comment_to_incident_-_unknown_action_results": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "message": "<p>QUARANTINE ACTION RESULTS<br>\n@{body('Create_HTML_table_of_unknown_action_results')}</p>"
+                                                                },
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Create_HTML_table_of_action_results": [
+                                            "SUCCEEDED"
+                                        ],
+                                        "Create_HTML_table_of_unknown_action_results": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_action_results": [
+                                    "SUCCEEDED"
                                 ]
                             }
                         }
