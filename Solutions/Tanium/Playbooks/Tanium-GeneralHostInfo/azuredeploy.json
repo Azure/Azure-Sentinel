@@ -13,7 +13,7 @@
         ],
         "entities": [ "host" ],
         "tags": [ "Enrichment" ],
-        "lastUpdateTime": "2023-12-07T00:00:00.000Z",
+        "lastUpdateTime": "2025-06-30T00:00:00.000Z",
         "support": {
             "tier": "developer",
             "link": "https://www.tanium.com"
@@ -92,7 +92,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "hidden-SentinelTemplateName": "Tanium-GeneralHostInfo",
-                "hidden-SentinelTemplateVersion": "2.1"
+                "hidden-SentinelTemplateVersion": "2.2"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -202,7 +202,6 @@
                         "Exit_early_if_incident_has_no_hosts": {
                             "actions": {
                                 "Add_comment__-_no_hosts_found": {
-                                    "runAfter": {},
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
@@ -245,7 +244,10 @@
                                     }
                                 ]
                             },
-                            "type": "If"
+                            "type": "If",
+                            "else": {
+                                "actions": {}
+                            }
                         },
                         "Flatten_API_Gateway_endpoints": {
                             "runAfter": {
@@ -272,7 +274,7 @@
                         "Initialize_API_Query": {
                             "runAfter": {
                                 "Exit_early_if_incident_has_no_hosts": [
-                                    "Succeeded"
+                                    "SUCCEEDED"
                                 ]
                             },
                             "type": "InitializeVariable",
@@ -309,8 +311,8 @@
                         },
                         "Initialize_API_Response": {
                             "runAfter": {
-                                "Get_General_Host_Info": [
-                                    "Succeeded"
+                                "Exit_early_if_incident_has_no_hosts": [
+                                    "SUCCEEDED"
                                 ]
                             },
                             "type": "InitializeVariable",
@@ -318,16 +320,15 @@
                                 "variables": [
                                     {
                                         "name": "apiResponse",
-                                        "type": "object",
-                                        "value": "@body('Get_General_Host_Info')"
+                                        "type": "object"
                                     }
                                 ]
                             }
                         },
                         "Initialize_response_cursor": {
                             "runAfter": {
-                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
-                                    "Succeeded"
+                                "Initialize_API_Response": [
+                                    "SUCCEEDED"
                                 ]
                             },
                             "type": "InitializeVariable",
@@ -335,8 +336,7 @@
                                 "variables": [
                                     {
                                         "name": "cursor",
-                                        "type": "string",
-                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                        "type": "string"
                                     }
                                 ]
                             }
@@ -344,7 +344,7 @@
                         "Initialize_Endpoint_Filter": {
                             "runAfter": {
                                 "Exit_early_if_incident_has_no_hosts": [
-                                    "Succeeded"
+                                    "SUCCEEDED"
                                 ]
                             },
                             "type": "InitializeVariable",
@@ -360,7 +360,7 @@
                         "Initialize_Endpoint_Source_to_TDS": {
                             "runAfter": {
                                 "Exit_early_if_incident_has_no_hosts": [
-                                    "Succeeded"
+                                    "SUCCEEDED"
                                 ]
                             },
                             "type": "InitializeVariable",
@@ -380,8 +380,8 @@
                         },
                         "Initialize_list_of_endpoints": {
                             "runAfter": {
-                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
-                                    "Succeeded"
+                                "Exit_early_if_incident_has_no_hosts": [
+                                    "SUCCEEDED"
                                 ]
                             },
                             "type": "InitializeVariable",
@@ -389,91 +389,337 @@
                                 "variables": [
                                     {
                                         "name": "endpoints",
-                                        "type": "array",
-                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['edges']"
+                                        "type": "array"
                                     }
                                 ]
                             }
                         },
-                        "Exit_early_If_Tanium_Has_No_Data_for_Incident": {
+                        "Get_General_Info_for_incident_hosts": {
+                            "type": "Scope",
                             "actions": {
-                                "Add_comment__-_no_data_in_Tanium": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>No data found in Tanium for hosts.</p>"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                "Exit_early_If_Tanium_Has_No_Data_for_Incident": {
+                                    "actions": {
+                                        "Add_comment__-_no_data_in_Tanium": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>No data found in Tanium for hosts.</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
                                             }
                                         },
-                                        "method": "post",
-                                        "path": "/Incidents/Comment"
-                                    }
-                                },
-                                "Exit_early__-_no_data_in_Tanium": {
-                                    "runAfter": {
-                                        "Add_comment__-_no_data_in_Tanium": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Terminate",
-                                    "inputs": {
-                                        "runStatus": "Succeeded"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Parse_API_response": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
-                                            "@null"
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "Loop_Paginated_Response_if_has_multiple_pages": {
-                            "actions": {
-                                "Until_no_more_pages": {
-                                    "actions": {
-                                        "For_each_endpoint_in_paginated_API_Gateway_response": {
-                                            "foreach": "@body('Parse_page')?['data']?['endpoints']?['edges']",
-                                            "actions": {
-                                                "Append_endpoint_to_endpoints": {
-                                                    "runAfter": {},
-                                                    "type": "AppendToArrayVariable",
-                                                    "inputs": {
-                                                        "name": "endpoints",
-                                                        "value": "@items('For_each_endpoint_in_paginated_API_Gateway_response')"
-                                                    }
-                                                }
-                                            },
+                                        "Exit_early__-_no_data_in_Tanium": {
                                             "runAfter": {
-                                                "Update_cursor_to_next_page": [
+                                                "Add_comment__-_no_data_in_Tanium": [
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "Foreach",
-                                            "runtimeConfiguration": {
-                                                "concurrency": {
-                                                    "repetitions": 1
-                                                }
+                                            "type": "Terminate",
+                                            "inputs": {
+                                                "runStatus": "Succeeded"
                                             }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_API_response": [
+                                            "SUCCEEDED"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
+                                                    "@null"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "else": {
+                                        "actions": {}
+                                    }
+                                },
+                                "Loop_Paginated_Response_if_has_multiple_pages": {
+                                    "actions": {
+                                        "Until_no_more_pages": {
+                                            "actions": {
+                                                "For_each_endpoint_in_paginated_API_Gateway_response": {
+                                                    "foreach": "@body('Parse_page')?['data']?['endpoints']?['edges']",
+                                                    "actions": {
+                                                        "Append_endpoint_to_endpoints": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "endpoints",
+                                                                "value": "@items('For_each_endpoint_in_paginated_API_Gateway_response')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Update_cursor_to_next_page": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach",
+                                                    "runtimeConfiguration": {
+                                                        "concurrency": {
+                                                            "repetitions": 1
+                                                        }
+                                                    }
+                                                },
+                                                "Get_next_page": {
+                                                    "runAfter": {
+                                                        "Update_cursor_for_next_page": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "query": "@variables('apiQuery')",
+                                                            "variables": "@json(variables('queryVariables'))"
+                                                        },
+                                                        "headers": {
+                                                            "Content-Type": "application/json",
+                                                            "session": "@parameters('TaniumApiToken')"
+                                                        },
+                                                        "method": "POST",
+                                                        "uri": "@parameters('TaniumApiGatewayApi')"
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "secureData": {
+                                                            "properties": [
+                                                                "inputs"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_page": {
+                                                    "runAfter": {
+                                                        "Get_next_page": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_next_page')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "data": {
+                                                                    "properties": {
+                                                                        "endpoints": {
+                                                                            "properties": {
+                                                                                "edges": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "node": {
+                                                                                                "type": "object"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "node"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "pageInfo": {
+                                                                                    "properties": {
+                                                                                        "endCursor": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "hasNextPage": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "hasPreviousPage": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "startCursor": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Update_cursor_to_next_page": {
+                                                    "runAfter": {
+                                                        "Parse_page": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "cursor",
+                                                        "value": "@body('Parse_page')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                                    }
+                                                },
+                                                "Update_cursor_for_next_page": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "queryVariables",
+                                                        "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"endCursor\": \"@{variables('cursor')}\"\n}"
+                                                    }
+                                                }
+                                            },
+                                            "expression": "@equals(body('Parse_page')?['data']?['endpoints']?['pageInfo']?['hasNextPage'], false)",
+                                            "limit": {
+                                                "count": 60,
+                                                "timeout": "PT1H"
+                                            },
+                                            "type": "Until"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_cursor": [
+                                            "SUCCEEDED"
+                                        ],
+                                        "Set_endpoints": [
+                                            "SUCCEEDED"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "else": {
+                                        "actions": {}
+                                    }
+                                },
+                                "Parse_API_response": {
+                                    "runAfter": {
+                                        "Switch_to_TS_from_TDS_if_needed": [
+                                            "SUCCEEDED"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@variables('apiResponse')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "endpoints": {
+                                                            "properties": {
+                                                                "edges": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "node": {
+                                                                                "properties": {},
+                                                                                "type": "object"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "node"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "pageInfo": {
+                                                                    "properties": {
+                                                                        "endCursor": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "hasNextPage": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "hasPreviousPage": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "startCursor": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "errors": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "message": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "message"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Get_General_Host_Info": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": {
+                                            "query": "@variables('apiQuery')",
+                                            "variables": "@json(variables('queryVariables'))"
                                         },
-                                        "Get_next_page": {
+                                        "headers": {
+                                            "Content-Type": "application/json",
+                                            "session": "@parameters('TaniumApiToken')"
+                                        },
+                                        "method": "POST",
+                                        "uri": "@parameters('TaniumApiGatewayApi')"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Switch_to_TS_from_TDS_if_needed": {
+                                    "actions": {
+                                        "Requery_the_API_Gateway": {
                                             "runAfter": {
-                                                "Update_cursor_for_next_page": [
+                                                "Update_API_Query_variables_to_get_new_source": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -498,324 +744,129 @@
                                                 }
                                             }
                                         },
-                                        "Parse_page": {
-                                            "runAfter": {
-                                                "Get_next_page": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ParseJson",
+                                        "Change_Endpoint_Source_to_TS": {
+                                            "type": "SetVariable",
                                             "inputs": {
-                                                "content": "@body('Get_next_page')",
-                                                "schema": {
-                                                    "properties": {
-                                                        "data": {
-                                                            "properties": {
-                                                                "endpoints": {
-                                                                    "properties": {
-                                                                        "edges": {
-                                                                            "items": {
-                                                                                "properties": {
-                                                                                    "node": {
-                                                                                        "type": "object"
-                                                                                    }
-                                                                                },
-                                                                                "required": [
-                                                                                    "node"
-                                                                                ],
-                                                                                "type": "object"
-                                                                            },
-                                                                            "type": "array"
-                                                                        },
-                                                                        "pageInfo": {
-                                                                            "properties": {
-                                                                                "endCursor": {
-                                                                                    "type": [
-                                                                                        "string",
-                                                                                        "null"
-                                                                                    ]
-                                                                                },
-                                                                                "hasNextPage": {
-                                                                                    "type": "boolean"
-                                                                                },
-                                                                                "hasPreviousPage": {
-                                                                                    "type": "boolean"
-                                                                                },
-                                                                                "startCursor": {
-                                                                                    "type": [
-                                                                                        "string",
-                                                                                        "null"
-                                                                                    ]
-                                                                                }
-                                                                            },
-                                                                            "type": "object"
-                                                                        }
-                                                                    },
-                                                                    "type": "object"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        }
-                                                    },
-                                                    "type": "object"
+                                                "name": "endpointSource",
+                                                "value": {
+                                                    "ts": {
+                                                        "stableWaitTime": 30
+                                                    }
                                                 }
                                             }
                                         },
-                                        "Update_cursor_to_next_page": {
+                                        "Update_API_Gateway_Response": {
                                             "runAfter": {
-                                                "Parse_page": [
+                                                "Requery_the_API_Gateway": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "SetVariable",
                                             "inputs": {
-                                                "name": "cursor",
-                                                "value": "@body('Parse_page')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                                "name": "apiResponse",
+                                                "value": "@body('Requery_the_API_Gateway')"
                                             }
                                         },
-                                        "Update_cursor_for_next_page": {
-                                            "runAfter": {},
+                                        "Update_API_Query_variables_to_get_new_source": {
+                                            "runAfter": {
+                                                "Change_Endpoint_Source_to_TS": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "type": "SetVariable",
                                             "inputs": {
                                                 "name": "queryVariables",
-                                                "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"endCursor\": \"@{variables('cursor')}\"\n}"
+                                                "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"incidentHosts\": {\n    \"any\": true,\n    \"filters\": @{variables('endpointFilters')}\n  }\n}"
                                             }
                                         }
                                     },
-                                    "runAfter": {},
-                                    "expression": "@equals(body('Parse_page')?['data']?['endpoints']?['pageInfo']?['hasNextPage'], false)",
-                                    "limit": {
-                                        "count": 60,
-                                        "timeout": "PT1H"
+                                    "runAfter": {
+                                        "Set_apiResponse": [
+                                            "SUCCEEDED"
+                                        ]
                                     },
-                                    "type": "Until"
-                                }
-                            },
-                            "runAfter": {
-                                "Initialize_list_of_endpoints": [
-                                    "Succeeded"
-                                ],
-                                "Initialize_response_cursor": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
-                                            "@true"
+                                    "description": "Switch from asking the Tanium Server for information to using the Tanium Data Service.",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@string(body('Get_General_Host_Info'))",
+                                                    "must refer to an existing sensor"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "else": {
+                                        "actions": {}
+                                    }
+                                },
+                                "Set_apiResponse": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "apiResponse",
+                                        "value": "@body('Get_General_Host_Info')"
+                                    },
+                                    "runAfter": {
+                                        "Get_General_Host_Info": [
+                                            "SUCCEEDED"
                                         ]
                                     }
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "Parse_API_response": {
-                            "runAfter": {
-                                "Switch_to_TS_from_TDS_if_needed": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@variables('apiResponse')",
-                                "schema": {
-                                    "properties": {
-                                        "data": {
-                                            "properties": {
-                                                "endpoints": {
-                                                    "properties": {
-                                                        "edges": {
-                                                            "items": {
-                                                                "properties": {
-                                                                    "node": {
-                                                                        "properties": {},
-                                                                        "type": "object"
-                                                                    }
-                                                                },
-                                                                "required": [
-                                                                    "node"
-                                                                ],
-                                                                "type": "object"
-                                                            },
-                                                            "type": "array"
-                                                        },
-                                                        "pageInfo": {
-                                                            "properties": {
-                                                                "endCursor": {
-                                                                    "type": [
-                                                                        "string",
-                                                                        "null"
-                                                                    ]
-                                                                },
-                                                                "hasNextPage": {
-                                                                    "type": "boolean"
-                                                                },
-                                                                "hasPreviousPage": {
-                                                                    "type": "boolean"
-                                                                },
-                                                                "startCursor": {
-                                                                    "type": [
-                                                                        "string",
-                                                                        "null"
-                                                                    ]
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                }
-                                            },
-                                            "type": "object"
-                                        },
-                                        "errors": {
-                                            "items": {
-                                                "properties": {
-                                                    "message": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "required": [
-                                                    "message"
-                                                ],
-                                                "type": "object"
-                                            },
-                                            "type": "array"
-                                        }
+                                },
+                                "Set_cursor": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "cursor",
+                                        "value": "@{body('Parse_API_response')?['data']?['endpoints']?['pageInfo']?['endCursor']}"
                                     },
-                                    "type": "object"
+                                    "runAfter": {
+                                        "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
+                                },
+                                "Set_endpoints": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "endpoints",
+                                        "value": "@body('Parse_API_response')?['data']?['endpoints']?['edges']"
+                                    },
+                                    "runAfter": {
+                                        "Exit_early_If_Tanium_Has_No_Data_for_Incident": [
+                                            "SUCCEEDED"
+                                        ]
+                                    }
                                 }
+                            },
+                            "runAfter": {
+                                "Initialize_API_Variables": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_API_Query": [
+                                    "SUCCEEDED"
+                                ],
+                                "Initialize_list_of_endpoints": [
+                                    "SUCCEEDED"
+                                ],
+                                "Initialize_response_cursor": [
+                                    "SUCCEEDED"
+                                ]
                             }
                         },
                         "Parse_endpoints_array": {
-                            "runAfter": {
-                                "Loop_Paginated_Response_if_has_multiple_pages": [
-                                    "Succeeded"
-                                ]
-                            },
                             "type": "ParseJson",
+                            "description": "We need an action's output to use in the JavaScript code since it can't read from a variable",
                             "inputs": {
                                 "content": "@variables('endpoints')",
                                 "schema": {
                                     "type": "array"
                                 }
                             },
-                            "description": "We need an action's output to use in the JavaScript code since it can't read from a variable"
-                        },
-                        "Get_General_Host_Info": {
                             "runAfter": {
-                                "Initialize_API_Query": [
-                                    "Succeeded"
-                                ],
-                                "Initialize_API_Variables": [
+                                "Get_General_Info_for_incident_hosts": [
                                     "Succeeded"
                                 ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "body": {
-                                    "query": "@variables('apiQuery')",
-                                    "variables": "@json(variables('queryVariables'))"
-                                },
-                                "headers": {
-                                    "Content-Type": "application/json",
-                                    "session": "@parameters('TaniumApiToken')"
-                                },
-                                "method": "POST",
-                                "uri": "@parameters('TaniumApiGatewayApi')"
-                            },
-                            "runtimeConfiguration": {
-                                "secureData": {
-                                    "properties": [
-                                        "inputs"
-                                    ]
-                                }
                             }
-                        },
-                        "Switch_to_TS_from_TDS_if_needed": {
-                            "actions": {
-                                "Requery_the_API_Gateway": {
-                                    "runAfter": {
-                                        "Update_API_Query_variables_to_get_new_source": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Http",
-                                    "inputs": {
-                                        "body": {
-                                            "query": "@variables('apiQuery')",
-                                            "variables": "@json(variables('queryVariables'))"
-                                        },
-                                        "headers": {
-                                            "Content-Type": "application/json",
-                                            "session": "@parameters('TaniumApiToken')"
-                                        },
-                                        "method": "POST",
-                                        "uri": "@parameters('TaniumApiGatewayApi')"
-                                    },
-                                    "runtimeConfiguration": {
-                                        "secureData": {
-                                            "properties": [
-                                                "inputs"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "Change_Endpoint_Source_to_TS": {
-                                    "runAfter": {},
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "endpointSource",
-                                        "value": {
-                                            "ts": {
-                                                "stableWaitTime": 30
-                                            }
-                                        }
-                                    }
-                                },
-                                "Update_API_Gateway_Response": {
-                                    "runAfter": {
-                                        "Requery_the_API_Gateway": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "apiResponse",
-                                        "value": "@body('Requery_the_API_Gateway')"
-                                    }
-                                },
-                                "Update_API_Query_variables_to_get_new_source": {
-                                    "runAfter": {
-                                        "Change_Endpoint_Source_to_TS": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "queryVariables",
-                                        "value": "{\n  \"source\": @{variables('endpointSource')},\n  \"incidentHosts\": {\n    \"any\": true,\n    \"filters\": @{variables('endpointFilters')}\n  }\n}"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Initialize_API_Response": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "contains": [
-                                            "@string(body('Get_General_Host_Info'))",
-                                            "must refer to an existing sensor"
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
                         }
                     },
                     "outputs": {}
