@@ -1,30 +1,3 @@
-# pylint: disable=line-too-long,useless-suppression
-# ------------------------------------
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-# ------------------------------------
-
-"""
-DESCRIPTION:
-    This sample demonstrates how to use agent operations with the Bing grounding tool from
-    the Azure Agents service using a synchronous client.
-
-USAGE:
-    python sample_agents_bing_grounding.py
-
-    Before running the sample:
-
-    pip install azure-ai-projects azure-ai-agents azure-identity
-
-    Set these environment variables with your own values:
-    1) PROJECT_ENDPOINT - The Azure AI Project endpoint, as found in the Overview
-                          page of your Azure AI Foundry portal.
-    2) MODEL_DEPLOYMENT_NAME - The deployment name of the AI model, as found under the "Name" column in
-       the "Models + endpoints" tab in your Azure AI Foundry project.
-    3) AZURE_BING_CONNECTION_ID - The ID of the Bing connection, in the format of:
-       /subscriptions/{subscription-id}/resourceGroups/{resource-group-name}/providers/Microsoft.MachineLearningServices/workspaces/{workspace-name}/connections/{connection-name}
-"""
-
 import os
 from azure.ai.projects import AIProjectClient
 from azure.ai.agents.models import MessageRole, BingGroundingTool
