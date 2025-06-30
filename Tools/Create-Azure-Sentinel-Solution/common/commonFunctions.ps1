@@ -1792,6 +1792,18 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             }
             return
         }
+
+        # Define a helper function to handle null or empty arrays
+        function Get-ValidArray($inputArray) {
+            if ($null -eq $inputArray -or -not $inputArray -or $inputArray.Count -eq 0) {
+                if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                }
+                return "[variables('TemplateEmptyArray')]"
+            }
+            return $inputArray
+        }
+
                     try {
                         # BELOW IS OLD WAY OF CCP CONNECTOR CODE I.E CLV1 WHICH ONLY HAS CONNECTORUICONFIG AND POLLER CONFIG SECTION IN SOURCE 
                         $ccpPollingConfig = [PSCustomObject] @{}
@@ -1811,6 +1823,19 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         {
                             $ccpPollingConfig = $null
                             $ccpConnector = $false
+
+                            if ($null -eq $connectorData.graphQueries -or $connectorData.graphQueries.Count -eq 0) {
+                                $connectorData.graphQueries = Get-ValidArray $connectorData.graphQueries
+                            }
+
+                            if ($null -eq $connectorData.dataTypes -or $connectorData.dataTypes.Count -eq 0) {
+                                $connectorData.dataTypes = Get-ValidArray $connectorData.dataTypes
+                            }
+
+                            if ($null -eq $connectorData.sampleQueries -or $connectorData.sampleQueries.Count -eq 0) {
+                                $connectorData.sampleQueries = Get-ValidArray $connectorData.sampleQueries
+                            }
+
                             $templateSpecConnectorData = $connectorData
                         }
                     }
@@ -2081,18 +2106,30 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     $connectorObj = [PSCustomObject]@{}
                     # If direct title is available, assume standard connector format
                     if ($connectorData.title) {
+                        $graphQueriesValue = Get-ValidArray $connectorData.graphQueries;
+                        $dataTypesValue = Get-ValidArray $connectorData.dataTypes;
                         $standardConnectorUiConfig = [PSCustomObject]@{
                             title                 = $connectorData.title;
                             publisher             = $connectorData.publisher;
                             descriptionMarkdown   = $connectorData.descriptionMarkdown;
-                            graphQueries          = $connectorData.graphQueries;
-                            dataTypes             = $connectorData.dataTypes;
-                            connectivityCriterias = $connectorData.connectivityCriterias;
+                            graphQueries          = $graphQueriesValue;
+                            dataTypes             = $dataTypesValue;
+                            #connectivityCriterias = $connectorData.connectivityCriterias;
+                        }
+                        
+                        # Add connectivityCriterias if not null
+                        if ($null -ne $connectorData.connectivityCriterias) {
+                            $standardConnectorUiConfig | Add-Member -MemberType NoteProperty -Name connectivityCriterias -Value $connectorData.connectivityCriterias
+                        }
+                        # Else, check if connectivityCriteria exists and add it
+                        elseif ($null -ne $connectorData.connectivityCriteria) {
+                            $standardConnectorUiConfig | Add-Member -MemberType NoteProperty -Name connectivityCriteria -Value $connectorData.connectivityCriteria
                         }
 
                         if(!$is1PConnector)
                         {
-                            $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $connectorData.sampleQueries;
+                            $sampleQueriesValue = Get-ValidArray $connectorData.sampleQueries
+                            $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $sampleQueriesValue;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "availability" -NotePropertyValue $connectorData.availability;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "permissions" -NotePropertyValue $connectorData.permissions;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "instructionSteps" -NotePropertyValue $connectorData.instructionSteps;
@@ -2170,7 +2207,13 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         return $typeResult
                     }
-                    $connectorDataType = $(getConnectorDataTypes $connectorData.dataTypes)
+                    
+                    if($connectorData.dataTypes -eq "[variables('TemplateEmptyArray')]") {
+                        $connectorDataType = "custom log"
+                    } else {
+                        $connectorDataType = $(getConnectorDataTypes $connectorData.dataTypes)
+                    }
+
                     $isParserAvailable = $($contentToImport.Parsers -and ($contentToImport.Parsers.Count -gt 0))
                     $baseDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Microsoft Sentinel workspace. Configure and enable this data connector in the Data Connector gallery after this Solution deploys."
                     $customLogsText = "$baseDescriptionText This data connector creates custom log table(s) $(getAllDataTypeNames $connectorData.dataTypes) in your Microsoft Sentinel / Azure Log Analytics workspace."
