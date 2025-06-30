@@ -12,6 +12,15 @@ This directory contains comprehensive guides for using the Microsoft 365 solutio
 - Security analytics and threat detection scenarios
 - Troubleshooting common issues
 
+### [M365 Copilot FAQ](M365-Copilot-FAQ.md)
+**New!** Frequently asked questions about Microsoft 365 Copilot integration with Azure Sentinel, including:
+
+- Do I need a separate data connector?
+- What events are available?
+- How to verify data ingestion
+- Licensing requirements
+- Security considerations
+
 **Key Features:**
 - ✅ No additional data connector required
 - ✅ Uses existing Microsoft 365 connector
