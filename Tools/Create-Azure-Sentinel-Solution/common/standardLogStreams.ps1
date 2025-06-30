@@ -97,7 +97,6 @@ $standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSS
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_VPC_FLOW_LOGS'; Value = 'Microsoft-GCPVPCFlow'}
 
-
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {
   param (
