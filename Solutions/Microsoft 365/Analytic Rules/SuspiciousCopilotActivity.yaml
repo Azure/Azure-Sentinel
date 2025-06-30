@@ -1,0 +1,120 @@
+id: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
+name: Suspicious Microsoft 365 Copilot Activity Pattern
+description: |
+  'Detects suspicious Microsoft 365 Copilot activity patterns that may indicate malicious use, including:
+  - Rapid successive interactions suggesting automation
+  - Unusual geographic locations
+  - Access patterns inconsistent with normal user behavior
+  This rule helps identify potential compromised accounts or insider threats using Copilot features.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1h
+queryPeriod: 24h
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 5h
+suppressionEnabled: false
+tactics:
+  - InitialAccess
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1078.004
+  - T1098
+  - T1005
+query: |
+  let timeframe = 1h;
+  let lookback = 24h;
+  // Define thresholds
+  let rapidInteractionThreshold = 30; // interactions per 5-minute window
+  let totalInteractionThreshold = 200; // total interactions in timeframe
+  let distinctWorkloadThreshold = 4; // distinct workloads accessed
+  // Get current period activity
+  let CurrentActivity = OfficeActivity
+  | where TimeGenerated > ago(timeframe)
+  | where Operation contains "Copilot"
+  | where UserType == "Regular"; // Exclude service accounts
+  // Detect rapid interactions (potential automation)
+  let RapidInteractions = CurrentActivity
+  | summarize InteractionCount = count() by UserId, bin(TimeGenerated, 5m)
+  | where InteractionCount > rapidInteractionThreshold
+  | summarize RapidInteractionWindows = count() by UserId;
+  // Detect high volume interactions
+  let HighVolumeUsers = CurrentActivity
+  | summarize TotalInteractions = count(), DistinctWorkloads = dcount(OfficeWorkload) by UserId
+  | where TotalInteractions > totalInteractionThreshold or DistinctWorkloads > distinctWorkloadThreshold;
+  // Detect geographic anomalies (if available)
+  let GeographicAnomalies = CurrentActivity
+  | where isnotempty(ClientIP)
+  | summarize DistinctIPs = dcount(ClientIP), IPs = make_set(ClientIP) by UserId
+  | where DistinctIPs > 3; // Multiple IPs in short timeframe
+  // Combine all suspicious indicators
+  CurrentActivity
+  | summarize 
+      TotalInteractions = count(),
+      DistinctOperations = dcount(Operation),
+      DistinctWorkloads = dcount(OfficeWorkload),
+      DistinctIPs = dcount(ClientIP),
+      FirstActivity = min(TimeGenerated),
+      LastActivity = max(TimeGenerated),
+      Operations = make_set(Operation),
+      Workloads = make_set(OfficeWorkload),
+      IPs = make_set(ClientIP)
+      by UserId
+  | join kind=leftouter (RapidInteractions) on UserId
+  | join kind=leftouter (HighVolumeUsers) on UserId  
+  | join kind=leftouter (GeographicAnomalies) on UserId
+  | extend
+      HasRapidInteractions = isnotempty(RapidInteractionWindows),
+      HasHighVolume = isnotempty(TotalInteractions1),
+      HasGeoAnomalies = isnotempty(DistinctIPs1),
+      ActivityTimeSpan = LastActivity - FirstActivity
+  | where HasRapidInteractions or HasHighVolume or HasGeoAnomalies
+  | extend
+      SuspicionScore = 
+          (iff(HasRapidInteractions, 3, 0)) +
+          (iff(HasHighVolume, 2, 0)) +
+          (iff(HasGeoAnomalies, 2, 0)) +
+          (iff(DistinctWorkloads > 3, 1, 0)),
+      AlertDescription = strcat(
+          iff(HasRapidInteractions, "Rapid interactions detected; ", ""),
+          iff(HasHighVolume, "High volume activity; ", ""),
+          iff(HasGeoAnomalies, "Multiple IP addresses; ", ""),
+          iff(DistinctWorkloads > 3, "Multiple workloads accessed; ", "")
+      )
+  | where SuspicionScore >= 3
+  | project 
+      UserId, SuspicionScore, AlertDescription, TotalInteractions,
+      DistinctWorkloads, DistinctIPs, ActivityTimeSpan,
+      FirstActivity, LastActivity, Operations, Workloads, IPs
+  | order by SuspicionScore desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: "Suspicious Copilot Activity - {{UserId}}"
+  alertDescriptionFormat: "Suspicious Microsoft 365 Copilot activity detected for user {{UserId}}. {{AlertDescription}} Total interactions: {{TotalInteractions}}, Suspicion score: {{SuspicionScore}}"
+customDetails:
+  SuspicionScore: SuspicionScore
+  TotalInteractions: TotalInteractions
+  DistinctWorkloads: DistinctWorkloads
+  ActivityTimeSpan: ActivityTimeSpan
+version: 1.0.1
+kind: Scheduled

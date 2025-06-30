@@ -1,0 +1,58 @@
+id: 9c9d9e2f-4d5e-6f7g-0a9b-8c7d6e5f4a3b
+name: Microsoft 365 Copilot Off-Hours Activity
+description: |
+  'This query identifies Microsoft 365 Copilot usage during non-business hours which may indicate compromised accounts,
+  insider threats, or policy violations. Adjust the business hours according to your organization's schedule.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 6h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1133
+query: |
+  let BusinessHoursStart = 08; // 8 AM
+  let BusinessHoursEnd = 18;   // 6 PM
+  let BusinessDays = pack_array(1,2,3,4,5); // Monday = 1, Sunday = 7
+  OfficeActivity
+  | where TimeGenerated > ago(1d)
+  | where Operation contains "Copilot"
+  | extend Hour = hourofday(TimeGenerated)
+  | extend DayOfWeek = dayofweek(TimeGenerated)
+  | where Hour < BusinessHoursStart or Hour > BusinessHoursEnd or DayOfWeek !in (BusinessDays)
+  | summarize 
+      OffHoursActivities = count(),
+      DistinctOperations = dcount(Operation),
+      FirstActivity = min(TimeGenerated),
+      LastActivity = max(TimeGenerated),
+      Operations = make_set(Operation),
+      Workloads = make_set(OfficeWorkload)
+      by UserId, ClientIP
+  | where OffHoursActivities > 5 // Adjust threshold as needed
+  | extend
+      ActivityWindow = LastActivity - FirstActivity,
+      RiskScore = case(
+          OffHoursActivities > 50, "High",
+          OffHoursActivities > 20, "Medium",
+          "Low"
+      )
+  | order by OffHoursActivities desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.0
+kind: Scheduled

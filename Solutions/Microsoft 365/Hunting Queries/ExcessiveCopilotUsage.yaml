@@ -1,0 +1,50 @@
+id: 8b8b9b1e-3c4d-4f5e-9a8b-7c6d5e4f3a2b
+name: Excessive Microsoft 365 Copilot Usage
+description: |
+  'This query identifies users with unusually high Microsoft 365 Copilot interaction volumes that may indicate automation, policy violations, or compromised accounts.
+  It looks for users who have significantly more Copilot interactions than normal within a specified time period.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1h
+queryPeriod: 24h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+query: |
+  let lookback = 24h;
+  let threshold = 100; // Adjust based on your organization's normal usage
+  let timebin = 1h;
+  // Get baseline Copilot usage per user
+  let baseline = OfficeActivity
+  | where TimeGenerated between (ago(lookback*7) .. ago(lookback))
+  | where Operation contains "Copilot"
+  | summarize BaselineInteractions = count() by UserId
+  | extend BaselineAvg = BaselineInteractions / 7; // 7 days average
+  // Get current period usage
+  let current = OfficeActivity
+  | where TimeGenerated > ago(lookback)
+  | where Operation contains "Copilot"
+  | summarize CurrentInteractions = count() by UserId, bin(TimeGenerated, timebin)
+  | summarize MaxHourlyInteractions = max(CurrentInteractions), TotalInteractions = sum(CurrentInteractions) by UserId;
+  // Compare current usage with baseline
+  current
+  | join kind=leftouter (baseline) on UserId
+  | extend BaselineAvg = iff(isempty(BaselineAvg), 10.0, BaselineAvg) // Default for new users
+  | extend AnomalyFactor = TotalInteractions / BaselineAvg
+  | where MaxHourlyInteractions > threshold or AnomalyFactor > 5.0
+  | project UserId, TotalInteractions, MaxHourlyInteractions, BaselineAvg, AnomalyFactor
+  | order by AnomalyFactor desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+version: 1.0.0
+kind: Scheduled

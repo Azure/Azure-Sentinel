@@ -1,0 +1,64 @@
+id: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+name: Microsoft 365 Copilot Sensitive Content Access
+description: |
+  'This query identifies potential unauthorized access to sensitive content through Microsoft 365 Copilot.
+  It monitors when Copilot accesses documents or content that may contain sensitive information.'
+severity: High
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1005
+  - T1039
+query: |
+  // Define sensitive keywords that might appear in file names or content
+  let SensitiveKeywords = pack_array(
+      "confidential", "secret", "classified", "restricted", 
+      "financial", "salary", "budget", "acquisition", "merger",
+      "ssn", "social security", "tax", "hr", "human resources",
+      "legal", "contract", "nda", "proprietary", "internal"
+  );
+  OfficeActivity
+  | where TimeGenerated > ago(1d)
+  | where Operation contains "Copilot"
+  | where isnotempty(OfficeObjectId) or isnotempty(ExtendedProperties)
+  | extend FileName = tolower(coalesce(OfficeObjectId, ""))
+  | extend ExtProps = tolower(coalesce(ExtendedProperties, ""))
+  | where FileName has_any (SensitiveKeywords) or ExtProps has_any (SensitiveKeywords)
+  | summarize 
+      SensitiveAccessCount = count(),
+      FirstAccess = min(TimeGenerated),
+      LastAccess = max(TimeGenerated),
+      AccessedFiles = make_set(OfficeObjectId),
+      Operations = make_set(Operation),
+      Workloads = make_set(OfficeWorkload)
+      by UserId, ClientIP
+  | extend 
+      AccessTimeSpan = LastAccess - FirstAccess,
+      RiskLevel = case(
+          SensitiveAccessCount > 20, "Critical",
+          SensitiveAccessCount > 10, "High", 
+          SensitiveAccessCount > 5, "Medium",
+          "Low"
+      )
+  | where SensitiveAccessCount > 3
+  | order by SensitiveAccessCount desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.0
+kind: Scheduled
