@@ -1,8 +1,8 @@
-# Blink-Sentinel-Incident-Trigger
+# Sentinel Alert Trigger
 
 ## Summary
 
-This playbook automatically triggers when a **Microsoft Sentinel incident is created or updated**, and sends a structured HTTPS POST request to **Blink**. The integration enables seamless coordination between Sentinel Incident and Blink automation workflows, allowing for rapid incident response, ticketing, notification dispatch, or any custom workflow configured in Blink.
+This playbook automatically triggers when a **Microsoft Sentinel alert is created**, and sends a structured HTTPS POST request to **Blink**. The integration enables seamless coordination between Sentinel alerts and Blink automation workflows, allowing for rapid alert response, ticketing, notification dispatch, or any custom workflow configured in Blink.
 
 <img src="./playbook_screenshot.png" width="50%"/>
 
@@ -30,7 +30,7 @@ To deploy the playbook into your Azure environment:
 
 1. Click the **Deploy to Azure** button below to launch the ARM Template deployment wizard.
 2. Provide the following required parameters:
-   - `Playbook-Name`: Choose a clear and descriptive name for the Logic App (e.g., `Blink_Sentinel_Incident_Trigger`).
+   - `Playbook-Name`: Choose a clear and descriptive name for the Logic App (e.g., `Sentinel Alert Hanlder`).
    - `Blink-Webhook-Full-URL`: Paste the full webhook URL from your Blink workflow.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)]()  
@@ -42,25 +42,18 @@ To deploy the playbook into your Azure environment:
 
 Once the playbook is deployed successfully, follow these steps to connect it with Microsoft Sentinel's automation rules:
 
-### 1. Create Automation Rule for **Incident Created**
+### Create Automation Rule for **Alert Created**
 
 - Go to: **Microsoft Sentinel > Configuration > Automation**.
 - Click **+ Create > Automation rule**.
 - Fill in the following:
-  - **Name**: e.g., `Notify Blink when new incident is created`.
-  - **Trigger**: Select `When incident is created`.
+  - **Name**: e.g., `Notify Blink when new alert is created`.
+  - **Trigger**: Select `When alert is created`.
   - **Conditions**: Leave default unless you want specific filters.
   - **Actions**: Choose `Run playbook`.
-  - **Playbook**: Select your deployed playbook (e.g., `Blink_Sentinel_Incident_Trigger`).
+  - **Playbook**: Select your deployed playbook (e.g., `Sentinel Alert Handler`).
 - Click **Apply**.
 
-### 2. Create Automation Rule for **Incident Updated**
-
-- Repeat the same steps as above.
-- For the **Trigger**, select `When incident is updated`.
-- Click **Apply**.
-
----
 
 ## Support
 
