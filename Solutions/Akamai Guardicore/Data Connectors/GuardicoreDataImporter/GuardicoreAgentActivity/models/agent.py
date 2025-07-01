@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional, Any, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 
 class Label(BaseModel):
@@ -61,24 +61,15 @@ class GuardicoreAgent(BaseModel):
     id: str = Field(alias="_id")
     agent_id: Optional[str] = ""
     asset_id: Optional[str] = ""
-    build_commit: Optional[str] = ""
-    build_date: Optional[Union[str, int]] = ""
     component_id: Optional[str] = ""
-    configuration_reported_errors: Optional[Dict[str, Dict[str, str]]] = {}
-    configuration_reported_revision: Optional[int] = 0
     display_name: Optional[str] = ""
-    doc_version: Optional[int] = 0
     first_seen: int
     health: Optional[Health] = None
     hostname: Optional[str] = ""
     installed_modules: Optional[List[str]] = []
     ip_addresses: List[str]
     is_agent_missing: Optional[bool] = False
-    is_configuration_dirty: Optional[bool] = False
     is_missing: Optional[bool] = False
-    kernel: Optional[str] = ""
-    labels: List[Label]
-    labels_groups: Optional[List[LabelGroup]] = []
     last_seen: int
     not_monitored: Optional[bool] = False
     os: Optional[str] = ""
@@ -87,6 +78,16 @@ class GuardicoreAgent(BaseModel):
     status_flags: Optional[List[StatusFlag]] = []
     supported_features: Optional[List[str]] = []
     version: Optional[str] = ""
+    is_agent_enforcing: Optional[bool] = False
+    configuration: Optional[Dict[str, Any]] = None
+
+    @field_serializer('is_agent_enforcing')
+    def serialize_is_agent_enforcing(self, _: bool, _info: Any) -> bool:
+        """Determine if agent is in enforcing mode based on configuration data"""
+        if hasattr(self, 'configuration') and self.configuration:
+            if 'enforcementagent' in self.configuration and 'agent_operating_mode' in self.configuration['enforcementagent']:
+                return self.configuration['enforcementagent']['agent_operating_mode'] == "Enforcing"
+        return False
 
     class Config:
         extra = "ignore"

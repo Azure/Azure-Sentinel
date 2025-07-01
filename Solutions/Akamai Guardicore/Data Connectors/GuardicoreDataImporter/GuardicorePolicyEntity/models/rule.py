@@ -101,33 +101,24 @@ class GuardicorePolicyRule(BaseModel):
     icmp_matches: List[ICMPCode] = []
     ports: List[int] = []
     enabled: bool
-    last_change_time: datetime
     section_position: str
     comments: Optional[str] = ""
     destination: EndpointDefinition
-    creation_time: datetime
     exclude_ports: List[int] = []
     hit_count: int = 0
     read_only: bool
     id: str
     action: str
-    hit_count_reset_time: Optional[datetime] = None
     state: str
     scope: List[ScopeItem] = []
     ruleset_name: str
     source: EndpointDefinition
     port_ranges: List[PortRange] = []
-    last_hit: Optional[datetime] = None
     network_profile: str
     exclude_port_ranges: List[PortRange] = []
     ip_protocols: List[str] = []
     author: Author
 
 
-    @field_serializer('creation_time', 'last_change_time', 'hit_count_reset_time', 'last_hit')
-    def serialize_datetime(self, dt: datetime | None) -> str | None:
-        if dt is None:
-            return None
-        return dt.strftime('%a, %d %b %Y %H:%M:%S GMT')
     class Config:
         extra = "ignore"
