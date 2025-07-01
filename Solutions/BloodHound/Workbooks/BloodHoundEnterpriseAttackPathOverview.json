@@ -13,18 +13,24 @@
             "label": "BHE Tenant",
             "type": 2,
             "isRequired": true,
-            "query": "BloodHoundAttackPathsDetails_CL \n| where isnotempty(tenant_url)\n| summarize arg_max(TimeGenerated, *) by tenant_url\n| extend display_name = replace_string(tenant_url, @\"https://\", \"\")\n| extend display_name = replace_string(display_name, @\"http://\", \"\")\n| extend display_name = replace_string(display_name, @\"/\", \"\") \n| project tenant_url, display_name",
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "BHEAttackPathsData_CL \n| where isnotempty(tenant_url)\n| summarize arg_max(TimeGenerated, *) by tenant_url\n| extend display_name = replace_string(tenant_url, @\"https://\", \"\")\n| extend display_name = replace_string(display_name, @\"http://\", \"\")\n| extend display_name = replace_string(display_name, @\"/\", \"\") \n| project tenant_url, display_name",
             "typeSettings": {
               "additionalResourceOptions": [
-                "value::1"
-              ]
+                "value::all"
+              ],
+              "showDefault": false
             },
             "timeContext": {
-              "durationMs": 86400000
+              "durationMs": 172800000
             },
-            "defaultValue": "value::1",
             "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces"
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "https://maplesyrup.bloodhoundenterprise.io/"
+            ]
           },
           {
             "id": "cb118fcd-4473-4470-ac89-28c6ea644d5d",
@@ -36,7 +42,7 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "BloodHoundAttackPathsDetails_CL \n| where isnotempty(domain_name)\n| where tenant_url == '{bhe_tenant}'\n| distinct domain_name",
+            "query": "BHEAttackPathsData_CL \n| where isnotempty(domain_name)\n| where tenant_url in~ ({bhe_tenant})\n| distinct domain_name",
             "typeSettings": {
               "additionalResourceOptions": [
                 "value::all"
@@ -48,10 +54,67 @@
             },
             "defaultValue": "value::all",
             "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces",
-            "value": [
-              "value::all"
-            ]
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "dafad90f-2d00-41cd-9463-efbe87d3888f",
+            "version": "KqlParameterItem/1.0",
+            "name": "time",
+            "label": "Time Range Picker",
+            "type": 4,
+            "isRequired": true,
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            },
+            "value": {
+              "durationMs": 259200000
+            }
           }
         ],
         "style": "pills",
@@ -64,9 +127,10 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsDetails_CL\n| where tenant_url == '{bhe_tenant}'\n| where domain_name in~ ({domain_name})\n| summarize arg_max(TimeGenerated, *) by id\n| summarize TotalAttackPathsFindings = dcount(id) by DomainName = domain_name\n| sort by TotalAttackPathsFindings desc",
+        "query": "BHEAttackPathsData_CL\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| summarize arg_max(TimeGenerated, *) by id, domain_name, tenant_url\n| summarize TotalAttackPathsFindings = dcount(id) by DomainName = domain_name\n| sort by TotalAttackPathsFindings desc",
         "size": 1,
         "title": "Total Attack Paths Findings per Domain",
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "barchart",
@@ -87,6 +151,9 @@
               }
             }
           }
+        },
+        "chartSettings": {
+          "showLegend": true
         }
       },
       "name": "query - 2"
@@ -95,12 +162,10 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsDetails_CL\n| where tenant_url == '{bhe_tenant}'\n| where domain_name in~ ({domain_name})\n| summarize Count = dcount(id) by Severity\n| sort by Count desc\n",
+        "query": "BHEAttackPathsData_CL\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| summarize arg_max(TimeGenerated, *) by id, domain_name, tenant_url\n| summarize Count = dcount(id) by Severity\n| sort by Count desc\n",
         "size": 0,
         "title": "Severity Breakdown",
-        "timeContext": {
-          "durationMs": 86400000
-        },
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "piechart"
@@ -111,21 +176,20 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsDetails_CL\n| where tenant_url == '{bhe_tenant}'\n| where domain_name in~ ({domain_name})\n| summarize arg_max(created_at, *) by id\n| summarize FindingsCount = count() by NonTierZeroPrincipal, domain_name\n| sort by FindingsCount desc\n",
-        "size": 0,
+        "query": "BHEAttackPathsData_CL\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| summarize arg_max(TimeGenerated, *) by id\n| where isnotempty(NonTierZeroPrincipalName)\n| summarize FindingsCount = count() by NonTierZeroPrincipalName, domain_name\n| sort by FindingsCount desc\n| take 5\n",
+        "size": 1,
         "aggregation": 2,
-        "title": "Top Non-Tier Zero Principals Involved in Findings",
-        "timeContext": {
-          "durationMs": 43200000
-        },
+        "title": "Top 5 Non-Tier Zero Principals Involved in Findings",
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "areachart",
+        "visualization": "unstackedbar",
         "chartSettings": {
           "xAxis": "FindingsCount",
           "yAxis": [
             "FindingsCount"
-          ]
+          ],
+          "showLegend": true
         }
       },
       "name": "query - 7"
@@ -134,15 +198,16 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsDetails_CL\n| where tenant_url == '{bhe_tenant}'\n| where domain_name in~ ({domain_name})\n| summarize Occurrence = dcount(id) by Finding\n| sort by Occurrence desc\n| take 5\n",
+        "query": "BHEAttackPathsData_CL\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| summarize arg_max(TimeGenerated, *) by id, domain_name, tenant_url\n| summarize Occurrence = dcount(id) by Finding\n| sort by Occurrence desc\n| take 5\n",
         "size": 0,
         "title": "Top 5 Most Common Findings",
-        "timeContext": {
-          "durationMs": 86400000
-        },
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "barchart"
+        "visualization": "barchart",
+        "chartSettings": {
+          "showLegend": true
+        }
       },
       "name": "query - 9"
     },
@@ -150,25 +215,22 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsDetails_CL\n| where tenant_url == '{bhe_tenant}'\n| where domain_name in~ ({domain_name})\n| extend exposure_pct = iif(isnull(ExposurePercentage), round(ImpactPercentage * 100, 2), round(ExposurePercentage * 100, 2))\n| extend impact_pct = round(ImpactPercentage * 100, 2)\n| summarize \n    ExposurePercent = max(exposure_pct),\n    ImpactPercent = max(impact_pct),\n    Remediation = any(Remediation),  \n    Count = count()\n    by Domain = domain_name, AttackPath = PathTitle, Severity\n| project Domain, AttackPath, Severity, Count, ['Exposure (%)'] = ExposurePercent, ['Impact (%)'] = ImpactPercent, Remediation\n| sort by ['Exposure (%)'] desc\n",
+        "query": "BHEAttackPathsData_CL\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| summarize arg_max(TimeGenerated, *) by id, domain_name, tenant_url\n| extend exposure_val = toreal(ExposurePercentage),\n         impact_val = toreal(ImpactPercentage)\n| extend exposure_pct = iif(isnull(exposure_val), round(impact_val, 2), round(exposure_val, 2))\n| extend impact_pct = round(impact_val, 2)\n| summarize \n    ExposurePercent = max(exposure_pct),\n    ImpactPercent = max(impact_pct),\n    Remediation = any(Remediation),  \n    Count = count()\n    by Domain = domain_name, AttackPath = PathTitle, Severity\n| project Domain, AttackPath, Severity, Count, ['Exposure (%)'] = ExposurePercent, ['Impact (%)'] = ImpactPercent, Remediation\n| sort by ['Exposure (%)'] desc",
         "size": 0,
         "title": "All Attack Paths List",
-        "timeContext": {
-          "durationMs": 86400000
-        },
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "table",
         "gridSettings": {
           "rowLimit": 500
-        },
-        "sortBy": []
+        }
       },
       "name": "query - 11"
     }
   ],
   "fallbackResourceIds": [
-    "/subscriptions/8487150a-2b54-4945-9a15-7aae2d005a3d/resourcegroups/specterops/providers/microsoft.operationalinsights/workspaces/specterops-log-analytics-workspace"
+    "/subscriptions/9ccf51b3-d707-424d-a466-75b7ea8f9050/resourcegroups/specterops-qa/providers/microsoft.operationalinsights/workspaces/specterops-qa-log-analytics-workspace"
   ],
   "fromTemplateId": "sentinel-UserWorkbook",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
