@@ -626,91 +626,91 @@ class UmbrellaClient:
                         'verdict': row[13]
                     }
                     try:
-                        event['FQDNS'] = row[11]
+                        event['FQDNS'] = row[14]
                     except IndexError:
                         pass
                     try:
-                        event['Destination List IDs'] = row[12]
+                        event['Destination List IDs'] = row[15]
                     except IndexError:
                         pass
                     try:
-                        event['First Packet Timestamp'] = row[13]
+                        event['First Packet Timestamp'] = row[16]
                     except IndexError:
                         pass
                     try:
-                        event['Last Packet Timestamp'] = row[14]
+                        event['Last Packet Timestamp'] = row[17]
                     except IndexError:
                         pass
                     try:
-                        event['Packets Sent'] = row[15]
+                        event['Packets Sent'] = row[18]
                     except IndexError:
                         pass
                     try:
-                        event['Packets Received'] = row[16]
+                        event['Packets Received'] = row[19]
                     except IndexError:
                         pass
                     try:
-                        event['Bytes Sent'] = row[17]
+                        event['Bytes Sent'] = row[20]
                     except IndexError:
                         pass
                     try:
-                        event['Bytes Received'] = row[18]
+                        event['Bytes Received'] = row[21]
                     except IndexError:
                         pass
                     try:
-                        event['FW Event ID'] = row[19]
+                        event['FW Event ID'] = row[22]
                     except IndexError:
                         pass
                     try:
-                        event['Destination Country'] = row[20]
+                        event['Destination Country'] = row[23]
                     except IndexError:
                         pass
                     try:
-                        event['AWS Region'] = row[21]
+                        event['AWS Region'] = row[24]
                     except IndexError:
                         pass
                     try:
-                        event['App ID'] = row[22]
+                        event['App ID'] = row[25]
                     except IndexError:
                         pass
                     try:
-                        event['Private App ID'] = row[23]
+                        event['Private App ID'] = row[26]
                     except IndexError:
                         pass
                     try:
-                        event['Private Flow'] = row[24]
+                        event['Private Flow'] = row[27]
                     except IndexError:
                         pass
                     try:
-                        event['Posture ID'] = row[25]
+                        event['Posture ID'] = row[28]
                     except IndexError:
                         pass
                     try:
-                        event['CASI Category IDs'] = row[26]
+                        event['CASI Category IDs'] = row[29]
                     except IndexError:
                         pass
                     try:
-                        event['Traffic Source'] = row[27]
+                        event['Traffic Source'] = row[30]
                     except IndexError:
                         pass
                     try:
-                        event['Content Category IDs'] = row[28]
+                        event['Content Category IDs'] = row[31]
                     except IndexError:
                         pass
                     try:
-                        event['Content Category List IDs'] = row[29]
+                        event['Content Category List IDs'] = row[32]
                     except IndexError:
                         pass
                     try:
-                        event['Organization ID'] = row[30]
+                        event['Organization ID'] = row[33]
                     except IndexError:
                         pass
                     try:
-                        event['Egress IP'] = row[31]
+                        event['Egress IP'] = row[34]
                     except IndexError:
                         pass
                     try:
-                        event['Egress'] = row[32]
+                        event['Egress'] = row[35]
                     except IndexError:
                         pass
                 else:
@@ -1030,6 +1030,94 @@ class UmbrellaClient:
                         'ruleId': row[12],
                         'verdict': row[13]
                     }
+                    try:
+                        event['FQDNS'] = row[14]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination List IDs'] = row[15]
+                    except IndexError:
+                        pass
+                    try:
+                        event['First Packet Timestamp'] = row[16]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Last Packet Timestamp'] = row[17]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Packets Sent'] = row[18]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Packets Received'] = row[19]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Bytes Sent'] = row[20]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Bytes Received'] = row[21]
+                    except IndexError:
+                        pass
+                    try:
+                        event['FW Event ID'] = row[22]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination Country'] = row[23]
+                    except IndexError:
+                        pass
+                    try:
+                        event['AWS Region'] = row[24]
+                    except IndexError:
+                        pass
+                    try:
+                        event['App ID'] = row[25]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Private App ID'] = row[26]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Private Flow'] = row[27]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Posture ID'] = row[28]
+                    except IndexError:
+                        pass
+                    try:
+                        event['CASI Category IDs'] = row[29]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Traffic Source'] = row[30]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Content Category IDs'] = row[31]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Content Category List IDs'] = row[32]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Organization ID'] = row[33]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Egress IP'] = row[34]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Egress'] = row[35]
+                    except IndexError:
+                        pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'firewalllogs'
