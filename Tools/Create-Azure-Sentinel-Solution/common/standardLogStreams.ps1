@@ -98,7 +98,8 @@ $standardStreamMapping += @{ Key = 'SENTINEL_GKE_SCHEDULER'; Value = 'Microsoft-
 $standardStreamMapping += @{ Key = 'SENTINEL_GKE_CONTROLLER_MANAGER'; Value = 'Microsoft-GKEControllerManager'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GKE_HPA_DECISION'; Value = 'Microsoft-GKEHPADecision'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GKE_APPLICATION'; Value = 'Microsoft-GKEApplication'}
-
+$standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSSecurityHubFindings'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver'}
 
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {

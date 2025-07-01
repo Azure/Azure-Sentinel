@@ -33,6 +33,10 @@ foreach ($dir in $solutions) {
     }
 
     $results = @(Test-AzTemplate -TemplatePath $dir.FullName)
+    $results | ForEach-Object {
+        $_.PSObject.Properties.Remove('TestInput')
+        $_.PSObject.Properties.Remove('File')
+    }
     $results
 
     if ($results | Where-Object {$_.Errors}) {
