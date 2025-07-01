@@ -11,7 +11,7 @@ This playbook will resolve any associated alerts in Tanium Threat Response assoc
 Only Microsoft Sentinel Incidents created by the "Tanium Threat Response Alerts" analytic rule will have the required metadata to allow resolving the associated Tanium Threat Response alert.
 
 - Tanium Threat Response Module  
-Tanium Threat Response musts be installed and operational in your Tanium environment.
+Tanium Threat Response must be installed and operational in your Tanium environment.
 
 ## Post-Deployment Instructions
 

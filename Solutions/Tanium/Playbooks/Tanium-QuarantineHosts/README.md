@@ -13,13 +13,16 @@ The results of the playbook will be added as comments to the incident:
 
 ## Prerequisites
 - Sentinel incidents with associated hosts running the Tanium client   
-If this playbook it run against and incident with 1 or more hosts that are not running the Tanium client, then Tanium will not be able to provide information for those host(s). If the incident only contains hosts that are not running the Tanium client then a comment will be placed on the incident incidicating that and the playbook will exit early.
+If this playbook it run against an incident with 1 or more hosts that are not running the Tanium client, then Tanium will not be able to provide information for those host(s). If the incident only contains hosts that are not running the Tanium client then a comment will be placed on the incident indicating that, and the playbook will exit early.
 
 > [!TIP]
 > Leverage the "Tanium Threat Response Alerts" analytics rule to generate Sentinel incidents for an Threat Response Alert from Tanium.
 
 - An Azure Integration Account   
 Required to execute javascript needed to prepare query filters for Tanium API Gateway HTTP requests
+
+- Tanium Threat Response 4.7+ Module
+Tanium Threat Response must be installed and running your Tanium environment and must be version 4.7 or higher. If you are running a lower version see See [Tanium Playbooks](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Get_to_know_our_Content.htm#_Tanium_Playbooks) for more information.
 
 
 ## Post-Deployment Instructions
