@@ -16,7 +16,7 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "BloodHoundAttackPathsDetails_CL\n| where isnotempty(tenant_url)\n| summarize arg_max(TimeGenerated, *) by tenant_url\n| extend display_name = replace_string(tenant_url, @\"https://\", \"\")\n| extend display_name = replace_string(display_name, @\"http://\", \"\")\n| extend display_name = replace_string(display_name, @\"/\", \"\") \n| project tenant_url, display_name",
+            "query": "BHEAttackPathsData_CL\n| where isnotempty(tenant_url)\n| summarize arg_max(TimeGenerated, *) by tenant_url\n| extend display_name = replace_string(tenant_url, @\"https://\", \"\")\n| extend display_name = replace_string(display_name, @\"http://\", \"\")\n| extend display_name = replace_string(display_name, @\"/\", \"\") \n| project tenant_url, display_name",
             "typeSettings": {
               "additionalResourceOptions": [
                 "value::all"
@@ -42,7 +42,7 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "BloodHoundAttackPathsDetails_CL\n| where isnotempty(domain_name)\n| where tenant_url in~ ({bhe_tenant})\n| distinct domain_name",
+            "query": "BHEAttackPathsData_CL\n| where isnotempty(domain_name)\n| where tenant_url in~ ({bhe_tenant})\n| distinct domain_name",
             "typeSettings": {
               "additionalResourceOptions": [
                 "value::all"
@@ -57,25 +57,90 @@
             "resourceType": "microsoft.operationalinsights/workspaces"
           },
           {
-            "id": "d6d95707-5b3e-4757-97e4-d53b956b5804",
+            "id": "3d301840-15be-455d-bb48-d2ca8e3d4c2f",
             "version": "KqlParameterItem/1.0",
             "name": "finding_type",
-            "label": "Attack Path",
+            "label": "Attack Path Types",
             "type": 2,
             "isRequired": true,
-            "query": "BloodHoundAttackPathsDetails_CL \n| where isnotempty(PathTitle)\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| distinct PathTitle",
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "BHEAttackPathsData_CL \n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| extend CleanPathTitle = trim(\" \", replace_string(replace_string(PathTitle, \"\\n\", \"\"), \"\\'\", \"\"))\n| distinct CleanPathTitle",
             "typeSettings": {
               "additionalResourceOptions": [
-                "value::1"
+                "value::all"
               ],
               "showDefault": false
             },
             "timeContext": {
               "durationMs": 86400000
             },
-            "defaultValue": "value::1",
             "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces"
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "value::all"
+            ]
+          },
+          {
+            "id": "7e02e873-7550-447e-88aa-fc99dc923c14",
+            "version": "KqlParameterItem/1.0",
+            "name": "time",
+            "label": "Time Range Picker",
+            "type": 4,
+            "isRequired": true,
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            },
+            "value": {
+              "durationMs": 86400000
+            }
           }
         ],
         "style": "pills",
@@ -88,27 +153,10 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsDetails_CL\n| where tenant_url in~ ({bhe_tenant})\n| summarize arg_max(updated_at, *) by DomainSID, domain_name,  PathTitle| sort by round(ExposurePercentage) desc| project     ['Domain'] = domain_name,    ['Attack path'] = PathTitle,    Severity,    ['ExposurePercentage (%)'] = round(ExposurePercentage, 2)",
-        "size": 0,
-        "title": "Attack Path Details",
-        "timeContext": {
-          "durationMs": 86400000
-        },
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "gridSettings": {
-          "rowLimit": 10000
-        }
-      },
-      "name": "query - 4"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsDetails_CL\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| summarize arg_max(TimeGenerated, *) by id, domain_name\n| extend \n    NonTierZeroPrincipalDistinguishedName = tostring(parse_json(NonTierZeroPrincipalProps).distinguishedname),\n    NonTierZeroPrincipalSAMAccountName = tostring(parse_json(NonTierZeroPrincipalProps).samaccountname),\n    NonTierZeroPrincipalLastLogon = todatetime(unixtime_seconds_todatetime(tolong(parse_json(NonTierZeroPrincipalProps).lastlogon))),\n    NonTierZeroPrincipalLastLogonTimestamp = todatetime(unixtime_seconds_todatetime(tolong(parse_json(NonTierZeroPrincipalProps).lastlogontimestamp))),\n    NonTierZeroPrincipalCreated = todatetime(unixtime_seconds_todatetime(tolong(parse_json(NonTierZeroPrincipalProps).whencreated))),\n    IsTierZero = case(\n        tostring(parse_json(ImpactedPrincipalProps).system_tags) contains \"admin_tier_0\", true,\n        false\n    )\n| project \n    [\"Non Tier Zero Principal\"] = NonTierZeroPrincipalName,\n    [\"Impacted Principal\"] = ImpactedPrincipalName,\n    [\"Path Title\"] = PathTitle,\n    [\"Distinguished Name\"] = NonTierZeroPrincipalDistinguishedName,\n    [\"Severity Level\"] = Severity,\n    [\"Impact %\"] = todouble(ImpactPercentage),\n    [\"Impact Count\"] = toint(ImpactCount),\n    [\"Exposure %\"] = todouble(ExposurePercentage),\n    [\"Exposure Count\"] = toint(ExposureCount),\n    [\"SAM Account Name\"] = NonTierZeroPrincipalSAMAccountName,\n    [\"Sensitive\"] = IsTierZero,\n    [\"Last Logon\"] = NonTierZeroPrincipalLastLogon,\n    [\"Last Logon Timestamp\"] = NonTierZeroPrincipalLastLogonTimestamp,\n    [\"Created Timestamp\"] = NonTierZeroPrincipalCreated,\n    [\"First Seen\"] = todatetime(created_at),\n    [\"Last Updated\"] = todatetime(updated_at),\n    Finding = Finding,\n    DomainName = domain_name,\n    Environment = Environment\n| order by [\"Last Updated\"] desc\n\n\n\n\n\n",
+        "query": "BHEAttackPathsData_CL\n| summarize arg_max(TimeGenerated, *) by id, domain_name\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| extend CleanPathTitle = trim(\" \", replace_string(PathTitle, \"\\n\", \"\"))\n| where CleanPathTitle in~ ({finding_type})\n| extend \n    NonTierZeroPrincipalDistinguishedName = tostring(parse_json(NonTierZeroPrincipalProps).distinguishedname),\n    NonTierZeroPrincipalSAMAccountName = tostring(parse_json(NonTierZeroPrincipalProps).samaccountname),\n    NonTierZeroPrincipalLastLogon = todatetime(unixtime_seconds_todatetime(tolong(parse_json(NonTierZeroPrincipalProps).lastlogon))),\n    NonTierZeroPrincipalLastLogonTimestamp = todatetime(unixtime_seconds_todatetime(tolong(parse_json(NonTierZeroPrincipalProps).lastlogontimestamp))),\n    NonTierZeroPrincipalCreated = todatetime(unixtime_seconds_todatetime(tolong(parse_json(NonTierZeroPrincipalProps).whencreated))),\n    IsTierZero = case(\n        tostring(parse_json(ImpactedPrincipalProps).system_tags) contains \"admin_tier_0\", true,\n        false\n    )\n| project \n    [\"Non Tier Zero Principal\"] = NonTierZeroPrincipalName,\n    [\"Impacted Principal\"] = ImpactedPrincipalName,\n    [\"Path Title\"] = PathTitle,\n    [\"Distinguished Name\"] = NonTierZeroPrincipalDistinguishedName,\n    [\"Severity Level\"] = Severity,\n    [\"Impact %\"] = todouble(ImpactPercentage),\n    [\"Impact Count\"] = toint(ImpactCount),\n    [\"Exposure %\"] = todouble(ExposurePercentage),\n    [\"Exposure Count\"] = toint(ExposureCount),\n    [\"SAM Account Name\"] = NonTierZeroPrincipalSAMAccountName,\n    [\"Sensitive\"] = IsTierZero,\n    [\"Last Logon\"] = NonTierZeroPrincipalLastLogon,\n    [\"Last Logon Timestamp\"] = NonTierZeroPrincipalLastLogonTimestamp,\n    [\"Created Timestamp\"] = NonTierZeroPrincipalCreated,\n    [\"First Seen\"] = todatetime(created_at),\n    [\"Last Updated\"] = todatetime(updated_at),\n    Finding = Finding,\n    DomainName = domain_name,\n    Environment = Environment\n| order by [\"Last Updated\"] desc\n\n\n\n\n\n",
         "size": 1,
         "title": "Principals",
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "gridSettings": {
@@ -122,15 +170,17 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsTimelineData_CL\n| where isnotempty(domain_name)\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| summarize arg_max(TimeGenerated, *) by id, domain_name, tenant_url\n| extend event_day = format_datetime(todatetime(updated_at), 'yyyy-MM-dd')\n| summarize arg_max(updated_at, *) by event_day, domain_name\n| extend _time = todatetime(event_day)\n| extend ExposureCount = round(todouble(ExposureCount), 4)\n| summarize LatestCompositeRisk = max(ExposureCount) by bin(_time, 2d)\n| order by _time asc",
+        "query": "BHEAttackPathsTimelineData_CL\n| where isnotempty(domain_name)\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| extend CleanPathTitle = trim(\" \", replace_string(path_title, \"\\n\", \"\"))\n| where CleanPathTitle in~ ({finding_type})\n| summarize arg_max(TimeGenerated, *) by id, domain_name, tenant_url\n| extend event_day = format_datetime(todatetime(updated_at), 'yyyy-MM-dd')\n| summarize arg_max(updated_at, *) by event_day, domain_name\n| extend _time = todatetime(event_day)\n| extend ExposureCount = round(todouble(ExposureCount), 4)\n| summarize LatestCompositeRisk = max(ExposureCount) by bin(_time, 2d)\n| order by _time asc",
         "size": 0,
+        "aggregation": 2,
         "title": "Maximum Exposure Percentage",
-        "timeContext": {
-          "durationMs": 172800000
-        },
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "timechart"
+        "visualization": "areachart",
+        "tileSettings": {
+          "showBorder": false
+        }
       },
       "name": "query - 4"
     },
@@ -138,14 +188,13 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundAttackPathsTimelineData_CL\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| extend _time = todatetime(updated_at)\n| where isnotnull(_time)\n| summarize arg_max(TimeGenerated,*) by id, domain_name, tenant_url\n| summarize SumFindingCount = sum(toint(FindingCount)) by bin(_time, 1d)\n| order by _time asc",
+        "query": "BHEAttackPathsTimelineData_CL\n| where tenant_url in~ ({bhe_tenant})\n| where domain_name in~ ({domain_name})\n| extend CleanPathTitle = trim(\" \", replace_string(path_title, \"\\n\", \"\"))\n| where CleanPathTitle in~ ({finding_type})\n| extend _time = todatetime(updated_at)\n| where isnotnull(_time)\n| summarize arg_max(TimeGenerated,*) by id, domain_name, tenant_url\n| summarize SumFindingCount = sum(toint(FindingCount)) by bin(_time, 1d)\n| order by _time asc",
         "size": 0,
-        "timeContext": {
-          "durationMs": 172800000
-        },
+        "title": "Total Number of Findings",
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "timechart"
+        "visualization": "areachart"
       },
       "name": "query - 6"
     }
