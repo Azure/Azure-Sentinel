@@ -28,8 +28,9 @@ namespace Varonis.Sentinel.Functions.DatAlert
 
         public async Task<IReadOnlyCollection<AlertItem>> GetDataAsync(DatAlertParams parameters)
         {
+            var parser = new CustomParser(_log);
             var tokenJson = await GetAccessTokenAsync(_baseUri, _apikey).ConfigureAwait(false);
-            var tokenInfo = CustomParser.ParseTokenInfo(tokenJson);
+            var tokenInfo = parser.ParseTokenInfo(tokenJson);
             var maxAlerts = parameters.MaxAlertRetrieval;
 
             if (tokenInfo is null) 
@@ -47,10 +48,10 @@ namespace Varonis.Sentinel.Functions.DatAlert
             client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue { NoCache = true };
             client.DefaultRequestHeaders.Add(Constants.IntegrationHeader, Constants.IntegrationType);
 
-            var severities = CustomParser.ParseArrayFromCSV(parameters.AlertSeverity);
+            var severities = parser.ParseCsvToArray(parameters.AlertSeverity);
             var ruleIds = await GetRuleIdsAsync(client, parameters.ThreatDetectionPolicies)
                 .ConfigureAwait(false);
-            var statuses = CustomParser.ParseArrayFromCSV(parameters.AlertStatus);
+            var statuses = parser.ParseCsvToArray(parameters.AlertStatus);
 
             var searchQuery = new AlertSearchQueryBuilder()
                 .WithDateRange(parameters.Start, parameters.End, AlertAttributes.IngestTime)
@@ -114,19 +115,20 @@ namespace Varonis.Sentinel.Functions.DatAlert
             return rules;
         }
 
-        private static async Task<int[]> GetRuleIdsAsync(HttpClient client, string threatModels) 
+        private async Task<int[]> GetRuleIdsAsync(HttpClient client, string threatModels) 
         {
             if (string.IsNullOrWhiteSpace(threatModels)) 
-                return Array.Empty<int>();
+                return [];
 
+            var parser = new CustomParser(_log);
             var allRules = await GetRulesAsync(client).ConfigureAwait(false);
-            var threatModelNames = CustomParser.ParseArrayFromCSV(threatModels);
+            var threatModelNames = parser.ParseCsvToArray(threatModels);
 
             var rules = from r in allRules
                          join tmn in threatModelNames on r.RuleName equals tmn
                          select r.RuleID;
 
-            return rules.ToArray();
+            return [.. rules];
         }
 
         private static async Task<string> GetSearchResultPath(HttpClient client, SearchRequest payload)
