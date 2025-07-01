@@ -1,6 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.2.15       |  12-03-2025                    | Fixed descritpion of **Playbooks**.	|
+3.2.16       |  08-05-2025                    | Updated **workbooks**, **analytic rules** and **hunting queries** to new `ThreatIntelIndicators` schema. Removed deprecated **analytic rules**. Updated documentation to reflect changes.	|
+| 3.2.15       |  12-03-2025                    | Fixed description of **Playbooks**.	|
 | 3.2.14       |  30-01-2025                    | Fix the name of `IntelligenceCloud` parameter in `RecordedFuture-CustomConnector` + other minor renames.	|
 | 3.2.13       |  08-01-2025                    | Removed Custom Entity mappings from **Analytic rules**.	|
 | 3.2.12       |  28-11-2024                    | Fix API connection bug in RecordedFuture-AlertImporter **Playbook**. |
@@ -19,7 +20,7 @@
 | 3.1.0       |  01-12-2023                    | Added (Recorded Future Threat Actor Map) **Workbook**.<br/> Added (RecordedFuture-ThreatMap-Importer) **Playbook**.<br/> Added (RecordedFuture-ActorThreatHunt-IndicatorImport) **Playbook**.<br/> Added 4 **Analytic Rules** to be used for Recorded Future Threat Hunt. <br/> Documentation update.<br/> Removed 6 deprecated **Playbooks** from Solution package. |
 | 3.0.2       | 02-11-2023                     | Encoding Fix to the (RecordedFuture-Alert-Importer) **Playbook**.<br/> Changed defaults in (RecordedFuture-Playbook-Alert-Importer). |
 | 3.0.1       | 26-10-2023                     | Fix to the (RecordedFuture-ThreatIntelligenceImport) **Playbook**.  |
-| 3.0.0       | 20-09-2023                     | Added **Workbooks** for correlating Recorded Future and logs containing IoC of type IP, DNS, URL and Hash <br/> Generate Markdown/HTML response for enrichment comments.<br/> (Recorded Future Playbook Alerts) **Playbook** and  **Workbook** for visualization.<br/> (Recorded Future Classic Alerts) **Playbook** and **Workbook** for visualization.<br/> Leveraging new API for importing threat indicators and deprecating old **Playbooks**. | 
+| 3.0.0       | 20-09-2023                     | Added **Workbooks** for correlating Recorded Future and logs containing IoC of type IP, DNS, URL and Hash <br/> Generate Markdown/HTML response for enrichment comments.<br/> (Recorded Future Playbook Alerts) **Playbook** and  **Workbook** for visualization.<br/> (Recorded Future Classic Alerts) **Playbook** and **Workbook** for visualization.<br/> Leveraging new API for importing threat indicators and deprecating old **Playbooks**. |
 | 2.4.0       | 29-05-2023                     | (Sandbox URL enrichment) **Playbook** included in the solution. <br/> Sandbox( of outlook attachment Playbook) provided as an example outside the solution. <br/> Sandbox of files in Azure storage accounts provided as example outside the solution. <br/> Fix to (IOC enrichment playbook) don’t report 404 (not found) as an error. |
 | 2.3.0       | 13-02-2023                     | Layout improvements to the (incident enrichment Playbook). <br/>Added **Detections** from collective insights to enrichment playbooks.<br/>IncidentId and MITRE Att&ck code added to collective insights.<br/>Fix for image in incident comment. |
 | 2.2.2       | 23-01-2023                     | Fixes for all risk list import **Playbooks**. |

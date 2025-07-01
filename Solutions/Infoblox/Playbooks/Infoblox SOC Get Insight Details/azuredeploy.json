@@ -7,8 +7,18 @@
         "prerequisites":  [
             "1. User must have a valid Infoblox API Key",
             "2. User must have a valid Workspace ID",
-            "3. User must have a valid Workspace Key"
-        ], 
+            "3. User must have a valid Workspace Key",
+            "4. User must have created an analytics rule from a rule template",
+            "5. **Configure the associated automation rule as specified below:**",
+            "a. Go to Microsoft Sentinel → *select your workspace* → Automation → Create → Automation rule",
+            "b. Set Automation rule name",
+            "c. Condition → If",
+                "A. Incident provider → Select Microsoft Sentinel",
+                "B. Analytic rule name → Select Analytic rule name created using step 4",
+            "d. Action → Select Run playbook",
+            "e. Select Infoblox-SOC-Get-Insight-Details playbook",
+            "f. Click on Apply"
+        ],
         "postDeployment":  [
             "**a. Authorize connections**",
             "Once deployment is complete, authorize each connection.",
@@ -19,14 +29,17 @@
             "5. Click Save",
             "6. Repeat steps for other connections",
             "**b. Assign Role to Update in incident**",
-            "Assign role to this playbook.",    
-            "1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add","2. Add role assignment",
+            "Assign role to this playbook.",
+            "1. Go to Log Analytics Workspace → *select your workspace* → Access Control → Add",
+            "2. Add role assignment",
             "3. Assignment type: Job function roles -> Add 'Microsoft Sentinel Contributor' as a Role",
             "4. Members: select managed identity for assigned access to and add your logic app as member",
             "5. Click on review+assign"
         ],
-        "prerequisitesDeployTemplateFile":  "",
-        "entities":  [ "Security Group", "SecurityGroup", "Malware"
+        "prerequisitesDeployTemplateFile": "",
+        "entities": [
+            "securitygroup",
+            "malware"
         ],
         "tags":  [ "Enrichment"
         ],
@@ -45,25 +58,57 @@
             "type":  "string"
         },
         "Infoblox API Key":  {
-            "type":  "string",
+            "type":  "Securestring",
             "metadata":  {
                 "description":  "Enter value for Infoblox API Key"
             }
         },
-        "Workspace ID":  {
-            "type":  "string",
-            "metadata":  {
-                "description":  "Enter value for Workspace ID,use same Workspace ID for Authorization"
-            }
+        "Assets Data Ingestion": {
+            "type": "string",
+            "defaultValue": "false",
+            "metadata": {
+                "description": "Provide true if you want to enable Assets data ingestion from SOC Insights. Default is false, Allowed values are true and false"
+            },
+            "allowedValues": [
+                "true",
+                "false"
+            ]
         },
-        "Workspace Key":  {
-            "type":  "string",
-            "metadata":  {
-                "description":  "Enter value for Workspace Key,use same Workspace Key for Authorization"
-            }
+        "Comments Data Ingestion": {
+            "type": "string",
+            "defaultValue": "false",
+            "metadata": {
+                "description": "Provide true if you want to enable Comments data ingestion from SOC Insights. Default is false, Allowed values are true and false"
+            },
+            "allowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "Events Data Ingestion": {
+            "type": "string",
+            "defaultValue": "false",
+            "metadata": {
+                "description": "Provide true if you want to enable Events data ingestion from SOC Insights. Default is false, Allowed values are true and false"
+            },
+            "allowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "Indicators Data Ingestion": {
+            "type": "string",
+            "defaultValue": "false",
+            "metadata": {
+                "description": "Provide true if you want to enable Indicators data ingestion from SOC Insights. Default is false, Allowed values are true and false"
+            },
+            "allowedValues": [
+                "true",
+                "false"
+            ]
         }
     },
-    "variables":  {
+    "variables": {
         "AzureloganalyticsdatacollectorConnectionName":  "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
         "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
     },
@@ -85,13 +130,21 @@
                             "defaultValue":  "[trim(parameters('Infoblox API Key'))]",
                             "type":  "string"
                         },
-                        "Workspace ID":  {
-                            "defaultValue":  "[trim(parameters('Workspace ID'))]",
-                            "type":  "string"
+                        "Assets Data Ingestion": {
+                            "defaultValue": "[trim(parameters('Assets Data Ingestion'))]",
+                            "type": "string"
                         },
-                        "Workspace Key":  {
-                            "defaultValue":  "[trim(parameters('Workspace Key'))]",
-                            "type":  "string"
+                        "Comments Data Ingestion": {
+                            "defaultValue": "[trim(parameters('Comments Data Ingestion'))]",
+                            "type": "string"
+                        },
+                        "Events Data Ingestion": {
+                            "defaultValue": "[trim(parameters('Events Data Ingestion'))]",
+                            "type": "string"
+                        },
+                        "Indicators Data Ingestion": {
+                            "defaultValue": "[trim(parameters('Indicators Data Ingestion'))]",
+                            "type": "string"
                         }
                     },
                     "triggers":  {
@@ -110,740 +163,1051 @@
                             }
                         }
                     },
-                    "actions":  {
-                        "Filter_array_for_Malware_Entity":  {
-                            "runAfter":  {
-                                "For_each":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "Query",
-                            "inputs":  {
-                                "from":  "@body('Parse_Entities_JSON')",
-                                "where":  "@equals(item()['kind'], 'Malware')"
-                            }
-                        },
-                        "Filter_array_for_Object_GUID_Entity":  {
-                            "runAfter":  {
-                                "Parse_Entities_JSON":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "Query",
-                            "inputs":  {
-                                "from":  "@body('Parse_Entities_JSON')",
-                                "where":  "@equals(item()?['kind'], 'SecurityGroup')"
-                            }
-                        },
-                        "For_each":  {
-                            "foreach":  "@body('Filter_array_for_Object_GUID_Entity')",
-                            "actions":  {
-                                "Test_Connection_to_Infoblox_CSP":  {
-                                    "runAfter":  {
-                                    },
-                                    "type":  "Http",
-                                    "inputs":  {
-                                        "headers":  {
-                                            "Authorization":  "Token @{parameters('Infoblox API Key')}"
-                                        },
-                                        "method":  "GET",
-                                        "uri":  "https://csp.infoblox.com/api/v1/insights/@{items('For_each')?['properties']?['objectGuid']}"
-                                    }
-                                }
-                            },
-                            "runAfter":  {
-                                "Filter_array_for_Object_GUID_Entity":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "Foreach"
-                        },
-                        "For_each_Insight_ID":  {
-                            "foreach":  "@body('Filter_array_for_Object_GUID_Entity')",
-                            "actions":  {
-                                "Add_InfobloxInsightID_Tag":  {
-                                    "runAfter":  {
-                                    },
-                                    "type":  "ApiConnection",
-                                    "inputs":  {
-                                        "body":  {
-                                            "incidentArmId":  "@triggerBody()?['object']?['id']",
-                                            "tagsToAdd":  {
-                                                "TagsToAdd":  [
-                                                    {
-                                                        "Tag":  "InfobloxInsightID: @{items('For_each_Insight_ID')?['properties']?['objectGuid']}"
-                                                    }
-                                                ]
-                                            }
-                                        },
-                                        "host":  {
-                                            "connection":  {
-                                                "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method":  "put",
-                                        "path":  "/Incidents"
+                    "actions": {
+                        "For_Each_Object_GUID": {
+                            "type": "Foreach",
+                            "foreach": "@body('Filter_array_for_Object_GUID_Entity')",
+                            "actions": {
+                                "Test_Connection_to_Infoblox_CSP": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "https://csp.infoblox.com/api/v1/insights/@{items('For_Each_Object_GUID')?['properties']?['objectGuid']}",
+                                        "method": "GET",
+                                        "headers": {
+                                            "Authorization": "Token @{parameters('Infoblox API Key')}"
+                                        }
                                     }
                                 },
-                                "Add_Summary_data_if_observed_via_CDC":  {
-                                    "actions":  {
-                                        "Get_Summary_Data":  {
-                                            "runAfter":  {
-                                            },
-                                            "type":  "Http",
-                                            "inputs":  {
-                                                "headers":  {
-                                                    "Authorization":  "Token @{parameters('Infoblox API Key')}"
-                                                },
-                                                "method":  "GET",
-                                                "uri":  "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}"
-                                            }
-                                        },
-                                        "Parse_Summary_JSON":  {
-                                            "runAfter":  {
-                                                "Get_Summary_Data":  [
-                                                    "Succeeded"
+                                "Condition_To_Verify_Test_Connection_Is_Successful": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('Test_Connection_to_Infoblox_CSP')?['statusCode']",
+                                                    200
                                                 ]
-                                            },
-                                            "type":  "ParseJson",
-                                            "inputs":  {
-                                                "content":  "@body('Get_Summary_Data')",
-                                                "schema":  {
-                                                    "properties":  {
-                                                        "insight":  {
-                                                            "properties":  {
-                                                                "changer":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "dateChanged":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "description":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "eventsBlockedCount":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "eventsNotBlockedCount":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "feedSource":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "insightId":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "mostRecentAt":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "numEvents":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "persistent":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "persistentDate":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "priorityText":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "spreading":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "spreadingDate":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "startedAt":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "status":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "tClass":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "tFamily":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "threatType":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "userComment":  {
-                                                                    "type":  "string"
-                                                                }
-                                                            },
-                                                            "type":  "object"
-                                                        }
-                                                    },
-                                                    "type":  "object"
+                                            }
+                                        ]
+                                    },
+                                    "actions": {},
+                                    "else": {
+                                        "actions": {
+                                            "Set_Status_Code": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "status_code",
+                                                    "value": "@{outputs('Test_Connection_to_Infoblox_CSP')?['statusCode']}"
                                                 }
-                                            }
-                                        },
-                                        "Send_Summary_(Insight)_Data":  {
-                                            "runAfter":  {
-                                                "Parse_Summary_JSON":  [
-                                                    "Succeeded"
-                                                ]
                                             },
-                                            "type":  "ApiConnection",
-                                            "inputs":  {
-                                                "body":  "@{addProperty(body('Parse_Summary_JSON')?['insight'], 'InfobloxInsightLogType', 'Insight')}",
-                                                "headers":  {
-                                                    "Log-Type":  "InfobloxInsight"
+                                            "Set_Error_Message": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "error_message",
+                                                    "value": "Error: @{body('Test_Connection_to_Infoblox_CSP')}"
                                                 },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                "runAfter": {
+                                                    "Set_Status_Code": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
                                             }
                                         }
                                     },
-                                    "runAfter":  {
-                                        "Add_InfobloxInsightID_Tag":  [
-                                            "Succeeded"
+                                    "runAfter": {
+                                        "Test_Connection_to_Infoblox_CSP": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Skipped",
+                                            "Failed"
                                         ]
-                                    },
-                                    "expression":  {
-                                        "and":  [
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_array_for_Object_GUID_Entity": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "For_each_Insight_ID": {
+                            "type": "Foreach",
+                            "foreach": "@body('Filter_array_for_Object_GUID_Entity')",
+                            "actions": {
+                                "Add_InfobloxInsightID_Tag": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                    {
+                                                        "Tag": "InfobloxInsightID: @{items('For_each_Insight_ID')?['properties']?['objectGuid']}"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "path": "/Incidents"
+                                    }
+                                },
+                                "Add_Summary_data_if_observed_via_CDC": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
                                             {
-                                                "contains":  [
+                                                "contains": [
                                                     "@body('Add_InfobloxInsightID_Tag')?['properties']?['description']",
                                                     "Observed via CDC"
                                                 ]
                                             }
                                         ]
                                     },
-                                    "type":  "If"
-                                },
-                                "For_each_Asset":  {
-                                    "foreach":  "@body('Parse_Assets_JSON')?['assets']",
-                                    "actions":  {
-                                        "Send_Asset_Data":  {
-                                            "runAfter":  {
+                                    "actions": {
+                                        "Get_Summary_Data": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Authorization": "Token @{parameters('Infoblox API Key')}"
+                                                }
+                                            }
+                                        },
+                                        "Parse_Summary_JSON": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get_Summary_Data')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "insight": {
+                                                            "properties": {
+                                                                "changer": {
+                                                                    "type": "string"
+                                                                },
+                                                                "dateChanged": {
+                                                                    "type": "string"
+                                                                },
+                                                                "description": {
+                                                                    "type": "string"
+                                                                },
+                                                                "eventsBlockedCount": {
+                                                                    "type": "string"
+                                                                },
+                                                                "eventsNotBlockedCount": {
+                                                                    "type": "string"
+                                                                },
+                                                                "feedSource": {
+                                                                    "type": "string"
+                                                                },
+                                                                "insightId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "mostRecentAt": {
+                                                                    "type": "string"
+                                                                },
+                                                                "numEvents": {
+                                                                    "type": "string"
+                                                                },
+                                                                "persistent": {
+                                                                    "type": "string"
+                                                                },
+                                                                "persistentDate": {
+                                                                    "type": "string"
+                                                                },
+                                                                "priorityText": {
+                                                                    "type": "string"
+                                                                },
+                                                                "spreading": {
+                                                                    "type": "string"
+                                                                },
+                                                                "spreadingDate": {
+                                                                    "type": "string"
+                                                                },
+                                                                "startedAt": {
+                                                                    "type": "string"
+                                                                },
+                                                                "status": {
+                                                                    "type": "string"
+                                                                },
+                                                                "tClass": {
+                                                                    "type": "string"
+                                                                },
+                                                                "tFamily": {
+                                                                    "type": "string"
+                                                                },
+                                                                "threatType": {
+                                                                    "type": "string"
+                                                                },
+                                                                "userComment": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
                                             },
-                                            "type":  "ApiConnection",
-                                            "inputs":  {
-                                                "body":  "@{addProperty(addProperty(items('For_Each_Asset'), 'InfobloxInsightID', items('For_each_Insight_ID')?['properties']?['objectGuid']), 'InfobloxInsightLogType', 'Asset')}",
-                                                "headers":  {
-                                                    "Log-Type":  "InfobloxInsightAssets"
-                                                },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            "runAfter": {
+                                                "Get_Summary_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Send_Summary_(Insight)_Data": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                                     }
                                                 },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                "method": "post",
+                                                "body": "@addProperty(addProperty(body('Parse_Summary_JSON')?['insight'], 'DataObservedVia', 'CDC'), 'InfobloxInsightLogType', 'Insight')",
+                                                "headers": {
+                                                    "Log-Type": "InfobloxInsight"
+                                                },
+                                                "path": "/api/logs"
+                                            },
+                                            "runAfter": {
+                                                "Parse_Summary_JSON": [
+                                                    "Succeeded"
+                                                ]
                                             }
                                         }
                                     },
-                                    "runAfter":  {
-                                        "Parse_Assets_JSON":  [
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Add_InfobloxInsightID_Tag": [
                                             "Succeeded"
                                         ]
-                                    },
-                                    "type":  "Foreach"
+                                    }
                                 },
-                                "For_each_Comment":  {
-                                    "foreach":  "@body('Parse_Comment_JSON')?['comments']",
-                                    "actions":  {
-                                        "Send_Comment_Data":  {
-                                            "runAfter":  {
+                                "Condition_To_Check_Assets_Data_Ingestion_Flag": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('assets_data_ingestion')",
+                                                    "true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Get_Asset_Data": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}/assets",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Authorization": "Token @{parameters('Infoblox API Key')}"
+                                                }
+                                            }
+                                        },
+                                        "Parse_Assets_JSON": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get_Asset_Data')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "assets": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "cid": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "cmac": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "count": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "location": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "os_version": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "qip": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "threat_indicator_distinct_count": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "threat_level_max": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "time_max": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "time_min": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "user": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
                                             },
-                                            "type":  "ApiConnection",
-                                            "inputs":  {
-                                                "body":  "@{addProperty(addProperty(items('For_Each_Comment'), 'InfobloxInsightID', items('For_each_Insight_ID')?['properties']?['objectGuid']), 'InfobloxInsightLogType', 'Comment')}",
-                                                "headers":  {
-                                                    "Log-Type":  "InfobloxInsightComments"
-                                                },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            "runAfter": {
+                                                "Get_Asset_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Condition_To_Ingest_Assets_Data_If_It_Is_Not_Null": {
+                                            "type": "If",
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_Assets_JSON')?['assets']",
+                                                                "@null"
+                                                            ]
+                                                        }
                                                     }
-                                                },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                ]
+                                            },
+                                            "actions": {
+                                                "For_each_Asset": {
+                                                    "type": "Foreach",
+                                                    "foreach": "@body('Parse_Assets_JSON')?['assets']",
+                                                    "actions": {
+                                                        "Send_Asset_Data": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": "@addProperty(addProperty(items('For_Each_Asset'), 'InfobloxInsightID', items('For_each_Insight_ID')?['properties']?['objectGuid']), 'InfobloxInsightLogType', 'Asset')",
+                                                                "headers": {
+                                                                    "Log-Type": "InfobloxInsightAssets"
+                                                                },
+                                                                "path": "/api/logs"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {}
+                                            },
+                                            "runAfter": {
+                                                "Parse_Assets_JSON": [
+                                                    "Succeeded"
+                                                ]
                                             }
                                         }
                                     },
-                                    "runAfter":  {
-                                        "Parse_Comment_JSON":  [
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Add_InfobloxInsightID_Tag": [
                                             "Succeeded"
                                         ]
-                                    },
-                                    "type":  "Foreach"
+                                    }
                                 },
-                                "For_each_Event":  {
-                                    "foreach":  "@body('Parse_Event_JSON')?['events']",
-                                    "actions":  {
-                                        "Send_Event_Data":  {
-                                            "runAfter":  {
+                                "Condition_To_Check_Indicators_Data_Ingestion_Flag": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('indicators_data_ingestion')",
+                                                    "true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Get_Indicator_Data": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}/indicators",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Authorization": "Token @{parameters('Infoblox API Key')}"
+                                                }
+                                            }
+                                        },
+                                        "Parse_Indicator_JSON": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get_Indicator_Data')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "indicators": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "action": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "actor": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "confidence": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "count": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "feed_name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "indicator": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "threat_level_max": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "time_max": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "time_min": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
                                             },
-                                            "type":  "ApiConnection",
-                                            "inputs":  {
-                                                "body":  "@{addProperty(addProperty(items('For_Each_Event'), 'InfobloxInsightID', items('For_each_Insight_ID')?['properties']?['objectGuid']), 'InfobloxInsightLogType', 'Event')}",
-                                                "headers":  {
-                                                    "Log-Type":  "InfobloxInsightEvents"
-                                                },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            "runAfter": {
+                                                "Get_Indicator_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Condition_To_Ingest_Indicator_Data_If_It_Is_Not_Null": {
+                                            "type": "If",
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_Indicator_JSON')?['indicators']",
+                                                                "@null"
+                                                            ]
+                                                        }
                                                     }
-                                                },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                ]
+                                            },
+                                            "actions": {
+                                                "For_each_Indicator": {
+                                                    "type": "Foreach",
+                                                    "foreach": "@body('Parse_Indicator_JSON')?['indicators']",
+                                                    "actions": {
+                                                        "Send_Indicator_Data": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": "@addProperty(addProperty(items('For_Each_Indicator'), 'InfobloxInsightID', items('For_each_Insight_ID')?['properties']?['objectGuid']), 'InfobloxInsightLogType', 'Indicator')\r\n",
+                                                                "headers": {
+                                                                    "Log-Type": "InfobloxInsightIndicators"
+                                                                },
+                                                                "path": "/api/logs"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {}
+                                            },
+                                            "runAfter": {
+                                                "Parse_Indicator_JSON": [
+                                                    "Succeeded"
+                                                ]
                                             }
                                         }
                                     },
-                                    "runAfter":  {
-                                        "Parse_Event_JSON":  [
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Add_InfobloxInsightID_Tag": [
                                             "Succeeded"
                                         ]
-                                    },
-                                    "type":  "Foreach"
+                                    }
                                 },
-                                "For_each_Indicator":  {
-                                    "foreach":  "@body('Parse_Indicator_JSON')?['indicators']",
-                                    "actions":  {
-                                        "Send_Indicator_Data":  {
-                                            "runAfter":  {
+                                "Condition_To_Check_Events_Data_Ingestion_Flag": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('events_data_ingestion')",
+                                                    "true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Get_Event_Data": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}/events",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Authorization": "Token @{parameters('Infoblox API Key')}"
+                                                }
+                                            }
+                                        },
+                                        "Parse_Event_JSON": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get_Event_Data')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "events": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "action": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "class": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "confidence_level": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "detected": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "deviceIp": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "device_country": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "device_name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "device_region": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "dhcp_fingerprint": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "dns_view": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "feed": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "mac_address": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "os_version": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "policy": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "property": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "query": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "query_type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "response": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "response_country": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "response_region": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "source": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "threat_family": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "threat_indicator": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "threat_level": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "user": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
                                             },
-                                            "type":  "ApiConnection",
-                                            "inputs":  {
-                                                "body":  "@{addProperty(addProperty(items('For_Each_Indicator'), 'InfobloxInsightID', items('For_each_Insight_ID')?['properties']?['objectGuid']), 'InfobloxInsightLogType', 'Indicator')\r\n}",
-                                                "headers":  {
-                                                    "Log-Type":  "InfobloxInsightIndicators"
-                                                },
-                                                "host":  {
-                                                    "connection":  {
-                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            "runAfter": {
+                                                "Get_Event_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Condition_To_Ingest_Event_Data_If_It_Is_Not_Null": {
+                                            "type": "If",
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_Event_JSON')?['events']",
+                                                                "@null"
+                                                            ]
+                                                        }
                                                     }
-                                                },
-                                                "method":  "post",
-                                                "path":  "/api/logs"
+                                                ]
+                                            },
+                                            "actions": {
+                                                "For_each_Event": {
+                                                    "type": "Foreach",
+                                                    "foreach": "@body('Parse_Event_JSON')?['events']",
+                                                    "actions": {
+                                                        "Send_Event_Data": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": "@addProperty(addProperty(items('For_Each_Event'), 'InfobloxInsightID', items('For_each_Insight_ID')?['properties']?['objectGuid']), 'InfobloxInsightLogType', 'Event')",
+                                                                "headers": {
+                                                                    "Log-Type": "InfobloxInsightEvents"
+                                                                },
+                                                                "path": "/api/logs"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {}
+                                            },
+                                            "runAfter": {
+                                                "Parse_Event_JSON": [
+                                                    "Succeeded"
+                                                ]
                                             }
                                         }
                                     },
-                                    "runAfter":  {
-                                        "Parse_Indicator_JSON":  [
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Add_InfobloxInsightID_Tag": [
                                             "Succeeded"
                                         ]
-                                    },
-                                    "type":  "Foreach"
-                                },
-                                "Get_Asset_Data":  {
-                                    "runAfter":  {
-                                        "Add_InfobloxInsightID_Tag":  [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type":  "Http",
-                                    "inputs":  {
-                                        "headers":  {
-                                            "Authorization":  "Token @{parameters('Infoblox API Key')}"
-                                        },
-                                        "method":  "GET",
-                                        "uri":  "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}/assets"
                                     }
                                 },
-                                "Get_Comment_Data":  {
-                                    "runAfter":  {
-                                        "Add_InfobloxInsightID_Tag":  [
-                                            "Succeeded"
+                                "Condition_To_Check_Comments_Data_Ingestion_Flag": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('comments_data_ingestion')",
+                                                    "true"
+                                                ]
+                                            }
                                         ]
                                     },
-                                    "type":  "Http",
-                                    "inputs":  {
-                                        "headers":  {
-                                            "Authorization":  "Token @{parameters('Infoblox API Key')}"
+                                    "actions": {
+                                        "Get_Comment_Data": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}/comments",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Authorization": "Token @{parameters('Infoblox API Key')}"
+                                                }
+                                            }
                                         },
-                                        "method":  "GET",
-                                        "uri":  "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}/comments"
-                                    }
-                                },
-                                "Get_Event_Data":  {
-                                    "runAfter":  {
-                                        "Add_InfobloxInsightID_Tag":  [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type":  "Http",
-                                    "inputs":  {
-                                        "headers":  {
-                                            "Authorization":  "Token @{parameters('Infoblox API Key')}"
-                                        },
-                                        "method":  "GET",
-                                        "uri":  "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}/events"
-                                    }
-                                },
-                                "Get_Indicator_Data":  {
-                                    "runAfter":  {
-                                        "Add_InfobloxInsightID_Tag":  [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type":  "Http",
-                                    "inputs":  {
-                                        "headers":  {
-                                            "Authorization":  "Token @{parameters('Infoblox API Key')}"
-                                        },
-                                        "method":  "GET",
-                                        "uri":  "https://csp.infoblox.com/api/v1/insights/@{items('For_each_Insight_ID')?['properties']?['objectGuid']}/indicators"
-                                    }
-                                },
-                                "Parse_Assets_JSON":  {
-                                    "runAfter":  {
-                                        "Get_Asset_Data":  [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type":  "ParseJson",
-                                    "inputs":  {
-                                        "content":  "@body('Get_Asset_Data')",
-                                        "schema":  {
-                                            "properties":  {
-                                                "assets":  {
-                                                    "items":  {
-                                                        "properties":  {
-                                                            "cid":  {
-                                                                "type":  "string"
+                                        "Parse_Comment_JSON": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get_Comment_Data')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "comments": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "commentsChanger": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "dateChanged": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "newComment": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "status": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [],
+                                                                "type": "object"
                                                             },
-                                                            "cmac":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "count":  {
-                                                                "type":  "integer"
-                                                            },
-                                                            "location":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "os_version":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "qip":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "threat_indicator_distinct_count":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "threat_level_max":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "time_max":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "time_min":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "user":  {
-                                                                "type":  "string"
-                                                            }
-                                                        },
-                                                        "required":  [
-                                                        ],
-                                                        "type":  "object"
+                                                            "type": "array"
+                                                        }
                                                     },
-                                                    "type":  "array"
+                                                    "type": "object"
                                                 }
                                             },
-                                            "type":  "object"
-                                        }
-                                    }
-                                },
-                                "Parse_Comment_JSON":  {
-                                    "runAfter":  {
-                                        "Get_Comment_Data":  [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type":  "ParseJson",
-                                    "inputs":  {
-                                        "content":  "@body('Get_Comment_Data')",
-                                        "schema":  {
-                                            "properties":  {
-                                                "comments":  {
-                                                    "items":  {
-                                                        "properties":  {
-                                                            "commentsChanger":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "dateChanged":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "newComment":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "status":  {
-                                                                "type":  "string"
+                                            "runAfter": {
+                                                "Get_Comment_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Condition_To_Ingest_Comment_Data_If_It_Is_Not_Null": {
+                                            "type": "If",
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_Comment_JSON')?['comments']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "actions": {
+                                                "For_each_Comment": {
+                                                    "type": "Foreach",
+                                                    "foreach": "@body('Parse_Comment_JSON')?['comments']",
+                                                    "actions": {
+                                                        "Send_Comment_Data": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": "@addProperty(addProperty(items('For_Each_Comment'), 'InfobloxInsightID', items('For_each_Insight_ID')?['properties']?['objectGuid']), 'InfobloxInsightLogType', 'Comment')",
+                                                                "headers": {
+                                                                    "Log-Type": "InfobloxInsightComments"
+                                                                },
+                                                                "path": "/api/logs"
                                                             }
-                                                        },
-                                                        "required":  [
-                                                        ],
-                                                        "type":  "object"
-                                                    },
-                                                    "type":  "array"
+                                                        }
+                                                    }
                                                 }
                                             },
-                                            "type":  "object"
+                                            "else": {
+                                                "actions": {}
+                                            },
+                                            "runAfter": {
+                                                "Parse_Comment_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            }
                                         }
-                                    }
-                                },
-                                "Parse_Event_JSON":  {
-                                    "runAfter":  {
-                                        "Get_Event_Data":  [
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Add_InfobloxInsightID_Tag": [
                                             "Succeeded"
                                         ]
-                                    },
-                                    "type":  "ParseJson",
-                                    "inputs":  {
-                                        "content":  "@body('Get_Event_Data')",
-                                        "schema":  {
-                                            "properties":  {
-                                                "events":  {
-                                                    "items":  {
-                                                        "properties":  {
-                                                            "action":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "class":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "confidence_level":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "detected":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "deviceIp":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "device_country":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "device_name":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "device_region":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "dhcp_fingerprint":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "dns_view":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "feed":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "mac_address":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "os_version":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "policy":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "property":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "query":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "query_type":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "response":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "response_country":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "response_region":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "source":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "threat_family":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "threat_indicator":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "threat_level":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "user":  {
-                                                                "type":  "string"
-                                                            }
-                                                        },
-                                                        "required":  [
-                                                        ],
-                                                        "type":  "object"
-                                                    },
-                                                    "type":  "array"
-                                                }
-                                            },
-                                            "type":  "object"
-                                        }
-                                    }
-                                },
-                                "Parse_Indicator_JSON":  {
-                                    "runAfter":  {
-                                        "Get_Indicator_Data":  [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type":  "ParseJson",
-                                    "inputs":  {
-                                        "content":  "@body('Get_Indicator_Data')",
-                                        "schema":  {
-                                            "properties":  {
-                                                "indicators":  {
-                                                    "items":  {
-                                                        "properties":  {
-                                                            "action":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "actor":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "confidence":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "count":  {
-                                                                "type":  "integer"
-                                                            },
-                                                            "feed_name":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "indicator":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "threat_level_max":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "time_max":  {
-                                                                "type":  "string"
-                                                            },
-                                                            "time_min":  {
-                                                                "type":  "string"
-                                                            }
-                                                        },
-                                                        "required":  [
-                                                        ],
-                                                        "type":  "object"
-                                                    },
-                                                    "type":  "array"
-                                                }
-                                            },
-                                            "type":  "object"
-                                        }
                                     }
                                 }
                             },
-                            "runAfter":  {
-                                "For_each_Malware_Entity":  [
+                            "runAfter": {
+                                "Condition_To_Check_Error_Message_is_Not_Empty": [
                                     "Succeeded"
                                 ]
-                            },
-                            "type":  "Foreach"
+                            }
                         },
-                        "For_each_Malware_Entity":  {
-                            "foreach":  "@body('Filter_array_for_Malware_Entity')",
-                            "actions":  {
-                                "Update_Incident_Tags":  {
-                                    "runAfter":  {
+                        "Parse_Entities_JSON": {
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "properties": {
+                                                "properties": {
+                                                    "friendlyName": {
+                                                        "type": "string"
+                                                    },
+                                                    "objectGuid": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [],
+                                        "type": "object"
                                     },
-                                    "type":  "ApiConnection",
-                                    "inputs":  {
-                                        "body":  {
-                                            "incidentArmId":  "@triggerBody()?['object']?['id']",
-                                            "tagsToAdd":  {
-                                                "TagsToAdd":  [
+                                    "type": "array"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Status_Code": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_Comments_Data_Ingestion_Flag": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "comments_data_ingestion",
+                                        "type": "string",
+                                        "value": "@parameters('Comments Data Ingestion')"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Assets_Data_Ingestion_Flag": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_Assets_Data_Ingestion_Flag": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "assets_data_ingestion",
+                                        "type": "string",
+                                        "value": "@parameters('Assets Data Ingestion')"
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Initialize_Events_Data_Ingestion_Flag": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "events_data_ingestion",
+                                        "type": "string",
+                                        "value": "@parameters('Events Data Ingestion')"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Comments_Data_Ingestion_Flag": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_Indicators_Data_Ingestion_Flag": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "indicators_data_ingestion",
+                                        "type": "string",
+                                        "value": "@parameters('Indicators Data Ingestion')"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Events_Data_Ingestion_Flag": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_Error_Message": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "error_message",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Indicators_Data_Ingestion_Flag": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_Status_Code": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "status_code",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Error_Message": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Filter_array_for_Malware_Entity": {
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Parse_Entities_JSON')",
+                                "where": "@equals(item()['kind'], 'Malware')"
+                            },
+                            "runAfter": {
+                                "Parse_Entities_JSON": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "For_each_Malware_Entity": {
+                            "type": "Foreach",
+                            "foreach": "@body('Filter_array_for_Malware_Entity')",
+                            "actions": {
+                                "Update_Incident_Tags": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
                                                     {
-                                                        "Tag":  "@items('For_each_Malware_Entity')?['kind']"
+                                                        "Tag": "@items('For_each_Malware_Entity')?['kind']"
                                                     },
                                                     {
-                                                        "Tag":  "@items('For_each_Malware_Entity')?['properties']?['malwareName']"
+                                                        "Tag": "@items('For_each_Malware_Entity')?['properties']?['malwareName']"
                                                     },
                                                     {
-                                                        "Tag":  "@items('For_each_Malware_Entity')?['properties']?['category']"
+                                                        "Tag": "@items('For_each_Malware_Entity')?['properties']?['category']"
                                                     },
                                                     {
-                                                        "Tag":  "Insight"
+                                                        "Tag": "Insight"
                                                     }
                                                 ]
                                             }
                                         },
-                                        "host":  {
-                                            "connection":  {
-                                                "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method":  "put",
-                                        "path":  "/Incidents"
+                                        "path": "/Incidents"
                                     }
                                 }
                             },
-                            "runAfter":  {
-                                "Filter_array_for_Malware_Entity":  [
+                            "runAfter": {
+                                "Filter_array_for_Malware_Entity": [
                                     "Succeeded"
                                 ]
-                            },
-                            "type":  "Foreach"
+                            }
                         },
-                        "Parse_Entities_JSON":  {
-                            "runAfter":  {
+                        "Condition_To_Check_Error_Message_is_Not_Empty": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@empty(variables('error_message'))",
+                                            "@false"
+                                        ]
+                                    }
+                                ]
                             },
-                            "type":  "ParseJson",
-                            "inputs":  {
-                                "content":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                                "schema":  {
-                                    "items":  {
-                                        "properties":  {
-                                            "id":  {
-                                                "type":  "string"
-                                            },
-                                            "kind":  {
-                                                "type":  "string"
-                                            },
-                                            "name":  {
-                                                "type":  "string"
-                                            },
-                                            "properties":  {
-                                                "properties":  {
-                                                    "friendlyName":  {
-                                                        "type":  "string"
-                                                    },
-                                                    "objectGuid":  {
-                                                        "type":  "string"
-                                                    }
-                                                },
-                                                "type":  "object"
-                                            },
-                                            "type":  {
-                                                "type":  "string"
-                                            }
-                                        },
-                                        "required":  [
-                                        ],
-                                        "type":  "object"
-                                    },
-                                    "type":  "array"
+                            "actions": {
+                                "Terminate_Due_Error_During_Test_Connction": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "@variables('status_code')",
+                                            "message": "@variables('error_message')"
+                                        }
+                                    }
                                 }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "runAfter": {
+                                "For_Each_Object_GUID": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Filter_array_for_Object_GUID_Entity": {
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Parse_Entities_JSON')",
+                                "where": "@equals(item()?['kind'], 'SecurityGroup')"
+                            },
+                            "runAfter": {
+                                "For_each_Malware_Entity": [
+                                    "Succeeded"
+                                ]
                             }
                         }
                     },
-                    "outputs":  {
+                    "outputs": {
                     }
                 },
-                "parameters":  {
+                "parameters": {
                     "$connections":  {
                         "value":  {
                             "azureloganalyticsdatacollector":  {
