@@ -16,16 +16,22 @@ If this playbook it run against and incident with 1 or more hosts that are not r
 > [!TIP]
 > Leverage the "Tanium Threat Response Alerts" analytics rule to generate Sentinel incidents for an Threat Response Alert from Tanium.
 
+- A [Tanium API Token](https://help.tanium.com/bundle/ug_console_cloud/page/platform_user/console_api_tokens.html)   
+A Tanium API token, granting access to your Tanium environment is required to make the necessary queries against the Tanium API.
+
 - An Azure Integration Account  
 Required to execute javascript needed to prepare query filters for Tanium API Gateway HTTP requests.
 
 - Tanium Comply Module
-Tanium Comply must be installed and operational in your Tanium environment.
+Tanium Comply must be installed and operational in your Tanium environment. See [Tanium Playbooks](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Get_to_know_our_Content.htm#_Tanium_Playbooks) for more information on creating a token and RBAC permissions guidance.
 
-## Post-Deployment Instructions
 
-You must authorize the API Connections used by this playbook after deployment. See [Tanium Playbooks](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Get_to_know_our_Content.htm#_Tanium_Playbooks) for more information about our playbooks and how to create a playbook from this template.
-
+- Permission to Assign Roles to the Resource Group   
+For this playbook to successfully run it must have the Microsoft Sentinel Contributor role at the Resource Group scope. This is added as part of this ARM template, and therefore requires the user who is creating the playbook to have `Microsoft.Authorization/roleAssignments/write` on the resource group. Some examples of roles that meet this criteria for the user include:
+  - Owner
+  - User Access Administrator
+  - Role Based Access Control Administrator
+  - Global Admininstrator 
 
 ## Get the Template
 Use the links below to create the playbook from our template.
