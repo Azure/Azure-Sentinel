@@ -10,8 +10,18 @@ This playbook will resolve any associated alerts in Tanium Threat Response assoc
 - Sentinel incidents created using the "Tanium Threat Response Alerts" analytic rule  
 Only Microsoft Sentinel Incidents created by the "Tanium Threat Response Alerts" analytic rule will have the required metadata to allow resolving the associated Tanium Threat Response alert.
 
+- A [Tanium API Token](https://help.tanium.com/bundle/ug_console_cloud/page/platform_user/console_api_tokens.html)   
+A Tanium API token, granting access to your Tanium environment is required to make the necessary queries against the Tanium API.  
+
 - Tanium Threat Response Module  
 Tanium Threat Response must be installed and operational in your Tanium environment.
+
+- Permission to Assign Roles to the Resource Group   
+For this playbook to successfully run it must have the Microsoft Sentinel Contributor role at the Resource Group scope. This is added as part of this ARM template, and therefore requires the user who is creating the playbook to have `Microsoft.Authorization/roleAssignments/write` on the resource group. Some examples of roles that meet this criteria for the user include:
+  - Owner
+  - User Access Administrator
+  - Role Based Access Control Administrator
+  - Global Admininstrator 
 
 ## Post-Deployment Instructions
 
