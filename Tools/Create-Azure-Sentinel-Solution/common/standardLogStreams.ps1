@@ -92,6 +92,12 @@ $standardStreamMapping += @{ Key = 'USAGE_METERING'; Value = 'Microsoft-Usage'}
 $standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watchlist'}
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB'; Value = 'Microsoft-WindowsEvent'}
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Microsoft-WindowsEvent'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GKE_AUDIT_LOGS'; Value = 'Microsoft-GKEAudit'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GKE_API_SERVER'; Value = 'Microsoft-GKEAPIServer'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GKE_SCHEDULER'; Value = 'Microsoft-GKEScheduler'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GKE_CONTROLLER_MANAGER'; Value = 'Microsoft-GKEControllerManager'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GKE_HPA_DECISION'; Value = 'Microsoft-GKEHPADecision'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GKE_APPLICATION'; Value = 'Microsoft-GKEApplication'}
 
 
 # Function to check if a key exists in the array of hashtables
