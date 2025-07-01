@@ -21,7 +21,7 @@ For this playbook to successfully run it must have the Microsoft Sentinel Contri
   - Owner
   - User Access Administrator
   - Role Based Access Control Administrator
-  - Global Admininstrator 
+  - Global Administrator 
 
 ## Post-Deployment Instructions
 

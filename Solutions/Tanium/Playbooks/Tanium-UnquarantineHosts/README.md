@@ -32,7 +32,7 @@ For this playbook to successfully run it must have the Microsoft Sentinel Contri
   - Owner
   - User Access Administrator
   - Role Based Access Control Administrator
-  - Global Admininstrator 
+  - Global Administrator 
 
 ## Get the Template
 Use the links below to create the playbook from our template.
