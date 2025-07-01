@@ -106,9 +106,23 @@ function New-ParametersForConnectorInstuctions($instructions) {
             New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
         }
         elseif ($instruction.type -eq "Dropdown") {
+            if ($instruction.parameters.name.tolower() -eq "streamname") {
+                $newParameter = [PSCustomObject]@{
+                    type         = "array";
+                }
+            } else {
+                $newParameter = [PSCustomObject]@{
+                    defaultValue = $instruction.parameters.name;
+                    type         = "array";
+                }
+            }
+
+            $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+        }
+        elseif ($instruction.type -eq "ServicePrincipalIDTextBox_test") {
             $newParameter = [PSCustomObject]@{
                 defaultValue = $instruction.parameters.name;
-                type         = "array";
+                type         = "securestring";
                 minLength    = 1;
             }
 
@@ -660,11 +674,16 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     elseif ($armResource.kind.ToLower() -eq 'amazonwebservicess3')
                     {
-                        CreateAwsResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
+                        CreateAwsResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType -isDynamicStreamName $ccpItem.isDynamicStreamName
+                    }
+                    elseif ($armResource.kind.ToLower() -eq 'storageaccountblobcontainer')
+                    {
+                        . "$PSScriptRoot/storageAccountDeploymentTemplate.ps1" # load storage resource creator
+                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
                     }
                     else 
                     {
-                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', WebSocket, 'GCP', 'AmazonWebServicesS3' or 'Push'." -BackgroundColor Red
+                        Write-Host "Error: Data Connector Poller file should have 'kind' attribute with value either 'RestApiPoller', WebSocket, 'GCP', 'AmazonWebServicesS3', 'Push' and 'StorageAccountBlobContainer'." -BackgroundColor Red
                         exit 1;
                     }
 
@@ -1218,9 +1237,7 @@ function CreateGCPResourceProperties($armResource, $templateContentConnections, 
     ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.request -propertyName 'subscriptionNames' -isInnerObject $true -innerObjectName 'request' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $true
 }
 
-$awsSolutions = @('VMware Carbon Black Cloud')
-
-function CreateAwsResourceProperties($armResource, $templateContentConnections, $fileType) {
+function CreateAwsResourceProperties($armResource, $templateContentConnections, $fileType, $isDynamicStreamName) {
     $kindType = 'AmazonWebServicesS3'
     ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dataTypes' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
@@ -1230,7 +1247,7 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
 
     ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-    if ($awsSolutions.Contains($solutionName)) {
+    if ($isDynamicStreamName) {
         # Handle properties destinationTable and streamName in dc poller file for this solutions as a special case
         $armResource.properties.dcrConfig.streamName = "[[parameters('streamName')[0]]"
         $armResource.properties.destinationTable = "[[concat(parameters('streamName')[0],'_CL')]"
@@ -1260,7 +1277,9 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
                     }
                 }
             } else {
-                $armResource.properties.dataFormat.format = "json"
+                if ($armResource.properties.dataFormat.format -eq "") {
+                    $armResource.properties.dataFormat.format = "json"
+                }
             }
         }
     }
