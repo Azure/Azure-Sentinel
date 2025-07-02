@@ -12,7 +12,7 @@ function Get-CloudTrailKmsPolicy {
 				'Principal' = @{
 					'Service' = 'cloudtrail.amazonaws.com';
 				};
-				'Action'    = 'kms=GenerateDataKey*';
+				'Action'    = 'kms:GenerateDataKey*';
 				'Resource'  = '*';
 			},
 			@{
@@ -22,7 +22,7 @@ function Get-CloudTrailKmsPolicy {
 					'AWS' = @("${roleArn}");
 				};
 				'Action'    = @(
-					'kms=Decrypt'
+					'kms:Decrypt'
 				);
 				'Resource'  = '*';
 			}

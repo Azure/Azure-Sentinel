@@ -33,7 +33,7 @@ Link to [Recorded Future Identity main readme](../readme.md)
 
 This solution contains two approaches to deal with exposed credentials.
 - The recommended variant (based on Recorded Future Playbook Alerts) is described in this readme
-- The old variant (based on the Recorded Future Identity API) is located in the [v3.0](./v3.0) folder
+- The old variant (based on the Recorded Future Identity API) is located in the [v3.0](./v3.0/readme.md) folder
 
 The playbooks need to be installed in the following order: custom-connector, and one of the alert playbooks.
 
@@ -68,7 +68,8 @@ Recorded Future recommend deploying playbooks in this solution from this README,
 - A Microsoft Entra ID Tenant and subscription.
 - A Microsoft Entra ID security group to which you want to assign any users who have leaked credentials.
 - The user who installs the Logic Apps requires the permissions Azure Subscription Owner or Contributor. [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
-- The user who authorizes the Entra ID connector requires the permissions `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a>.
+- If a user authorizes the Entra ID connectors, they must have the Entra role `Directory Writers`. If a service principal (e.g., managed identity of app registration) authorizes the Entra ID connectors, they must have the permissions `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a>
+- If a user authorizes the Entra Identity Protection connector, they must have the Entra role `Security Administrator`. If a service principal (e.g., managed identity of app registration) authorizes the Entra ID connectors, they must have the permission `IdentityRiskyUser.ReadWrite.All`
 - In Consumption Logic Apps, before you can create or manage Logic Apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
 
 - For `Recorded Future Identity` Connections you will need `Recorded Future Identity API` token. To obtain one - check out [this section](#how_to_obtain_Recorded_Future_API_token).
@@ -377,7 +378,17 @@ To see Log Analytics Custom Logs:
 ## Customization
 Recorded Future Identity Solution is a baseline solution, there are ways to customize it to your preferred workflow.
 
-#### Playbook Alert Onward Actions
+#### Automatic remediation of identity exposures
+The default configuration for this playbook provides remediation in the form of placing a user in a security group and confirming a user as risky (requires Microsoft Entra ID P1 or P2 license). Based on this there is other remediation actions that can be done, either manual or automatic. The various ways to configure automatic remediation are based on organizational needs and knowledge of the Azure environment to find a appropriate remediation path.
+
+
+Depending of Entra ID licensing levels, some solutions available are:
+ - Conditional Access Policies (requires Microsoft Entra ID P1 or P2 license) - More information <a href="https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview" target="_blank">here<a>
+ - Microsoft Entra ID Protection (requires Microsoft Entra ID P1 or P2 license) - More information <a href="https://learn.microsoft.com/en-us/entra/id-protection/overview-identity-protection" target="_blank"> here<a>
+ - Microsoft Graph API - Powerful, no license requirements but requires extensive configuration - More information <a href="https://learn.microsoft.com/en-us/graph/identity-network-access-overview" target="_blank"> here</a>. For advanced guidance, please contact your Recorded Future Customer Success Manager.
+
+#### Recorded Future Playbook Alert Onward Actions
+Onward Actions is a way to keep the Recorded Future Playbook Alert up to date with actions taken in regards to a specific alert, to get a overview of actions taken on alerts.
 By default the Playbook Alert Update steps have been configured with `added_actions_taken` set to `identity_novel_exposures.placed_in_risky_group`, if the solution is extended with actions such as blocking users or forcing password resets, you can submit this information to Recorded Future. Currently the following actions are supported:
 | Action |
 |-|
@@ -395,10 +406,12 @@ To change/add actions, modify the items under `added_actions_taken` parameter in
 <a id="known_issues"></a>
 ## Known Issues
 
-Microsoft Entra ID Protection is a premium feature. You need an Microsoft Entra ID P1 or P2 license to access the `riskDetection` API (note: P1 licenses receive limited risk information). The `riskyUsers` API is only available to Microsoft Entra ID P2 licenses only. If your organization does not have P1 or P2 license, then the `Get risky user` step will fail, but the run will continue and complete.
+#### Risky Users (Microsoft Entra ID P1 or P2 license)
+Microsoft Entra ID Protection is a premium feature. You need an Microsoft Entra ID P1 or P2 license to access the `riskDetection` API (note: P1 licenses receive limited risk information). The `riskyUsers` API is only available to Microsoft Entra ID P2 licenses only. If your organization does not have P1 or P2 license, then the `Confirm as risky user as compromised` step will fail, but the run will continue and complete.
 
-![Failed Get Risky User step](images/risky_user_fail.png)
 
+#### Playbook Alert set to resolved but not added to Security Group
+When the user that authorizes the Entra ID connector can search for a user in Entra ID, but lacks sufficient privileges to add the user to a group (e.g, same organization, but no permissions to modify users) there can be a scenario where the Logic App does not fail, and the Playbook Alert is incorrectly set to resolve, even if no remediation action has been done. A possible remediation can be that the user which authorizes the Entra ID connector has sufficient privileges to modify all users in  a organization.
 
 <a id="useful_documentation"></a>
 ## Useful Azure documentation
