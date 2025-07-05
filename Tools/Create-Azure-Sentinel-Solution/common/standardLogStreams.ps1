@@ -29,6 +29,9 @@ $standardStreamMapping += @{ Key = 'SENTINEL_AWSCLOUDWATCH'; Value = 'Microsoft-
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSGUARDDUTY'; Value = 'Microsoft-AWSGuardDuty'}
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSVPCFLOW'; Value = 'Microsoft-AWSVPCFlow'}
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSWAF'; Value = 'Microsoft-AWSWAF'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWS_NETWORK_FIREWALL_ALERT_LOGS'; Value = 'Microsoft-AWSNetworkFirewallAlert'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWS_NETWORK_FIREWALL_FLOW_LOGS'; Value = 'Microsoft-AWSNetworkFirewallFlow'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWS_NETWORK_FIREWALL_TLS_LOGS'; Value = 'Microsoft-AWSNetworkFirewallTls'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGCLOUDAPPEVENTS'; Value = 'Microsoft-CloudAppEvents'}
 $standardStreamMapping += @{ Key = 'SECURITY_CISCO_ASA_BLOB'; Value = 'Microsoft-CommonSecurityLog'}
 $standardStreamMapping += @{ Key = 'SECURITY_CEF_BLOB'; Value = 'Microsoft-CommonSecurityLog'}
@@ -60,12 +63,10 @@ $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHU
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGEMAILEVENTS'; Value = 'Microsoft-EmailEvents'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGEMAILPOSTDELIVERYEVENTS'; Value = 'Microsoft-EmailPostDeliveryEvents'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGEMAILURLINFO'; Value = 'Microsoft-EmailUrlInfo'}
-$standardStreamMapping += @{ Key = 'SENTINEL_GCP_IDS_LOGS'; Value = 'Microsoft-GCPIDS'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_AUDIT_LOGS'; Value = 'Microsoft-GCPAuditLogs'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_FIREWALL_LOGS'; Value = 'Microsoft-GCPFirewallLogs'}
-$standardStreamMapping += @{ Key = 'SENTINEL_GCP_IAM_LOGS'; Value = 'Microsoft-GCPIAM'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCPAPIGEE'; Value = 'Microsoft-GCPApigee'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GOOGLE_CLOUD_SCC'; Value = 'Microsoft-GoogleCloudSCC'}
-$standardStreamMapping += @{ Key = 'SENTINEL_GCP_CDN_LOGS'; Value = 'Microsoft-GCPCDN'}
 $standardStreamMapping += @{ Key = 'HUNTING_BOOKMARKS_LOGANALYTICS'; Value = 'Microsoft-HuntingBookmark'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGIDENTITYDIRECTORYEVENTS'; Value = 'Microsoft-IdentityDirectoryEvents'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGIDENTITYLOGONEVENTS'; Value = 'Microsoft-IdentityLogonEvents'}
