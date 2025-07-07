@@ -97,24 +97,8 @@ function GenerateSummaryRules($solutionName, $file, $rawData, $contentResourceDe
       }
     }
 
-    if ($summaryRuleMetadataDependencies.criteria.Count -eq 0) {
-        # If no criteria, then point it to [variables('TemplateEmptyArray')] to avoid errors in ARM TTK for empty array i.e []
-        $summaryRuleMetadataDependencies.PSObject.Properties.Remove('criteria')
-        $summaryRuleMetadataDependencies | Add-Member -NotePropertyName "criteria" -NotePropertyValue ""
-        $summaryRuleMetadataDependencies.criteria = "[variables('TemplateEmptyArray')]"
-
-        if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
-            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
-        }
-    }
-
     $metadataDescription = "Description about $displayName - metadata"
-    # Generate ARM template for metadata
-    $summaryRuleMetadata = [PSCustomObject]@{
-      "type" = "Microsoft.OperationalInsights/workspaces/providers/metadata"
-      "apiVersion" = $contentResourceDetails.commonResourceMetadataApiVersion
-      "name" = "[[concat(parameters('workspace-name'),'/Microsoft.SecurityInsights/',concat('SummaryRule-', last(split(resourceId('$($type)', parameters('workspace-name'),variables('workspaceResourceId')) ,'/'))))]"
-      "properties" = [PSCustomObject]@{
+    $metadataProperties = [PSCustomObject]@{
         "description" = $metadataDescription
         "parentId" = "[[resourceId('$($type)', parameters('workspace-name'),variables('workspaceResourceId'))]"
         "contentId" = "[variables('summaryRuleObject$global:summaryRuleCounter')._summaryRuleContentId$global:summaryRuleCounter]"
@@ -127,8 +111,18 @@ function GenerateSummaryRules($solutionName, $file, $rawData, $contentResourceDe
         }
         "author" = $authorDetails
         "support" = $baseMetadata.support
-        "dependencies" = $summaryRuleMetadataDependencies
-      }
+    }
+
+    if ($summaryRuleMetadataDependencies.criteria.Count -gt 0) {
+        $metadataProperties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $summaryRuleMetadataDependencies
+    }
+
+    # Generate ARM template for metadata
+    $summaryRuleMetadata = [PSCustomObject]@{
+      "type" = "Microsoft.OperationalInsights/workspaces/providers/metadata"
+      "apiVersion" = $contentResourceDetails.commonResourceMetadataApiVersion
+      "name" = "[[concat(parameters('workspace-name'),'/Microsoft.SecurityInsights/',concat('SummaryRule-', last(split(resourceId('$($type)', parameters('workspace-name'),variables('workspaceResourceId')) ,'/'))))]"
+      "properties" = $metadataProperties
     }
 
     # merge content and metadata
