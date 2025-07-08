@@ -11,7 +11,7 @@ The results of the playbook will be added as a comment to the incident.
 ## Prerequisites
 
 - Sentinel incidents with associated hosts running the Tanium client  
-If this playbook it run against and incident with 1 or more hosts that are not running the Tanium client, then Tanium will not be able to provide information for those host(s). If the incident only contains hosts that are not running the Tanium client then a comment will be placed on the incident indicating that and the playbook will exit early.
+If this playbook is run against an incident with 1 or more hosts that are not running the Tanium client, then Tanium will not be able to provide information for those host(s). If the incident only contains hosts that are not running the Tanium client then a comment will be placed on the incident indicating that and the playbook will exit early.
 
 > [!TIP]
 > Leverage the "Tanium Threat Response Alerts" analytics rule to generate Sentinel incidents for an Threat Response Alert from Tanium.  
