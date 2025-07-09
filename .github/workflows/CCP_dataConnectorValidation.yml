@@ -14,6 +14,7 @@ env:
   CLIENT_ID: ${{ secrets.AZURE_CONTENT_VALIDATION_CLIENT_ID }}
   API_BASE: https://sentinel-content-validationapi-prod-bvgsc3hjhyeqangg.canadacentral-01.azurewebsites.net/
 
+
 jobs:
   pr-validate:
     runs-on: ubuntu-latest
@@ -35,7 +36,7 @@ jobs:
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
 
-          mapfile -t files < <(git diff --name-only "$BASE" "$HEAD" | grep -Ei '\.json$')
+          mapfile -t files < <(git diff --diff-filter=ACMR --name-only "$BASE" "$HEAD" | grep -Ei '\.json$')
           echo "→ All .json files: ${files[*]:-<none>}"
 
           if [ ${#files[@]} -eq 0 ]; then
@@ -97,7 +98,7 @@ jobs:
             exit 1
           fi
 
-      - name: POST CCP payload
+      - name: POST CCF payload
         if: env.JSON_PAYLOAD_PATH != 'empty'
         run: |
           echo "Sending JSON payload to API"
@@ -106,11 +107,17 @@ jobs:
 
           result_status=$(echo "$response" | jq -r '.status // empty')
           message=$(echo "$response" | jq -r '.message // "No message provided"')
+          id=$(echo "$response" | jq -r '.operation_Id // "No message provided"')
 
           if [ "$result_status" != "passed" ]; then
-            echo -e " ❌ Validation failed: \n \n"
+            echo -e "\n"
+            echo -e " ❌ Validation failed: \n"
             echo -e " $message"
+            echo -e "\n"
+            echo "operation id is $id"
             exit 1
           fi
 
           echo "✅ $message"
+          echo -e "\n"
+          echo "operation id is $id"
