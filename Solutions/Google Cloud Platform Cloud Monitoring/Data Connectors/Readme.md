@@ -1,6 +1,6 @@
 #  Create OAuth 2.0 Credentials in Google Cloud for Microsoft Sentinel
  
-This guide helps create the required **Client ID** and **Client Secret** in **Google Cloud Platform (GCP)** so logs can be securely sent to **Microsoft Sentinel**.
+This guide helps create the required **Client ID** and **Client Secret** in **Google Cloud Platform (GCP)** so logs can be securely sent to **Microsoft Sentinel** .
  
 
  
