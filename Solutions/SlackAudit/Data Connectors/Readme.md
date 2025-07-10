@@ -48,3 +48,4 @@ The below mentioned resources are required to connect SlackAudit with Sentinel.
 
 ## Action Name Limit for Sentinel Integration
 - While connecting to sentinel, In the Action Type field, you can enter up to 30 action names at once separated by commas.
+- If you want to capture all the actions, fill the Action column with a space.
