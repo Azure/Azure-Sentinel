@@ -2,7 +2,7 @@
 
 ARM template for ASIM NetworkSession schema parser for CheckPointFirewall.
 
-This ASIM parser supports normalizing Check Point VPN-1 & Firewall-1 logs coming from CEF Data Connector to the ASIM Network Session normalized schema.
+This ASIM parser supports normalizing Check Point VPN-1 & Firewall-1 logs  coming from CEF  Data Connector to the ASIM Network Session normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
