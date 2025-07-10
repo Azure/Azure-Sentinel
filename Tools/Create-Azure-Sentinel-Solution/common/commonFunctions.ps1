@@ -20,6 +20,7 @@ $global:parserCounter = 1
 $global:savedSearchCounter = 1
 $global:huntingQueryCounter = 1
 $global:watchlistCounter = 1
+$global:summaryRuleCounter = 1
 
 $global:DependencyCriteria = @();
 $global:customConnectorsList = @{};
@@ -45,6 +46,7 @@ $ContentKindDict.Add("LogicAppsCustomConnector", "lc")
 $ContentKindDict.Add("AutomationRule", "ar")
 $ContentKindDict.Add("ResourcesDataConnector", "rdc")
 $ContentKindDict.Add("Standalone", "sa")
+$ContentKindDict.Add("SummaryRule", "sr")
 
 function ReadFileContent($filePath) {
     try {
@@ -3254,14 +3256,15 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                     'metadataApiVersion' = '2023-04-01-preview'
                     'templateSpecsVersionApiVersion' = '2023-04-01-preview'
-
+                    'summaryRulesApiVersion' = '2023-01-01-preview'
                     'resources' = @("Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
                                     "Microsoft.OperationalInsights/workspaces/providers/metadata",
                                     "Microsoft.OperationalInsights/workspaces/savedSearches",
                                     "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
                                     "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
                                     "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
-                                    "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions")
+                                    "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+                                    "Microsoft.OperationalInsights/workspaces/summaryLogs")
                     }
             }
             elseif ($version.Major -eq 2)
