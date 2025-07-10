@@ -47,20 +47,17 @@ query: |
   let Domain_Indicators = materialize(
       ThreatIntelIndicators
       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-      | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+      | where IndicatorType == "domain-name"
       | extend DomainName = tolower(IndicatorType)
-      | where isnotempty(DomainName)
       | where TimeGenerated >= ago(ioc_lookBack)
-      | extend TI_DomainEntity = tolower(DomainName)
-      //| where TI_DomainEntity in (LogDomains)
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-      | where IsActive == true and ValidUntil > now());
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil)));
   // Join threat intelligence indicators with common security logs
-  Domain_Indicators | join kind=innerunique (SecurityLog) on $left.TI_DomainEntity == $right.Domain
+  Domain_Indicators | join kind=innerunique (SecurityLog) on $left.DomainName == $right.Domain
   | where CommonSecurityLog_TimeGenerated < ValidUntil
   | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id
   | extend Description = tostring(parse_json(Data).description), ActivityGroupNames = tostring(parse_json(Data).activitygroupnames)
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, Id, ValidUntil, Confidence, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, Id, ValidUntil, Confidence, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type
   | extend timestamp = CommonSecurityLog_TimeGenerated
 entityMappings:
   - entityType: Host
@@ -75,5 +72,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: PA_Url
-version: 1.4.2
+version: 1.4.3
 kind: Scheduled
