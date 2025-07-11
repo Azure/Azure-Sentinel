@@ -23,21 +23,15 @@ query: |
   let dlp_policy_events = PowerPlatformAdminActivity
       | where TimeGenerated >= ago(query_frequency)
       | where EventOriginalType == "GovernanceApiPolicyOperation"
-      | where PropertyCollection has_any ("DeleteDlpPolicy", "UpdateDlpPolicy", "CreateDlpPolicy")
-      | mv-expand PropertyCollection
-      | extend
-          Name = tostring(PropertyCollection.Name),
-          Value = tostring(PropertyCollection.Value)
-      | summarize Properties = make_bag(bag_pack(Name, Value))
-          by
-          TimeGenerated,
-          EventOriginalUid
+      | where Properties has_any ("DeleteDlpPolicy", "UpdateDlpPolicy", "CreateDlpPolicy")
       | extend
           PolicyName = tostring(Properties['powerplatform.analytics.resource.display_name']),
           EventType = tostring(Properties['powerplatform.analytics.resource.tenant.governance.api_policy.operation_name']),
           ActorName = tostring(Properties['enduser.principal_name']),
           PolicyId = tostring(Properties['powerplatform.analytics.resource.id']),
-          AdditionalInfo = Properties['powerplatform.analytics.resource.tenant.governance.api_policy.additional_resources'];
+          EnvironmentId = tostring(Properties['powerplatform.analytics.resource.environment.id']),
+          AdditionalInfo = Properties['powerplatform.analytics.resource.tenant.governance.api_policy.additional_resources']
+      | extend EnvironmentId = tolower(replace_string(EnvironmentId, "/providers/Microsoft.BusinessAppPlatform/environments/Default-", ""));
   let delete_events = dlp_policy_events
       | where EventType == "DeleteDlpPolicy";
   let update_events = dlp_policy_events
@@ -67,6 +61,7 @@ query: |
       PolicyId,
       AccountName,
       UPNSuffix,
+      EnvironmentId,
       AdditionalInfo
 eventGroupingSettings:
   aggregationKind: SingleAlert
@@ -84,4 +79,4 @@ alertDetailsOverride:
 customDetails:
   Policy: PolicyId
   PolicyName: PolicyName
-version: 3.2.0
+version: 3.2.3
