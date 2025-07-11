@@ -1,34 +1,74 @@
-id: 41cb1074-3cc9-516f-9e7a-0004eec43d09
+id: e8d42d69-1fbe-4c04-9cc5-78cea6f28115
 Function:
-  Title: corelight_software parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight Software Events
+  Version: 1.1.0
+  LastUpdated: '2024-12-09'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_software
 FunctionAlias: corelight_software
-FunctionQuery: |+
-  let corelight_software = view () {
-      Corelight_v2_software_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          host=host_s,
-          host_p=host_p_d,
-          software_type=software_type_s,
-          name=name_s,
-          version_major=version_major_d,
-          version_minor=version_minor_d,
-          version_minor2=version_minor2_d,
-          version_minor3=version_minor3_d,
-          version_addl=version_addl_s,
-          unparsed_version=unparsed_version_s
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="software",
-          ts=TimeGenerated
-  };
-  corelight_software
-
-...
+FunctionQuery: |
+  let dummy_table = datatable(TimeGenerated: datetime) [];
+    let corelight_software = view () {
+        union isfuzzy=true Corelight_v2_software_CL, dummy_table
+        | extend
+            timestamp = column_ifexists("_timestamp_t", ""),
+            _timestamp = column_ifexists("_timestamp_s", ""),
+            path = column_ifexists("_path_s", ""),
+            system_name = column_ifexists("_system_name_s", ""),
+            write_ts = column_ifexists("_write_ts_t", ""),
+            host = column_ifexists("host_s", ""),
+            host_header = column_ifexists("host_header_s", ""),
+            host_p = column_ifexists("host_p_d", real(null)),
+            software_type = column_ifexists("software_type_s", ""),
+            name = column_ifexists("name_s", ""),
+            _version = column_ifexists("_version_s", ""),
+            version_major = column_ifexists("version_major_d", real(null)),
+            version_minor = column_ifexists("version_minor_d", real(null)),
+            version_minor2 = column_ifexists("version_minor2_d", real(null)),
+            version_minor3 = column_ifexists("version_minor3_d", real(null)),
+            version_addl = column_ifexists("version_addl_s", ""),
+            unparsed_version = column_ifexists("unparsed_version_s", "")
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "software",
+            ts = TimeGenerated,
+            host_header = coalesce(host_header, host),
+            src_host = host_header,
+            tx_host = host_header,
+            src_port = host_p,
+            version_patch = version_minor2,
+            version = iif(isempty(version_major), "", substring(tostring(version_major), 0, strlen(tostring(version_major))-2)),
+            sensor_name = coalesce(system_name, "unknown"),
+            timestamp = coalesce(tostring(timestamp), _timestamp)
+        | extend version = iif(isempty(version_minor), version, iif(isempty(version), substring(tostring(version_minor), 0, strlen(tostring(version_minor))-2), strcat(version, ".", substring(tostring(version_minor), 0, strlen(tostring(version_minor))-2))))
+        | extend version = iif(isempty(version_minor2), version, iif(isempty(version), substring(tostring(version_minor2), 0, strlen(tostring(version_minor2))-2), strcat(version, ".", substring(tostring(version_minor2), 0, strlen(tostring(version_minor2))-2))))
+        | project
+            TimeGenerated,
+            path,
+            system_name,
+            write_ts,
+            host_header,
+            host_p,
+            software_type,
+            name,
+            timestamp,
+            _version,
+            version,
+            version_major,
+            version_minor,
+            version_minor2,
+            version_minor3,
+            version_addl,
+            unparsed_version,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts,
+            src_host,
+            tx_host,
+            src_port,
+            version_patch,
+            sensor_name
+    };
+    corelight_software

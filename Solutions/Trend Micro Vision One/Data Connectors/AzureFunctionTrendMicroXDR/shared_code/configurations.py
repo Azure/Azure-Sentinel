@@ -5,7 +5,7 @@ import os
 
 from shared_code.models.oat import RiskLevel
 
-VERSION = '1.2.3'
+VERSION = '1.2.5'
 SIEM_NAME = 'SentinelAddon'
 XDR_HOSTS = {
     'us': 'https://api.xdr.trendmicro.com',
@@ -15,6 +15,7 @@ XDR_HOSTS = {
     'sg': 'https://api.sg.xdr.trendmicro.com',
     'au': 'https://api.au.xdr.trendmicro.com',
     'uae': 'https://api.uae.xdr.trendmicro.com/',
+    'mea': 'https://api.mea.xdr.trendmicro.com',
 }
 
 
@@ -189,3 +190,7 @@ def get_query_aggressive_workbench():
 
 def get_query_custom_workbench():
     return bool(os.environ.get("queryCustomWorkbench", False))
+
+
+def get_is_rca_disabled():
+    return bool(os.environ.get("isRcaDisabled", True))

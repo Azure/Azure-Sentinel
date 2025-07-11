@@ -36,7 +36,7 @@ def get_headers(ctx: Context) -> Dict[str, str]:
         "X-Abnormal-Trace-Id": str(ctx.TRACE_ID),
         "Authorization": f"Bearer {ctx.API_TOKEN}",
         "Soar-Integration-Origin": "AZURE SENTINEL",
-        "Azure-Sentinel-Version": "2024-12-24 V2",
+        "Azure-Sentinel-Version": "2025-05-17 V2",
     }
 
 
