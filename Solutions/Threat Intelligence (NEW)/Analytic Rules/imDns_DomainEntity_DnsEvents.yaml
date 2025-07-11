@@ -60,16 +60,16 @@ query: |
     //extract key part of kv pair
     | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
     | extend IndicatorId = tostring(split(Id, "--")[2])
-    | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+    | where IndicatorType == "domain-name"
     | extend DomainName = ObservableValue
     | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
-    | where isnotempty(DomainName)
+    
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | extend ThreatList = tostring(parse_json(Data).indicator_types[0])
     | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where IsActive == true and ValidUntil > now();
-  let Domains = DomainTIs | where isnotempty(DomainName) |summarize NDomains=dcount(DomainName), DomainsList=make_set(DomainName) 
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
+  let Domains = DomainTIs  |summarize NDomains=dcount(DomainName), DomainsList=make_set(DomainName) 
     | project DomainList = iff(NDomains > HAS_ANY_MAX, dynamic([]), DomainsList);
   DomainTIs
   | project-reorder *, ThreatList, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
@@ -115,5 +115,5 @@ customDetails:
   SourceIPAddress: SrcIpAddr
   DnsQuery: DnsQuery
   QueryType: DnsQueryType
-version: 1.2.1
+version: 1.2.2
 kind: Scheduled
