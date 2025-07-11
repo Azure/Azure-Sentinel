@@ -9,7 +9,7 @@
 <a name="intro">
 
 ## Introduction
-The Google Cloud Platform Cloud Run Codeless Connector for Microsoft Sentinel enables seamless integration of Google Cloud Platform Cloud Run logs with Microsoft Sentinel without the need for custom code. Developed as part of the Codeless Connector Platform(CCP), this connector simplifies the process of collecting and ingesting Cloud Run Request logs, Container logs and audit logs from Google Cloud Platform into Sentinel.
+The Google Cloud Platform Cloud Run Codeless Connector for Microsoft Sentinel enables seamless integration of Google Cloud Platform Cloud Run logs with Microsoft Sentinel without the need for custom code. Developed as part of the Codeless Connector Framework(CCF), this connector simplifies the process of collecting and ingesting Cloud Run Request logs, Container logs and audit logs from Google Cloud Platform into Sentinel.
 
 
 <a name="step2">
@@ -31,7 +31,7 @@ To generate the above resources, you must execute the following terraform script
 <a name="log">
 
 ## Steps to execute Terraform scripts for Log Setup
-To access the terraform script for Log Setup [Click here](https://github.com/v-svankam/harshaccp/blob/main/GcpCloudRunLogSetup.tf).
+To access the terraform script for Log Setup [Click here](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPCloudRunLogsSetup).
 - Launch the cloud shell in Google Cloud Console.
 - Execute the below mentioned commands.
 - create a directory

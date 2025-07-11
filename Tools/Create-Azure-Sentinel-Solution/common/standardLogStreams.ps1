@@ -68,6 +68,7 @@ $standardStreamMapping += @{ Key = 'SENTINEL_GCP_FIREWALL_LOGS'; Value = 'Micros
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_MONITORING_LOGS'; Value = 'Microsoft-GCPMonitoring'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPAPIGEE'; Value = 'Microsoft-GCPApigee'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GOOGLE_CLOUD_SCC'; Value = 'Microsoft-GoogleCloudSCC'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCPCLOUDRUN'; Value = 'Microsoft-GCPCloudRun'}
 $standardStreamMapping += @{ Key = 'HUNTING_BOOKMARKS_LOGANALYTICS'; Value = 'Microsoft-HuntingBookmark'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGIDENTITYDIRECTORYEVENTS'; Value = 'Microsoft-IdentityDirectoryEvents'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGIDENTITYLOGONEVENTS'; Value = 'Microsoft-IdentityLogonEvents'}
