@@ -43,9 +43,9 @@ Connectors used: ***RecordedFuture-CustomConnector*** see [Connector authorizati
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ActorThreatHunt-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ActorThreatHunt-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
-Fetch indicators linked to threat actors from the threat actor map. The logic app will run on a schedule and check threat actor related to the client’s Recorded Future threat map. It is possible to set a risk score threshold, so that if a threat actor score exceeds the score. The logic app will query Recorded Future for all relevant links indicators (IPs, Hashes, Domains, and URLs) tied to threat actors and store them in the ThreatIntelligenceIndicator table.
+Fetch indicators linked to threat actors from the threat actor map. The logic app will run on a schedule and check threat actor related to the client’s Recorded Future threat map. It is possible to set a risk score threshold, so that if a threat actor score exceeds the score. The logic app will query Recorded Future for all relevant links indicators (IPs, Hashes, Domains, and URLs) tied to threat actors and store them in the ThreatIntelIndicators table.
 
-If recurrence is changed from default (24h), also change `valid_until_delta_hours` to avoid duplicates in ThreatIntelligenceIndicator table leading to multiple incidents created.
+If recurrence is changed from default (24h), also change `valid_until_delta_hours` to avoid duplicates in ThreatIntelIndicators table leading to multiple incidents created.
 
 After successful installation, automate incidents creation by setup Analytic Rules shipped in the Solution to correlate this data with your infrastructure, described [here](../readme.md#analytic-rules). Automate triage of incidents by install and configure [Recorded Future Enrichment](../Enrichment/readme.md#recordedfuture-ioc_enrichment).
 
@@ -61,9 +61,9 @@ Connectors used: ***RecordedFuture-CustomConnector*** see [Connector authorizati
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-MalwareThreatHunt-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-MalwareThreatHunt-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
-Fetch malware threat information from the threat actor map. The logic app will run on a schedule  to check threat actor data related to the client’s Recorded Future threat map. It is possible to set a risk score threshold, so that if a threat actor score exceeds the score. The logic app will query Recorded Future for all relevant links indicators (IPs, Hashes, Domains, and URLs) tied to threat actors and store them in the ThreatIntelligenceIndicator table.
+Fetch malware threat information from the malware threat map. The logic app will run on a schedule  to check malware threat data related to the client’s Recorded Future malware threat map. It is possible to set a risk score threshold, so that if a malware score exceeds the score. The logic app will query Recorded Future for all relevant links indicators (IPs, Hashes, Domains, and URLs) tied to the malware and store them in the ThreatIntelIndicators table.
 
-If recurrence is changed from default (24h), also change `valid_until_delta_hours` to avoid duplicates in ThreatIntelligenceIndicator table leading to multiple incidents created.
+If recurrence is changed from default (24h), also change `valid_until_delta_hours` to avoid duplicates in ThreatIntelIndicators table leading to multiple incidents created.
 
 After successful installation, automate incidents creation by setup Analytic Rules shipped in the Solution to correlate this data with your infrastructure, described [here](../readme.md#analytic-rules). Automate triage of incidents by install and configure [Recorded Future Enrichment](../Enrichment/readme.md#recordedfuture-ioc_enrichment).
 
@@ -75,7 +75,7 @@ Malware and actor threat map import playbooks are configured with defaults that 
 <br/>
 <br/>
 <details>
-<summary>Expand Advance parameters</summary>
+<summary>Expand Advanced parameters</summary>
 It's possible to restrict hunts by actor or malware.
 
 ![alt text](Images/AdvancedParameters.png)
@@ -90,7 +90,7 @@ Malware and actor indicator import playbooks are configured with defaults that w
 
 Risk scores can be modified to restrict number of indicators returned from the API.
 
-If recurrence is changed from default (24h), also change `valid_until_delta_hours` to avoid duplicates in ThreatIntelligenceIndicator table leading to multiple incidents created.
+If recurrence is changed from default (24h), also change `valid_until_delta_hours` to avoid duplicates in ThreatIntelIndicators table leading to multiple incidents created.
 
 <img src="Images/ActorIndicators.png" alt="Threat Indicator Import Config" width="80%"/>
 
