@@ -76,14 +76,14 @@ query: |
     ThreatIntelIndicators
     //extract key part of kv pair
        | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
        | extend NetworkSourceIP = toupper(ObservableValue)
        | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | where TimeGenerated >= ago(ioc_lookBack)
     | extend TI_ipEntity = NetworkSourceIP
     | where TI_ipEntity != "NO_IP"
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   );
   IP_TI
      | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
@@ -120,19 +120,19 @@ customDetails:
   EventEndTime: imNWS_maxtime
   IoCDescription: Description
   ActivityGroupNames: ActivityGroupNames
-  IndicatorId: IndicatorId
-  ThreatType: ThreatType
-  IoCExpirationTime: ExpirationDateTime
-  IoCConfidenceScore: ConfidenceScore
+  IndicatorId: Id
+  ThreatType: Type
+  IoCExpirationTime: ValidUntil
+  IoCConfidenceScore: Confidence
   IoCIPDirection: IoCDirection
 
 alertDetailsOverride:
   alertDisplayNameFormat: A network session {{IoCDirection}} address {{IoCIP}} matched an IoC. 
-  alertDescriptionFormat: The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blead for more information on the indicator.
+  alertDescriptionFormat: The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{Type}}. Consult the threat intelligence blead for more information on the indicator.
 
 tags:
   - Schema: ASIMNetworkSession
     SchemaVersion: 0.2.4
 
-version: 1.2.7
+version: 1.2.8
 kind: Scheduled
