@@ -22,8 +22,14 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 # Post-deployment
 1. Assign Microsoft Sentinel Responder role to the Playbook's Managed Identity
 2. Authorize Microsoft Teams connector
-
-
+# If the Playbook is Grayed Out, Follow These Steps
+1. Navigate to `Microsoft Sentinel → Settings → Settings `
+2. Scroll down to the **Playbook permissions** section
+3. Click the **Configure permissions** button
+4. In the **Manage permissions** side panel:
+   - Under the **Browse** tab, search and select the **Resource Group** that contains your Logic App Playbook
+5. Click **Apply**
+6. Return to your **Automation Rule** and try adding the playbook again – it should now be selectable (no longer grayed out)
 ## Screenshots
 **Incident Trigger**
 ![Incident Trigger](./images/incidentTrigger-light.png)

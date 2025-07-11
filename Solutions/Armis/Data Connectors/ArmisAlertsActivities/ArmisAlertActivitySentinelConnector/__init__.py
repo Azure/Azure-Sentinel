@@ -6,18 +6,20 @@ import azure.functions as func
 import json
 from .sentinel import AzureSentinel
 from .exports_store import ExportsTableStore
-from Exceptions.ArmisExceptions import ArmisException, ArmisDataNotFoundException
+from Exceptions.ArmisExceptions import ArmisException, ArmisDataNotFoundException, ArmisTimeOutException
 from .utils import Utils
 from . import consts
 import inspect
+import time
 
 
 class ArmisAlertsActivities(Utils):
     """This class will process the Alert Activity data and post it into the Microsoft sentinel."""
 
-    def __init__(self):
+    def __init__(self, start_time):
         """__init__ method will initialize object of class."""
         super().__init__()
+        self.start_time = start_time
         self.data_alert_from = 0
         self.azuresentinel = AzureSentinel()
         self.total_alerts_posted = 0
@@ -174,6 +176,36 @@ class ArmisAlertsActivities(Utils):
             )
             raise ArmisException()
 
+    def process_large_chunks_of_activity_data(self, activity_uuids):
+        """Process large chunks of activity data for specific alert.
+
+        Args:
+            activity_uuids (list): list of activity uuids
+        """
+        __method_name = inspect.currentframe().f_code.co_name
+        try:
+            for index in range(0, len(activity_uuids), consts.CHUNK_SIZE):
+                if int(time.time()) >= self.start_time + consts.FUNCTION_APP_TIMEOUT_SECONDS:
+                    raise ArmisTimeOutException()
+                chunk_of_activity_uuids = activity_uuids[index: index + consts.CHUNK_SIZE]
+                activity_data = self.get_activity_data(chunk_of_activity_uuids)
+                self.azuresentinel.post_data(
+                    json.dumps(activity_data, indent=2),
+                    consts.ARMIS_ACTIVITIES_TABLE,
+                    "armis_activity_time",
+                )
+                self.total_activities_posted += len(activity_data)
+                logging.info(
+                    consts.LOG_FORMAT.format(
+                        __method_name, "Posted Activities count : {}.".format(len(activity_data))
+                    )
+                )
+        except ArmisException:
+            raise ArmisException()
+
+        except ArmisTimeOutException:
+            raise ArmisTimeOutException()
+
     def process_alerts_data(self, alerts, offset_to_post, checkpoint_table_object: ExportsTableStore):
         """Process alerts data to fetch related activity.
 
@@ -185,6 +217,8 @@ class ArmisAlertsActivities(Utils):
             activity_uuid_list = []
             alerts_data_to_post = []
             for alert in alerts:
+                if int(time.time()) >= self.start_time + consts.FUNCTION_APP_TIMEOUT_SECONDS:
+                    raise ArmisTimeOutException()
                 activity_uuids = alert.get("activityUUIDs", [])
                 if len(activity_uuid_list) + len(activity_uuids) <= consts.CHUNK_SIZE:
                     activity_uuid_list.extend(activity_uuids)
@@ -200,23 +234,13 @@ class ArmisAlertsActivities(Utils):
                         alerts_data_to_post.append(alert)
                     else:
                         logging.info(
-                        consts.LOG_FORMAT.format(
-                            __method_name, "Chunk size is greater than {}.".format(consts.CHUNK_SIZE))
+                            consts.LOG_FORMAT.format(
+                                __method_name, "Chunk size is greater than {}.".format(consts.CHUNK_SIZE)
+                            )
                         )
-                        for index in range(0, len(activity_uuids), consts.CHUNK_SIZE):
-                            chunk_of_activity_uuids = activity_uuids[index: index + consts.CHUNK_SIZE]
-                            activity_data = self.get_activity_data(chunk_of_activity_uuids)
-                            self.azuresentinel.post_data(
-                                json.dumps(activity_data, indent=2),
-                                consts.ARMIS_ACTIVITIES_TABLE,
-                                "armis_activity_time",
-                            )
-                            self.total_activities_posted += len(activity_data)
-                            logging.info(
-                                consts.LOG_FORMAT.format(
-                                    __method_name, "Posted Activities count : {}.".format(len(activity_data))
-                                )
-                            )
+                        self.process_large_chunks_of_activity_data(
+                            activity_uuids
+                        )
                         self.azuresentinel.post_data(
                             json.dumps([alert], indent=2), consts.ARMIS_ALERTS_TABLE, "armis_alert_time"
                         )
@@ -236,6 +260,9 @@ class ArmisAlertsActivities(Utils):
             )
         except ArmisException:
             raise ArmisException()
+
+        except ArmisTimeOutException:
+            raise ArmisTimeOutException()
 
         except Exception as err:
             logging.error(
@@ -257,13 +284,22 @@ class ArmisAlertsActivities(Utils):
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            if is_checkpoint_not_exist:
-                aql_data = "in:alerts"
+            aql_with_severity = "in:alerts"
+            if consts.SEVERITY in consts.SEVERITIES:
+                severity_index = consts.SEVERITIES.index(consts.SEVERITY)
+                included_severities = ",".join(consts.SEVERITIES[severity_index:])
+                aql_with_severity = f"in:alerts severity:{included_severities}"
             else:
-                aql_data = """{} after:{}""".format("in:alerts", last_time)
+                raise ValueError()
+            if is_checkpoint_not_exist:
+                aql_data = aql_with_severity
+            else:
+                aql_data = """{} after:{}""".format(aql_with_severity, last_time)
             alert_parameter["aql"] = aql_data
             alert_parameter["length"] = 1000
             while self.data_alert_from is not None:
+                if int(time.time()) >= self.start_time + consts.FUNCTION_APP_TIMEOUT_SECONDS:
+                    raise ArmisTimeOutException()
                 alert_parameter.update({"from": self.data_alert_from})
                 offset_to_post = self.data_alert_from
                 logging.info(consts.LOG_FORMAT.format(__method_name, "Fetching alerts data with parameters = {}.".format(alert_parameter)))
@@ -294,6 +330,17 @@ class ArmisAlertsActivities(Utils):
 
         except ArmisDataNotFoundException:
             raise ArmisDataNotFoundException()
+
+        except ArmisTimeOutException:
+            raise ArmisTimeOutException()
+
+        except ValueError:
+            logging.error(
+                consts.LOG_FORMAT.format(
+                    __method_name, "Value Error occurred, Severity value is not from the list 'Low', 'Medium', 'High', 'Critical'."
+                )
+            )
+            raise ArmisException()
 
         except Exception as err:
             logging.error(consts.LOG_FORMAT.format(__method_name, "Error occurred : {}.".format(err)))
@@ -374,6 +421,14 @@ class ArmisAlertsActivities(Utils):
         except ArmisException:
             raise ArmisException()
 
+        except ArmisTimeOutException:
+            logging.error(
+                consts.LOG_FORMAT.format(
+                    __method_name, "9:30 mins executed hence stopping the execution"
+                )
+            )
+            return
+
         except ArmisDataNotFoundException:
             raise ArmisDataNotFoundException()
 
@@ -399,8 +454,8 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info(
         consts.LOG_FORMAT.format(__method_name, "Python timer trigger function ran at {}".format(utc_timestamp))
     )
-
-    armis_obj = ArmisAlertsActivities()
+    start_time = time.time()
+    armis_obj = ArmisAlertsActivities(start_time)
     try:
         armis_obj.check_data_exists_or_not_alert()
     except ArmisDataNotFoundException:
