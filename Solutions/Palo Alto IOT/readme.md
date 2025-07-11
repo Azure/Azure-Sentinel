@@ -1,7 +1,7 @@
 This solution is for the customers who are using Palo Alto IOT solution and want to send alerts to Microsoft Sentinel.
 
-As a solution to this, I've created a logic app to connect one of the
-Palo Alto IOT with a customer ID and key, then get the Palo Alto IOT alerts to Microsoft Sentinel table named PaloAltoIOTAlerts
+As a solution to this, I've created a logic app to connect the
+Palo Alto IOT using API call with a customer ID and key, then get the Palo Alto IOT alerts to Microsoft Sentinel table named PaloAltoIOTAlerts
 
 **Deployment Steps**
 
