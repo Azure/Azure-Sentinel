@@ -29,6 +29,9 @@ $standardStreamMapping += @{ Key = 'SENTINEL_AWSCLOUDWATCH'; Value = 'Microsoft-
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSGUARDDUTY'; Value = 'Microsoft-AWSGuardDuty'}
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSVPCFLOW'; Value = 'Microsoft-AWSVPCFlow'}
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSWAF'; Value = 'Microsoft-AWSWAF'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWS_NETWORK_FIREWALL_ALERT_LOGS'; Value = 'Microsoft-AWSNetworkFirewallAlert'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWS_NETWORK_FIREWALL_FLOW_LOGS'; Value = 'Microsoft-AWSNetworkFirewallFlow'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWS_NETWORK_FIREWALL_TLS_LOGS'; Value = 'Microsoft-AWSNetworkFirewallTls'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGCLOUDAPPEVENTS'; Value = 'Microsoft-CloudAppEvents'}
 $standardStreamMapping += @{ Key = 'SECURITY_CISCO_ASA_BLOB'; Value = 'Microsoft-CommonSecurityLog'}
 $standardStreamMapping += @{ Key = 'SECURITY_CEF_BLOB'; Value = 'Microsoft-CommonSecurityLog'}
@@ -62,6 +65,8 @@ $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHU
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGEMAILURLINFO'; Value = 'Microsoft-EmailUrlInfo'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_AUDIT_LOGS'; Value = 'Microsoft-GCPAuditLogs'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_FIREWALL_LOGS'; Value = 'Microsoft-GCPFirewallLogs'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCP_MONITORING_LOGS'; Value = 'Microsoft-GCPMonitoring'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCPAPIGEE'; Value = 'Microsoft-GCPApigee'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GOOGLE_CLOUD_SCC'; Value = 'Microsoft-GoogleCloudSCC'}
 $standardStreamMapping += @{ Key = 'HUNTING_BOOKMARKS_LOGANALYTICS'; Value = 'Microsoft-HuntingBookmark'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGIDENTITYDIRECTORYEVENTS'; Value = 'Microsoft-IdentityDirectoryEvents'}
@@ -92,7 +97,14 @@ $standardStreamMapping += @{ Key = 'USAGE_METERING'; Value = 'Microsoft-Usage'}
 $standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watchlist'}
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB'; Value = 'Microsoft-WindowsEvent'}
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Microsoft-WindowsEvent'}
-
+$standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSSecurityHubFindings'}
+$standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver'}
+$standardStreamMapping += @{ Key = 'CROWDSTRIKE_VULNERABILITIES'; Value = 'Microsoft-CrowdStrikeVulnerabilities'}
+$standardStreamMapping += @{ Key = 'CROWDSTRIKE_ALERTS'; Value = 'Microsoft-CrowdStrikeAlerts'}
+$standardStreamMapping += @{ Key = 'CROWDSTRIKE_INCIDENTS'; Value = 'Microsoft-CrowdStrikeIncidents'}
+$standardStreamMapping += @{ Key = 'CROWDSTRIKE_DETECTIONS'; Value = 'Microsoft-CrowdStrikeDetections'}
+$standardStreamMapping += @{ Key = 'CROWDSTRIKE_HOSTS'; Value = 'Microsoft-CrowdStrikeHosts'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCP_VPC_FLOW_LOGS'; Value = 'Microsoft-GCPVPCFlow'}
 
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {

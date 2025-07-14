@@ -38,15 +38,15 @@ query: |
   let IP_Indicators = materialize(ThreatIntelIndicators
   //extract key part of kv pair
        | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
        | extend NetworkSourceIP = toupper(ObservableValue)
        | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-    | where isnotempty(NetworkSourceIP)
     | where TimeGenerated >= ago(ioc_lookBack)
     | extend TI_ipEntity = NetworkSourceIP
     | where TI_ipEntity in (ActivityIPs)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-    | where  IsActive == true and ValidUntil > now()
+    | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
     | extend Description = tostring(parse_json(Data).description)
     | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;");
   IP_Indicators
@@ -61,7 +61,7 @@ query: |
   // Select the desired output fields
   | extend Description = tostring(parse_json(Data).description)
   | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkSourceIP, Type//, ThreatType, Url, NetworkIP, NetworkDestinationIP, EmailSourceIpAddress
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkSourceIP, Type, Url
   | extend timestamp = OfficeActivity_TimeGenerated, Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])
 entityMappings:
   - entityType: Account
@@ -80,5 +80,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.4.3
+version: 1.4.6
 kind: Scheduled

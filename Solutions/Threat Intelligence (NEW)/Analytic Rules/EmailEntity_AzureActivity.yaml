@@ -31,14 +31,14 @@ query: |
   ThreatIntelIndicators
   //Filtering the table for Email related IOCs
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-  | where isnotempty(IndicatorType) and IndicatorType == "email-addr"
+  | where IndicatorType == "email-addr"
   | extend EmailSenderAddress = ObservableValue
   | extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, "@") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, "@") - 1)
+  | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-  | where isnotempty(EmailSenderAddress)
   | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   | project-reorder *, IsActive, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
@@ -52,10 +52,8 @@ query: |
   | summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by Id, Caller
   | extend Description = tostring(parse_json(Data).description)
   | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-  | project AzureActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress,
-  EmailSourceDomain,// FileHashValue, FileHashType, Caller, Level, CallerIpAddress, CategoryValue, OperationNameValue, ActivityStatusValue,
-  ResourceGroup, SubscriptionId
-  //| extend Name = tostring(split(Caller, '@', 0)[0]), UPNSuffix = tostring(split(Caller, '@', 1)[0])
+  | project AzureActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, EmailSourceDomain, Caller, CallerIpAddress, Url
+  | extend Name = tostring(split(Caller, '@', 0)[0]), UPNSuffix = tostring(split(Caller, '@', 1)[0])
   | extend timestamp = AzureActivity_TimeGenerated
 entityMappings:
   - entityType: Account
@@ -74,5 +72,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.2.7
+version: 1.2.10
 kind: Scheduled

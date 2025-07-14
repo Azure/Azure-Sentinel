@@ -31,15 +31,15 @@ query: |
   ThreatIntelIndicators
   //Filtering the table for Email related IOCs
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-  | where isnotempty(IndicatorType) and IndicatorType == "email-addr"
+  | where IndicatorType == "email-addr"
   | extend EmailSenderAddress = ObservableValue
   | extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, "@") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, "@") - 1)
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   | extend IndicatorId = tostring(split(Id, "--")[2])
-  | where isnotempty(EmailSenderAddress)
+  | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
   | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
     | project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
@@ -64,7 +64,7 @@ query: |
   | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
   | project Alert_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
   EmailSenderAddress, EntityEmail, AlertName, AlertType,
-  AlertSeverity, Entities, ProviderName, VendorName//,Url, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, 
+  AlertSeverity, Entities, ProviderName, VendorName,Url//, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, 
   | extend Name = tostring(split(EntityEmail, '@', 0)[0]), UPNSuffix = tostring(split(EntityEmail, '@', 1)[0])
   | extend timestamp = Alert_TimeGenerated
 entityMappings:
@@ -80,5 +80,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.2.8
+version: 1.2.10
 kind: Scheduled

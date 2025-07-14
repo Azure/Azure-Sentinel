@@ -1,5 +1,5 @@
 id: 0385e99c-ae45-45f4-aecf-00104485cd6b
-name: Preview - TI map Email entity to Cloud App Events
+name: TI map Email entity to Cloud App Events
 description: |
   'Identifies compromises and attacks and detect malicious activities in one's email entity from TI'
 severity: Medium
@@ -24,13 +24,12 @@ query: |
   let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
   ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   //extract key part of kv pair
     | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-    | where isnotempty(IndicatorType) and IndicatorType == "email-addr"
+    | where IndicatorType == "email-addr"
     | extend EmailSenderAddress = ObservableValue
-    | where isnotempty(EmailSenderAddress)
     | extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, "@") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, "@") - 1)
     | project-reorder *, EmailSenderAddress, EmailSourceDomain, Type
     | extend IndicatorId = tostring(split(Id, "--")[2])
@@ -53,5 +52,5 @@ entityMappings:
         columnName: User_Id
       - identifier: UPNSuffix
         columnName: UPNSuffix
-version: 1.0.3
+version: 1.0.5
 kind: Scheduled
