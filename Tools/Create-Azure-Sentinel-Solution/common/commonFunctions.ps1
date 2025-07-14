@@ -1827,15 +1827,33 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $ccpConnector = $false
 
                             if ($null -eq $connectorData.graphQueries -or $connectorData.graphQueries.Count -eq 0) {
-                                $connectorData.graphQueries = Get-ValidArray $connectorData.graphQueries
+                                $graphQueriesValue = Get-ValidArray -inputArray $connectorData.graphQueries
+                                if ($graphQueriesValue -is [string]) {
+                                    $connectorData.graphQueries = $graphQueriesValue
+                                }
+                                else {
+                                    $connectorData.graphQueries = @($graphQueriesValue)
+                                }
                             }
 
                             if ($null -eq $connectorData.dataTypes -or $connectorData.dataTypes.Count -eq 0) {
-                                $connectorData.dataTypes = Get-ValidArray $connectorData.dataTypes
+                                $dataTypesValue = Get-ValidArray -inputArray $connectorData.dataTypes
+                                if ($dataTypesValue -is [string]) {
+                                    $connectorData.dataTypes = $dataTypesValue
+                                }
+                                else {
+                                    $connectorData.dataTypes = @($dataTypesValue)
+                                }
                             }
 
                             if ($null -eq $connectorData.sampleQueries -or $connectorData.sampleQueries.Count -eq 0) {
-                                $connectorData.sampleQueries = Get-ValidArray $connectorData.sampleQueries
+                                $sampleQueriesValue = Get-ValidArray -inputArray $connectorData.sampleQueries
+                                if ($sampleQueriesValue -is [string]) {
+                                    $connectorData.sampleQueries = $sampleQueriesValue
+                                }
+                                else {
+                                    $connectorData.sampleQueries = @($sampleQueriesValue)
+                                }
                             }
 
                             $templateSpecConnectorData = $connectorData
@@ -2108,8 +2126,22 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     $connectorObj = [PSCustomObject]@{}
                     # If direct title is available, assume standard connector format
                     if ($connectorData.title) {
-                        $graphQueriesValue = Get-ValidArray $connectorData.graphQueries;
-                        $dataTypesValue = Get-ValidArray $connectorData.dataTypes;
+                        $graphQueriesResult = Get-ValidArray -inputArray $connectorData.graphQueries
+                        if ($graphQueriesResult -is [string]) {
+                            $graphQueriesValue = $graphQueriesResult
+                        }
+                        else {
+                            $graphQueriesValue = @($graphQueriesResult)
+                        }
+
+                        $dataTypesResult = Get-ValidArray -inputArray $connectorData.dataTypes
+                        if ($dataTypesResult -is [string]) {
+                            $dataTypesValue = $dataTypesResult
+                        }
+                        else {
+                            $dataTypesValue = @($dataTypesResult)
+                        }
+
                         $standardConnectorUiConfig = [PSCustomObject]@{
                             title                 = $connectorData.title;
                             publisher             = $connectorData.publisher;
@@ -2130,7 +2162,14 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         if(!$is1PConnector)
                         {
-                            $sampleQueriesValue = Get-ValidArray $connectorData.sampleQueries
+                            $sampleQueriesResult = Get-ValidArray -inputArray $connectorData.sampleQueries
+                            if ($sampleQueriesResult -is [string]) {
+                                $sampleQueriesValue = $sampleQueriesResult
+                            }
+                            else {
+                                $sampleQueriesValue = @($sampleQueriesResult)
+                            }
+
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $sampleQueriesValue;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "availability" -NotePropertyValue $connectorData.availability;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "permissions" -NotePropertyValue $connectorData.permissions;
