@@ -315,7 +315,17 @@ function getQueryResourceLocation () {
 function getParserDetails($solutionName,$yaml,$isyaml)
 {
     $API = 'https://catalogapi.azure.com/offers?api-version=2018-08-01-beta&$filter=categoryIds%2Fany(cat%3A%20cat%20eq%20%27AzureSentinelSolution%27)%20or%20keywords%2Fany(key%3A%20contains(key%2C%27f1de974b-f438-4719-b423-8bf704ba2aef%27))'
-    $SolutionDataItems = $(Invoke-WebRequest -URI $API | ConvertFrom-Json).items
+    #$SolutionDataItems = $(Invoke-WebRequest -URI $API | ConvertFrom-Json).items
+
+    $SolutionDataItems = @()
+    $response = Invoke-WebRequest -Uri $API | ConvertFrom-Json
+    $SolutionDataItems += $response.items
+
+    while ($response.nextPageLink) {
+        $response = Invoke-WebRequest -Uri $response.nextPageLink | ConvertFrom-Json
+        $SolutionDataItems += $response.items
+    }
+
     $parserResourceType = [PSObject]@{
         templateSpecParserType = "Microsoft.OperationalInsights/workspaces/savedSearches"
         workspaceType = "Microsoft.OperationalInsights/workspaces"
