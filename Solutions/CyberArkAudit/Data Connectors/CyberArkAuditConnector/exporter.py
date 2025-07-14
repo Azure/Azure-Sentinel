@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from azure.identity import DefaultAzureCredential
@@ -19,10 +20,10 @@ def _transform_schema(audit_events: list) -> list:
             'cloudAssets': audit.get('cloudAssets') or '',
             'cloudIdentities': audit.get('cloudIdentities') or '',
             'cloudProvider': audit.get('cloudProvider') or '',
-            'cloudWorkspacesAndRoles': audit.get('cloudWorkspacesAndRoles') or '',
+            'cloudWorkspacesAndRoles': json.dumps(audit.get('cloudWorkspacesAndRoles', {})),
             'command': audit.get('command') or '',
             'component': audit.get('component') or '',
-            'customData': audit.get('customData') or '',
+            'customData': json.dumps(audit.get('customData', {})),
             'identityType': audit.get('identityType') or '',
             'message': audit.get('message') or '',
             'target': audit.get('target') or '',
