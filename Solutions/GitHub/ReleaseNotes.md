@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.0.7       | 14-07-2025                     | Enhanced GitHub Enterprise Audit Log connector to support both Organization-level and Enterprise-level audit logs with backward compatibility |
 | 3.0.6       | 26-04-2024                     | Repackaged for fix on parser in maintemplate to have old parsername and parentid                    |
 | 3.0.5       | 18-04-2024                     | Repackaged to fix parser issue                                                  |
 | 3.0.4       | 04-04-2024                     | Updated Entity Mappings                                                  |
