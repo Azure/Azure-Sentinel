@@ -9,6 +9,7 @@ def _transform_schema(audit_events: list) -> list:
         {
             'CyberArkTenantId': audit['tenantId'],
             'accountName': audit.get('accountName') or '',
+            'accessMethod': audit.get('accessMethod') or '',
             'action': audit.get('action') or '',
             'actionType': audit.get('actionType') or '',
             'applicationCode': audit.get('applicationCode') or '',
@@ -18,8 +19,10 @@ def _transform_schema(audit_events: list) -> list:
             'cloudAssets': audit.get('cloudAssets') or '',
             'cloudIdentities': audit.get('cloudIdentities') or '',
             'cloudProvider': audit.get('cloudProvider') or '',
+            'cloudWorkspacesAndRoles': audit.get('cloudWorkspacesAndRoles') or '',
             'command': audit.get('command') or '',
             'component': audit.get('component') or '',
+            'customData': audit.get('customData') or '',
             'identityType': audit.get('identityType') or '',
             'message': audit.get('message') or '',
             'target': audit.get('target') or '',
@@ -31,7 +34,8 @@ def _transform_schema(audit_events: list) -> list:
             'serviceName': audit.get('serviceName') or '',
             'source': audit.get('source') or '',
             'userId': audit.get('userId') or '',
-            'username': audit.get('username') or ''
+            'username': audit.get('username') or '',
+            'uuid': audit.get('uuid') or ''
         }
         for audit in audit_events]
     return dcr_events
