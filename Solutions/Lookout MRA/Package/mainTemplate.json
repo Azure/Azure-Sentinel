@@ -1,0 +1,857 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Lookout MRA"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Lookout MRA",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-lookoutevents",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "LookoutEventsLogs_ConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "LookoutEventsLogs_ConnectorDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Lookout MRA Connector",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "LookoutEventsLogs_ConnectorDefinition",
+                  "title": "Lookout MRA Connector",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The [Lookout Mobile Threat Detection](https://lookout.com) data connector provides the capability to ingest events related to mobile security risks into Microsoft Sentinel through the Mobile Risk API. Refer to [API documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) for more information. This connector helps you examine potential security risks detected in mobile devices.",
+                  "graphQueriesTableName": "LookoutPollingLogsV2_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Events",
+                      "baseQuery": "LookoutPollingLogsV2_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Lookout Mobile Threat Detection Events - All Activities.",
+                      "query": "LookoutPollingLogsV2_CL\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "LookoutPollingLogsV2_CL",
+                      "lastDataReceivedQuery": "LookoutPollingLogsV2_CL\n | summarize Time = max(TimeGenerated)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": false,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect Lookout Mobile Threat Defence connector to Microsoft Sentinel",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "Before connecting to Lookout, ensure the following prerequisites are completed."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 1.  **ApiKey** is required for Mobile Threat Detection API. See the [documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) to learn more about API. Check all requirements and follow  the [instructions](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide#authenticatingwiththemobileriskapi) for obtaining credentials."
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API key",
+                            "placeholder": "Enter your API key ",
+                            "type": "password",
+                            "name": "applicationKey",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Start Time",
+                            "type": "text",
+                            "name": "startTime",
+                            "description": "Enter start time in ISO8601 UrlEncoded format. Eg: 2025-6-8T00%3A00%3A00%2B00%3A00",
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "LookoutEventsLogsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-LookoutPollingLogsV2_CL": {
+                    "columns": [
+                      {
+                        "name": "oid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "enterprise_guid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created_time",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "change_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "device",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "threat",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "smishing_alert",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "audit",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "target",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "actor",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-LookoutPollingLogsV2_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend Oid=tostring(oid), Enterprise_guid=tostring(enterprise_guid), Actor_Device_guid=tostring(actor.guid), Created_time=todatetime(created_time), Event_type=tostring(type), Change_type=tostring(change_type), Device_guid=tostring(device.guid), Device_profile_type=tostring(device.profile_type), Device_platform=tostring(device.platform), Device_info=device.info, Device_status_security_status=tostring(device.status.security_status), Device_status_activation_status=tostring(device.status.activation_status), Device_status_protection_status=tostring(device.status.protection_status), Device_hardware_manufacturer=tostring(device.hardware.manufacturer), Device_hardware_model=tostring(device.hardware.model), Device_software_latest_os_version=tostring(device.software.latest_os_version), Device_software_latest_security_patch_level=tostring(device.software.latest_security_patch_level), Device_software_os_version_date=tostring(device.software.os_version_date), Device_software_os_version_rsr=tostring(device.software.os_version_rsr), Device_software_rsr=tostring(device.software.rsr), Device_software_os_version=tostring(device.software.os_version), Device_software_sdk_version=tostring(device.software.sdk_version), Device_software_security_patch_level=tostring(device.software.security_patch_level), Device_client_ota_version=tostring(device.client.ota_version), Device_client_package_name=tostring(device.client.package_name), Device_client_package_version=tostring(device.client.package_version), Device_client_lookout_sdk_version=tostring(device.client.lookout_sdk_version), Device_parent_status_parent_device_guid=tostring(device.parent_status.parent_device_guid), Device_parent_status_activation_status=tostring(device.parent_status.activation_status), Device_parent_status_security_status=tostring(device.parent_status.security_status), Device_parent_status_protection_status=tostring(device.parent_status.protection_status), Threat_guid=tostring(threat.guid), Threat_status=tostring(threat.status), Threat_resolved_at=tostring(threat.resolved_at), Threat_detected_at=tostring(threat.detected_at), Threat_severity=tostring(threat.severity), Threat_type=tostring(threat.type), Threat_classifications=threat.classifications, Threat_assessments=threat.assessments, Threat_details=threat.details, Target_guid=tostring(target.guid), Target_type=tostring(target.type), Audit_type=tostring(audit.type), Audit_attribute_changes=audit.attribute_changes, Smishing_alert_guid=tostring(smishing_alert.guid), Smishing_alert_detections=smishing_alert.detections, Actor_guid=tostring(actor.guid), Actor_type=tostring(actor.type), TimeGenerated=todatetime(created_time) | project Oid, Enterprise_guid, Actor_Device_guid, Created_time, Event_type, Change_type, Device_guid, Device_profile_type, Device_platform, Device_info, Device_status_security_status, Device_status_activation_status, Device_status_protection_status, Device_hardware_manufacturer, Device_hardware_model, Device_software_latest_os_version, Device_software_latest_security_patch_level, Device_software_os_version_date, Device_software_os_version_rsr, Device_software_rsr, Device_software_os_version, Device_software_sdk_version, Device_software_security_patch_level, Device_client_ota_version, Device_client_package_name, Device_client_package_version, Device_client_lookout_sdk_version, Device_parent_status_parent_device_guid, Device_parent_status_activation_status, Device_parent_status_security_status, Device_parent_status_protection_status, Threat_guid, Threat_status, Threat_resolved_at, Threat_detected_at, Threat_severity, Threat_type, Threat_classifications, Threat_assessments, Threat_details, Target_guid, Target_type, Audit_type, Audit_attribute_changes, Smishing_alert_guid, Smishing_alert_detections, Actor_guid, Actor_type, TimeGenerated",
+                    "outputStream": "Custom-LookoutPollingLogsV2_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "LookoutPollingLogsV2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "LookoutPollingLogsV2_CL",
+                  "columns": [
+                    {
+                      "name": "Oid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Enterprise_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Actor_Device_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Created_time",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Event_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Change_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_profile_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_platform",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_info",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Device_status_security_status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_status_activation_status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_status_protection_status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_hardware_manufacturer",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_hardware_model",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_software_latest_os_version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_software_latest_security_patch_level",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_software_os_version_date",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_software_os_version_rsr",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_software_rsr",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_software_os_version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_software_sdk_version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_software_security_patch_level",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_client_ota_version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_client_package_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_client_package_version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_client_lookout_sdk_version",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_parent_status_parent_device_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_parent_status_activation_status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_parent_status_security_status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Device_parent_status_protection_status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Threat_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Threat_status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Threat_resolved_at",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Threat_detected_at",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Threat_severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Threat_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Threat_classifications",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Threat_assessments",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Threat_details",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Target_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Target_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Audit_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Audit_attribute_changes",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Smishing_alert_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Smishing_alert_detections",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Actor_guid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Actor_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "LookoutEventsLogs_ConnectorDefinition",
+          "title": "Lookout MRA Connector",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The [Lookout Mobile Threat Detection](https://lookout.com) data connector provides the capability to ingest events related to mobile security risks into Microsoft Sentinel through the Mobile Risk API. Refer to [API documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) for more information. This connector helps you examine potential security risks detected in mobile devices.",
+          "graphQueriesTableName": "LookoutPollingLogsV2_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Events",
+              "baseQuery": "LookoutPollingLogsV2_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Lookout Mobile Threat Detection Events - All Activities.",
+              "query": "LookoutPollingLogsV2_CL\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "LookoutPollingLogsV2_CL",
+              "lastDataReceivedQuery": "LookoutPollingLogsV2_CL\n | summarize Time = max(TimeGenerated)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": false,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect Lookout Mobile Threat Defence connector to Microsoft Sentinel",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "Before connecting to Lookout, ensure the following prerequisites are completed."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 1.  **ApiKey** is required for Mobile Threat Detection API. See the [documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) to learn more about API. Check all requirements and follow  the [instructions](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide#authenticatingwiththemobileriskapi) for obtaining credentials."
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API key",
+                    "placeholder": "Enter your API key ",
+                    "type": "password",
+                    "name": "applicationKey",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Start Time",
+                    "type": "text",
+                    "name": "startTime",
+                    "description": "Enter start time in ISO8601 UrlEncoded format. Eg: 2025-6-8T00%3A00%3A00%2B00%3A00",
+                    "required": true
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "name": "toggle"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Lookout MRA Connector",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Lookout MRA Connector",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "applicationKey": {
+              "defaultValue": "applicationKey",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "startTime": {
+              "defaultValue": "startTime",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'LookoutEventsLogs_PollingConfig', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "LookoutEventsLogs_ConnectorDefinition",
+                "dataType": "LookoutPollingLogsV2_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-LookoutPollingLogsV2_CL"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "NA",
+                  "ClientSecret": "NA",
+                  "grantType": "client_credentials",
+                  "tokenEndpoint": "https://api.lookout.com/oauth2/token",
+                  "tokenEndpointHeaders": {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json",
+                    "Authorization": "[[concat('Bearer ',parameters('applicationKey'))]"
+                  },
+                  "TokenEndpointQueryParameters": {}
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://api.lookout.com/mra/api/v2/events?limit=100&start_time=', parameters('startTime'))]",
+                  "httpMethod": "GET",
+                  "rateLimitQps": 5,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.events"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "PersistentToken",
+                  "nextPageTokenJsonPath": "$.last_oid",
+                  "nextPageParaName": "oid"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Lookout MRA",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Lookout%20MRA/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://lookout.com\">Lookout</a> solution provides the capability to ingest <a href=\"https://enterprise.support.lookout.com/hc/articles/115002741773-Mobile-Risk-API-Guide#commoneventfields\">Lookout events</a> into Microsoft Sentinel through the Mobile Risk API. It can get events which helps to examine potential security risks and more. Refer to <a href=\"https://enterprise.support.lookout.com/hc/articles/115002741773-Mobile-Risk-API-Guide\">API documentation</a> for more information .</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs</p>\n<ol type=\"a\">\n<li><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Platform (CCP)</a></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Lookout MRA",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-06-18",
+        "lastPublishDate": "2025-06-18",
+        "providers": [
+          "Lookout"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
