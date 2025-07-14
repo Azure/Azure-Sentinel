@@ -633,7 +633,7 @@ class FilteringTest(unittest.TestCase):
             post = get_postfix(value, rows, substrings_list, delimiter)
 
             # Add post to the list if it's not already present
-            if post not in substrings_list:
+            if post and post not in substrings_list:
                 substrings_list.append(post)
 
             # If the list has reached the required number of substrings, break the loop
@@ -643,7 +643,7 @@ class FilteringTest(unittest.TestCase):
             # If post is equal to value, also add pre to the list
             if post == value:
                 pre = get_prefix(value, rows, substrings_list, delimiter)
-                if pre not in substrings_list:
+                if pre and pre not in substrings_list:
                     substrings_list.append(pre)
             
         return substrings_list

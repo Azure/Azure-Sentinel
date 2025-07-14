@@ -32,16 +32,13 @@ query: |
   let Domain_Indicators = ThreatIntelIndicators
     // Filter out indicators without domain names
     | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-    | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+    | where IndicatorType == "domain-name"
     | extend DomainName = tolower(ObservableValue)
-    | extend TI_DomainEntity = DomainName
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
-    | where isnotempty(DomainName)
     | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-    | where IsActive == true and ValidUntil > now()
-    | extend TI_DomainEntity = DomainName;
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
   // Create a list of TLDs in our threat feed for later validation
   let maxListSize = 100000; // Define the maximum allowed size for each list
   let list_tlds = Domain_Indicators
@@ -53,7 +50,7 @@ query: |
     | summarize make_list(tld, maxListSize);
   // Perform a join between domain indicators and DNS events to identify potential malicious activity
   Domain_Indicators
-   | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type, TI_DomainEntity
+   | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
     // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
     | join kind=innerunique (
       DnsEvents
@@ -65,14 +62,14 @@ query: |
       // Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
       | where tld in~ (list_tlds)
       | extend DNS_TimeGenerated = TimeGenerated
-    ) on $left.TI_DomainEntity==$right.Name
+    ) on $left.DomainName==$right.Name
     // Filter out DNS events that occurred after the expiration of the corresponding indicator
     | where DNS_TimeGenerated < ValidUntil
     // Group the results by IndicatorId and Name, and keep the DNS event with the latest timestamp
     | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by Id, Name
     // Select the desired output fields
     | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-    | project DNS_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, Computer, ClientIP//, Name, QueryType, Type, TI_DomainEntity
+    | project DNS_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, Computer, ClientIP//, Name, QueryType, Type, DomainName
     // Extract hostname and DNS domain from the Computer field
     | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
     // Rename the timestamp field
@@ -94,5 +91,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.4.4
+version: 1.4.5
 kind: Scheduled

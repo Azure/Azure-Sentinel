@@ -31,14 +31,13 @@ query: |
   | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
   //extract key part of kv pair
        | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
        | extend NetworkSourceIP = toupper(ObservableValue)
        | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-  | where isnotempty(NetworkSourceIP)
-        or isnotempty(NetworkSourceIP) // Filter for indicators with relevant IP fields
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id // Get the latest indicator time for each IndicatorId
+       | where isnotempty(NetworkSourceIP)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue // Get the latest indicator time for each IndicatorId
     | extend TI_ipEntity = coalesce(NetworkSourceIP, NetworkSourceIP, NetworkSourceIP, NetworkSourceIP) // Combine IP fields into a single entity
-    | where IsActive == true and ValidUntil > now() // Filter for active indicators that have not expired
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil)) // Filter for active indicators that have not expired
     | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
     | join kind=inner (
         ASimAuditEventLogs
@@ -66,7 +65,7 @@ query: |
     | extend
         timestamp = WD_TimeGenerated,
         Name = tostring(split(ActorUsername, '@', 0)),
-        UPNSuffix = tostring(split(ActorUsername, '@', 1)) // Add additional fields for timestamp, name, and UPN suffix     
+        UPNSuffix = tostring(split(ActorUsername, '@', 1)) // Add additional fields for timestamp, name, and UPN suffix   
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -80,5 +79,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: DvcIpAddr
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
