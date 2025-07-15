@@ -916,30 +916,44 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             {
                                 $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
                             }
+
+                            $workbookOrderedSourceProps = [ordered]@{
+                                kind     = "Solution";
+                                name     = $contentToImport.Name;
+                                sourceId = "[variables('_solutionId')]"
+                            }
+
+                            $workbookOrderedProps = [ordered]@{
+                                description = "$dependencies.description";
+                                parentId  = "[variables('workbookId$global:workbookCounter')]"
+                                contentId = "[variables('_workbookContentId$global:workbookCounter')]";
+                                kind      = "Workbook";
+                                version   = "[variables('workbookVersion$global:workbookCounter')]";
+                                source    = [PSCustomObject]$workbookOrderedSourceProps
+                                author    = $authorDetails;
+                                support   = $baseMetadata.support;
+                            }
+
+                            if ($dependencies.PSObject.Properties['previewImages']) {
+                                $workbookOrderedProps.previewImages = $dependencies.previewImages
+                            }
+
+                            if ($dependencies.PSObject.Properties['previewImagesDark']) {
+                                $workbookOrderedProps.previewImagesDark = $dependencies.previewImagesDark
+                            }
+
+                            if($null -ne $workbookDependencies)
+                            {
+                                $workbookOrderedProps.dependencies = $workbookDependencies
+                            }
+
                             $workbookMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId$global:workbookCounter'),'/'))))]";
-                                properties = [PSCustomObject]@{
-                                    description = "$dependencies.description";
-                                    parentId  = "[variables('workbookId$global:workbookCounter')]"
-                                    contentId = "[variables('_workbookContentId$global:workbookCounter')]";
-                                    kind      = "Workbook";
-                                    version   = "[variables('workbookVersion$global:workbookCounter')]";
-                                    source    = [PSCustomObject]@{
-                                        kind     = "Solution";
-                                        name     = $contentToImport.Name;
-                                        sourceId = "[variables('_solutionId')]"
-                                    };
-                                    author    = $authorDetails;
-                                    support   = $baseMetadata.support;
-                                    #dependencies = $workbookDependencies;
-                                }
+                                properties = [PSCustomObject]$workbookOrderedProps
                             }
-                            if($null -ne $workbookDependencies)
-                            {
-                                $workbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $workbookDependencies
-                            }
+
                             if($workbookDescriptionText -ne "")
                             {
                                 $workbookMetadata | Add-Member -NotePropertyName "description" -NotePropertyValue $workbookDescriptionText
