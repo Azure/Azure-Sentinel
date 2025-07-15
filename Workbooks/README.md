@@ -41,7 +41,11 @@ This pull request will contain:
     
     "dataConnectorsDependencies": [],//Relevant connectors
     
-    "previewImagesFileNames": [ ],//The relative path of the preview images you saved under workbooks/images/previews
+    "previewImagesFileNames": [ ],//The relative path of the preview images for standalone workbook you saved under workbooks/images/previews
+
+    "previewImages": [],//The relative path of the preview images for solution workbook you saved under workbooks/images/previews 
+
+    "previewImagesDark": [],//The relative path of the preview images for solution workbook you saved under workbooks/images/previews  
     
     "version": "1.0", // if this is a new workbook - this should be "1.0"
     
@@ -64,6 +68,8 @@ This pull request will contain:
       "dataTypesDependencies": [ "CommonSecurityLog" ],
       "dataConnectorsDependencies": [ "PaloAlto" ],
       "previewImagesFileNames": [ "PaloAltoOverviewWhite1.png", "PaloAltoOverviewBlack1.png", "PaloAltoOverviewWhite2.png", "PaloAltoOverviewBlack2.png", "PaloAltoOverviewWhite3.png", "PaloAltoOverviewBlack3.png" ],
+      "previewImages": ["PaloAltoOverviewWhite1.png", "PaloAltoOverviewWhite2.png", "PaloAltoOverviewWhite3.png",],
+      "previewImagesDark": ["PaloAltoOverviewBlack1.png", "PaloAltoOverviewBlack2.png","PaloAltoOverviewBlack3.png"],
       "version": "1.1",
       "title": "Palo Alto overview",
       "templateRelativePath": "PaloAltoOverview.json",
