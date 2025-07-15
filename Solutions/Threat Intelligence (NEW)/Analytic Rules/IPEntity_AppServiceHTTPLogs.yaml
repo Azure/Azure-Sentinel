@@ -28,11 +28,10 @@ query: |
   let IP_Indicators = ThreatIntelIndicators
     //extract key part of kv pair
     | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-    | where IndicatorType == "ipv4-addr"
+    | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
     | extend NetworkSourceIP = ObservableValue
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     // Filter out indicators without relevant IP address fields
-    | where isnotempty(NetworkSourceIP) //or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
     | where TimeGenerated >= ago(ioc_lookBack)
     | where TimeGenerated >= ago(ioc_lookBack)
     // Filtering out rows where the Confidence Score is less than 50 as they would not have an Alert Priority label. 
@@ -47,8 +46,8 @@ query: |
                                   "Low")
     // Exclude local addresses using the ipv4_is_private operator and filtering out specific address prefixes
     | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-    | where IsActive == true and ValidUntil > now();
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
     // Perform a join between IP indicators and AppServiceHTTPLogs to identify potential malicious activity
   IP_Indicators
   | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity, AlertPriority
@@ -97,6 +96,6 @@ entityMappings:
         columnName: _ResourceId
 alertDetailsOverride:
   alertSeverityColumnName: AlertPriority
-version: 1.5.4
+version: 1.5.5
 kind: Scheduled
  

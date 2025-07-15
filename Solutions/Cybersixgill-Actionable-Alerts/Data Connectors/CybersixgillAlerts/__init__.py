@@ -115,8 +115,10 @@ def main(mytimer: func.TimerRequest) -> None:
                 attributes = '\n\n-----------\n\n'.join(attributes)
                 actionable_alert['alert_attributes'] = attributes
             elif es_id == "Not Applicable":
-                alert_content = actionable_alerts_client.get_actionable_alert_content(actionable_alert_id=alert_info.get('id'),
-                                                                            fetch_only_current_item=True)
+                alert_content = actionable_alerts_client.get_actionable_alert_content(
+                    actionable_alert_id=alert_info.get('id'),
+                    organization_id=organization_id,
+                    fetch_only_current_item=True)
                 content_item = {}
                 content_items = alert_content.get('items')
                 if content_items:
@@ -151,9 +153,12 @@ def main(mytimer: func.TimerRequest) -> None:
                 aggregate_alert_id = alert_info.get('aggregate_alert_id')
                 if not isinstance(aggregate_alert_id, int):
                     aggregate_alert_id = None
-                content = actionable_alerts_client.get_actionable_alert_content(actionable_alert_id=alert_id,
-                                                                            aggregate_alert_id=aggregate_alert_id,
-                                                                            fetch_only_current_item=True)
+                content = actionable_alerts_client.get_actionable_alert_content(
+                    actionable_alert_id=alert_id,
+                    aggregate_alert_id=aggregate_alert_id,
+                    fetch_only_current_item=True,
+                    organization_id=organization_id
+                )
                 # get item full content
                 content = content.get('items')
                 if content:
@@ -171,7 +176,7 @@ def main(mytimer: func.TimerRequest) -> None:
             sub_alerts = actionable_alert.pop("sub_alerts", [])
             for sub_alert in filter(None, sub_alerts):
                 unique_id = f'{alert_id}__{int(sub_alert.get("aggregate_alert_id"))}'
-                # Merging assets to a single list 
+                # Merging assets to a single list
                 sub_alert_assets = []
                 if "matched_assets" in sub_alert and isinstance(sub_alert["matched_assets"], dict):
                     for _, v in sub_alert["matched_assets"].items():
