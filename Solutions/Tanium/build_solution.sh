@@ -89,7 +89,7 @@ build_solution() {
   # TODO Now push up the templates to the demo/qa environment for review
   if ( ! az deployment group create \
     --resource-group "$target_resource_group" \
-    --name "${built_version}-Preview"  \
+    --name "${built_version}-Preview${RANDOM}"  \
     --template-file "${_package_folder_path}/mainTemplate.json" \
     --parameters workspace-location="${target_location}" \
     --parameters workspace="${target_workspace}" \
