@@ -4,20 +4,28 @@ param($runId, $pullRequestNumber, $instrumentationKey, $isPRMerged = $false)
 $solutionName = ''
 try 
 {
-    if ($instrumentationKey -ne '')
-    {
-        Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "GetSolutionName" -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; "EventName"="GetSolutionName"; }
-
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for getSolutionName started, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; "EventName"="GetSolutionName"; }
-    }
-
     #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
     if ($isPRMerged) {
-        git fetch --depth=1 origin master
-        $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+        $masterMergeCommitId = git log --format="%H" --merges --grep="Merge pull request #$pullRequestNumber" master
+        if ($null -ne $masterMergeCommitId) {
+            Write-Host "masterMergeCommitId $masterMergeCommitId"
+            $diff = git diff --diff-filter=d --name-only $masterMergeCommitId^ $masterMergeCommitId
+        } else {
+            Write-Host "PR not merged into master!"
+            exit 0;
+        }
     } else {
-        $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+        $masterMergeCommit = git show -s --format='%s' -1
+        Write-Host "masterMergeCommit $masterMergeCommit"
+        if ($masterMergeCommit -like "*Merge branch*") {
+            Write-Host "Skipping as Master merge commit!"
+            Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
+            exit 0
+        } else {
+            $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+        }
     }
+
     Write-Host "List of files in PR: $diff"
 
     $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' } 
@@ -37,11 +45,6 @@ try
 
     if ($filteredFiles.Count -gt 0)
     {
-        if ($instrumentationKey -ne '')
-        {
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName and inside of Filtered Files, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'FilesChanged'="$filteredFiles"; "EventName"="GetSolutionName";}
-        }
-
         foreach ($currentFile in $filteredFiles)
         {
             $solutionIndex = $currentFile.IndexOf("Solutions/")
@@ -72,47 +75,22 @@ try
         {
             Write-Host "Skipping Github workflow as Solution name cannot be blank."
             Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
-
-            if ($instrumentationKey -ne '')
-            {
-                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Unable to identify solution name for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; "EventName"="GetSolutionName";}
-            }
         }
         else
         {
             Write-Output "solutionName=$solutionName" >> $env:GITHUB_OUTPUT
-            if ($instrumentationKey -ne '')
-            {
-                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Identified Solution Name : $solutionName for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'="$pullRequestNumber"; "EventName"="GetSolutionName";}
-            }
         }
     }
     else
     {
         Write-Output "Skipping Github workflow as changes are not in Solutions folder or changes are in .md file or images folder inside of Solutions!"
         Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
-
-        if ($instrumentationKey -ne '')
-        {
-            Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Executing getSolutionName : Skipping as changes are not in solutions folder or changes are in .md file or images folder inside of Solutions for Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber"; 'FilesChanged'="$filteredFiles"; "EventName"="GetSolutionName"}
-        }
     }
 }
 catch
 {
     Write-Output "solutionName=" >> $env:GITHUB_OUTPUT
-    Write-Host "Skipping as exception occured: Unable to identify Solution name. Error Details: $_"
+    Write-Host "Skipping as exception occured: Unable to identify Solution name. Error Details: $($_ | Out-String)"
 
-    if ($instrumentationKey -ne '')
-    {
-        if ($solutionName -eq '')
-        {
-            Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; 'ErrorDetails'="getSolutionName : Error occured in catch block: $_"; "EventName"="GetSolutionName"}
-        }
-        else
-        {
-            Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'SolutionName'="$solutionName"; 'PullRequestNumber'= "$pullRequestNumber"; 'ErrorDetails'="getSolutionName : Error occured in catch block: $_"; "EventName"="GetSolutionName"}
-        }
-    }
     exit 1
 }

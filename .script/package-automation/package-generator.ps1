@@ -1,4 +1,15 @@
-param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $defaultPackageVersion, $solutionOfferId, $inputBaseFolderPath, $isNewSolution)
+param (
+    $solutionName, 
+    $pullRequestNumber, 
+    $runId, 
+    $instrumentationKey, 
+    $defaultPackageVersion, 
+    $solutionOfferId, 
+    $inputBaseFolderPath, 
+    $isNewSolution = $false,
+    $isPRMerged = $false
+)
+
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 . ./.script/package-automation/catalogAPI.ps1
 
@@ -10,132 +21,138 @@ function ErrorOutput {
     exit 1
 }
 
-try {
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for Package-generator started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "Package Generator"; 'SolutionOfferId' = "$solutionOfferId"; }
     if ($null -eq $solutionName -or $solutionName -eq '') { 
         Write-Host "::error::Solution name not found" 
         ErrorOutput
     }
 
-    function GetGivenFilesPathNames {
-        Param
-        (
-            [Parameter(Mandatory = $true, Position = 0)] 
-            [System.Array] $givenInputFiles
+    function Remove-ParameterFilesFromDataFolder {
+        [CmdletBinding()]
+        Param(
+            [Parameter(Mandatory = $true, Position = 0)]
+            [System.Array]$DatafolderFiles
         )
-        $resultList = @()
-        foreach ($item in $givenInputFiles) {
-            $getFileNameLastIndex = $item.LastIndexOf('/')
-            if ($getFileNameLastIndex -gt 0) {
-                $resultList += $item.substring($getFileNameLastIndex + 1)
+        $Result = @()
+        foreach ($Item in $DatafolderFiles) {
+            if ($Item -notmatch 'parameters\.json' -and
+                $Item -notmatch 'parameter\.json' -and
+                $Item -notmatch 'system_generated_metadata\.json' -and
+                $Item -notmatch 'testParameters\.json') {
+                $Result += $Item
             }
         }
-        return $resultList;
+        return $Result
     }
 
-    function GetValidDataConnectorFileNames { 
-        Param
-        (
+    function Get-ValidFileNames {
+        [CmdletBinding()]
+        Param(
             [Parameter(Mandatory = $true, Position = 0)]
-            [System.Array] $dataConnectorFiles
+            [System.Array]$filesList
         )
-        $newDataConnectorFilesWithoutExcludedFiles = @()
-        foreach ($item in $dataConnectorFiles) {
-            $hostFileExist = $item -match ([regex]::Escape("host.json"))
-            $proxiesFileExist = $item -match ([regex]::Escape("proxies.json"))
-            $azureDeployFileExist = $item -match ([regex]::Escape("azureDeploy"))
-            $functionFileExist = $item -match ([regex]::Escape("function.json"))
-            $textFileExist = $item -match ([regex]::Escape(".txt"))
-            $zipFileExist = $item -match ([regex]::Escape(".zip"))
-            $pythonFileExist = $item -match ([regex]::Escape(".py"))
-            $jsonFile = $item -match ([regex]::Escape(".json"))
+        $Result = @()
+        foreach ($Item in $filesList) {
+            # Exclude files that are not valid data connector JSONs
+            if ($Item -match '\.json$' -and
+                $Item -notmatch 'host\.json$' -and
+                $Item -notmatch 'proxies\.json$' -and
+                $Item -notmatch 'azureDeploy' -and
+                $Item -notmatch 'function\.json$' -and
+                $Item -notmatch '\.txt$' -and
+                $Item -notmatch '\.zip$' -and
+                $Item -notmatch '\.py$') {
+                $Result += $Item
+            }
+        }
+        return $Result
+    }
 
-            if ($hostFileExist -or $proxiesFileExist -or $azureDeployFileExist -or $functionFileExist -or $textFileExist -or $zipFileExist -or $pythonFileExist) 
-            { }
-            else { 
-                if ($jsonFile) {
-                    $newDataConnectorFilesWithoutExcludedFiles += $item
+    function Get-ValidFileNamesByExtension {
+    [CmdletBinding()]
+        Param(
+            [Parameter(Mandatory = $true, Position = 0)]
+            [System.Array]$filesList,
+            [Parameter(Mandatory = $true, Position = 1)]
+            [string]$extension # e.g. '.yaml' or '.json'
+        )
+        $Result = @()
+        foreach ($Item in $filesList) {
+            if ($Item -match ([regex]::Escape($extension) + '$')) {
+                $Result += $Item
+            }
+        }
+        return $Result
+    }
+
+    function Get-PlaybooksJsonFileNames {
+        [CmdletBinding()]
+        Param(
+            [Parameter(Mandatory = $true, Position = 0)]
+            [System.Array]$PlaybookFiles
+        )
+        $Result = $PlaybookFiles | Where-Object {
+            $_ -match '\.json$' -and
+            $_ -notlike '*swagger*' -and
+            $_ -notlike '*function.json' -and
+            $_ -notlike '*host.json'
+        }
+        return $Result
+    }
+
+    function Get-OnlyFileNames {
+        [CmdletBinding()]
+        Param(
+            [Parameter(Mandatory = $true, Position = 0)]
+            [System.Array]$FilePaths,
+            [Parameter(Mandatory = $true, Position = 1)]
+            [System.String]$FolderNameWithSlash
+        )
+        $Result = @()
+        foreach ($Item in $FilePaths) {
+            $Index = $Item.IndexOf($FolderNameWithSlash)
+            #$Length = $FolderNameWithSlash.Length
+            if ($Index -gt 0) {
+                #$Result += $Item.Substring($Index + $Length)
+                $Result += $Item.Substring($Index)
+            } else {
+                $Result += $Item
+            }
+        }
+        return $Result
+    }
+
+    function Remove-LinkedTemplates {
+        [CmdletBinding()]
+        Param(
+            [Parameter(Mandatory = $true)]
+            [array]$PlaybookFiles,
+            [string]$BaseFolderPath
+        )
+        $filtered = @()
+        foreach ($item in $PlaybookFiles) {
+            $filePath = $BaseFolderPath + $item
+            if (Test-Path $filePath) {
+                $fileContentObj = Get-Content "$filePath" | ConvertFrom-Json
+                if ($null -ne $fileContentObj) {
+                    $hasLinked = $false
+                    foreach ($resource in $fileContentObj.resources) {
+                        if ($resource.type -eq "Microsoft.Resources/deployments") {
+                            $hasLinked = $true
+                            break
+                        }
+                    }
+                    if (-not $hasLinked) { $filtered += $item }
+                } else {
+                    $filtered += $item
                 }
+            } else {
+                $filtered += $item
             }
         }
-        return $newDataConnectorFilesWithoutExcludedFiles;
+        return $filtered
     }
 
-    function GetValidWatchlistFileNames { 
-        Param
-        (
-            [Parameter(Mandatory = $true, Position = 0)]
-            [System.Array] $watchlistFiles
-        )
-        $newWatchlistFiles = @()
-        foreach ($item in $watchlistFiles) {
-            $jsonFile = $item -match ([regex]::Escape(".json"))
-            if ($jsonFile) {
-                $newWatchlistFiles += $item
-            }
-        }
-
-        return $newWatchlistFiles;
-    }
-
-    function IgnoreParameterFileInDataFolder { 
-        Param
-        (
-            [Parameter(Mandatory = $true, Position = 0)] 
-            [System.Array] $datafolderFiles
-        )
-        $newDataFolderFilesWithoutExcludedFiles = @()
-        foreach ($item in $datafolderFiles) {
-            $paramterFileExist = $item -match ([regex]::Escape("parameters.json"))
-            $paramtersFileExist = $item -match ([regex]::Escape("parameter.json"))
-            $systemGeneratedFileExist = $item -match ([regex]::Escape("system_generated_metadata.json"))
-            $testParametersFileExist = $item -match ([regex]::Escape("testParameters.json"))
-            if ($paramterFileExist -or $paramtersFileExist -or $systemGeneratedFileExist -or $testParametersFileExist) 
-            { } 
-            else { 
-                $newDataFolderFilesWithoutExcludedFiles += $item 
-            } 
-        }
-        return $newDataFolderFilesWithoutExcludedFiles;
-    }
-
-    function GetPlaybooksJsonFileNames($playbookFiles) {
-        $playbookFiles = $playbookFiles -match ([regex]::Escape(".json"))
-    
-        if ($playbookFiles.Count -gt 0) {
-            $playbookFiles = $playbookFiles | Where-Object { $_ -notlike '*swagger*' -and $_ -notlike '*gov*' -and $_ -notlike '*function.json' -and $_ -notlike '*host.json' }
-        }
-    
-        return $playbookFiles;
-    }
-
-    function GetValidFunctionAppConnectorFileNames { 
-        Param
-        (
-            [Parameter(Mandatory = $true, Position = 0)]
-            [System.Array] $files
-        )
-        $newFilesWithoutExcludedFiles = @()
-        foreach ($item in $files) {
-            $hostFileExist = $item -match ([regex]::Escape("host.json"))
-            $proxiesFileExist = $item -match ([regex]::Escape("proxies.json"))
-            $functionFileExist = $item -match ([regex]::Escape("function.json"))
-            $textFileExist = $item -match ([regex]::Escape(".txt"))
-            $zipFileExist = $item -match ([regex]::Escape(".zip"))
-            $pythonFileExist = $item -match ([regex]::Escape(".py"))
-            $jsonFile = $item -match ([regex]::Escape(".json"))
-            if ($hostFileExist -or $proxiesFileExist -or $functionFileExist -or $textFileExist -or $zipFileExist -or $pythonFileExist)
-            { }
-            else { 
-                if ($jsonFile) {
-                    $newFilesWithoutExcludedFiles += $item
-                }
-            }
-        }
-        return $newFilesWithoutExcludedFiles;
-    }
-
-    function GetWorkbooksJsonFileNames { 
+    function Get-WorkbooksJsonFileNames { 
         Param
         (
             [Parameter(Mandatory = $true, Position = 0)] 
@@ -146,32 +163,151 @@ try {
         return $newWorkbookFilesWithoutExcludedFiles;
     }
 
-    function GetOnlyFileNames {
-        Param
-        (
-            [Parameter(Mandatory = $true, Position = 0)]
-            [System.Array] $filePaths,
-            [Parameter(Mandatory = $true, Position = 1)]
-            [System.String] $folderNameWithSlash
-        )
-        $newFiles = @()
-        foreach ($item in $filePaths) {
-            $indexOfFiles = $item.IndexOf($folderNameWithSlash); # $item.IndexOf("Workbooks/")
-            $lengthOfFolder = $folderNameWithSlash.Length
-            if ($indexOfFiles -gt 0) {
-                # REPLACE ALL INITIAL FILE PATHS JUST GET THE FILE NAME
-                $fileName = $item.Substring($indexOfFiles + $lengthOfFolder);
-                $newFiles += $fileName
-            }
-            else {
-                $newFiles += $item
-            }
+function Normalize-FilePathSpaces {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$filePath
+    )
+    return $filePath -replace '%20', ' '
+}
+
+function Normalize-SummaryRulesPaths {
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$SummaryRulesArray
+    )
+    $normalized = @()
+    foreach ($item in $SummaryRulesArray) {
+        $item = Normalize-FilePathSpaces $item
+        if ($item -like "Summary Rules/*") {
+            $normalized += $item -replace "^Summary Rules/", "SummaryRules/"
+        } elseif ($item -like "SummaryRules/*") {
+            $normalized += $item
+        } else {
+            $normalized += $item
         }
-        return $newFiles;
+    }
+    return $normalized
+}
+
+try 
+{
+    $solutionFolderPath = 'Solutions/' + $solutionName + "/"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "::error::Failed to fetch origin/master"
+        Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
+        exit 1
     }
 
-    $solutionFolderPath = 'Solutions/' + $solutionName + "/"
+    $base = git merge-base HEAD origin/master
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "::error::Failed to get merge-base with origin/master"
+        Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
+        exit 1
+    }
+
+    $head = git rev-parse HEAD
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "::error::Failed to get HEAD commit"
+        Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
+        exit 1
+    }
+
+    if ($base -eq $head -and $isPRMerged -eq $false) {
+        Write-Host "PR branch is up to date with master. Skipping package generation."
+        Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
+        exit 0
+    }
+
+    if ($isPRMerged) {
+        Write-Host "PR branch is merged with master."
+        $changedFiles = $(git diff --name-only HEAD^ HEAD)
+        if ([string]::IsNullOrWhiteSpace($changedFiles)) {
+            Write-Host "No files changed in the last commit. Skipping package generation." -ForegroundColor Yellow
+            Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
+            exit 0
+        }
+    }
+
     $filesList = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
+
+    #SOLUTION FOLDERS
+    $solutionParsersFolder = $solutionFolderPath + 'Parsers/'
+    $solutionDataConnectorsFolder = $solutionFolderPath + 'DataConnectors/'
+    $solutionDataConnectorsWithSpaceFolder = $solutionFolderPath + 'Data Connectors/'
+    $solutionWorkbooksFolder = $solutionFolderPath + 'Workbooks/'
+    $solutionPlaybooksFolder = $solutionFolderPath + 'Playbooks/'
+    $solutionHuntingQueriesFolder = $solutionFolderPath + 'Hunting Queries/'
+    $solutionAnalyticRulesFolder = $solutionFolderPath + 'Analytic Rules/'
+    $solutionWatchlistsFolder = $solutionFolderPath + 'Watchlists/'
+    $solutionWatchlistInWorkbookFolder = $solutionFolderPath + 'Workbooks/Watchlist/'
+    $solutionSummaryRulesFolder = $solutionFolderPath + 'SummaryRules/'
+    $solutionSummaryRulesWithSpaceFolder = $solutionFolderPath + 'Summary Rules/'
+
+    # Filter result variables by $dataFileContentObject arrays if present, else set to empty
+    $parserFolderResult = $filesList -match ([regex]::Escape($solutionParsersFolder)) | ForEach-Object { $_.replace($solutionParsersFolder, '', 'OrdinalIgnoreCase') }
+    if ($null -ne $dataFileContentObject.Parsers -and $dataFileContentObject.Parsers.Count -gt 0) {
+        $parserFolderResult = $parserFolderResult | Where-Object { $dataFileContentObject.Parsers -contains $_ }
+    } else {
+        $parserFolderResult = @()
+    }
+
+    $dataConnectorsFolderResult = $filesList -match ([regex]::Escape($solutionDataConnectorsFolder)) | ForEach-Object { $_.replace($solutionDataConnectorsFolder, '', 'OrdinalIgnoreCase') }
+    if ($null -ne $dataFileContentObject.DataConnectors -and $dataFileContentObject.DataConnectors.Count -gt 0) {
+        $dataConnectorsFolderResult = $dataConnectorsFolderResult | Where-Object { $dataFileContentObject.DataConnectors -contains $_ }
+    } else {
+        $dataConnectorsFolderResult = @()
+    }
+
+    $dataConnectorsWithSpaceFolderResult = $filesList -match ([regex]::Escape($solutionDataConnectorsWithSpaceFolder)) | ForEach-Object { $_.replace($solutionDataConnectorsWithSpaceFolder, '', 'OrdinalIgnoreCase') }
+    if ($null -ne $dataFileContentObject.'Data Connectors' -and $dataFileContentObject.'Data Connectors'.Count -gt 0 -and $null -ne $dataConnectorsWithSpaceFolderResult -and $dataConnectorsWithSpaceFolderResult.Count -gt 0) {
+        $dataConnectorsWithSpaceFolderResult = $dataConnectorsWithSpaceFolderResult | Where-Object { $dataFileContentObject.'Data Connectors' -contains $_ }
+    } else {
+        $dataConnectorsWithSpaceFolderResult = @()
+    }
+
+    $playbooksFolderResult = $filesList -match ([regex]::Escape($solutionPlaybooksFolder))
+    if ($null -ne $dataFileContentObject.Playbooks -and $dataFileContentObject.Playbooks.Count -gt 0) {
+        $playbooksFolderResult = $playbooksFolderResult | Where-Object { $dataFileContentObject.Playbooks -contains $_ }
+    } else {
+        $playbooksFolderResult = @()
+    }
+
+    $workbooksFolderResult = $filesList -match ([regex]::Escape($solutionWorkbooksFolder)) | ForEach-Object { $_.replace($solutionWorkbooksFolder, '', 'OrdinalIgnoreCase') }
+    if ($null -ne $dataFileContentObject.Workbooks -and $dataFileContentObject.Workbooks.Count -gt 0) {
+        $workbooksFolderResult = $workbooksFolderResult | Where-Object { $dataFileContentObject.Workbooks -contains $_ }
+    } else {
+        $workbooksFolderResult = @()
+    }
+
+    $huntingQueriesFolderResult = $filesList -match ([regex]::Escape($solutionHuntingQueriesFolder)) | ForEach-Object { $_.replace( $solutionHuntingQueriesFolder, '', 'OrdinalIgnoreCase') }
+    if ($null -ne $dataFileContentObject.'Hunting Queries' -and $dataFileContentObject.'Hunting Queries'.Count -gt 0) {
+        $huntingQueriesFolderResult = $huntingQueriesFolderResult | Where-Object { $dataFileContentObject.'Hunting Queries' -contains $_ }
+    } else {
+        $huntingQueriesFolderResult = @()
+    }
+
+    $analyticRulesFolderResult = $filesList -match ([regex]::Escape($solutionAnalyticRulesFolder)) | ForEach-Object { $_.replace($solutionAnalyticRulesFolder, '', 'OrdinalIgnoreCase') }
+    if ($null -ne $dataFileContentObject.'Analytic Rules' -and $dataFileContentObject.'Analytic Rules'.Count -gt 0) {
+        $analyticRulesFolderResult = $analyticRulesFolderResult | Where-Object { $dataFileContentObject.'Analytic Rules' -contains $_ }
+    } else {
+        $analyticRulesFolderResult = @()
+    }
+
+    $watchlistsFolderResult = $filesList -match ([regex]::Escape($solutionWatchlistsFolder)) | ForEach-Object { $_.replace($solutionWatchlistsFolder, '', 'OrdinalIgnoreCase') }
+    if ($null -ne $dataFileContentObject.Watchlists -and $dataFileContentObject.Watchlists.Count -gt 0) {
+        $watchlistsFolderResult = $watchlistsFolderResult | Where-Object { $dataFileContentObject.Watchlists -contains $_ }
+    } else {
+        $watchlistsFolderResult = @()
+    }
+
+    $watchlistInWorkbooksFolderResult = $filesList -match ([regex]::Escape($solutionWatchlistInWorkbookFolder)) | ForEach-Object { $_.replace($solutionWatchlistInWorkbookFolder, '', 'OrdinalIgnoreCase') }
+    if ($null -ne $dataFileContentObject.'WatchlistInWorkbook' -and $dataFileContentObject.'WatchlistInWorkbook'.Count -gt 0) {
+        $watchlistInWorkbooksFolderResult = $watchlistInWorkbooksFolderResult | Where-Object { $dataFileContentObject.'WatchlistInWorkbook' -contains $_ }
+    } else {
+        $watchlistInWorkbooksFolderResult = @()
+    }
+
     $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
     if ($dataFolderFiles.Count -gt 0) {
         $selectFirstdataFolderFile = $dataFolderFiles | Select-Object -first 1
@@ -186,7 +322,7 @@ try {
         ErrorOutput
     }
 
-    $dataFolderFile = IgnoreParameterFileInDataFolder($dataFolderFiles)
+    $dataFolderFile = Remove-ParameterFilesFromDataFolder($dataFolderFiles)
     $solutionDataFolder = $solutionFolderPath + "$dataFolderActualName/"
     Write-Host "solutionDataFolder is $solutionDataFolder"
 
@@ -197,7 +333,16 @@ try {
     Write-Output "dataFileLink=$dataFileLink" >> $env:GITHUB_OUTPUT
     Write-Host "Data File Path $dataFilePath"
 
+    # Use Test-Path before file operations
+    if (-not (Test-Path $dataFilePath)) {
+        Write-Error "Data file not found: $dataFilePath"
+        exit 1
+    }
     $dataFileContentObject = Get-Content "$dataFilePath" | ConvertFrom-Json
+    if ($null -eq $dataFileContentObject) {
+        Write-Error "Data file content is invalid."
+        exit 1
+    }
     $dataFileContentObject = $null -eq $dataFileContentObject[0] ? $dataFileContentObject[1] : $dataFileContentObject[0]
 
     $dataFolderPath = $baseFolderPath + $solutionDataFolder
@@ -239,11 +384,8 @@ try {
     }
 
     # =============START: DETAILS TO IDENTIFY VERSION FROM CATALOG API=========
-    $customProperties = @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "Package Generator"; 'SolutionOfferId' = "$solutionOfferId"; }
-
     $offerId = "$solutionOfferId"
     $offerDetails = GetCatalogDetails $offerId
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Offer details in Package-generator for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
 
     $userInputPackageVersion = ''
     if ($packageVersionAttribute) {
@@ -260,6 +402,7 @@ try {
         if ($dataFileContentObject.Version -ne "$packageVersion") {
             $dataFileContentObject.PSObject.Properties.Remove('Version')
             $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'Version' -Value "$packageVersion"
+            Write-Host "Package version updated to $packageVersion"
         }
     }
     
@@ -353,46 +496,76 @@ try {
         $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'support' -Value $solutionMetadataFileContentObject.support
     }
 
-    #SOLUTION FOLDERS
-    $solutionParsersFolder = $solutionFolderPath + 'Parsers/'
-    $solutionDataConnectorsFolder = $solutionFolderPath + 'DataConnectors/'
-    $solutionDataConnectorsWithSpaceFolder = $solutionFolderPath + 'Data Connectors/'
-    $solutionWorkbooksFolder = $solutionFolderPath + 'Workbooks/'
-    $solutionPlaybooksFolder = $solutionFolderPath + 'Playbooks/'
-    $solutionHuntingQueriesFolder = $solutionFolderPath + 'Hunting Queries/'
-    $solutionAnalyticRulesFolder = $solutionFolderPath + 'Analytic Rules/'
-    $solutionWatchlistsFolder = $solutionFolderPath + 'Watchlists/'
-    $solutionWatchlistInWorkbookFolder = $solutionFolderPath + 'Workbooks/Watchlist/'
-
     $parserFolderResult = $filesList -match ([regex]::Escape($solutionParsersFolder)) | ForEach-Object { $_.replace($solutionParsersFolder, '', 'OrdinalIgnoreCase') }
     $dataConnectorsFolderResult = $filesList -match ([regex]::Escape($solutionDataConnectorsFolder)) | ForEach-Object { $_.replace( $solutionDataConnectorsFolder, '', 'OrdinalIgnoreCase') }
-    if ($null -ne $dataConnectorsFolderResult) {
-        $dataConnectorsFolderResult = GetValidDataConnectorFileNames($dataConnectorsFolderResult)
+    if ($null -ne $dataConnectorsFolderResult -and $null -ne $dataFileContentObject.'DataConnectors' -and $dataFileContentObject.'DataConnectors'.Count -gt 0) {
+        $dataConnectorsFolderResult = Get-ValidFileNames($dataConnectorsFolderResult)
     }
 
     $dataConnectorsWithSpaceFolderResult = $filesList -match ([regex]::Escape($solutionDataConnectorsWithSpaceFolder)) | ForEach-Object { $_.replace($solutionDataConnectorsWithSpaceFolder, '', 'OrdinalIgnoreCase') }
-    if ($null -ne $dataConnectorsWithSpaceFolderResult) {
-        $dataConnectorsWithSpaceFolderResult = GetValidDataConnectorFileNames($dataConnectorsWithSpaceFolderResult)
+    if ($null -ne $dataConnectorsWithSpaceFolderResult -and $null -ne $dataFileContentObject.'Data Connectors' -and $dataFileContentObject.'Data Connectors'.Count -gt 0) {
+        $dataConnectorsWithSpaceFolderResult = Get-ValidFileNames($dataConnectorsWithSpaceFolderResult)
     }
 
     $playbooksFolderResult = $filesList -match ([regex]::Escape($solutionPlaybooksFolder))
-    if ($null -ne $playbooksFolderResult) {
-        $playbooksFolderResult = GetPlaybooksJsonFileNames($playbooksFolderResult)
+    # if ($null -ne $playbooksFolderResult -and $playbooksFolderResult.Count -gt 0) {
+    #     $playbooksFolderResult = Get-PlaybooksJsonFileNames($playbooksFolderResult)
+    # }
+
+    if ($null -ne $dataFileContentObject.Playbooks -and $dataFileContentObject.Playbooks.Count -gt 0) {
+        $playbooksFolderResult = $playbooksFolderResult | Where-Object { $dataFileContentObject.Playbooks -like "*$_*"  }
+    } else {
+        $playbooksFolderResult = @()
     }
 
     $workbooksFolderResult = $filesList -match ([regex]::Escape($solutionWorkbooksFolder)) | ForEach-Object { $_.replace($solutionWorkbooksFolder, '', 'OrdinalIgnoreCase') }
+
+    # Filter workbooksFolderResult by dataFileContentObject.Workbooks if present
+    if ($null -ne $dataFileContentObject.Workbooks -and $dataFileContentObject.Workbooks.Count -gt 0) {
+        $workbooksFolderResult = $workbooksFolderResult | Where-Object { $dataFileContentObject.Workbooks -like "*$_*" }
+    } else {
+        $workbooksFolderResult = @()
+    }
+
     $huntingQueriesFolderResult = $filesList -match ([regex]::Escape($solutionHuntingQueriesFolder)) | ForEach-Object { $_.replace( $solutionHuntingQueriesFolder, '', 'OrdinalIgnoreCase') }
+
+    # Filter analyticRulesFolderResult by dataFileContentObject.'Analytic Rules' if present
+    if ($null -ne $dataFileContentObject.'Hunting Queries' -and $dataFileContentObject.'Hunting Queries'.Count -gt 0) {
+        $huntingQueriesFolderResult = $huntingQueriesFolderResult | Where-Object { $dataFileContentObject.'Hunting Queries' -like "*$_*"  }
+    } else {
+        $huntingQueriesFolderResult = @()
+    }
+
     $analyticRulesFolderResult = $filesList -match ([regex]::Escape($solutionAnalyticRulesFolder)) | ForEach-Object { $_.replace($solutionAnalyticRulesFolder, '', 'OrdinalIgnoreCase') }
+
+    # Filter analyticRulesFolderResult by dataFileContentObject.'Analytic Rules' if present
+    if ($null -ne $dataFileContentObject.'Analytic Rules' -and $dataFileContentObject.'Analytic Rules'.Count -gt 0) {
+        $analyticRulesFolderResult = $analyticRulesFolderResult | Where-Object { $dataFileContentObject.'Analytic Rules' -like "*$_*"  }
+    } else {
+        $analyticRulesFolderResult = @()
+    }
 
     $watchlistsFolderResult = $filesList -match ([regex]::Escape($solutionWatchlistsFolder)) | ForEach-Object { $_.replace($solutionWatchlistsFolder, '', 'OrdinalIgnoreCase') }
     $watchlistInWorkbooksFolderResult = $filesList -match ([regex]::Escape($solutionWatchlistInWorkbookFolder)) | ForEach-Object { $_.replace($solutionWatchlistInWorkbookFolder, '', 'OrdinalIgnoreCase') }
 
-    if ($null -ne $watchlistsFolderResult) {
-        $watchlistsFolderResult = GetValidWatchlistFileNames($watchlistsFolderResult)
+    if ($null -ne $dataFileContentObject.Watchlists -and $dataFileContentObject.Watchlists.Count -gt 0) {
+        $watchlistsFolderResult = $watchlistsFolderResult | Where-Object { $dataFileContentObject.Watchlists -like "*$_*"  }
+    } else {
+        $watchlistsFolderResult = @()
     }
 
-    if ($null -ne $watchlistInWorkbooksFolderResult) {
-        $watchlistInWorkbooksFolderResult = GetValidWatchlistFileNames($watchlistInWorkbooksFolderResult)
+    if ($null -ne $dataFileContentObject.Watchlists -and $dataFileContentObject.Watchlists.Count -gt 0) {
+        $watchlistInWorkbooksFolderResult = $watchlistInWorkbooksFolderResult | Where-Object { $dataFileContentObject.Watchlists -like "*$_*" }
+    } else {
+        $watchlistInWorkbooksFolderResult = @()
+    }
+
+    if ($null -ne $watchlistsFolderResult -and $watchlistsFolderResult.Count -gt 0) {
+        $watchlistsFolderResult = Get-ValidFileNamesByExtension $watchlistsFolderResult ".json"
+    }
+
+    if ($null -ne $watchlistInWorkbooksFolderResult -and $watchlistInWorkbooksFolderResult.Count -gt 0) {
+        $watchlistInWorkbooksFolderResult = Get-ValidFileNamesByExtension $watchlistInWorkbooksFolderResult ".json"
     }
 
     #COUNT NUMBER OF FILES IN EACH FOLDER
@@ -407,13 +580,22 @@ try {
     $watchlistsFolderResultLength = $watchlistsFolderResult.Count
     $watchlistInWorkbookFolderLength = $watchlistInWorkbooksFolderResult.Count
 
+    Write-Host "ParserFolderResultLength: $parserFolderResultLength"
+    Write-Host "dataConnectorsFolderResultLength: $dataConnectorsFolderResultLength"
+    Write-Host "dataConnectorsWithSpaceFolderResultLength: $dataConnectorsWithSpaceFolderResultLength"
+    Write-Host "playbooksFolderResultLength: $playbooksFolderResultLength"
+    Write-Host "workbooksFolderResultLength: $workbooksFolderResultLength"
+    Write-Host "huntingQueriesFolderResultLength: $huntingQueriesFolderResultLength"
+    Write-Host "analyticRulesFolderResultLength: $analyticRulesFolderResultLength"
+    Write-Host "watchlistsFolderResultLength: $watchlistsFolderResultLength"
+    Write-Host "watchlistInWorkbookFolderLength: $watchlistInWorkbookFolderLength"
+
     $dataConnectorFolderName = 'Data Connectors'
-    if ($dataConnectorsFolderResultLength -gt 0) {
+    if ($dataConnectorsFolderResultLength -gt 0 -and $dataFileContentObject.'DataConnectors'.Count -gt 0) {
         $dataConnectorFolderName = 'DataConnectors'
         $newDataConnectorFiles = @()
-        $newDataConnectorFiles = GetOnlyFileNames -filePaths $dataConnectorsFolderResult -folderNameWithSlash "DataConnectors/"
-
-        $dataConnectorFilesResultArray = GetValidDataConnectorFileNames($newDataConnectorFiles) | ConvertTo-Json -AsArray
+        $newDataConnectorFiles = Get-OnlyFileNames -filePaths $dataConnectorsFolderResult -folderNameWithSlash "DataConnectors/"
+        $dataConnectorFilesResultArray = (Get-ValidFileNamesByExtension $newDataConnectorFiles ".json") | ConvertTo-Json -AsArray
         $dataConnectoryWithoutSpaceArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("DataConnectors")))
         if (!$dataConnectoryWithoutSpaceArrayAttributeExist) {
             $dataFileContentObject.PSObject.Properties.Remove('Data Connectors')
@@ -428,18 +610,18 @@ try {
             }
         }
     }
-    elseif ($dataConnectorsWithSpaceFolderResultLength -gt 0) {
+    elseif ($dataConnectorsWithSpaceFolderResultLength -gt 0 -and $dataFileContentObject.'Data Connectors'.Count -gt 0) {
         $newDataConnectorFiles = @()
         $dataConnectorDataPaths = $dataFileContentObject."Data Connectors"
         Write-Host "dataConnectorDataPaths is $dataConnectorDataPaths"
         if ($null -eq $dataConnectorDataPaths -or $dataConnectorDataPaths -eq '') {
-            $newDataConnectorFiles = GetOnlyFileNames -filePaths $dataConnectorsWithSpaceFolderResult -folderNameWithSlash "Data Connectors/"
+            $newDataConnectorFiles = Get-OnlyFileNames -filePaths $dataConnectorsWithSpaceFolderResult -folderNameWithSlash "Data Connectors/"
         }
         else {
-            $newDataConnectorFiles = GetOnlyFileNames -filePaths $dataConnectorDataPaths -folderNameWithSlash "Data Connectors/"
+            $newDataConnectorFiles = Get-OnlyFileNames -filePaths $dataConnectorDataPaths -folderNameWithSlash "Data Connectors/"
         }
-        
-        $dataConnectorFilesWithSpaceFolderResultArray = GetValidDataConnectorFileNames($newDataConnectorFiles) | ConvertTo-Json -AsArray
+
+        $dataConnectorFilesWithSpaceFolderResultArray = (Get-ValidFileNamesByExtension $newDataConnectorFiles ".json") | ConvertTo-Json -AsArray
         $dataConnectoryArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("Data Connectors")))
 
         if (!$dataConnectoryArrayAttributeExist) {
@@ -457,7 +639,7 @@ try {
 
     if ($dataConnectoryArrayAttributeExist) {
         if ($dataFileContentObject.DataConnectors.Count -gt 0) {
-            $dataFileDataConnectorList = GetGivenFilesPathNames($dataFileContentObject.DataConnectors) | ConvertTo-Json -AsArray
+            $dataFileDataConnectorList = (Get-ValidFileNamesByExtension $dataFileContentObject.DataConnectors ".json") | ConvertTo-Json -AsArray
             $dataFileContentObject.PSObject.Properties.Remove('Data Connectors')
             $datafilecontentobject | foreach-object {
                 $_ | add-member -membertype noteproperty -name 'Data Connectors' -value $dataFileDataConnectorList -passthru
@@ -475,7 +657,7 @@ try {
         } 
         else {
             if ($dataFileContentObject.Parsers.Count -gt 0) {
-                $dataFileparsersList = GetGivenFilesPathNames($dataFileContentObject.parsers) | ConvertTo-Json -AsArray
+                $dataFileparsersList = (Get-ValidFileNamesByExtension $dataFileContentObject.parsers ".yaml") | ConvertTo-Json -AsArray
                 $dataFileContentObject.PSObject.Properties.Remove('Parsers')
                 $datafilecontentobject | foreach-object {
                     $_ | add-member -membertype noteproperty -name 'Parsers' -value $dataFileparsersList -passthru
@@ -493,15 +675,8 @@ try {
         #===============START : PLAYBOOKS FUNCTION APP FILES=============
         # check if functionapp folder files are present in solution for playbooks
         $playbooksFunctionAppFiles = @()
-    
-        $playbooksFolderHasFunctionAppsInPlaybooksFolder = $filesList -like "Solutions/$solutionName/Playbooks/*FunctionApp*"
-        if ($playbooksFolderHasFunctionAppsInPlaybooksFolder -ne $false -and $playbooksFolderHasFunctionAppsInPlaybooksFolder.Count -gt 0) {
-            $playbooksFunctionAppFiles += GetPlaybooksJsonFileNames($playbooksFolderHasFunctionAppsInPlaybooksFolder)
-    
-            if ($playbooksFunctionAppFiles -gt 0)
-            {
-                $playbooksFunctionAppFiles = $playbooksFunctionAppFiles | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
-            }
+        if ($playbooksFolderHasFunctionAppsInPlaybooksFolder -and $playbooksFolderHasFunctionAppsInPlaybooksFolder.Count -gt 0) {
+            $playbooksFunctionAppFiles += Get-PlaybooksJsonFileNames($playbooksFolderHasFunctionAppsInPlaybooksFolder)
         }
     
         $playbooksFolderHasFunctionAppsInSolutionsFolder = $filesList -like "Solutions/$solutionName/*FunctionApp*"
@@ -518,18 +693,15 @@ try {
                 }
             }
     
-            if ($playbooksFolderHasFunctionAppsInSolutionsFolder -gt 0 -and $filteredPlaybookFunctionApps -gt 0)
+            if ($filteredPlaybookFunctionApps -and $filteredPlaybookFunctionApps.Count -gt 0)
             {
                 $playbooksFolderHasFunctionAppsInSolutionsFolder = @()
                 $playbooksFolderHasFunctionAppsInSolutionsFolder += $filteredPlaybookFunctionApps
-    
-                $playbooksFunctionAppFilesInSolutionsFolder = GetPlaybooksJsonFileNames($playbooksFolderHasFunctionAppsInSolutionsFolder)
-    
-                if ($playbooksFunctionAppFilesInSolutionsFolder.Count -gt 0)
+                $playbooksFunctionAppFilesInSolutionsFolder = Get-PlaybooksJsonFileNames($playbooksFolderHasFunctionAppsInSolutionsFolder)
+                if ($playbooksFunctionAppFilesInSolutionsFolder -and $playbooksFunctionAppFilesInSolutionsFolder.Count -gt 0)
                 {
                     $filteredPlaybooksFunctionAppFiles = $playbooksFunctionAppFilesInSolutionsFolder | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
-
-                    if ($filteredPlaybooksFunctionAppFiles.Count -gt 0)
+                    if ($filteredPlaybooksFunctionAppFiles -and $filteredPlaybooksFunctionAppFiles.Count -gt 0)
                     {
                         foreach($item in $filteredPlaybooksFunctionAppFiles)
                         {
@@ -563,64 +735,47 @@ try {
         # check if individual file exist inside of playbooks folder and check content if "resources" section has "type" = "Microsoft.Resources/deployments"
         #if it has Microsoft.Resources/deployments type then we should skip this file
     
-        $linkedTemplate = @()
-        foreach ($item in $playbooksFolderResult)
-        {
-            $filePath = $baseFolderPath + $item
-            $fileContentObj = Get-Content "$filePath" | ConvertFrom-Json
-            if ($null -ne $fileContentObj) {
-                foreach ($resource in $fileContentObj.resources) {
-                    if ($resource.type -eq "Microsoft.Resources/deployments") {
-                        # ignore individual file of azure deploy inside of playbooks folder
-                        $linkedTemplate += $item
-                        break;
-                    }
-                }
-            }
-        }
-    
-        if ($linkedTemplate.Count -gt 0)
-        {
-            $playbooksFolderResult = $playbooksFolderResult | Where-Object { $_ -notlike "*$linkedTemplate" } 
-        }
-    
-        $playbooksFolderResult = $playbooksFolderResult | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
-    
-        #======================================
-        #check if folder with *Connector Name present inside of Solutions folder or in playbooks folder eg: Check Point or Cisco ISE solution 
-        $filterPath = "$solutionFolderPath" + "*Connector/*"
-        $playbooksDynamicCustomConnector = $filesList -like ($filterPath) | Where-Object {$_ -notlike '*/Data Connectors/*'} | Where-Object {$_ -notlike '*/DataConnectors/*'}
-    
-        if ($playbooksDynamicCustomConnector -ne $false -and $playbooksDynamicCustomConnector.Count -gt 0)
-        {
-            # it has custom connector playbooks 
-            $playbooksDynamicCustomConnector = GetPlaybooksJsonFileNames($playbooksDynamicCustomConnector)
-    
-            if ($playbooksDynamicCustomConnector -gt 0)
-            {
-                $linkedTemplate = @()
-                # CHECK IF WE HAVE ANY TEMPLATELINK AND IF YES THEN SKIP IT
-                foreach ($item in $playbooksDynamicCustomConnector)
-                {
-                    $filePath = $baseFolderPath + $item
+        # Helper function to filter out playbooks with Microsoft.Resources/deployments
+        function Remove-LinkedTemplates {
+            param(
+                [Parameter(Mandatory = $true)]
+                [array]$PlaybookFiles,
+                [string]$BaseFolderPath
+            )
+            $filtered = @()
+            foreach ($item in $PlaybookFiles) {
+                $filePath = $BaseFolderPath + $item
+                if (Test-Path $filePath) {
                     $fileContentObj = Get-Content "$filePath" | ConvertFrom-Json
                     if ($null -ne $fileContentObj) {
+                        $hasLinked = $false
                         foreach ($resource in $fileContentObj.resources) {
                             if ($resource.type -eq "Microsoft.Resources/deployments") {
-                                # ignore individual file of azure deploy inside of playbooks folder
-                                $linkedTemplate += $item
-                                break;
+                                $hasLinked = $true
+                                break
                             }
                         }
+                        if (-not $hasLinked) { $filtered += $item }
+                    } else {
+                        $filtered += $item
                     }
-                }
-    
-                if ($linkedTemplate.Count -gt 0)
-                {
-                    #REMOVE LINKED TEMPLATE
-                    $playbooksDynamicCustomConnector = $playbooksDynamicCustomConnector | Where-Object { $_ -notlike "*$linkedTemplate" }
+                } else {
+                    $filtered += $item
                 }
             }
+            return $filtered
+        }
+
+        # Remove linked templates from playbooksFolderResult
+        $playbooksFolderResult = Remove-LinkedTemplates -PlaybookFiles $playbooksFolderResult -BaseFolderPath $baseFolderPath
+        $playbooksFolderResult = $playbooksFolderResult | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
+
+        # Find dynamic custom connectors (excluding Data Connectors)
+        $filterPath = "$solutionFolderPath*Connector/*"
+        $playbooksDynamicCustomConnector = $filesList -like $filterPath | Where-Object { $_ -notlike '*/Data Connectors/*' -and $_ -notlike '*/DataConnectors/*' }
+        if ($playbooksDynamicCustomConnector -and $playbooksDynamicCustomConnector.Count -gt 0) {
+            $playbooksDynamicCustomConnector = Get-PlaybooksJsonFileNames($playbooksDynamicCustomConnector)
+            $playbooksDynamicCustomConnector = Remove-LinkedTemplates -PlaybookFiles $playbooksDynamicCustomConnector -BaseFolderPath $baseFolderPath
         }
         $playbooksFinalDynamicCustomConnectorCount = $playbooksDynamicCustomConnector.Count
     
@@ -630,7 +785,7 @@ try {
     
         if ($playbookCustomConnectorFolderInRootFiles.Count -gt 0) {
             # BELOW LINE IS TO JUST GET JSON FILES AND EXCLUDE OTHER TYPE OF FILES.
-            $playbookCustomConnectorFolderInRootFiles = GetPlaybooksJsonFileNames($playbookCustomConnectorFolderInRootFiles)
+            $playbookCustomConnectorFolderInRootFiles = Get-PlaybooksJsonFileNames($playbookCustomConnectorFolderInRootFiles)
         }
         $playbookCustomConnectorFolderInRootCount = $playbookCustomConnectorFolderInRootFiles.Count
     
@@ -639,7 +794,7 @@ try {
         $playbookCustomConnectorFolderInSolutionFiles = $filesList -match ([regex]::Escape($playbookCustomConnectorFolderInSolution)) | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
         if ($playbookCustomConnectorFolderInSolutionFiles.Count -gt 0) {
             # BELOW LINE IS TO JUST GET JSON FILES AND EXCLUDE OTHER TYPE OF FILES.
-            $playbookCustomConnectorFolderInSolutionFiles = GetPlaybooksJsonFileNames($playbookCustomConnectorFolderInSolutionFiles)
+            $playbookCustomConnectorFolderInSolutionFiles = Get-PlaybooksJsonFileNames($playbookCustomConnectorFolderInSolutionFiles)
         }
         $playbookCustomConnectorFolderInSolutionCount = $playbookCustomConnectorFolderInSolutionFiles.Count
     
@@ -648,7 +803,7 @@ try {
         $playbookConnectorFolderInRootFiles = $filesList -match ([regex]::Escape($playbookConnectorFolderInRoot)) | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
         if ($playbookConnectorFolderInRootFiles.Count -gt 0) {
             # BELOW LINE IS TO JUST GET JSON FILES AND EXCLUDE OTHER TYPE OF FILES.
-            $playbookConnectorFolderInRootFiles = GetPlaybooksJsonFileNames($playbookConnectorFolderInRootFiles)
+            $playbookConnectorFolderInRootFiles = Get-PlaybooksJsonFileNames($playbookConnectorFolderInRootFiles)
         }
         $playbookConnectorFolderInRootCount = $playbookConnectorFolderInRootFiles.Count
     
@@ -657,12 +812,11 @@ try {
         $playbookConnectorFolderInSolutionFiles = $filesList -match ([regex]::Escape($playbookConnectorFolderInSolution)) | ForEach-Object { $_.replace("$solutionFolderPath", '', 'OrdinalIgnoreCase') }
         if ($playbookConnectorFolderInSolutionFiles.Count -gt 0) {
             # BELOW LINE IS TO JUST GET JSON FILES AND EXCLUDE OTHER TYPE OF FILES.
-            $playbookConnectorFolderInSolutionFiles = GetPlaybooksJsonFileNames($playbookConnectorFolderInSolutionFiles)
+            $playbookConnectorFolderInSolutionFiles = Get-PlaybooksJsonFileNames($playbookConnectorFolderInSolutionFiles)
         }
         $playbookConnectorFolderInSolutionCount = $playbookConnectorFolderInSolutionFiles.Count
     
         $formulatePlaybooksList = @();
-        $hasCustomPlaybook = $false;
     
         # IDENTIFY THE NAME OF FIRST CUSTOM CONNECTOR SO THAT WE CAN COMPARE IT WITH THE LIST OF FILE NAMES OF PLAYBOOKS IF INPUT HAS PLAYBOOKS ARRAY SPECIFIED
         if ($playbookCustomConnectorFolderInRootCount -le 0 -and 
@@ -683,8 +837,10 @@ try {
                     $formulatePlaybooksList += "$playbookCustomConnectorFolderInRootFiles"
                 }
                 else {
-                    $playbookCustomConnectorFolderInRootFilesFirstFile = GetPlaybooksJsonFileNames($playbookCustomConnectorFolderInRootFiles) | Select-Object -first 1
-                    $formulatePlaybooksList += "$playbookCustomConnectorFolderInRootFilesFirstFile"
+                    if ($playbookCustomConnectorFolderInRootFiles.Count -gt 0) {
+                        $playbookCustomConnectorFolderInRootFilesFirstFile = Get-PlaybooksJsonFileNames($playbookCustomConnectorFolderInRootFiles) | Select-Object -first 1
+                        $formulatePlaybooksList += "$playbookCustomConnectorFolderInRootFilesFirstFile"
+                    }
                 }
             }
             elseif ($playbookConnectorFolderInRootCount -gt 0) {
@@ -693,8 +849,10 @@ try {
                     $formulatePlaybooksList += "$playbookConnectorFolderInRootFiles"
                 }
                 else {
-                    $playbookConnectorFolderInRootFilesFirstFile = GetPlaybooksJsonFileNames($playbookConnectorFolderInRootFiles) | Select-Object -first 1
-                    $formulatePlaybooksList += $playbookConnectorFolderInRootFilesFirstFile
+                    if ($playbookConnectorFolderInRootFiles.Count -gt 0) {
+                        $playbookConnectorFolderInRootFilesFirstFile = Get-PlaybooksJsonFileNames($playbookConnectorFolderInRootFiles) | Select-Object -first 1
+                        $formulatePlaybooksList += "$playbookConnectorFolderInRootFilesFirstFile"
+                    }
                 }
             }
             elseif ($playbookCustomConnectorFolderInSolutionCount -gt 0) {
@@ -703,8 +861,10 @@ try {
                     $formulatePlaybooksList += "$playbookCustomConnectorFolderInSolutionFiles"
                 }
                 else {
-                    $playbookCustomConnectorFolderInSolutionFilesFirstFile = GetPlaybooksJsonFileNames($playbookCustomConnectorFolderInSolutionFiles) | Select-Object -first 1
-                    $formulatePlaybooksList += $playbookCustomConnectorFolderInSolutionFilesFirstFile
+                    if ($playbookCustomConnectorFolderInSolutionFiles.Count -gt 0) {
+                        $playbookCustomConnectorFolderInSolutionFilesFirstFile = Get-PlaybooksJsonFileNames($playbookCustomConnectorFolderInSolutionFiles) | Select-Object -first 1
+                        $formulatePlaybooksList += $playbookCustomConnectorFolderInSolutionFilesFirstFile
+                    }
                 }
             }
             elseif ($playbookConnectorFolderInSolutionCount -gt 0) {
@@ -712,8 +872,10 @@ try {
                     $formulatePlaybooksList += "$playbookConnectorFolderInSolutionFiles"
                 }
                 else {
-                    $playbookConnectorFolderInSolutionFilesFirstFile = GetPlaybooksJsonFileNames($playbookConnectorFolderInSolutionFiles) | Select-Object -first 1
-                    $formulatePlaybooksList += $playbookConnectorFolderInSolutionFilesFirstFile
+                    if ($playbookConnectorFolderInSolutionFiles.Count -gt 0) {
+                        $playbookConnectorFolderInSolutionFilesFirstFile = Get-PlaybooksJsonFileNames($playbookConnectorFolderInSolutionFiles) | Select-Object -first 1
+                        $formulatePlaybooksList += "$playbookConnectorFolderInSolutionFilesFirstFile"
+                    }
                 }
             }
             elseif ($playbooksFinalDynamicCustomConnectorCount -gt 0) {
@@ -798,7 +960,7 @@ try {
     if ($workbooksFolderResultLength -gt 0) {
         $workbooksArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("Workbooks")))
 
-        $workbookFiles = GetWorkbooksJsonFileNames($workbooksFolderResult)
+        $workbookFiles = Get-WorkbooksJsonFileNames($workbooksFolderResult)
 
         $workbooksFolderResultArray = $workbookFiles | ConvertTo-Json -AsArray
 
@@ -810,9 +972,9 @@ try {
         else {
             if ($dataFileContentObject.Workbooks.Count -gt 0) {
                 $newWorkbookFiles = @()
-                $newWorkbookFiles = GetOnlyFileNames -filePaths $dataFileContentObject.Workbooks -folderNameWithSlash "Workbooks/"
+                $newWorkbookFiles = Get-OnlyFileNames -filePaths $dataFileContentObject.Workbooks -folderNameWithSlash "Workbooks/"
 
-                $dataFileworkbooksList = GetWorkbooksJsonFileNames($newWorkbookFiles) | ConvertTo-Json -AsArray
+                $dataFileworkbooksList = Get-WorkbooksJsonFileNames($newWorkbookFiles) | ConvertTo-Json -AsArray
                 $dataFileContentObject.PSObject.Properties.Remove('Workbooks')
                 $datafilecontentobject | foreach-object {
                     $_ | add-member -membertype noteproperty -name 'Workbooks' -value $dataFileworkbooksList -passthru
@@ -822,6 +984,7 @@ try {
         }
     }
 
+    Write-Host "analyticRulesFolderResult $analyticRulesFolderResult, analyticRulesFolderResultLength $analyticRulesFolderResultLength, dataFileContentObject $dataFileContentObject"
     if ($analyticRulesFolderResultLength -gt 0) {
         $analyticRulesFolderResultArray = $analyticRulesFolderResult | ConvertTo-Json -AsArray
         $analyticRulesArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("Analytic Rules")))
@@ -832,7 +995,7 @@ try {
         } 
         else {
             if ($dataFileContentObject.'Analytic Rules'.Count -gt 0) {
-                $dataFileanalyticRulesList = GetGivenFilesPathNames($dataFileContentObject.'Analytic Rules') | ConvertTo-Json -AsArray
+                $dataFileanalyticRulesList = (Get-ValidFileNamesByExtension $dataFileContentObject.'Analytic Rules' ".yaml") | ConvertTo-Json -AsArray
                 $dataFileContentObject.PSObject.Properties.Remove('Analytic Rules')
                 $datafilecontentobject | foreach-object {
                     $_ | add-member -membertype noteproperty -name 'Analytic Rules' -value $dataFileanalyticRulesList -passthru
@@ -844,6 +1007,7 @@ try {
         }
     }
 
+    Write-Host "huntingQueriesFolderResult $huntingQueriesFolderResult, huntingQueriesFolderResultLength $huntingQueriesFolderResultLength, dataFileContentObject $dataFileContentObject"
     if ($huntingQueriesFolderResultLength -gt 0) {
         $huntingQueriesFolderResultArray = $huntingQueriesFolderResult | ConvertTo-Json -AsArray
         $huntingQueriesArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("Hunting Queries")))
@@ -854,7 +1018,7 @@ try {
         } 
         else {
             if ($dataFileContentObject.'Hunting Queries'.Count -gt 0) {
-                $dataFilehuntingList = GetGivenFilesPathNames($dataFileContentObject.'Hunting Queries') | ConvertTo-Json -AsArray
+                $dataFilehuntingList = (Get-ValidFileNamesByExtension $dataFileContentObject.'Hunting Queries' ".yaml") | ConvertTo-Json -AsArray
                 $dataFileContentObject.PSObject.Properties.Remove('Hunting Queries')
                 $datafilecontentobject | foreach-object {
                     $_ | add-member -membertype noteproperty -name 'Hunting Queries' -value $dataFilehuntingList -passthru
@@ -885,22 +1049,45 @@ try {
                 $dataFileContentObject | ForEach-Object {
                     $_ | Add-Member -MemberType NoteProperty -Name 'Watchlists' -Value $watchlistFolderResultArray -PassThru
                 }
-            } 
-            else {
-                if ($dataFileContentObject.Watchlists.Count -gt 0) {
-                    $dataFileWatchListList = GetValidWatchlistFileNames($watchlistFolderResultArray)
-                    $dataFileContentObject.PSObject.Properties.Remove('Watchlists')
-                    $datafilecontentobject | foreach-object {
-                        $_ | add-member -membertype noteproperty -name 'Watchlists' -value $dataFileWatchListList -passthru
-                    }
-                }
-                else { 
-                    $dataFileContentObject.PSObject.Properties.Remove('Watchlists') 
-                }
             }
         }
     }
     #===================End: Watchlist code================
+
+    # ===============Start of new: SummaryRules Code ============
+    $summaryRulesFolderResult = $filesList -match ([regex]::Escape($solutionSummaryRulesFolder)) | ForEach-Object { $_.replace($solutionSummaryRulesFolder, '', 'OrdinalIgnoreCase') }
+    $summaryRulesWithSpaceFolderResult = $filesList -match ([regex]::Escape($solutionSummaryRulesWithSpaceFolder)) | ForEach-Object { $_.replace($solutionSummaryRulesWithSpaceFolder, '', 'OrdinalIgnoreCase') }
+    $summaryRulesFolderResultLength = $summaryRulesFolderResult.Count
+    $summaryRulesWithSpaceFolderResultLength = $summaryRulesWithSpaceFolderResult.Count
+
+    $summaryRulesArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("SummaryRules")))
+    if ($summaryRulesFolderResultLength -gt 0 -or $summaryRulesWithSpaceFolderResultLength -gt 0) {
+        $allSummaryRules = @()
+        if ($summaryRulesFolderResultLength -gt 0) {
+            $allSummaryRules += $summaryRulesFolderResult
+        }
+        if ($summaryRulesWithSpaceFolderResultLength -gt 0) {
+            $allSummaryRules += $summaryRulesWithSpaceFolderResult
+        }
+        $allSummaryRules = Normalize-SummaryRulesPaths $allSummaryRules
+        $allSummaryRules = $allSummaryRules | Where-Object { $_ -ne '' }
+        $allSummaryRulesArray = $allSummaryRules | ConvertTo-Json -AsArray
+        if (!$summaryRulesArrayAttributeExist) {
+            $dataFileContentObject | ForEach-Object {
+                $_ | Add-Member -MemberType NoteProperty -Name 'SummaryRules' -Value $allSummaryRulesArray -PassThru
+            }
+        } else {
+            if ($dataFileContentObject.SummaryRules.Count -gt 0) {
+                $normalizedSummaryRules = Normalize-SummaryRulesPaths $dataFileContentObject.SummaryRules | ConvertTo-Json -AsArray
+                $dataFileContentObject.PSObject.Properties.Remove('SummaryRules')
+                $datafilecontentobject | foreach-object {
+                    $_ | add-member -membertype noteproperty -name 'SummaryRules' -value $normalizedSummaryRules -passthru
+                }
+            } else {
+                $dataFileContentObject.PSObject.Properties.Remove('SummaryRules')
+            }
+        }
+    }
 
     $jsonDataFile = $dataFileContentObject | ConvertTo-Json
     $jsonDataFile.replace("'", "''") # replace single quote with double
@@ -910,34 +1097,19 @@ try {
     Write-Host "Updating data input file $dataFolderFile"
     Set-Content -Path $dataFilePath -Value $jsonDataFile
 
-    foreach ($property in $dataFileContentObject.PSObject.Properties) {
-        if ($property.Name.ToLower() -eq 'watchlists' -or 
-            $property.Name.ToLower() -eq 'watchlist' -or 
-            $property.Name -eq 'Hunting Queries' -or 
-            $property.Name -eq 'Analytic Rules' -or 
-            $property.Name.ToLower() -eq 'playbooks' -or 
-            $property.Name.ToLower() -eq 'workbooks' -or 
-            $property.Name.ToLower() -eq 'parsers' -or 
-            $property.Name.ToLower() -eq 'dataconnectors' -or 
-            $property.Name.ToLower() -eq 'data connectors') {
-            if ($property.Value.GetType().FullName -eq 'System.String') {
-                $customProperties[$property.Name] = $property.Value | ConvertFrom-Json
-            }
-            else {
-                $customProperties[$property.Name] = $property.Value
-            }
-        }
-    }
-
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Package-generator : Data Input File Prepared dynamic, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
     Write-Host "Now going to execute createSolutionV4 file"
+
+    if ($null -eq $isWatchListInsideOfWorkbooksFolder -or $isWatchListInsideOfWorkbooksFolder -eq '') {
+        $isWatchListInsideOfWorkbooksFolder = $false
+    }
 
     ./Tools/Create-Azure-Sentinel-Solution/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
     Write-Host "packageCreationPath $packageCreationPath"
-    if (Test-Path -Path "$packageCreationPath") {
-        $allFilesInCreatedPackage = Get-ChildItem "$packageCreationPath" 
+    $zipPackagePath = $packageCreationPath + $packageVersion + ".zip"
+    if (Test-Path -Path "$zipPackagePath") {
+        $allFilesInCreatedPackage = Get-ChildItem "$zipPackagePath" 
         $allFilesInCreatedPackageCount = $allFilesInCreatedPackage.Count
     } else {
         $allFilesInCreatedPackageCount = 0
@@ -948,11 +1120,10 @@ try {
     Write-Host "Package Files List are : $allFilesInCreatedPackage"
     Write-Host "Package Files Count $allFilesInCreatedPackageCount"
 
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Package-generator : Total Files created in package : $allFilesInCreatedPackageCount with file names : $allFilesInCreatedPackage , Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
-
     $solutionBaseFolderPath = "Solutions/" + $solutionName + "/Package"
 
     if ($allFilesInCreatedPackageCount -gt 0) {
+        $uploadPackagePath = $packageCreationPath + $packageVersion + ".zip"
         Write-Output "isCreatePackage=$true" >> $env:GITHUB_OUTPUT
         Write-Output "solutionBaseFolderPath=$solutionBaseFolderPath" >> $env:GITHUB_OUTPUT
         Write-Output "packageCreationPath=$packageCreationPath" >> $env:GITHUB_OUTPUT
@@ -961,12 +1132,11 @@ try {
         Write-Output "dataFileLink=$dataFileLink" >> $env:GITHUB_OUTPUT
         Write-Output "dataFolderPath=$dataFolderPath" >> $env:GITHUB_OUTPUT
         Write-Output "dataInputFileName=$dataFolderFile" >> $env:GITHUB_OUTPUT 
+        Write-Output "uploadPackagePath=$uploadPackagePath" >> $env:GITHUB_OUTPUT
 
         Write-Host "Package created successfully!"
     }
     else {
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Package-generator : Total Files created in package : 0, Job Run Id : $runId" -Severity Warning -CustomProperties $customProperties
-
         Write-Output "::error::Package creation for Solution '$solutionName' Failed with an error" 
         ErrorOutput
     }
@@ -977,6 +1147,5 @@ catch {
     Write-Output "Error Details $errorDetails , Error Info $errorInfo"
     
     Write-Host "Package-generator: Error occured in catch block!"
-    Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "Package-generator : Error occured in catch block: $_"; 'EventName' = "Package Generator"; 'SolutionOfferId' = "$solutionOfferId"; }
     ErrorOutput
 }
