@@ -7,7 +7,7 @@ app = func.FunctionApp()
 
 
 @app.timer_trigger(
-    schedule=f"0 */{os.getenv('INTERVAL', 5)} * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False
+    schedule=f"0 */{os.getenv('INTERVAL', 5)} * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False # type: ignore[misc]
 )
 def timer_trigger(myTimer: func.TimerRequest) -> None:
     if myTimer.past_due:
@@ -15,7 +15,7 @@ def timer_trigger(myTimer: func.TimerRequest) -> None:
 
     logging.info("MAIN execution")
     try:
-        from integration.main import main
+        from main_sentinel import main
 
         main()
     except Exception as e:
