@@ -83,10 +83,11 @@ function New-ArnRole
         
         # Determine if this role already exists before continuing
         Write-Log "Executing: aws iam get-role --role-name $roleName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
-        aws iam get-role --role-name $roleName 2>&1| Out-Null
+        aws iam get-role --role-name "OIDC_$roleName" 2>&1| Out-Null
 
         # If there was an error the role does not already exist, so it must be created.
         $isRuleNotExist = $lastexitcode -ne 0
+        Write-Log -Message "isRuleNotExist: $isRuleNotExist" -LogFileName $LogFileName -Severity Verbose
         if ($isRuleNotExist)
         {
             $script:roleName = "OIDC_$roleName"
