@@ -98,6 +98,7 @@ $standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watc
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB'; Value = 'Microsoft-WindowsEvent' }
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Microsoft-WindowsEvent' }
 $standardStreamMapping += @{ Key = 'SENTINEL_GOOGLEWORKSPACEREPORTS'; Value = 'Microsoft-GoogleWorkspaceReports' }
+
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSSecurityHubFindings' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver' }
 $standardStreamMapping += @{ Key = 'CROWDSTRIKE_VULNERABILITIES'; Value = 'Microsoft-CrowdStrikeVulnerabilities' }
@@ -106,6 +107,8 @@ $standardStreamMapping += @{ Key = 'CROWDSTRIKE_INCIDENTS'; Value = 'Microsoft-C
 $standardStreamMapping += @{ Key = 'CROWDSTRIKE_DETECTIONS'; Value = 'Microsoft-CrowdStrikeDetections' }
 $standardStreamMapping += @{ Key = 'CROWDSTRIKE_HOSTS'; Value = 'Microsoft-CrowdStrikeHosts' }
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_VPC_FLOW_LOGS'; Value = 'Microsoft-GCPVPCFlow' }
+$standardStreamMapping += @{ Key = 'SENTINEL_GCP_CDN_LOGS'; Value = 'Microsoft-GCPCDN'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCPRESOURCEMANAGER'; Value = 'Microsoft-GCPResourceManager'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPCOMPUTEENGINE'; Value = 'Microsoft-GCPComputeEngine'}
 
 # Function to check if a key exists in the array of hashtables
