@@ -30,15 +30,14 @@ query: |
   let fileHashIndicators = ThreatIntelIndicators
   //extract key part of kv pair
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-  | where isnotempty(IndicatorType) and IndicatorType == "file"
+  | where IndicatorType == "file"
   | extend FileHashType = replace("'", "", substring(ObservableKey, indexof(ObservableKey, "hashes.") + 7, strlen(ObservableKey) - indexof(ObservableKey, "hashes.") - 7))
   | extend FileHashValue = toupper(ObservableValue)
   | extend IndicatorId = tostring(split(Id, "--")[2])
   | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
-  | where isnotempty(FileHashValue)
   | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now();
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
   // Handle matches against both lower case and uppercase versions of the hash:
   (fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
   | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
@@ -46,7 +45,6 @@ query: |
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   |  join kind=innerunique (
     CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
-    | where isnotempty(FileHash)
     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
     )
   on $left.FileHashValue == $right.FileHash
@@ -93,5 +91,5 @@ entityMappings:
         columnName: FileHashValue
       - identifier: Algorithm
         columnName: FileHashType
-version: 1.3.7
+version: 1.3.8
 kind: Scheduled

@@ -30,18 +30,17 @@ query: |
   ThreatIntelIndicators
   //extract key part of kv pair
        | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
        | extend NetworkSourceIP = toupper(ObservableValue)
        | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   // Picking up only IOC's that contain the entities we want
-  | where isnotempty(NetworkSourceIP)
   | where TimeGenerated >= ago(ioc_lookBack)
   // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
   // Taking the first non-empty value based on potential IOC match availability
   | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
    | join (
        DuoSecurityAuthentication_CL
        | where TimeGenerated >= ago(dt_lookBack)
@@ -51,8 +50,8 @@ query: |
    )
    on $left.TI_ipEntity == $right.access_device_ip_s
    | where TimeGenerated >= ago(ioc_lookBack)
-   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-   | where IsActive == true and ValidUntil > now()
+   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+   | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
    | extend Description = tostring(parse_json(Data).description)
    | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
    | project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Duo_TimeGenerated,
@@ -71,5 +70,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: access_device_ip_s
-version: 1.0.7
+version: 1.0.8
 kind: Scheduled
