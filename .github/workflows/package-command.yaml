@@ -38,24 +38,30 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: "${{ env.BRANCH_NAME }}"
+          fetch-depth: 0
+          persist-credentials: false  # Disable automatic token authentication
+          # Do not use privileged token for untrusted code checkout
+
       - name: Generate a token
         id: generate_token
         uses: actions/create-github-app-token@333678481b1f02ee31fa1443aba4f1f7cb5b08b5 # v2.0.0
         with:
           app-id: ${{ secrets.APPLICATION_ID }}
           private-key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
-
-      - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: "${{ env.BRANCH_NAME }}"
-          fetch-depth: 2000
-          token: ${{ steps.generate_token.outputs.token }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
 
       - name: Check if PR branch is up to date with master
         id: check_up_to_date
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git fetch origin master
           BASE=$(git merge-base HEAD origin/master)
           if [ "$BASE" = "$(git rev-parse HEAD)" ]; then
@@ -137,31 +143,16 @@ jobs:
 
       - name: Push changes to existing PR
         if: steps.uploadDataFileArtifact.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           git config --global user.email "noreply@github.com"
           git config --global user.name "GitHub Actions Bot"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m '[skip ci] Automated package addition to Pull Request'
-            git push
+            git push origin HEAD:${{ env.BRANCH_NAME }}
           else
             echo "No changes to commit"
           fi
-
-      - uses: docker/build-push-action@v2
-        id: publishGithubPackage
-        name: Run ARM-TTK
-        if: ${{ success() }}
-        continue-on-error: true
-        env: 
-          SolutionName: "${{ steps.validateAndCreatePackage.outputs.solutionName }}"
-          mainTemplateChanged: "True"
-          createUiChanged: "True"
-        with:
-          context: .
-          file: ./.github/actions/Dockerfile
-          push: false
-          build-args: |
-            SolutionName=${{ env.SolutionName }}
-            mainTemplateChanged=${{ env.mainTemplateChanged }}
-            createUiChanged=${{ env.createUiChanged }}
