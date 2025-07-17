@@ -38,26 +38,6 @@
             }
           },
           {
-            "id": "6b4373f0-7c1a-47d8-baed-bc5d0cd7233e",
-            "version": "KqlParameterItem/1.0",
-            "name": "timebrush",
-            "label": "Time Filter",
-            "type": 4,
-            "isRequired": true,
-            "isHiddenWhenLocked": true,
-            "typeSettings": {
-              "selectableValues": [],
-              "allowCustom": true
-            },
-            "timeContext": {
-              "durationMs": 86400000
-            },
-            "value": {
-              "durationMs": 60000,
-              "endTime": "2016-12-12T18:01:00.000Z"
-            }
-          },
-          {
             "id": "a40ffccc-08a0-4e15-9bf2-3ed99658d4d8",
             "version": "KqlParameterItem/1.0",
             "name": "selectedseverity",
@@ -98,7 +78,9 @@
               "showDefault": false
             },
             "jsonData": "[\"Audit\",\"Application\", \"Process\", \"User\", \"Network\", \"System\"]",
-            "defaultValue": "value::all"
+            "value": [
+              "value::all"
+            ]
           }
         ],
         "style": "pills",
@@ -117,15 +99,35 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let audit = view(){\n        Samsung_Knox_Audit_CL\n    };\nlet application= view(){\n        Samsung_Knox_Application_CL\n    };\n    let system= view(){\n        Samsung_Knox_System_CL\n    };\n    let process= view(){\n        Samsung_Knox_Process_CL\n    };\n    let user= view(){\n        Samsung_Knox_User_CL\n    };\n    let network= view(){\n        Samsung_Knox_Network_CL\n    };\nlet selectedtables = dynamic([{selectedtype}]);\nlet severityParam = dynamic([{selectedseverity}]);\nlet maxdatapoints = 10000;\nlet starttime = {CustomTimeRange:start};\nlet endtime = {CustomTimeRange:end};\nlet day = datetime_diff('day',endtime,starttime);\nlet initialbinsize = case(day >=30, 1d, day >=7, 1d, day >=1,1h,5m);\nlet datapoints = (binsize : timespan){\nunion (audit() | where \"Audit\" in (selectedtables)), (application() | where \"Application\" in (selectedtables)),(process() | where \"Process\" in (selectedtables)),(user() | where \"User\" in (selectedtables)),(network() | where \"Network\" in (selectedtables)),(system() | where \"System\" in (selectedtables))\n| where TimeGenerated >= {CustomTimeRange:start} and TimeGenerated <={CustomTimeRange:end} \n| where Severity in (severityParam)\n| summarize Count=count() by Name, bin(TimeGenerated,binsize)};\n\nlet totalpoints = datapoints(initialbinsize) |summarize totalrows = count();\nlet inttotalpoints = toint(toscalar(totalpoints));\nlet binsizefactor = inttotalpoints/maxdatapoints +1;\nlet binsize = binsizefactor * initialbinsize;\n\nunion (audit() | where \"Audit\" in (selectedtables)), (application() | where \"Application\" in (selectedtables)),(process() | where \"Process\" in (selectedtables)),(user() | where \"User\" in (selectedtables)),(network() | where \"Network\" in (selectedtables)),(system() | where \"System\" in (selectedtables))\n| where TimeGenerated >= {CustomTimeRange:start} and TimeGenerated <={CustomTimeRange:end} \n| where Severity in (severityParam)\n| summarize Count=count() by Name, bin(TimeGenerated,binsize)\n",
+              "query": "let selectedtables = dynamic([{selectedtype}]);\nlet severityParam = dynamic([{selectedseverity}]);\nlet starttime = {CustomTimeRange:start};\nlet endtime = {CustomTimeRange:end};\nlet timeRange = datetime_diff('minute', endtime, starttime);\nlet binsize = case(\n    timeRange <= 30, 1m,\n    timeRange <= 60, 2m,\n    timeRange <= 180, 5m,\n    timeRange <= 720, 15m,\n    timeRange <= 1440, 30m,\n    timeRange <= 4320, 1h,\n    timeRange <= 10080, 4h,\n    timeRange <= 43200, 1d,\n    7d\n);\nunion \n    (Samsung_Knox_Audit_CL | where \"Audit\" in (selectedtables) | extend Type = \"Audit\"),\n    (Samsung_Knox_Application_CL | where \"Application\" in (selectedtables) | extend Type = \"Application\"),\n    (Samsung_Knox_Process_CL | where \"Process\" in (selectedtables) | extend Type = \"Process\"),\n    (Samsung_Knox_User_CL | where \"User\" in (selectedtables) | extend Type = \"User\"),\n    (Samsung_Knox_Network_CL | where \"Network\" in (selectedtables) | extend Type = \"Network\"),\n    (Samsung_Knox_System_CL | where \"System\" in (selectedtables) | extend Type = \"System\")\n| where TimeGenerated >= starttime and TimeGenerated < endtime\n| where \"{selectedseverity}\" == \"value::all\" or Severity in (severityParam)\n| summarize EventCount=count() by EventName=Name, TimeBin=bin(TimeGenerated, binsize)\n| where TimeBin >= starttime and TimeBin < endtime\n| extend TimeBinFormatted = TimeBin\n| order by TimeBin asc\n| project TimeBin=TimeBinFormatted, EventName, EventCount",
               "size": 2,
               "title": "Total events",
-              "noDataMessage": "No security event data found for the selected time period, severity or type.  Please update the filters applied.",
-              "timeBrushParameterName": "timebrush",
-              "timeBrushExportOnlyWhenBrushed": true,
+              "noDataMessage": "No security event data found for the selected time period, severity or type. Please update the filters applied.",
+              "timeBrushParameterName": "CustomTimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "barchart"
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "TimeBin",
+                "yAxis": [
+                  "EventCount"
+                ],
+                "group": "EventName",
+                "createOtherGroup": 100,
+                "showLegend": true,
+                "legendPosition": "bottom",
+                "seriesLabelSettings": [],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  },
+                  "min": 0
+                }
+              }
             },
             "customWidth": "60",
             "name": "query - 7",
@@ -150,10 +152,10 @@
                         "type": 3,
                         "content": {
                           "version": "KqlItem/1.0",
-                          "query": "\n\nlet severityParam = dynamic([{selectedseverity}]);\nlet audit = view(){\n        Samsung_Knox_Audit_CL\n    };\nlet application= view(){\n        Samsung_Knox_Application_CL\n    };\n    let system= view(){\n        Samsung_Knox_System_CL\n    };\n    let process= view(){\n        Samsung_Knox_Process_CL\n    };\n    let user= view(){\n        Samsung_Knox_User_CL\n    };\n    let network= view(){\n        Samsung_Knox_Network_CL\n    };\nlet selectedtables = dynamic([{selectedtype}]);\nunion (audit() | where \"Audit\" in (selectedtables)), (application() | where \"Application\" in (selectedtables)),(process() | where \"Process\" in (selectedtables)),(user() | where \"User\" in (selectedtables)),(network() | where \"Network\" in (selectedtables)),(system() | where \"System\" in (selectedtables))\n|where iff('{timebrush:label}'==\"12/12/2016 10:00 AM - 10:01 AM\" ,  TimeGenerated >= {CustomTimeRange:start} and TimeGenerated <={CustomTimeRange:end},  TimeGenerated >= {timebrush:start} and TimeGenerated <={timebrush:end})\n|where Severity in (severityParam)\n| summarize count() by Severity\n| where Severity in ('high', 'med','low')\n|order by case( Severity == 'high',3, Severity == 'med',2, Severity == 'low',1,0)\n",
+                          "query": "let selectedtables = dynamic([{selectedtype}]);\nlet severityParam = dynamic([{selectedseverity}]);\nunion \n    (Samsung_Knox_Audit_CL | where \"Audit\" in (selectedtables) | extend Type = \"Audit\"),\n    (Samsung_Knox_Application_CL | where \"Application\" in (selectedtables) | extend Type = \"Application\"),\n    (Samsung_Knox_Process_CL | where \"Process\" in (selectedtables) | extend Type = \"Process\"),\n    (Samsung_Knox_User_CL | where \"User\" in (selectedtables) | extend Type = \"User\"),\n    (Samsung_Knox_Network_CL | where \"Network\" in (selectedtables) | extend Type = \"Network\"),\n    (Samsung_Knox_System_CL | where \"System\" in (selectedtables) | extend Type = \"System\")\n| where TimeGenerated {CustomTimeRange}\n| where \"{selectedseverity}\" == \"value::all\" or Severity in (severityParam)\n| summarize count() by Severity\n| where Severity in ('high', 'med', 'low')\n| order by case(Severity == 'high', 3, Severity == 'med', 2, Severity == 'low', 1, 0)",
                           "size": 4,
                           "title": "Events by severity",
-                          "noDataMessage": "No security event data found for the selected time period, severity or type.  Please update the filters applied.",
+                          "noDataMessage": "No security event data found for the selected time period, severity or type. Please update the filters applied.",
                           "queryType": 0,
                           "resourceType": "microsoft.operationalinsights/workspaces",
                           "visualization": "tiles",
@@ -267,37 +269,43 @@
                         "type": 3,
                         "content": {
                           "version": "KqlItem/1.0",
-                          "query": "let severityParam = dynamic([{selectedseverity}]);\nlet audit = view(){\n        Samsung_Knox_Audit_CL\n    };\nlet application= view(){\n        Samsung_Knox_Application_CL\n    };\n    let system= view(){\n        Samsung_Knox_System_CL\n    };\n    let process= view(){\n        Samsung_Knox_Process_CL\n    };\n    let user= view(){\n        Samsung_Knox_User_CL\n    };\n    let network= view(){\n        Samsung_Knox_Network_CL\n    };\nlet selectedtables = dynamic([{selectedtype}]);\nunion (audit() | where \"Audit\" in (selectedtables)), (application() | where \"Application\" in (selectedtables)),(process() | where \"Process\" in (selectedtables)),(user() | where \"User\" in (selectedtables)),(network() | where \"Network\" in (selectedtables)),(system() | where \"System\" in (selectedtables))\n|where iff('{timebrush:label}'==\"12/12/2016 10:00 AM - 10:01 AM\" ,  TimeGenerated >= {CustomTimeRange:start} and TimeGenerated <={CustomTimeRange:end},  TimeGenerated >= {timebrush:start} and TimeGenerated <={timebrush:end})\n|where Severity in (severityParam)\n| summarize count() by Type\n| render piechart ",
+                          "query": "let selectedtables = dynamic([{selectedtype}]);\nlet severityParam = dynamic([{selectedseverity}]);\nlet allSelected = \"{selectedtype}\" == \"value::all\" or array_length(selectedtables) == 6;\nlet results = union \n    (Samsung_Knox_Audit_CL | extend EventType = \"Audit\"),\n    (Samsung_Knox_Application_CL | extend EventType = \"Application\"),\n    (Samsung_Knox_Process_CL | extend EventType = \"Process\"),\n    (Samsung_Knox_User_CL | extend EventType = \"User\"),\n    (Samsung_Knox_Network_CL | extend EventType = \"Network\"),\n    (Samsung_Knox_System_CL | extend EventType = \"System\")\n| where TimeGenerated {CustomTimeRange}\n| where \"{selectedseverity}\" == \"value::all\" or Severity in (severityParam)\n| where allSelected or EventType in (selectedtables)\n| summarize EventCount = count() by EventType;\nresults\n| render piechart with (legend=hidden)",
                           "size": 3,
                           "title": "Events by type",
-                          "noDataMessage": "No security event data found for the selected time period, severity or type.  Please update the filters applied.",
+                          "noDataMessage": "No security event data found for the selected time period, severity or type. Please update the filters applied.",
                           "queryType": 0,
                           "resourceType": "microsoft.operationalinsights/workspaces",
                           "chartSettings": {
                             "seriesLabelSettings": [
                               {
-                                "seriesName": "Samsung_Knox_Application_CL",
-                                "label": "Application"
+                                "seriesName": "Audit",
+                                "label": "Audit",
+                                "color": "purple"
                               },
                               {
-                                "seriesName": "Samsung_Knox_Network_CL",
-                                "label": "Network"
+                                "seriesName": "Application",
+                                "label": "Application",
+                                "color": "blue"
                               },
                               {
-                                "seriesName": "Samsung_Knox_User_CL",
-                                "label": "User"
+                                "seriesName": "Process",
+                                "label": "Process",
+                                "color": "turquoise"
                               },
                               {
-                                "seriesName": "Samsung_Knox_Process_CL",
-                                "label": "Process"
+                                "seriesName": "User",
+                                "label": "User",
+                                "color": "green"
                               },
                               {
-                                "seriesName": "Samsung_Knox_Audit_CL",
-                                "label": "Audit"
+                                "seriesName": "Network",
+                                "label": "Network",
+                                "color": "orange"
                               },
                               {
-                                "seriesName": "Samsung_Knox_System_CL",
-                                "label": "System"
+                                "seriesName": "System",
+                                "label": "System",
+                                "color": "redBright"
                               }
                             ]
                           }
@@ -320,10 +328,10 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "\nlet audit = view(){\n        Samsung_Knox_Audit_CL\n    };\nlet application= view(){\n        Samsung_Knox_Application_CL\n    };\n    let system= view(){\n        Samsung_Knox_System_CL\n    };\n    let process= view(){\n        Samsung_Knox_Process_CL\n    };\n    let user= view(){\n        Samsung_Knox_User_CL\n    };\n    let network= view(){\n        Samsung_Knox_Network_CL\n    };\nlet selectedtables = dynamic([{selectedtype}]);\nlet severityParam = dynamic([{selectedseverity}]);\nunion (audit() | where \"Audit\" in (selectedtables)), (application() | where \"Application\" in (selectedtables)),(process() | where \"Process\" in (selectedtables)),(user() | where \"User\" in (selectedtables)),(network() | where \"Network\" in (selectedtables)),(system() | where \"System\" in (selectedtables))\n| where iff('{timebrush:label}'==\"12/12/2016 10:00 AM - 10:01 AM\" ,  TimeGenerated >= {CustomTimeRange:start} and TimeGenerated <={CustomTimeRange:end},  TimeGenerated >= {timebrush:start} and TimeGenerated <={timebrush:end})\n| where Severity in (severityParam)\n|project Time =TimeGenerated,\nName,\nSeverity,\n[\"Device Model\"] = DeviceModel,\nType = replace_string(replace_string(Type,\"Samsung_Knox_\",\"\"),\"_CL\",\"\"),\nProfile,\n[\"MITRE Technique ID(s)\"] = array_strcat(MitreTtp,\", \")\n| sort by Time desc\n\n\n",
+              "query": "let selectedtables = dynamic([{selectedtype}]);\nlet severityParam = dynamic([{selectedseverity}]);\nunion \n    (Samsung_Knox_Audit_CL | where \"Audit\" in (selectedtables) | extend Type = \"Audit\"),\n    (Samsung_Knox_Application_CL | where \"Application\" in (selectedtables) | extend Type = \"Application\"),\n    (Samsung_Knox_Process_CL | where \"Process\" in (selectedtables) | extend Type = \"Process\"),\n    (Samsung_Knox_User_CL | where \"User\" in (selectedtables) | extend Type = \"User\"),\n    (Samsung_Knox_Network_CL | where \"Network\" in (selectedtables) | extend Type = \"Network\"),\n    (Samsung_Knox_System_CL | where \"System\" in (selectedtables) | extend Type = \"System\")\n| where TimeGenerated {CustomTimeRange}\n| where \"{selectedseverity}\" == \"value::all\" or Severity in (severityParam)\n| extend SeverityDisplay = case(\n    tolower(Severity) == \"low\", \"1-low\",\n    tolower(Severity) == \"med\", \"2-med\",\n    tolower(Severity) == \"high\", \"3-high\",\n    Severity\n)\n| project Time = TimeGenerated,\n    Name,\n    Severity = SeverityDisplay,\n    [\"Device Model\"] = DeviceModel,\n    Type,\n    Profile,\n    [\"Primary IMEI\"] = PrimaryImei,\n    [\"MITRE Technique ID(s)\"] = array_strcat(MitreTtp, \", \")\n| sort by Time desc",
               "size": 2,
               "title": "Event list",
-              "noDataMessage": "No security event data found for the selected time period, severity or type.  Please update the filters applied.",
+              "noDataMessage": "No security event data found for the selected time period, severity or type. Please update the filters applied.",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "table",
@@ -337,45 +345,27 @@
                       "thresholdsGrid": [
                         {
                           "operator": "==",
-                          "thresholdValue": "high",
+                          "thresholdValue": "3-high",
                           "representation": "dot-redBright",
-                          "text": "{0}{1}"
+                          "text": "high"
                         },
                         {
                           "operator": "==",
-                          "thresholdValue": "med",
+                          "thresholdValue": "2-med",
                           "representation": "dot-orange",
-                          "text": "{0}{1}"
+                          "text": "med"
                         },
                         {
                           "operator": "==",
-                          "thresholdValue": "low",
+                          "thresholdValue": "1-low",
                           "representation": "dot-yellow",
-                          "text": "{0}{1}"
-                        },
-                        {
-                          "operator": "==",
-                          "thresholdValue": "LOW",
-                          "representation": "dot-yellow",
-                          "text": "{0}{1}"
-                        },
-                        {
-                          "operator": "==",
-                          "thresholdValue": "HIGH",
-                          "representation": "dot-redBright",
-                          "text": "{0}{1}"
-                        },
-                        {
-                          "operator": "==",
-                          "thresholdValue": "MED",
-                          "representation": "dot-orange",
-                          "text": "{0}{1}"
+                          "text": "low"
                         },
                         {
                           "operator": "Default",
                           "thresholdValue": null,
                           "representation": "success",
-                          "text": "{0}{1}"
+                          "text": "{0}"
                         }
                       ]
                     }
