@@ -26,7 +26,7 @@ This pull request will contain:
 * The gallery template json of your workbook. Place it directly under workbooks.<br/>
       Standalone - [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks) <br/>
       Solution   - [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/[SolutionName]/Workbooks)
-* (optional) A logo that workbook to display will be a genetic workbooks logo.
+* A logo that workbook to display will be a genetic workbooks logo.
 * Change workbooksMetadata.json [file](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json), so that it will contain a new section, which will include:
 
    ```
@@ -78,7 +78,7 @@ This pull request will contain:
       },
    
   
-  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>  
+  After this PR is approved and completed, and once publishing is scheduled via Microsoft Partner Center, the workbooks in Sentinel will be synced with the ones in GitHub.<br/>  
   
  
 # How to update an existing workbook
