@@ -5,15 +5,15 @@
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions
 
 1. Obtains domains from URL entities in the incident.
-2. Optionally adds these domains to a customer's domain lists using [Cisco Umbrella Enforcement API](https://developer.cisco.com/docs/cloud-security/#!enforcement-overview/overview).
+2. Optionally adds these domains to a customer's domain lists using [Cisco Cloud Security Enforcement API](https://developer.cisco.com/docs/cloud-security/#!enforcement-overview/overview).
 3. Adds comment to incident with information about posted domains.
 
 <img src="./playbook_screenshot.png" width="50%"/><br>
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, Cisco Umbrella Enforcement Connector needs to be deployed under the same subscription.
-2. Obtain Cisco Umbrella API credentials. Refer to Cisco Umbrella Enforcement Custom Connector documentation.
+1. Prior to the deployment of this playbook, Cisco Cloud Security Enforcement Connector needs to be deployed under the same subscription.
+2. Obtain Cisco Cloud Security API credentials. Refer to Cisco Cloud Security Enforcement Custom Connector documentation.
 
 ### Deployment instructions
 
@@ -34,7 +34,7 @@ Once deployment is complete, authorize each connection.
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Repeat steps for Cisco Umbrella Enforcement connector API Connection. Provide your key and the secret for authorizing.
+6. Repeat steps for Cisco Cloud Security Enforcement connector API Connection. Provide your key and the secret for authorizing.
 
 #### b. Configurations in Sentinel
 
