@@ -1,20 +1,55 @@
-﻿using System;
+﻿using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
+using CsvHelper;
+using CsvHelper.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Varonis.Sentinel.Functions.Helpers
 {
-    internal static class CustomParser
+    public class CustomParser(ILogger logger)
     {
-        public static string[] ParseArrayFromCSV(string propValue)
+        private readonly ILogger _logger = logger;
+
+        public string[] ParseCsvToArray(string propValue)
         {
-            return propValue
-                ?.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                ?.Select(x => x.Trim())
-                ?.ToArray() ?? Array.Empty<string>();
+            if (string.IsNullOrWhiteSpace(propValue))
+            {
+                return [];
+            }
+
+            using var reader = new StringReader(propValue);
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                HasHeaderRecord = false,
+                IgnoreBlankLines = true,
+                TrimOptions = TrimOptions.Trim,
+            };
+            using var csvReader = new CsvReader(reader, config);
+
+            if (!csvReader.Read())
+                return [];
+
+            try
+            {
+                var row = Enumerable.Range(0, csvReader.ColumnCount)
+                    .Select(csvReader.GetField)
+                    .Select(x => x?.Trim())
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .ToArray();
+
+                return row;
+            }
+            catch (CsvHelperException ex)
+            {
+                _logger.LogError(ex, "Error parsing CSV data: {Message}", ex.Message);
+            }
+
+            return [];
         }
 
-        public static (string token, string token_type, int expiresIn)? ParseTokenInfo(string json)
+        public (string token, string token_type, int expiresIn)? ParseTokenInfo(string json)
         {
             var jelement = JsonSerializer.Deserialize<JsonElement>(json);
 
