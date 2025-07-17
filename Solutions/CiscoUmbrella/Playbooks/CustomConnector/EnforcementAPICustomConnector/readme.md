@@ -1,21 +1,21 @@
-# Cisco Umbrella Enforcement API Logic Apps Custom connector
+# Cisco Cloud Security Enforcement API Logic Apps Custom connector
 
-This Custom Connector is used for connection to Cisco Umbrella Enforcement API.
+This Custom Connector is used for connection to Cisco Cloud Security Enforcement API.
 
 ### Authentication methods supported by this connector
 
 * API Key authentication
 
-### Prerequisites in Cisco Umbrella
+### Prerequisites in Cisco Cloud Security
 
-To get Cisco Umbrella Enforcement API credentials, follow the instructions:
+To get Cisco Cloud Security Enforcement API credentials, follow the instructions:
 
-1. Log in to your Cisco Umbrella dashboard.
+1. Log in to your Cisco Cloud Security dashboard.
 2. Navigate to Policies > Policy Components > Integrations.
 3. Expand an existing integration, or click Add to generate a custom integration.
 4. Get *customerKey* parameter value.
 
-## Actions supported by Cisco Umbrella Enforcement API Custom Connector
+## Actions supported by Cisco Cloud Security Enforcement API Custom Connector
 
 | **Component** | **Description** |
 | --------- | -------------- |
