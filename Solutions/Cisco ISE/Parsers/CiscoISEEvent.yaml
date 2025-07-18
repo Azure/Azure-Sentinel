@@ -11,58 +11,113 @@ FunctionQuery: |
     | where ProcessName has_any  ("CSCO", "CISE")
     | extend EventVendor = 'CISCO'
     | extend EventProduct = 'ISE'
-    | parse SyslogMessage with * " " * " " * " " EventId " " EventSeverity " " EventCategory " " RestOfMessage
+    | parse SyslogMessage with MessageID " " NumberOfSyslogs " " SequenceNo " " RestOfMessage
+    | order by MessageID, NumberOfSyslogs, SequenceNo asc 
+    | summarize count(), SyslogArray = make_list(RestOfMessage), TimeGenerated = arg_max(TimeGenerated, *) by MessageID, HostName // group the syslogs with the same ISE message ID, ordered by sequence number
+    | where count_ == toint(NumberOfSyslogs) or toint(NumberOfSyslogs) >= 1 // this line filters out logs where we've missed one of the syslogs from a multiline ISE message
+    | extend SyslogMessage = iff(NumberOfSyslogs == "1", SyslogArray[0], strcat_array(SyslogArray, "")) // if the message is meant to be over one syslog, just take the first entry in the array, otherwise concat the array
+    | parse SyslogMessage with Date:string " " Time:string " " Offset:string " " * " " EventId " " EventSeverity " " EventCategory " " RestOfMessage
+    | extend EventTime = strcat(Date, " ", Time, " ", Offset)
+    | extend EventTime = todatetime(EventTime)
     | parse SyslogMessage with * ": " EventMessage"," *
-    | parse-kv SyslogMessage as (ConfigVersionId:int, ['Device IP Address']:string, NetworkDeviceName:string, DestinationIPAddress:string, DestinationPort:int, UserName:string, Protocol:string, RequestLatency:int, ['NAS-IP-Address']:string, ['NAS-Port']:int, ['NAS-Port-Type']:string, ['NAS-Identifier']:string, ['Service-Type']:string, ['Framed-MTU']:int, ['Called-Station-ID']:string, ['Calling-Station-ID']:string, Action:string, ['Privilege-Level']:int, ['Remote-Address']:string, NetworkDeviceProfileId:string, AcsSessionID:string, ['Acct-Session-Id']:string, ['Authen-Type']:string, AuthenticationIdentityStore:string, AuthenticationMethod:string, Service:string, SelectedAccessService:string, SelectedShellProfile:string, IdentityGroup:string, ['Service-Argument']:string, CmdSet:string, MatchedCommandSet:string, ['Authen-Method']:string, SelectedCommandSet:string, NetworkDeviceProfileName:string, PostureStatus:string, SelectedAuthorizationProfiles:string, AuthorizationPolicyMatchedRule:string, MisconfiguredClientFixReason:string, RadiusPacketType:string, FailureReason:string, Type:string, DetailedInfo:string) with (pair_delimiter=', ', kv_delimiter='=')
+    | parse-kv SyslogMessage as (ConfigVersionId:int, ['Device IP Address']:string, allowEasyWiredSession:string,  NetworkDeviceName:string, DestinationIPAddress:string, DestinationPort:int, Port: string, UserName:string, Protocol:string, ['Acct-Status-Type']:string, ['Acct-Delay-Time']:string, ['Acct-Output-Octets']:string, Location:string, IsMachineAuthentication:string, IsMachineIdentity:string, DTLSSupport:string,  RequestLatency:int,  ['NAS-IP-Address']:string, ['AD-Host-DNS-Domain']:string, TLSVersion:string,  ['NAS-Port']:int, ['NAS-Port-Type']:string, ['Acct-Authentic']:string, ['Acct-Output-Packets']: string,['AD-User-Resolved-Identities']:string, ['AD-User-Join-Point']:string, ['AD-Host-Qualified-Name']:string, ['Acct-Input-Packets']:string, ['NAS-Identifier']:string, ['Service-Type']:string, ['Framed-MTU']:int, ['Called-Station-ID']:string, IdentityAccessRestricted:string, EapAuthentication:string, ['Calling-Station-ID']:string, ExternalGroups:string,  Action:string, ['Privilege-Level']:int, ['Remote-Address']:string, RadiusFlowType:string, ['Device Type']:string, IPSEC:string, ['AD-Host-Join-Point']:string,AuthenticationStatus:string, ['Acct-Input-Octets']:string, AcsSessionID:string, IdentityPolicyMatchedRule:string, ClientLatency:string, ['Acct-Session-Id']:string, ['Authen-Type']:string, AuthenticationIdentityStore:string, AuthenticationMethod:string, Service:string, SelectedAccessService:string, SelectedAuthenticationIdentityStores:string, SelectedShellProfile:string, IdentityGroup:string, ['Service-Argument']:string,['AD-User-NetBios-Name']:string, ['AD-User-SamAccount-Name']:string, ['AD-User-Resolved-DNs']:string, CmdSet:string, MatchedCommandSet:string, ['Authen-Method']:string, ['AD-Host-Resolved-DNs']:string, ['AD-Host-NetBios-Name']:string, ['AD-Groups-Names']:string,['Subject - Common Name']:string, ['Network Device Profile']:string, ['audit-session-id']: string,TLSCipher:string,  ['NAS-Port-Id']: string , HostIdentityGroup:string, SelectedCommandSet:string, NetworkDeviceProfileName:string, TotalAuthenLatency:string, PostureStatus:string, SelectedAuthorizationProfiles:string,['AD-Host-Resolved-Identities']:string, ['AD-Host-Candidate-Identities']:string, AuthorizationPolicyMatchedRule:string,['Serial Number']:string,  IsThirdPartyDeviceFlow:string, MisconfiguredClientFixReason:string, ['AD-User-Qualified-Name']:string,  ['Issuer - Common Name']:string, SSID:string, ['Issuer - Domain Component']:string, EndPointMACAddress:string,EndPointMatchedProfile:string, ISEPolicySetName:string, PostureAssessmentStatus:string, IdentitySelectionMatchedRule:string, CPMSessionID:string, RadiusPacketType:string, FailureReason:string, Type:string, DetailedInfo:string) with (pair_delimiter=', ', kv_delimiter='=')
     | project-rename DvcIpAddr = ['Device IP Address']
     				,DvcHostname = NetworkDeviceName
     				,DstIpAddr = DestinationIPAddress
     				,DstPortNumber = DestinationPort
     				,DstUserName = UserName
+                    ,NetworkDeviceProfile = ['Network Device Profile']
+                    ,AcctDelayTime = ['Acct-Delay-Time']
+                    ,AllowEasyWiredSession= allowEasyWiredSession
+                    ,AcctStatusType = ['Acct-Status-Type']
+                    ,AcctOutputOctets = ['Acct-Output-Octets']
+                    ,AcctInputOctets = ['Acct-Input-Octets']
+                    ,SubjectCommonName = ['Subject - Common Name']
+                    ,ADHostQualifiedName = ['AD-Host-Qualified-Name']
     				,NetworkProtocol = Protocol
-    				,RequestLatency = RequestLatency
+                    ,SerialNumber = ['Serial Number']
     				,NasIpAddress = ['NAS-IP-Address']
+                    ,ADHostResolvedDNs = ['AD-Host-Resolved-DNs']
+                    ,ADUserNetBiosName = ['AD-User-NetBios-Name']
+                    ,ADUserResolvedDNs = ['AD-User-Resolved-DNs']
+                    ,ADHostResolvedIdentities = ['AD-Host-Resolved-Identities']
+                    ,ADHostDNSDomain = ['AD-Host-DNS-Domain']
     				,NasPort = ['NAS-Port']
     				,NasPortType = ['NAS-Port-Type']
     				,NasIdentifier = ['NAS-Identifier']
     				,ServiceType = ['Service-Type']
     				,FramedMtu = ['Framed-MTU']
+                    ,AcctOutputPackets = ['Acct-Output-Packets']
+                    ,NASPortId = ['NAS-Port-Id']
     				,CalledStationId = ['Called-Station-ID']
     				,CallingStationId = ['Calling-Station-ID']
+                    ,ADUserJoinPoint = ['AD-User-Join-Point']
     				,EventType = Type
     				,DvcAction = Action
     				,PrivilegeLevel = ['Privilege-Level']
+                    ,ADHostCandidateIdentities = ['AD-Host-Candidate-Identities']
     				,SrcIpAddr = ['Remote-Address']
-    				,NetworkDeviceProfileId = NetworkDeviceProfileId
-    				,AcsSessionId = AcsSessionID
+                    ,AcsSessionId = AcsSessionID
     				,AcctSessionId = ['Acct-Session-Id']
     				,AuthenType = ['Authen-Type']
-    				,AuthenticationIdentityStore = AuthenticationIdentityStore
-    				,AuthenticationMethod = AuthenticationMethod
-    				,SelectedAccessService = SelectedAccessService
-    				,SelectedShellProfile = SelectedShellProfile
-    				,IdentityGroup = IdentityGroup
-    				,Service = Service
     				,ServiceArgument = ['Service-Argument']
-    				,CmdSet = CmdSet
-    				,MatchedCommandSet = MatchedCommandSet
+                    ,ADUserSamAccountName = ['AD-User-SamAccount-Name']
+                    ,ADUserResolvedIdentities = ['AD-User-Resolved-Identities']
     				,AuthenMethod = ['Authen-Method']
-    				,SelectedCommandSet = SelectedCommandSet
-    				,NetworkDeviceProfileName = NetworkDeviceProfileName
-    				,PostureStatus = PostureStatus
-    				,SelectedAuthorizationProfiles = SelectedAuthorizationProfiles
-    				,AuthorizationPolicyMatchedRule = AuthorizationPolicyMatchedRule
-    				,MisconfiguredClientFixReason = MisconfiguredClientFixReason
-    				,RadiusPacketType = RadiusPacketType
+                    ,IssuerCommonName = ['Issuer - Common Name']
+                    ,IssuerDomainComponent = ['Issuer - Domain Component']
+                    ,AcctAuthentic = ['Acct-Authentic']
+                    ,ADHostJoinPoint = ['AD-Host-Join-Point']
+                    ,ADHostNetBiosName = ['AD-Host-NetBios-Name']
+                    ,ADUserQualifiedName = ['AD-User-Qualified-Name']
+                    ,AcctInputPackets = ['Acct-Input-Packets']
     				,EventTypeDetailed = FailureReason
     				,EventResultDetails = DetailedInfo
     | parse SyslogMessage with * "device-mac=" DvcMacAddr"," *
+    | parse SyslogMessage with * "audit-session-id=" AuditSessionId"," *
+    | parse SyslogMessage with * "NetworkDeviceGroups=" NetworkDeviceGroups"," *
+    | parse SyslogMessage with * "vlan-id=" vlanId"," *
+    | parse SyslogMessage with * "Tunnel-Medium-Type=" TunnelMediumType"," *
+    | parse SyslogMessage with * "ISEServiceName=" ISEServiceName"," *
+    | parse SyslogMessage with * "UniqueConnectionIdentifier =" UniqueConnectionIdentifier"," *
+    | parse SyslogMessage with * "ConnectionStatus=" ConnectionStatus"," *
+    | parse SyslogMessage with * "ISEModuleName=" ISEModuleName"," *
+    | parse SyslogMessage with * "ISELocalAddress=" ISELocalAddress"," *
+    | parse SyslogMessage with * "Tunnel-Private-Group-ID=" TunnelPrivateGroupID"," *
+    | parse SyslogMessage with * "Airespace-Wlan-Id=" AirespaceWlanId"," *
+    | parse SyslogMessage with * "AD-Domain=" ADDomain"," *
+    | parse SyslogMessage with * "AD-Groups-Names=" ADGroupsNames"," *
+    | parse SyslogMessage with * "Model Name=" ModelName"," *
+    | parse SyslogMessage with * "ShutdownReason =" ShutdownReason"," *
+    | parse SyslogMessage with * "EAP-Key-Name=" EAPKeyName"," *
+    | parse SyslogMessage with * "NetworkDeviceProfileId=" NetworkDeviceProfileId"," *
     | parse SyslogMessage with * "device-public-mac=" DevicePublicMac"," *
     | parse SyslogMessage with * "device-platform=" DevicePlatform"," *
+    | parse SyslogMessage with * "AKI=" AKI"," *
+    | parse SyslogMessage with * "PeerAddress=" PeerAddress"," *
+    | parse SyslogMessage with * "PeerName=" PeerName"," *
+    | parse SyslogMessage with * "PeerAuthenticated=" PeerAuthenticated"," *
+    | parse SyslogMessage with * "UniqueSubjectID=" UniqueSubjectID"," *
+    | parse SyslogMessage with * "AuthenticationIdentityStore=" AuthenticationIdentityStore"," *
+    | parse SyslogMessage with * "Response=" Response"," *
+    | parse SyslogMessage with * "AD-Log-Id=" ADLogId"," *
+    | parse SyslogMessage with * "AD-Srv-Query=" ADSrvQuery"," *
+    | parse SyslogMessage with * "AD-Srv-Record=" ADSrvRecord"," *
+    | parse SyslogMessage with * "CertificateHash=" CertificateHash"," *
+    | parse SyslogMessage with * "AdminIPAddress=" AdminIPAddress"," *
+    | parse SyslogMessage with * "AdminInterface=" AdminInterface"," *
+    | parse SyslogMessage with * "AdminName=" AdminName"," *
+    | parse SyslogMessage with * "AD-User-DNS-Domain=" ADUserDNSDomain"," *
+    | parse SyslogMessage with * "AD-Error-Details=" ADErrorDetails"," *
+    | parse SyslogMessage with * "FQSubjectName=" FQSubjectName"," *
+    | parse SyslogMessage with * "AD-Host-SamAccount-Name=" ADHostSamAccountName"," *
+    | parse SyslogMessage with * "Subject=" Subject"," *
+    | parse SyslogMessage with * "Template Name=" TemplateName"," *
+    | parse SyslogMessage with * "Issuer - Fingerprint SHA-256=" IssuerFingerprintSHA256"," *
     | parse SyslogMessage with * "device-platform-version=" DevicePlatformVersion"," *
-    | parse SyslogMessage with * "=device-type=" DeviceType"," *
+    | parse SyslogMessage with * "device-type=" DeviceType"," *
     | parse SyslogMessage with * "ac-user-agent=" HttpUserAgentOriginal"," *;
-    let EventName=datatable(EventId:string, EventDescription:string)["5200","User authentication ended successfully","5201", "User authentication ended successfully","5202","The requested Command Authorization passed","5203","The requested Session Authorization passed","5205","Dynamic Authorization succeeded","5231","Guest Authentication Passed","5236","Authorize-Only ended successfully","5238","","5240","Previously rejected endpoint was released to continue authentications","5400","User authentication failed. See FailureReason for more information","5401","User authentication failed. See FailureReason for more information","5405","RADIUS request dropped","5406","","5407","TACACS+ Authorization failed","5411","Supplicant did not respond to the last message that ISE sent to it","5417","Dynamic Authorization failed","5434","Endpoint conducted several failed authentications of the same scenario","5436","Ignoring this request because it is a duplicate of another packet that is currently being processed","5440","Endpoint started new authentication while previous is still in progress. Most probable that supplicant on that endpoint stopped conducting the previous authentication and started the new one. Closing the previous authentication","5449","Endpoint failed authentication of the same scenario several times and all further requests will be rejected for the duration of the Request Rejection Interval","12508","EAP-TLS handshake failed","12514","EAP-TLS failed SSL/TLS handshake because of an unknown CA in the client certificates chain","12516","EAP-TLS failed SSL/TLS handshake because of an expired certificate in the client certificates chain","60114","ISE server shutdown has been initiated","60166","Certificate Expiration warning","60167","Certificate has expired","80002","This message is generated when a profiler endpoint is profiled","86009","Guest user record is not found in the database","86010","Guest user authentication failed. Please check your password and account permission","86011","Guest user authentication failed. User is not enabled. Please contact your System Administrator","86012","Guest User must accept Access-Use policy before network access is granted","86013","Portal is not found in the database. Please contact your System Administrator","86014","User authentication failed. User account is suspended","86015","Invalid password change. Use correct password based on the password policy","86016","Timeout from server has exceeded the threshold. Please contact your System Administrator","86017","SessionID is missing. Please contact your System Administrator","86018","Guest Change of Authorization has failed. Please contact your System Administrator","86019","User access is restricted based on time profile. Please contact your System Administrator","86020","User authentication failed. Please contact your System Administrator"];
+    let EventName=datatable(EventId:string, EventDescription:string)["5200","User authentication ended successfully","5201", "User authentication ended successfully","5202","The requested Command Authorization passed","5203","The requested Session Authorization passed","5205","Dynamic Authorization succeeded","5231","Guest Authentication Passed","5236","Authorize-Only ended successfully","5238","","5240","Previously rejected endpoint was released to continue authentications","5400","User authentication failed. See FailureReason for more information","5401","User authentication failed. See FailureReason for more information","5405","RADIUS request dropped","5406","","5407","TACACS+ Authorization failed","5411","Supplicant did not respond to the last message that ISE sent to it","5417","Dynamic Authorization failed","5434","Endpoint conducted several failed authentications of the same scenario","5436","Ignoring this request because it is a duplicate of another packet that is currently being processed","5440","Endpoint started new authentication while previous is still in progress. Most probable that supplicant on that endpoint stopped conducting the previous authentication and started the new one. Closing the previous authentication","5449","Endpoint failed authentication of the same scenario several times and all further requests will be rejected for the duration of the Request Rejection Interval","12508","EAP-TLS handshake failed","12514","EAP-TLS failed SSL/TLS handshake because of an unknown CA in the client certificates chain","12542","The EAP-TLS session ticket received from supplicant while the stateless session resume is disabled. Performing full authentication","12516","EAP-TLS failed SSL/TLS handshake because of an expired certificate in the client certificates chain","60114","ISE server shutdown has been initiated","60166","Certificate Expiration warning","60167","Certificate has expired","80002","This message is generated when a profiler endpoint is profiled","86009","Guest user record is not found in the database","86010","Guest user authentication failed. Please check your password and account permission","86011","Guest user authentication failed. User is not enabled. Please contact your System Administrator","86012","Guest User must accept Access-Use policy before network access is granted","86013","Portal is not found in the database. Please contact your System Administrator","86014","User authentication failed. User account is suspended","86015","Invalid password change. Use correct password based on the password policy","86016","Timeout from server has exceeded the threshold. Please contact your System Administrator","86017","SessionID is missing. Please contact your System Administrator","86018","Guest Change of Authorization has failed. Please contact your System Administrator","86019","User access is restricted based on time profile. Please contact your System Administrator","86020","User authentication failed. Please contact your System Administrator"];
     EventData
     | lookup EventName on EventId
     | project TimeGenerated
@@ -78,46 +133,137 @@ FunctionQuery: |
             , DvcHostname
             , DstIpAddr
             , DstPortNumber
+            , ConnectionStatus
+            , ShutdownReason
+            , ADDomain
+            , ADSrvRecord
             , DstUserName
+            , AcctDelayTime
+            , AdminInterface
+            , ADSrvQuery
+            , CertificateHash
+            , UniqueConnectionIdentifier
+            , ISEModuleName
+            , AdminIPAddress
+            , AdminName
+            , ISELocalAddress
+            , IsMachineAuthentication
+            , IsMachineIdentity
+            , TLSVersion
+            , PeerName
+            , PeerAuthenticated
+            , AllowEasyWiredSession
             , NetworkProtocol
+            , ExternalGroups
+            , IssuerCommonName
+            , IssuerDomainComponent
             , RequestLatency
+            , HostIdentityGroup
+            , ADErrorDetails
+            , ADLogId
             , NasIpAddress
             , NasPort
             , NasPortType
+            , RadiusFlowType
+            , Location
+            , IPSEC
+            , EndPointMACAddress
+            , IsThirdPartyDeviceFlow
+            , TunnelMediumType
             , NasIdentifier
+            , CPMSessionID
             , ServiceType
             , FramedMtu
+            , ModelName
+            , NASPortId
+            , SelectedAuthenticationIdentityStores
             , CalledStationId
+            , SerialNumber
             , CallingStationId
             , EventType
+            , EAPKeyName
+            , AKI
+            , NetworkDeviceProfile
+            , ADUserJoinPoint
+            , ADUserNetBiosName
+            , DeviceType
+            , ADUserSamAccountName
             , DvcAction
             , PrivilegeLevel
+            , TemplateName
+            , ADUserResolvedIdentities
+            , IdentityAccessRestricted
+            , TotalAuthenLatency
+            , IssuerFingerprintSHA256
+            , AuthenticationStatus
+            , TunnelPrivateGroupID
             , SrcIpAddr
+            , ADHostResolvedIdentities
+            , ADUserResolvedDNs
+            , ADHostCandidateIdentities
+            , ADHostJoinPoint
+            , Port
+            , SSID
+            , AirespaceWlanId
             , NetworkDeviceProfileId
             , AcsSessionId
+            , AcctAuthentic
+            , ADUserDNSDomain
+            , PostureAssessmentStatus
+            , ISEServiceName
+            , AcctInputPackets
+            , EndPointMatchedProfile
+            , PeerAddress
+            , AcctOutputPackets
+            , ADHostDNSDomain
+            , AuthorizationPolicyMatchedRule
+            , ADGroupsNames
+            , FQSubjectName
+            , UniqueSubjectID
+            , ADUserQualifiedName
+            , SubjectCommonName
             , AuthenType
             , AuthenticationIdentityStore
             , AuthenticationMethod
+            , ADHostNetBiosName
+            , AcctStatusType
+            , AcctInputOctets
+            , AcctOutputOctets
+            , ADHostSamAccountName
+            , AcctSessionId
+            , TLSCipher
+            , ADHostQualifiedName
+            , DTLSSupport
+            , Response
             , SelectedAccessService
             , SelectedShellProfile
             , IdentityGroup
+            , ClientLatency
             , Service
+            , Subject
+            , NetworkDeviceGroups
+            , IdentityPolicyMatchedRule
             , ServiceArgument
             , CmdSet
             , MatchedCommandSet
             , AuthenMethod
             , SelectedCommandSet
+            , ADHostResolvedDNs
             , NetworkDeviceProfileName
+            , ISEPolicySetName
+            , IdentitySelectionMatchedRule
+            , EapAuthentication
             , PostureStatus
             , SelectedAuthorizationProfiles
-            , AuthorizationPolicyMatchedRule
+            , AuditSessionId
+            , vlanId
             , DvcMacAddr
             , DevicePublicMac
             , DevicePlatform
             , DevicePlatformVersion
-            , DeviceType
             , HttpUserAgentOriginal
             , MisconfiguredClientFixReason
             , RadiusPacketType
             , EventTypeDetailed
-            , EventResultDetails
+            , MessageID
+            , EventTime
