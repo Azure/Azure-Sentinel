@@ -109,8 +109,7 @@
             },
             "jsonData": "[{\"value\":\"*\",\"label\":\"All Statuses\",\"selected\":true},{\"value\":\"🟢 Active\",\"label\":\"🟢 Active (<1h)\",\"selected\":false},{\"value\":\"🟡 Recent\",\"label\":\"🟡 Recent (1-6h)\",\"selected\":false},{\"value\":\"🔴 Inactive\",\"label\":\"🔴 Inactive (>6h)\",\"selected\":false}]",
             "defaultValue": "value::all",
-            "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces"
+            "queryType": 0
           }
         ],
         "style": "pills",
@@ -118,6 +117,69 @@
         "resourceType": "microsoft.operationalinsights/workspaces"
       },
       "name": "parameters"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "alert-workspace-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "AlertWorkspace",
+            "type": 5,
+            "isRequired": true,
+            "query": "Resources\n| where type =~ 'microsoft.operationalinsights/workspaces'\n| project value = id, label = id, selected = true\n| take 1",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "isHiddenWhenLocked": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "alert-location-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "AlertLocation",
+            "type": 1,
+            "isRequired": true,
+            "query": "Resources\n| where id =~ '{AlertWorkspace}'\n| project location",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "isHiddenWhenLocked": true,
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "alert-rg-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "AlertResourceGroup",
+            "type": 1,
+            "isRequired": true,
+            "query": "Resources\n| where id =~ '{AlertWorkspace}'\n| project rg = strcat('/subscriptions/', subscriptionId, '/resourceGroups/', resourceGroup)",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "isHiddenWhenLocked": true,
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          }
+        ],
+        "style": "above",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources"
+      },
+      "conditionalVisibility": {
+        "parameterName": "ShowAlertConfig",
+        "comparison": "isEqualTo",
+        "value": "true"
+      },
+      "name": "alert-parameters"
     },
     {
       "type": 12,
@@ -280,19 +342,236 @@
             "name": "kpi-latest-log"
           },
           {
-            "type": 3,
+            "type": 12,
             "content": {
-              "version": "KqlItem/1.0",
-              "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}'\n| make-series LogCount = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step 1h",
-              "size": 0,
-              "title": "📈 Log Volume Timeline",
-              "timeContextFromParameter": "TimeRange",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "areachart"
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Alert Configuration",
+              "expandable": true,
+              "expanded": true,
+              "items": [
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "alert-type-selector",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "AlertType",
+                        "label": "Alert Type",
+                        "type": 2,
+                        "description": "Choose the type of alert to create",
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[{\"value\":\"count\",\"label\":\"🚨 Volume Count Alert - Triggers when hourly event count exceeds threshold\",\"selected\":true},{\"value\":\"change\",\"label\":\"📊 Volume Change Alert - Triggers when volume changes significantly\",\"selected\":false}]",
+                        "value": "change"
+                      },
+                      {
+                        "id": "unified-alert-name",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "AlertName",
+                        "label": "Alert Name",
+                        "type": 1,
+                        "description": "Name for the alert rule",
+                        "value": "SAP LogServ - Volume Change Alert",
+                        "typeSettings": {
+                          "paramValidationRules": [
+                            {
+                              "regExp": "^[a-zA-Z0-9-_ \\(\\)]+$",
+                              "match": true,
+                              "message": "Alert name can only contain alphanumeric characters, spaces, hyphens, underscores, and parentheses"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "unified-threshold",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "AlertThreshold",
+                        "label": "Threshold",
+                        "type": 1,
+                        "description": "Alert threshold (events for count alert, percentage for change alert)",
+                        "value": "10",
+                        "typeSettings": {
+                          "paramValidationRules": [
+                            {
+                              "regExp": "^[0-9]+$",
+                              "match": true,
+                              "message": "Please enter a valid number"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "unified-severity",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "AlertSeverity",
+                        "label": "Severity",
+                        "type": 2,
+                        "description": "Alert severity level",
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[{\"value\":\"0\",\"label\":\"Critical\",\"selected\":false},{\"value\":\"1\",\"label\":\"Error\",\"selected\":false},{\"value\":\"2\",\"label\":\"Warning\",\"selected\":true},{\"value\":\"3\",\"label\":\"Informational\",\"selected\":false},{\"value\":\"4\",\"label\":\"Verbose\",\"selected\":false}]"
+                      }
+                    ],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "unified-alert-params"
+                },
+                {
+                  "type": 11,
+                  "content": {
+                    "version": "LinkItem/1.0",
+                    "style": "nav",
+                    "links": [
+                      {
+                        "id": "create-unified-alert-link",
+                        "linkTarget": "ArmTemplate",
+                        "linkLabel": "Create Alert Rule",
+                        "style": "primary",
+                        "linkIsContextBlade": true,
+                        "templateRunContext": {
+                          "componentIdSource": "parameter",
+                          "componentId": "AlertResourceGroup",
+                          "templateUriSource": "static",
+                          "templateUri": "Community-Workbooks/Workloads/Alerts/log-metric-noag.armtemplate",
+                          "templateParameters": [
+                            {
+                              "name": "alertName",
+                              "source": "parameter",
+                              "value": "AlertName",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertLocation",
+                              "source": "parameter",
+                              "value": "AlertLocation",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "dataSourceId",
+                              "source": "parameter",
+                              "value": "AlertWorkspace",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertThreshold",
+                              "source": "parameter",
+                              "value": "AlertThreshold",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertOperator",
+                              "source": "static",
+                              "value": "GreaterThan",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertMetricThreshold",
+                              "source": "static",
+                              "value": "1",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertMetricOperator",
+                              "source": "static",
+                              "value": "GreaterThan",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertMetricType",
+                              "source": "static",
+                              "value": "Total",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertMetricColumn",
+                              "source": "static",
+                              "value": "LogCount",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertQuery",
+                              "source": "static",
+                              "value": "SAPLogServ_CL | where isnotempty(clz_dir) and isnotempty(clz_subdir) | summarize AggregatedValue = count() by bin(TimeGenerated, 1h)",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertDescription",
+                              "source": "static",
+                              "value": "Alert triggered when SAP LogServ event volume exceeds monitoring threshold",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertSeverity",
+                              "source": "parameter",
+                              "value": "AlertSeverity",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "profileId",
+                              "source": "static",
+                              "value": "SAP-LogServ-Profile",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertTemplateId",
+                              "source": "static",
+                              "value": "SAP-LogServ-Alert",
+                              "kind": "stringValue"
+                            }
+                          ],
+                          "titleSource": "static",
+                          "title": "Create SAP LogServ Alert Rule",
+                          "descriptionSource": "static",
+                          "description": "This will create an alert rule that monitors SAP LogServ event volume based on your selected criteria.",
+                          "runLabelSource": "static",
+                          "runLabel": "Deploy Alert Rule"
+                        }
+                      }
+                    ]
+                  },
+                  "name": "create-unified-alert-button"
+                }
+              ]
+            },
+            "name": "unified-alert-config",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}'\n| make-series LogCount = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step 1h",
+                    "size": 0,
+                    "title": "📈 Log Volume Timeline",
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "visualization": "areachart"
+                  },
+                  "customWidth": "100",
+                  "name": "volume-timeline"
+                }
+              ]
             },
             "customWidth": "100",
-            "name": "volume-timeline"
+            "name": "volume-timeline-with-alerts"
           },
           {
             "type": 3,
