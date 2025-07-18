@@ -412,3 +412,4 @@ def main(mytimer: func.TimerRequest) -> None:
     g.consume_ips()
 
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
+    
