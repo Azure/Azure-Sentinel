@@ -89,7 +89,7 @@ build_solution() {
   # TODO Now push up the templates to the demo/qa environment for review
   if ( ! az deployment group create \
     --resource-group "$target_resource_group" \
-    --name "${built_version}-Preview"  \
+    --name "${built_version}-Preview${RANDOM}"  \
     --template-file "${_package_folder_path}/mainTemplate.json" \
     --parameters workspace-location="${target_location}" \
     --parameters workspace="${target_workspace}" \
@@ -191,12 +191,28 @@ check-matching-analytic-rules-declarations() {
   fi
 }
 
-check-prerequisites() {
+check_spelling(){
+
+  local has_errors  
+  if ! cspell --quiet ./Solutions/Tanium --exclude ./Solutions/Tanium/Workbooks/connect-module-connections.json --exclude ./Solutions/Tanium/Package/mainTemplate.json ; then
+    
+    _msg "  🕵️  Are the only misspellings variables names due to javascript limitations?"   
+    read -p "Enter Y to continue: " ignore_spelling_errors
+    if [ "$ignore_spelling_errors" != "Y" ] && [ "$ignore_spelling_errors" != "y" ]; then
+      return 1
+    fi
+
+  fi  
+}
+
+check_prerequisites() {
   _msg "🧰 checking prerequisites"
   check-command "jq"
+
   check-command "git"
   check-command "unzip"
   check-command "pwsh" "powershell"  
+  check-command "cspell"
   check-arm-ttk
   _msg "\n🧾 checking the package manifest"
   check-matching-playbook-declarations
@@ -228,7 +244,14 @@ main() {
     done
 
     _shout "Checking prerequisites"
-    check-prerequisites
+    check_prerequisites
+
+    _shout "Checking spelling errors"
+    if ! check_spelling ; then
+      _msg_error "Found 1 or more misspellings!"
+      return 1
+    fi
+    
     _shout "Building Solution"
     build_solution
   )

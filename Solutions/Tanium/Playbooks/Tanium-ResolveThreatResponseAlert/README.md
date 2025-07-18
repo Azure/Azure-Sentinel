@@ -2,23 +2,34 @@
 
 ## Overview
 
-This playbook will resolve any associated alerts in Tanium Threat Response associated with a Microsoft Sentinel incident.
+This playbook will resolve any associated alerts in Tanium Threat Response associated with a Microsoft Sentinel incident. The result of resolving the alert will be added as a comment on the incident.
 
 ![Tanium-ResolveThreatResponseAlert screenshot](images/Tanium-ResolveThreatResponseAlert.png)
 
 ## Prerequisites
-
+- Sentinel incidents created using the "Tanium Threat Response Alerts" analytic rule  
 Only Microsoft Sentinel Incidents created by the "Tanium Threat Response Alerts" analytic rule will have the required metadata to allow resolving the associated Tanium Threat Response alert.
 
-This playbook requires Tanium API Gateway 1.4+
+- A [Tanium API Token](https://help.tanium.com/bundle/ug_console_cloud/page/platform_user/console_api_tokens.html)   
+A Tanium API token, granting access to your Tanium environment is required to make the necessary queries against the Tanium API.  
+
+- Tanium Threat Response Module  
+Tanium Threat Response must be installed and operational in your Tanium environment.
+
+- Permission to Assign Roles to the Resource Group   
+For this playbook to successfully run it must have the Microsoft Sentinel Contributor role at the Resource Group scope. This is added as part of this ARM template, and therefore requires the user who is creating the playbook to have `Microsoft.Authorization/roleAssignments/write` on the resource group. Some examples of roles that meet this criteria for the user include:
+  - Owner
+  - User Access Administrator
+  - Role Based Access Control Administrator
+  - Global Administrator 
 
 ## Post-Deployment Instructions
 
-You must authorize the API Connections used by this playbook after deployment.
+You must authorize the API Connections used by this playbook after deployment. See [Tanium Playbooks](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Get_to_know_our_Content.htm#_Tanium_Playbooks) for more information about our playbooks and how to create a playbook from this template.
 
-1. Visit the playbook resource.
-2. Under "Development Tools" (located on the sidebar), click "API Connections".
-3. Ensure each connection has been authorized.
+
+## Get the Template
+Use the links below to create the playbook from our template.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-ResolveThreatResponseAlert%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-ResolveThreatResponseAlert%2Fazuredeploy.json)
 
