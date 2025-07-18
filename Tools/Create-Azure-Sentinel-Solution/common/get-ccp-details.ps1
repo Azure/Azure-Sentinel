@@ -19,7 +19,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
             Write-Host "currentFileDCPath $currentFileDCPath, ccpBaseFolderPath $ccpBaseFolderPath"
             #$fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
             
-            $fileContent = ReadFileContent -filePath $currentFileDCPath
+            $fileContent = ReadFileContent -filePath "$currentFileDCPath"
             if ($null -eq $fileContent) {
                 exit 1;
             }

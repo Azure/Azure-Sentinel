@@ -50,14 +50,16 @@ $ContentKindDict.Add("SummaryRule", "sr")
 
 function ReadFileContent($filePath) {
     try {
-        if (!(Test-Path -Path "$filePath")) {
-            return $null;
+        # Case-insensitive file existence check
+        $parentDir = Split-Path -Path $filePath -Parent
+        $fileName = [System.IO.Path]::GetFileName($filePath)
+        $actualFile = Get-ChildItem -Path $parentDir -Filter "*" | Where-Object { $_.Name -ieq $fileName }
+        if ($null -eq $actualFile) {
+            Write-Host "filePath $filePath (not found, case-insensitive check)"
+            return $null
         }
-
-        $stream = New-Object System.IO.StreamReader -Arg "$filePath";
-        $content = $stream.ReadToEnd();
-        $stream.Close();
-
+        $filePath = $actualFile.FullName
+        $content = Get-Content -Raw -Path $filePath
         if ($null -eq $content) {
             Write-Host "Error in reading file $filePath"
             return $null;
