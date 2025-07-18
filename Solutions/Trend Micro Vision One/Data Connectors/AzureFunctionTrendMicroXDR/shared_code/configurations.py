@@ -5,7 +5,7 @@ import os
 
 from shared_code.models.oat import RiskLevel
 
-VERSION = '1.2.0'
+VERSION = '1.2.5'
 SIEM_NAME = 'SentinelAddon'
 XDR_HOSTS = {
     'us': 'https://api.xdr.trendmicro.com',
@@ -15,6 +15,7 @@ XDR_HOSTS = {
     'sg': 'https://api.sg.xdr.trendmicro.com',
     'au': 'https://api.au.xdr.trendmicro.com',
     'uae': 'https://api.uae.xdr.trendmicro.com/',
+    'mea': 'https://api.mea.xdr.trendmicro.com',
 }
 
 
@@ -102,6 +103,10 @@ def get_datetime_format():
     return '%Y-%m-%dT%H:%M:%S.000Z'
 
 
+def get_wb_list_v3_datetime_format():
+    return "%Y-%m-%dT%H:%M:%SZ"
+
+
 def get_oat_pipeline_datetime_format():
     return '%Y-%m-%dT%H:%M:%SZ'
 
@@ -177,3 +182,15 @@ def get_proactive_retry_time_interval_minutes():
 
 def get_retry_time_interval_minutes():
     return int(os.environ.get('retryTimeIntervalMinutes', 30))
+
+
+def get_query_aggressive_workbench():
+    return bool(os.environ.get("queryAggressiveWorkbench", False))
+
+
+def get_query_custom_workbench():
+    return bool(os.environ.get("queryCustomWorkbench", False))
+
+
+def get_is_rca_disabled():
+    return bool(os.environ.get("isRcaDisabled", True))

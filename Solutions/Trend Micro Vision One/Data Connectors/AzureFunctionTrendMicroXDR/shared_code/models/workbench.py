@@ -7,6 +7,7 @@ ALLOWED_WORKBENCH_COLUMN = [
     'createdTime',
     'updatedTime',
     'severity',
+    'modelId',
 ]
 
 ALLOWED_WORKBENCH_DETAIL_COLUMN = [

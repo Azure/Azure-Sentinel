@@ -1,52 +1,129 @@
-id: 6a3827d2-da52-595f-821a-7b8a9bca4ad3
+id: 133ef0a8-1236-4d7d-af60-c34cdf2d6aed
 Function:
-  Title: corelight_smtp parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight Smtp Events
+  Version: 1.1.0
+  LastUpdated: '2024-12-09'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_smtp
 FunctionAlias: corelight_smtp
-FunctionQuery: |+
-  let corelight_smtp = view () {
-      Corelight_v2_smtp_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          uid=uid_s,
-          id_orig_h=id_orig_h_s,
-          id_orig_p=id_orig_p_d,
-          id_resp_h=id_resp_h_s,
-          id_resp_p=id_resp_p_d,
-          trans_depth=trans_depth_d,
-          helo=helo_s,
-          mailfrom=mailfrom_s,
-          rcptto=rcptto_s,
-          _date=date_s,
-          from=from_s,
-          _to=to_s,
-          cc=cc_s,
-          reply_to=reply_to_s,
-          msg_id=msg_id_s,
-          in_reply_to=in_reply_to_s,
-          subject=subject_s,
-          x_originating_ip=x_originating_ip_s,
-          first_received=first_received_s,
-          second_received=second_received_s,
-          last_reply=last_reply_s,
-          path=path_s,
-          user_agent=user_agent_s,
-          tls=tls_b,
-          fuids=fuids_s,
-          is_webmail=is_webmail_b,
-          urls=urls_s,
-          domains=domains_s
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="smtp",
-          ts=TimeGenerated
-  };
-  corelight_smtp
-
-...
+FunctionQuery: |
+  let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let corelight_smtp = view () {
+        union isfuzzy=true Corelight_v2_smtp_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+        | join kind=leftouter 
+        ( corelight_conn
+        | project uid, local_orig, local_resp
+        ) on $left.uid_s == $right.uid
+        | project-away uid
+        | extend
+            timestamp = column_ifexists("_timestamp_t", ""),
+            _timestamp = column_ifexists("_timestamp_s", ""),
+            path = column_ifexists("_path_s", ""),
+            system_name = column_ifexists("_system_name_s", ""),
+            write_ts = column_ifexists("_write_ts_t", ""),
+            uid = column_ifexists("uid_s", ""),
+            id_orig_h = column_ifexists("id_orig_h_s", ""),
+            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
+            id_resp_h = column_ifexists("id_resp_h_s", ""),
+            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
+            trans_depth = column_ifexists("trans_depth_d", real(null)),
+            version = column_ifexists("_version_s", ""),
+            helo = column_ifexists("helo_s", ""),
+            mailfrom = column_ifexists("mailfrom_s", ""),
+            rcptto = column_ifexists("rcptto_s", ""),
+            date_ = column_ifexists("date_s", ""),          
+            from = column_ifexists("from_s", ""),
+            to_ = column_ifexists("to_s", ""),
+            cc = column_ifexists("cc_s", ""),
+            reply_to = column_ifexists("reply_to_s", ""),
+            msg_id = column_ifexists("msg_id_s", ""),
+            in_reply_to = column_ifexists("in_reply_to_s", ""),
+            subject = column_ifexists("subject_s", ""),
+            x_originating_ip = column_ifexists("x_originating_ip_s", ""),
+            first_received = column_ifexists("first_received_s", ""),
+            second_received = column_ifexists("second_received_s", ""),
+            last_reply = column_ifexists("last_reply_s", ""),
+            path_list = column_ifexists("path_s", ""),
+            user_agent = column_ifexists("user_agent_s", ""),
+            tls = column_ifexists("tls_b", ""),
+            fuids = column_ifexists("fuids_s", ""),
+            is_webmail = column_ifexists("is_webmail_b", ""),
+            urls = column_ifexists("urls_s", ""),
+            domains = column_ifexists("domains_s", "")
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "smtp",
+            ts = TimeGenerated,
+            url_domain = domains,
+            recipient = rcptto,
+            url = urls,
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            sensor_name = coalesce(system_name, "unknown"),
+            timestamp = coalesce(tostring(timestamp), _timestamp)
+        | extend
+            is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false"),
+            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+        | project
+            TimeGenerated,
+            path,
+            system_name,
+            timestamp,
+            write_ts,
+            uid,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            trans_depth,
+            version,
+            helo,
+            mailfrom,
+            rcptto,
+            date_,        
+            from,
+            to_,
+            cc,
+            reply_to,
+            msg_id,
+            in_reply_to,
+            subject,
+            x_originating_ip,
+            first_received,
+            second_received,
+            last_reply,
+            path_list,
+            user_agent,
+            tls,
+            fuids,
+            is_webmail,
+            urls,
+            domains,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts,
+            url_domain,
+            recipient,
+            url,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            sensor_name,
+            is_broadcast,
+            is_dest_internal_ip,
+            is_src_internal_ip,
+            direction
+    };
+    corelight_smtp

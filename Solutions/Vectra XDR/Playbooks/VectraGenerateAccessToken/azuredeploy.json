@@ -1,0 +1,958 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Vectra Generate Access Token",
+        "description": "This playbook will generate access token and refresh token for another playbooks.",
+        "prerequisites": [
+            "1. Users must have a valid pair of Vectra API Client ID and Client secret credentials.",
+            "2. Store Vectra API Client credentials in Key Vault and obtain keyvault name and tenantId",
+            "a. Create a Key Vault with a unique name",
+            "b. Go to KeyVault → secrets, click on Generate/import and create 'Vectra-Client-ID' & 'Vectra-Client-Secret' for storing client_id and client_secret respectively",
+            "NOTE: Make sure the Permission model in the Access Configuration of Keyvault is selected to the Vault access policy. If not then change it to 'Vault access policy'"
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Go to your logic app → API connections → Select keyvault connection resource",
+            "2. Go to General → edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**b. Add Access policy in Keyvault**",
+            "Add access policy for the playbook's managed identity and authorized user to read, and write secrets of key vault.",
+            "1. Go to logic app → <your logic app> → identity → System assigned Managed identity and copy Object (principal) ID.",
+            "2. Go to keyvaults → <your keyvault> → Access policies → create.",
+            "3. Select all keys & secrets permissions. Click next.",
+            "4. In the principal section, search by copied object ID. Click next.",
+            "5. Click review + create.",
+            "6. Repeat the above step 2 to 5 to add access policy for the user account using which connection is authorized."
+        ],
+        "entities": ["Account", "Host"],
+        "tags": ["Vectra", "Access-Token", "Refresh-Token"],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Vectra"
+        },
+        "lastUpdateTime": "2024-09-02T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "VectraGenerateAccessToken",
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Please do not keep 'PlaybookName' parameter empty, else you will receive validation failure"
+            }
+        },
+        "azure key vault": {
+            "type": "string",
+            "defaultValue": "vault.azure",
+            "metadata": {
+                "description": "Enter value for azure key vault"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1
+        },
+        "BaseURL": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter baseurl for your Vectra account.(e.g. https://host.portal.vectra.ai)"
+            }
+        }
+    },
+    "variables": {
+        "KeyvaultConnectionName": "[concat('Keyvault-', trim(parameters('PlaybookName')))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "azure key vault": {
+                            "type": "string",
+                            "defaultValue": "[trim(parameters('azure key vault'))]"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {}
+                        }
+                    },
+                    "actions": {
+                        "Condition_To_Generate_New_Access_Token_If_Refresh_Token_Is_Empty": {
+                            "actions": {},
+                            "runAfter": {
+                                "Initialize_Refresh_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Condition_To_Verify_Successful_Token_Generation_Via_Refresh_Token": {
+                                        "actions": {
+                                            "Condition_To_Verify_Token_Updated_In_Key_Vault_Successfully_Via_Refresh_Token": {
+                                                "actions": {
+                                                    "Response_to_Indicate_Success_While_Updating_Token_In_Vault_Via_Refresh_Token": {
+                                                        "runAfter": {},
+                                                        "type": "Response",
+                                                        "kind": "Http",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "message": "New access code has been generated via refresh token and successfully updated in key vault.",
+                                                                "status": "success"
+                                                            },
+                                                            "statusCode": "@outputs('HTTP_Request_To_Update_Access_Token_In_Key_Vault_Via_Refresh_Token')['statusCode']"
+                                                        }
+                                                    },
+                                                    "Terminate_Due_To_Access_Token_Updated_Successfully": {
+                                                        "runAfter": {
+                                                            "Response_to_Indicate_Success_While_Updating_Token_In_Vault_Via_Refresh_Token": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "Terminate",
+                                                        "inputs": {
+                                                            "runStatus": "Succeeded"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "HTTP_Request_To_Update_Access_Token_In_Key_Vault_Via_Refresh_Token": [
+                                                        "Succeeded",
+                                                        "TimedOut",
+                                                        "Failed"
+                                                    ]
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Response_To_Indicate_Failure_While_Updating_Token_In_Vault_Via_Refresh_Token": {
+                                                            "runAfter": {},
+                                                            "type": "Response",
+                                                            "kind": "Http",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "message": "Error occurred while updating new access token generated via refresh token with status code: @{outputs('HTTP_Request_To_Update_Access_Token_In_Key_Vault_Via_Refresh_Token')['statusCode']}",
+                                                                    "status": "failure"
+                                                                },
+                                                                "statusCode": "@outputs('HTTP_Request_To_Update_Access_Token_In_Key_Vault_Via_Refresh_Token')['statusCode']"
+                                                            }
+                                                        },
+                                                        "Terminate_Due_To_Failure_While_Updating_Access_Token_Via_Refresh_Token": {
+                                                            "runAfter": {
+                                                                "Response_To_Indicate_Failure_While_Updating_Token_In_Vault_Via_Refresh_Token": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Terminate",
+                                                            "inputs": {
+                                                                "runError": {
+                                                                    "code": "@{outputs('HTTP_Request_To_Update_Access_Token_In_Key_Vault_Via_Refresh_Token')['statusCode']}",
+                                                                    "message": "@{body('HTTP_Request_To_Update_Access_Token_In_Key_Vault_Via_Refresh_Token')}"
+                                                                },
+                                                                "runStatus": "Failed"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@outputs('HTTP_Request_To_Update_Access_Token_In_Key_Vault_Via_Refresh_Token')['statusCode']",
+                                                                200
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            },
+                                            "HTTP_Request_To_Update_Access_Token_In_Key_Vault_Via_Refresh_Token": {
+                                                "runAfter": {
+                                                    "Parse_JSON_For_Authentication_Data_Via_Refresh_Token": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "authentication": {
+                                                        "audience": "[concat('https://',trim(parameters('azure key vault')),'.net')]",
+                                                        "type": "ManagedServiceIdentity"
+                                                    },
+                                                    "body": {
+                                                        "value": "@body('Parse_JSON_For_Authentication_Data_Via_Refresh_Token')?['access_token']"
+                                                    },
+                                                    "method": "PUT",
+                                                    "uri": "@{concat('https://',variables('key_vault_name'),'.',parameters('azure key vault'),'.net/secrets/',variables('access_token_secret_name'),'?api-version=7.4')}"
+                                                },
+                                                "runtimeConfiguration": {
+                                                    "secureData": {
+                                                        "properties": [
+                                                            "outputs"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "Parse_JSON_For_Authentication_Data_Via_Refresh_Token": {
+                                                "runAfter": {},
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "access_token": {
+                                                                "type": "string"
+                                                            },
+                                                            "expires_in": {
+                                                                "type": "integer"
+                                                            },
+                                                            "token_type": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "runAfter": {
+                                            "HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token": [
+                                                "Succeeded",
+                                                "TimedOut",
+                                                "Failed"
+                                            ]
+                                        },
+                                        "else": {
+                                            "actions": {
+                                                "Condition_To_Verify_Unauthorized_Attempt": {
+                                                    "actions": {},
+                                                    "runAfter": {},
+                                                    "else": {
+                                                        "actions": {
+                                                            "Response_To_Indicate_Unknown_Error_While_Generating_Token": {
+                                                                "runAfter": {},
+                                                                "type": "Response",
+                                                                "kind": "Http",
+                                                                "inputs": {
+                                                                    "body": {
+                                                                        "message": "Unknown error occurred while generating new access token via refresh token with status code: @{outputs('HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token')['statusCode']}.",
+                                                                        "status": "failure"
+                                                                    },
+                                                                    "statusCode": "@outputs('HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token')['statusCode']"
+                                                                }
+                                                            },
+                                                            "Terminate_Due_To_Error_Occurred_While_Generating_Access_Token_Via_Refresh_Token": {
+                                                                "runAfter": {
+                                                                    "Response_To_Indicate_Unknown_Error_While_Generating_Token": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Terminate",
+                                                                "inputs": {
+                                                                    "runError": {
+                                                                        "code": "@{outputs('HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token')['statusCode']}",
+                                                                        "message": "@{body('HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token')}"
+                                                                    },
+                                                                    "runStatus": "Failed"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "or": [
+                                                            {
+                                                                "equals": [
+                                                                    "@outputs('HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token')['statusCode']",
+                                                                    400
+                                                                ]
+                                                            },
+                                                            {
+                                                                "equals": [
+                                                                    "@outputs('HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token')['statusCode']",
+                                                                    401
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            }
+                                        },
+                                        "expression": {
+                                            "and": [
+                                                {
+                                                    "equals": [
+                                                        "@outputs('HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token')['statusCode']",
+                                                        200
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "type": "If"
+                                    },
+                                    "HTTP_Request_To_Generate_Access_Token_Via_Refresh_Token": {
+                                        "runAfter": {
+                                            "Set_Grant_Type_For_Refresh_Token": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Http",
+                                        "inputs": {
+                                            "authentication": {
+                                                "password": "@variables('client_secret')",
+                                                "type": "Basic",
+                                                "username": "@variables('client_id')"
+                                            },
+                                            "body": "grant_type=@{variables('grant_type')}&refresh_token=@{variables('refresh_token')}",
+                                            "headers": {
+                                                "Content-Type": "application/x-www-form-urlencoded"
+                                            },
+                                            "method": "POST",
+                                            "uri": "@{variables('base_url')}/oauth2/token"
+                                        },
+                                        "runtimeConfiguration": {
+                                            "secureData": {
+                                                "properties": [
+                                                    "outputs"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "Set_Grant_Type_For_Refresh_Token": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "grant_type",
+                                            "value": "refresh_token"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@empty(variables('refresh_token'))",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Verify_Both_Tokens_Updated_Successfully": {
+                            "actions": {
+                                "Response_To_Indicate_Success_While_Updating_Token_In_Vault": {
+                                    "runAfter": {},
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "body": {
+                                            "message": "New access token and refresh token has been generated and updated in key vault.",
+                                            "status": "success"
+                                        },
+                                        "statusCode": 200
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Verify_Successful_Token_Generation": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Response_To_Indicate_Failure_While_Updating_Token_In_Vault": {
+                                        "runAfter": {},
+                                        "type": "Response",
+                                        "kind": "Http",
+                                        "inputs": {
+                                            "body": {
+                                                "message": "Error occured while updating tokens in key vault.",
+                                                "status": "failure"
+                                            },
+                                            "statusCode": "@outputs('HTTP_Request_To_Update_Access_Token_In_Key_Vault')['statusCode']"
+                                        }
+                                    },
+                                    "Terminate_Due_To_Failure_While_Updating_Tokens_in_Key_Vault": {
+                                        "runAfter": {
+                                            "Response_To_Indicate_Failure_While_Updating_Token_In_Vault": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "message": "Unknown Error Occurred While Updating Tokens.\nRefreshToken Body: @{body('HTTP_Request_To_Update_Refresh_Token_in_Key_Vault')}\nAccessToken Body:@{body('HTTP_Request_To_Update_Access_Token_In_Key_Vault')}"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('set_access_token')",
+                                            "@true"
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@variables('set_refresh_token')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Verify_Successful_Token_Generation": {
+                            "actions": {
+                                "Condition_To_Verify_Access_Token_Updated_Successfully": {
+                                    "actions": {
+                                        "Set_Is_Access_Token_Updated_True": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "set_access_token",
+                                                "value": "@true"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_Request_To_Update_Access_Token_In_Key_Vault": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP_Request_To_Update_Access_Token_In_Key_Vault')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_To_Verify_Refresh_Token_Updated_Successfully": {
+                                    "actions": {
+                                        "Set_Is_Refresh_Token_Updated_True": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "set_refresh_token",
+                                                "value": "@true"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_Request_To_Update_Refresh_Token_in_Key_Vault": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP_Request_To_Update_Refresh_Token_in_Key_Vault')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP_Request_To_Update_Access_Token_In_Key_Vault": {
+                                    "runAfter": {
+                                        "Parse_JSON_For_Authentication_Data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "[concat('https://',trim(parameters('azure key vault')),'.net')]",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": {
+                                            "value": "@body('Parse_JSON_For_Authentication_Data')?['access_token']"
+                                        },
+                                        "method": "PUT",
+                                        "uri": "@{concat('https://',variables('key_vault_name'),'.',parameters('azure key vault'),'.net/secrets/',variables('access_token_secret_name'),'?api-version=7.4')}"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "HTTP_Request_To_Update_Refresh_Token_in_Key_Vault": {
+                                    "runAfter": {
+                                        "Parse_JSON_For_Authentication_Data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "[concat('https://',trim(parameters('azure key vault')),'.net')]",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": {
+                                            "value": "@body('Parse_JSON_For_Authentication_Data')?['refresh_token']"
+                                        },
+                                        "method": "PUT",
+                                        "uri": "@{concat('https://',variables('key_vault_name'),'.',parameters('azure key vault'),'.net/secrets/',variables('refresh_token_secret_name'),'?api-version=7.4')}"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_For_Authentication_Data": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_Request_To_Generate_Access_Token')",
+                                        "schema": {
+                                            "properties": {
+                                                "access_token": {
+                                                    "type": "string"
+                                                },
+                                                "expires_in": {
+                                                    "type": "integer"
+                                                },
+                                                "refresh_expires_in": {
+                                                    "type": "integer"
+                                                },
+                                                "refresh_token": {
+                                                    "type": "string"
+                                                },
+                                                "token_type": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP_Request_To_Generate_Access_Token": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "TimedOut"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Response_For_Indicating_Failure_While_Generating_Token": {
+                                        "runAfter": {},
+                                        "type": "Response",
+                                        "kind": "Http",
+                                        "inputs": {
+                                            "body": {
+                                                "message": "Error occurred while generating new access token with status code @{outputs('HTTP_Request_To_Generate_Access_Token')['statusCode']}.",
+                                                "status": "failure"
+                                            },
+                                            "statusCode": "@outputs('HTTP_Request_To_Generate_Access_Token')['statusCode']"
+                                        }
+                                    },
+                                    "Terminate_Due_To_Failure_While_Generating_Token": {
+                                        "runAfter": {
+                                            "Response_For_Indicating_Failure_While_Generating_Token": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "code": "@{outputs('HTTP_Request_To_Generate_Access_Token')['statusCode']}",
+                                                "message": "@{body('HTTP_Request_To_Generate_Access_Token')}"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('HTTP_Request_To_Generate_Access_Token')['statusCode']",
+                                            200
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_Refresh_Token": {
+                            "runAfter": {
+                                "Get_Vectra_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Vectra-Refresh-Token')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Get_Vectra_Client_ID": {
+                            "runAfter": {
+                                "Initialize_Vectra_Refresh_Token_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Vectra-Client-ID')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Get_Vectra_Client_Secret": {
+                            "runAfter": {
+                                "Get_Vectra_Client_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Vectra-Client-Secret')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "HTTP_Request_To_Generate_Access_Token": {
+                            "runAfter": {
+                                "Set_Grant_Type_For_New_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@variables('client_secret')",
+                                    "type": "Basic",
+                                    "username": "@variables('client_id')"
+                                },
+                                "body": "grant_type=@{variables('grant_type')}",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "method": "POST",
+                                "retryPolicy": {
+                                    "type": "none"
+                                },
+                                "uri": "@{variables('base_url')}/oauth2/token"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Initialize_Base_URL": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "[trim(parameters('BaseURL'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Grant_Type": {
+                            "runAfter": {
+                                "Initialize_Key_Vault_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "grant_type",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Is_Access_Token_Updated_False": {
+                            "runAfter": {
+                                "Initialize_Grant_Type": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "set_access_token",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Is_Refresh_Token_Updated_False": {
+                            "runAfter": {
+                                "Initialize_Is_Access_Token_Updated_False": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "set_refresh_token",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Key_Vault_Name": {
+                            "runAfter": {
+                                "Initialize_Base_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "key_vault_name",
+                                        "type": "string",
+                                        "value": "[trim(parameters('KeyVaultName'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Refresh_Token": {
+                            "runAfter": {
+                                "Initialize_Vectra_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "refresh_token",
+                                        "type": "string",
+                                        "value": "@body('Get_Refresh_Token')?['value']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Vectra_Access_Token_Name": {
+                            "runAfter": {
+                                "Initialize_Is_Refresh_Token_Updated_False": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "access_token_secret_name",
+                                        "type": "string",
+                                        "value": "Vectra-Access-Token"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Vectra_Client_ID": {
+                            "runAfter": {
+                                "Get_Refresh_Token": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "client_id",
+                                        "type": "string",
+                                        "value": "@body('Get_Vectra_Client_ID')?['value']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Vectra_Client_Secret": {
+                            "runAfter": {
+                                "Initialize_Vectra_Client_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "client_secret",
+                                        "type": "string",
+                                        "value": "@body('Get_Vectra_Client_Secret')?['value']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Vectra_Refresh_Token_Name": {
+                            "runAfter": {
+                                "Initialize_Vectra_Access_Token_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "refresh_token_secret_name",
+                                        "type": "string",
+                                        "value": "Vectra-Refresh-Token"
+                                    }
+                                ]
+                            }
+                        },
+                        "Set_Grant_Type_For_New_Access_Token": {
+                            "runAfter": {
+                                "Condition_To_Generate_New_Access_Token_If_Refresh_Token_Is_Empty": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "grant_type",
+                                "value": "client_credentials"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "VectraGenerateAccessToken",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[trim(parameters('TenantId'))]",
+                    "token:grantType": "code",
+                    "vaultName": "[trim(parameters('KeyVaultName'))]"
+                }
+            }
+        }
+    ]
+}

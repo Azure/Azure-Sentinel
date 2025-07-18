@@ -310,10 +310,11 @@ let FortiNDR_Cloud_detections_view = view () {
         de_username=column_ifexists('username_s', ''),
         de_hostname=column_ifexists('hostname_s', ''),
         de_category=column_ifexists('rule_category_s', ''),
-        de_dhcp=column_ifexists('dhcp_s', ''),
-        de_pdns=column_ifexists('PDNS_s', ''),
         de_event_count=column_ifexists('event_count_d', ''),
-        de_events=column_ifexists('events_s', '')
+        de_events=column_ifexists('events_s', ''),
+        de_primary_attack_id=column_ifexists('rule_primary_attack_id_s', ''),
+        de_secondary_attack_id=column_ifexists('rule_secondary_attack_id_s', ''),
+        de_rule_url=column_ifexists('rule_url_s', '')
     | project
         de_device_ip,
         de_event_count,
@@ -343,8 +344,9 @@ let FortiNDR_Cloud_detections_view = view () {
         de_uuid,
         de_username,
         de_hostname,
-        de_dhcp,
-        de_pdns,
+        de_primary_attack_id,
+        de_secondary_attack_id,
+        de_rule_url,
         Type
 }; 
 

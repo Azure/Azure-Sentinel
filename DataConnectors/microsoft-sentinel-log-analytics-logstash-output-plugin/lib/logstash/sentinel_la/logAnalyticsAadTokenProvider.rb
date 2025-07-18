@@ -1,10 +1,10 @@
 # encoding: utf-8
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
-require 'rest-client'
 require 'json'
 require 'openssl'
 require 'base64'
 require 'time'
+require 'excon'
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsAadTokenProvider
@@ -64,14 +64,13 @@ class LogAnalyticsAadTokenProvider
     while true
       begin
         # Post REST request 
-        response = RestClient::Request.execute(method: :post, url: @token_request_uri, payload: @token_request_body, headers: headers,
-                                              proxy: @logstashLoganalyticsConfiguration.proxy_aad)
-                    
-        if (response.code == 200 || response.code == 201)
+        response = Excon.post(@token_request_uri, :body => @token_request_body, :headers => headers, :proxy => @logstashLoganalyticsConfiguration.proxy_aad, expects: [200, 201])
+
+        if (response.status == 200 || response.status == 201)
           return JSON.parse(response.body)
         end
-      rescue RestClient::ExceptionWithResponse => ewr
-        @logger.error("Exception while authenticating with AAD API ['#{ewr.response}']")          
+      rescue Excon::Error::HTTPStatus => ex
+        @logger.error("Error while authenticating with AAD [#{ex.class}: '#{ex.response.status}', Response: '#{ex.response.body}']")
       rescue Exception => ex          
         @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
       end
