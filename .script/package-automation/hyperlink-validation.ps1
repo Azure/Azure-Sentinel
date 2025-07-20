@@ -111,7 +111,7 @@ foreach($item in $filteredFiles)
 $exclusionList = @(".py$",".png$",".jpg$",".jpeg$",".conf$", ".svg$", ".html$", ".ps1$", ".psd1$", "requirements.txt$", "host.json$", "proxies.json$", "/function.json$", ".xml$", ".zip$", ".md$")
 $filterOutExclusionList = $finalFilteredFiles | Where-Object { $_ -notmatch ($exclusionList -join '|')  }
 
-$exclusionDomainList = @("&&sudo","schema.management","schemas.microsoft","twitter.com", "s-platform.api.opendns.com", "github.com", "azure.microsoft.com", "sts.windows.net", "oauth2.googleapis.com", "monitoring.googleapis.com")
+$exclusionDomainList = @("&&sudo","schema.management","schemas.microsoft","twitter.com", "s-platform.api.opendns.com", "github.com", "azure.microsoft.com", "sts.windows.net", "oauth2.googleapis.com", "monitoring.googleapis.com","api2.eu.prismacloud.io","api.lookout.com")
 
 foreach ($currentFile in $filterOutExclusionList)
 {
