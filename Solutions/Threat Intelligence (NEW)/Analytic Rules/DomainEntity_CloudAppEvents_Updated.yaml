@@ -24,11 +24,11 @@ query: |
   let list_tlds =
     ThreatIntelIndicators
       | where TimeGenerated >= ago(ioc_lookBack)
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-      | where IsActive == true and ValidUntil > now()
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
       //extract key part of kv pair
       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-      | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+      | where IndicatorType == "domain-name"
       | extend DomainName = tolower(IndicatorType)
       | extend parts = split(DomainName, '.')
       | extend tld = parts[(array_length(parts) - 1)]
@@ -38,26 +38,23 @@ query: |
   let Domain_Indicators =
     ThreatIntelIndicators
       | where TimeGenerated >= ago(ioc_lookBack)
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-      | where IsActive == true and ValidUntil > now()
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
       | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-      | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
-      | extend TI_DomainEntity = tolower(ObservableValue)
-      | extend DomainName = TI_DomainEntity
+      | where IndicatorType == "domain-name"
+      | extend DomainName = tolower(ObservableValue)
       | extend IndicatorId = tostring(split(Id, "--")[2])
-      | where isnotempty(TI_DomainEntity)
-      | project-reorder *, IndicatorType, DomainName, Type, TI_DomainEntity;
+      | project-reorder *, IndicatorType, DomainName, Type;
     Domain_Indicators
       | join kind=innerunique (
     CloudAppEvents
       | extend IngestionTime = ingestion_time()
       | where IngestionTime > ago(dt_lookBack)
       | extend PAUrl = columnifexists("RequestURL", "None")
-      | extend Domain = trim('"', tostring(parseurl(PAUrl).Host))
-      | extend Domain = tolower(Domain)
+      | extend Domain = tolower(trim('"', tostring(parseurl(PAUrl).Host)))
       | extend parts = split(Domain, '.')
       | extend tld = parts[(array_length(parts) - 1)]
-      | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.TI_DomainEntity == $right.Domain
+      | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.DomainName == $right.Domain
       | where CloudAppEvents_TimeGenerated < ValidUntil
       | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId
       | extend 
@@ -80,5 +77,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.4
+version: 1.0.5
 kind: Scheduled
