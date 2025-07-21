@@ -18,11 +18,11 @@ class TenableIO(BaseIO):
         (default values can be overridden with environment variables):
         - vendor: str (default: "Microsoft")
         - product: str (default: "Azure Sentinel")
-        - build: str (default: "0.0.1")
+        - build: str (default: "3.1.0")
         """
         kwargs["vendor"] = os.getenv("PyTenableUAVendor", "Microsoft")
         kwargs["product"] = os.getenv("PyTenableUAProduct", "Azure Sentinel")
-        kwargs["build"] = os.getenv("PyTenableUABuild", "0.0.1")
+        kwargs["build"] = os.getenv("PyTenableUABuild", "3.1.0")
         super().__init__(**kwargs)
 
     @property
