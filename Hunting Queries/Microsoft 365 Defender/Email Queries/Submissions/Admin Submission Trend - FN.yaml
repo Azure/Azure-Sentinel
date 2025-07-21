@@ -1,0 +1,47 @@
+id: 4ec96a3b-94b0-4662-8ee6-b95102e20430
+name: Admin Submission Trend (FN)
+description: |
+  This query visualises the daily amount of admin false negative submission by submission type.
+description-detailed: |
+  This query visualises the daily amount of admin false negative submission by submission type.
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let TimeStart = startofday(ago(30d));
+  let TimeEnd = startofday(now());
+  let baseQuery = CloudAppEvents
+  | where TimeGenerated >= TimeStart
+  | where ActionType contains "Submission"
+  | extend SubmissionType = tostring((parse_json(RawEventData)).SubmissionType),SubmissionContentType=tostring((parse_json(RawEventData)).SubmissionContentType);
+  let Admin_Malware_FN=baseQuery
+  | make-series Count= countif(SubmissionType == "2" and ActionType == "AdminSubmissionSubmitted" and SubmissionContentType=="Mail" ) default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Admin_Malware_FN";
+  let Admin_Phish_FN=baseQuery
+  | make-series Count= countif(SubmissionType == "1" and ActionType == "AdminSubmissionSubmitted" and SubmissionContentType=="Mail" ) default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Admin_Phish_FN";
+  let Admin_Spam_FN=baseQuery
+  | make-series Count= countif(SubmissionType == "0" and ActionType == "AdminSubmissionSubmitted" and SubmissionContentType=="Mail") default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Admin_Spam_FN";
+  let Admin_Malware_URL_FN=baseQuery
+  | make-series Count= countif(SubmissionType == "2" and ActionType == "AdminSubmissionSubmitted" and SubmissionContentType=="URL") default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Admin_Malware_URL_FN";
+  let Admin_Malware_Attach_FN=baseQuery
+  | make-series Count= countif(SubmissionType == "2" and ActionType == "AdminSubmissionSubmitted" and SubmissionContentType=="Attachment") default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Admin_Malware_Attach_FN";
+  let Admin_Phish_URL_FN=baseQuery
+  | make-series Count= countif(SubmissionType == "1" and ActionType == "AdminSubmissionSubmitted" and SubmissionContentType=="URL") default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Admin_Phish_URL_FN";
+  let Admin_Phish_Attach_FN=baseQuery
+  | make-series Count= countif(SubmissionType == "1" and ActionType == "AdminSubmissionSubmitted" and SubmissionContentType=="Attachment") default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Admin_Phish_Attach_FN";
+  union Admin_Malware_FN,Admin_Phish_FN,Admin_Spam_FN,Admin_Malware_URL_FN,Admin_Malware_Attach_FN,Admin_Phish_URL_FN,Admin_Phish_Attach_FN
+  | project Count, Details, Timestamp
+  | render timechart
+version: 1.0.0

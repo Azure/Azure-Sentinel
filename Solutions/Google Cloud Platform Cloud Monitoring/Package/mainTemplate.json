@@ -27,31 +27,53 @@
       "metadata": {
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Google Cloud Platform Cloud Monitoring",
-    "_solutionVersion": "3.0.0",
+    "_solutionVersion": "3.0.2",
     "solutionId": "azuresentinel.azure-sentinel-solution-gcpmonitoring",
     "_solutionId": "[variables('solutionId')]",
     "parserObject1": {
-      "_parserName1": "[concat(parameters('workspace'),'/','Google Cloud Platform Cloud Monitoring Data Parser')]",
-      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Google Cloud Platform Cloud Monitoring Data Parser')]",
+      "_parserName1": "[concat(parameters('workspace'),'/','GCP_MONITOR')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'GCP_MONITOR')]",
       "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('GCP_MONITOR-Parser')))]",
       "parserVersion1": "1.0.0",
       "parserContentId1": "GCP_MONITOR-Parser"
     },
-    "uiConfigId1": "GCPMonitorDataConnector",
-    "_uiConfigId1": "[variables('uiConfigId1')]",
-    "dataConnectorContentId1": "GCPMonitorDataConnector",
-    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
-    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-    "_dataConnectorId1": "[variables('dataConnectorId1')]",
-    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
-    "dataConnectorVersion1": "1.0.0",
-    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "GCPMonitorCCPDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "GCPMonitorCCPDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "uiConfigId2": "GCPMonitorDataConnector",
+    "_uiConfigId2": "[variables('uiConfigId2')]",
+    "dataConnectorContentId2": "GCPMonitorDataConnector",
+    "_dataConnectorContentId2": "[variables('dataConnectorContentId2')]",
+    "dataConnectorId2": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+    "_dataConnectorId2": "[variables('dataConnectorId2')]",
+    "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2'))))]",
+    "dataConnectorVersion2": "1.0.0",
+    "_dataConnectorcontentProductId2": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId2'),'-', variables('dataConnectorVersion2'))))]",
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
@@ -64,7 +86,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCP_MONITOR Data Parser with template version 3.0.0",
+        "description": "GCP_MONITOR Data Parser with template version 3.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -78,10 +100,10 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "Google Cloud Platform Cloud Monitoring Data Parser",
+                "displayName": "Parser for GCP_MONITOR",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "GCP_MONITOR",
-                "query": "GCP_MONITORING_CL\n| extend EventVendor = 'GCP'\n| extend EventProduct = 'Cloud Monitoring'\n| project-rename MetricLabelsInstanceName=metric_labels_instance_name_s,\n    MetricType=metric_type_s,\n    ResourceType=resource_type_s,\n    ResourceLabelsProjectId=resource_labels_project_id_s,\n    ResourceLabelsInstanceId=resource_labels_instance_id_s,\n    ResourceLabelsZone=resource_labels_zone_s,\n    MetricKind=metricKind_s,\n    ValueType=valueType_s,\n    IntervalStartTime=interval_startTime_t,\n    IntervalEndTime=interval_endTime_t,\n    ValueInt64Value=value_int64Value_d\n",
+                "query": "let GCP_MONITORING_CL_View = view () {\nGCP_MONITORING_CL\n| extend EventVendor = 'GCP'\n| extend EventProduct = 'Cloud Monitoring'\n| extend\n      MetricLabelsInstanceName= column_ifexists('metric_labels_instance_name_s', ''),\n      MetricType= column_ifexists('metric_type_s', ''),\n      ResourceType= column_ifexists('resource_type_s', ''),\n      ResourceLabelsProjectId= column_ifexists('resource_labels_project_id_s', ''),\n      ResourceLabelsInstanceId= column_ifexists('resource_labels_instance_id_s', ''),\n      ResourceLabelsZone= column_ifexists('resource_labels_zone_s', ''),\n      MetricKind= column_ifexists('metricKind_s', ''),\n      ValueType= column_ifexists('valueType_s', ''),\n      IntervalStartTime= column_ifexists('interval_startTime_t', ''),\n      IntervalEndTime= column_ifexists('interval_endTime_t', ''),\n      ValueInt64Value= column_ifexists('value_int64Value_d', '')\n};\nlet GCP_MONITORINGV2_CL_View = view () {\nGCP_MONITORINGV2_CL\n| extend EventVendor = 'GCP'\n| extend EventProduct = 'Cloud Monitoring'\n| extend \n      MetricType= column_ifexists('MetricType', ''),\n      MetricLabelsInstanceName = column_ifexists('tostring(MetricLabels.instance_name)', ''), \n      ResourceType = column_ifexists('tostring(Resource.type)', ''), \n      ResourceLabelsProjectId = column_ifexists('tostring(Resource.labels.project_id)', ''),\n      ResourceLabelsInstanceId = column_ifexists('tostring(Resource.labels.instance_id)', ''),\n      ResourceLabelsZone =column_ifexists('tostring(Resource.labels.zone)', ''),\n      IntervalStartTime = column_ifexists('tostring(Points.interval.startTime)', ''), \n      IntervalEndTime = column_ifexists('tostring(Points.interval.endTime)', ''),\n      ValueInt64Value = column_ifexists('tostring(ValueType.int64Value)', ''),\n      MetricKind= column_ifexists('MetricKind', ''),\n      ValueType= column_ifexists('ValueType', '')\n};\nunion isfuzzy=true (GCP_MONITORING_CL_View), (GCP_MONITORINGV2_CL_View)\n| project MetricLabelsInstanceName, MetricType, ResourceType, ResourceLabelsProjectId, ResourceLabelsInstanceId, ResourceLabelsZone, MetricKind, ValueType, IntervalStartTime, IntervalEndTime, ValueInt64Value\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -100,7 +122,7 @@
                 "[variables('parserObject1')._parserId1]"
               ],
               "properties": {
-                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Google Cloud Platform Cloud Monitoring Data Parser')]",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'GCP_MONITOR')]",
                 "contentId": "[variables('parserObject1').parserContentId1]",
                 "kind": "Parser",
                 "version": "[variables('parserObject1').parserVersion1]",
@@ -130,7 +152,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('parserObject1').parserContentId1]",
         "contentKind": "Parser",
-        "displayName": "Google Cloud Platform Cloud Monitoring Data Parser",
+        "displayName": "Parser for GCP_MONITOR",
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
         "version": "[variables('parserObject1').parserVersion1]"
@@ -143,10 +165,10 @@
       "location": "[parameters('workspace-location')]",
       "properties": {
         "eTag": "*",
-        "displayName": "Google Cloud Platform Cloud Monitoring Data Parser",
+        "displayName": "Parser for GCP_MONITOR",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "GCP_MONITOR",
-        "query": "GCP_MONITORING_CL\n| extend EventVendor = 'GCP'\n| extend EventProduct = 'Cloud Monitoring'\n| project-rename MetricLabelsInstanceName=metric_labels_instance_name_s,\n    MetricType=metric_type_s,\n    ResourceType=resource_type_s,\n    ResourceLabelsProjectId=resource_labels_project_id_s,\n    ResourceLabelsInstanceId=resource_labels_instance_id_s,\n    ResourceLabelsZone=resource_labels_zone_s,\n    MetricKind=metricKind_s,\n    ValueType=valueType_s,\n    IntervalStartTime=interval_startTime_t,\n    IntervalEndTime=interval_endTime_t,\n    ValueInt64Value=value_int64Value_d\n",
+        "query": "let GCP_MONITORING_CL_View = view () {\nGCP_MONITORING_CL\n| extend EventVendor = 'GCP'\n| extend EventProduct = 'Cloud Monitoring'\n| extend\n      MetricLabelsInstanceName= column_ifexists('metric_labels_instance_name_s', ''),\n      MetricType= column_ifexists('metric_type_s', ''),\n      ResourceType= column_ifexists('resource_type_s', ''),\n      ResourceLabelsProjectId= column_ifexists('resource_labels_project_id_s', ''),\n      ResourceLabelsInstanceId= column_ifexists('resource_labels_instance_id_s', ''),\n      ResourceLabelsZone= column_ifexists('resource_labels_zone_s', ''),\n      MetricKind= column_ifexists('metricKind_s', ''),\n      ValueType= column_ifexists('valueType_s', ''),\n      IntervalStartTime= column_ifexists('interval_startTime_t', ''),\n      IntervalEndTime= column_ifexists('interval_endTime_t', ''),\n      ValueInt64Value= column_ifexists('value_int64Value_d', '')\n};\nlet GCP_MONITORINGV2_CL_View = view () {\nGCP_MONITORINGV2_CL\n| extend EventVendor = 'GCP'\n| extend EventProduct = 'Cloud Monitoring'\n| extend \n      MetricType= column_ifexists('MetricType', ''),\n      MetricLabelsInstanceName = column_ifexists('tostring(MetricLabels.instance_name)', ''), \n      ResourceType = column_ifexists('tostring(Resource.type)', ''), \n      ResourceLabelsProjectId = column_ifexists('tostring(Resource.labels.project_id)', ''),\n      ResourceLabelsInstanceId = column_ifexists('tostring(Resource.labels.instance_id)', ''),\n      ResourceLabelsZone =column_ifexists('tostring(Resource.labels.zone)', ''),\n      IntervalStartTime = column_ifexists('tostring(Points.interval.startTime)', ''), \n      IntervalEndTime = column_ifexists('tostring(Points.interval.endTime)', ''),\n      ValueInt64Value = column_ifexists('tostring(ValueType.int64Value)', ''),\n      MetricKind= column_ifexists('MetricKind', ''),\n      ValueType= column_ifexists('ValueType', '')\n};\nunion isfuzzy=true (GCP_MONITORING_CL_View), (GCP_MONITORINGV2_CL_View)\n| project MetricLabelsInstanceName, MetricType, ResourceType, ResourceLabelsProjectId, ResourceLabelsInstanceId, ResourceLabelsZone, MetricKind, ValueType, IntervalStartTime, IntervalEndTime, ValueInt64Value\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -166,7 +188,7 @@
         "[variables('parserObject1')._parserId1]"
       ],
       "properties": {
-        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Google Cloud Platform Cloud Monitoring Data Parser')]",
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'GCP_MONITOR')]",
         "contentId": "[variables('parserObject1').parserContentId1]",
         "kind": "Parser",
         "version": "[variables('parserObject1').parserVersion1]",
@@ -190,31 +212,615 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
-      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Google Cloud Platform Cloud Monitoring data connector with template version 3.0.0",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Google Cloud Platform Cloud Monitoring (via Codeless Connector Framework) (Preview)",
+        "contentKind": "DataConnector",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
           "parameters": {},
           "variables": {},
           "resources": [
             {
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "GCPMonitorCCPDefinition",
+                  "title": "Google Cloud Platform Cloud Monitoring (via Codeless Connector Framework) (Preview)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The Google Cloud Platform Cloud Monitoring data connector ingests Monitoring logs from Google Cloud into Microsoft Sentinel using the Google Cloud Monitoring API. Refer to [Cloud Monitoring API](https://cloud.google.com/monitoring/api/v3) documentation for more details.",
+                  "graphQueriesTableName": "GCPMonitoring",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Google Cloud Platform Cloud Monitoring Events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get a sample of Google Cloud Platform Cloud Monitoring logs",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect Google Cloud Platform Cloud Monitoring to Microsoft Sentinel",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 1. Setup GCP Monitoring Integration\n To fetch logs from GCP Cloud Monitoring to Sentinel **Project ID** of Google cloud is required."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 2. Chose the **Metric Type**\n To collect logs from Google Cloud Monitoring provide the required Metric type.\n\nFor more details, refer to [Google Cloud Metrics](https://cloud.google.com/monitoring/api/metrics_gcp)."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 3. OAuth Credentials\n To Fetch Oauth client id and client secret refer to this [documentation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Cloud%20Monitoring/Data%20Connectors/Readme.md)."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 4. Connect to Sentinel\n Click on **Connect** to start pulling monitoring logs from Google Cloud into Microsoft Sentinel."
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "GCP Project ID",
+                            "name": "projectid",
+                            "required": true,
+                            "description": "Enter your Google Cloud Project ID."
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Metric Type",
+                            "type": "text",
+                            "name": "metrictype",
+                            "required": true,
+                            "description": "Provide the metric types you want to collect logs for with comma separated.For example: compute.googleapis.com/instance/disk/write_bytes_count,compute.googleapis.com/instance/uptime_total"
+                          }
+                        },
+                        {
+                          "type": "OAuthForm",
+                          "parameters": {
+                            "clientIdLabel": "Client ID",
+                            "clientSecretLabel": "Client Secret",
+                            "connectButtonLabel": "Connect",
+                            "disconnectButtonLabel": "Disconnect"
+                          }
+                        },
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "Metric Type",
+                                "columnValue": "properties.addOnAttributes.metrictype"
+                              },
+                              {
+                                "columnName": "Project ID",
+                                "columnValue": "properties.addOnAttributes.projectid"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "GCPMonitorDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Microsoft-GCPMonitoring"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ]
+                  }
+                ],
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]"
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "GCPMonitorCCPDefinition",
+          "title": "Google Cloud Platform Cloud Monitoring (via Codeless Connector Framework) (Preview)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The Google Cloud Platform Cloud Monitoring data connector ingests Monitoring logs from Google Cloud into Microsoft Sentinel using the Google Cloud Monitoring API. Refer to [Cloud Monitoring API](https://cloud.google.com/monitoring/api/v3) documentation for more details.",
+          "graphQueriesTableName": "GCPMonitoring",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Google Cloud Platform Cloud Monitoring Events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get a sample of Google Cloud Platform Cloud Monitoring logs",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect Google Cloud Platform Cloud Monitoring to Microsoft Sentinel",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 1. Setup GCP Monitoring Integration\n To fetch logs from GCP Cloud Monitoring to Sentinel **Project ID** of Google cloud is required."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 2. Chose the **Metric Type**\n To collect logs from Google Cloud Monitoring provide the required Metric type.\n\nFor more details, refer to [Google Cloud Metrics](https://cloud.google.com/monitoring/api/metrics_gcp)."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 3. OAuth Credentials\n To Fetch Oauth client id and client secret refer to this [documentation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Cloud%20Monitoring/Data%20Connectors/Readme.md)."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 4. Connect to Sentinel\n Click on **Connect** to start pulling monitoring logs from Google Cloud into Microsoft Sentinel."
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "GCP Project ID",
+                    "name": "projectid",
+                    "required": true,
+                    "description": "Enter your Google Cloud Project ID."
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Metric Type",
+                    "type": "text",
+                    "name": "metrictype",
+                    "required": true,
+                    "description": "Provide the metric types you want to collect logs for with comma separated.For example: compute.googleapis.com/instance/disk/write_bytes_count,compute.googleapis.com/instance/uptime_total"
+                  }
+                },
+                {
+                  "type": "OAuthForm",
+                  "parameters": {
+                    "clientIdLabel": "Client ID",
+                    "clientSecretLabel": "Client Secret",
+                    "connectButtonLabel": "Connect",
+                    "disconnectButtonLabel": "Disconnect"
+                  }
+                },
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Metric Type",
+                        "columnValue": "properties.addOnAttributes.metrictype"
+                      },
+                      {
+                        "columnName": "Project ID",
+                        "columnValue": "properties.addOnAttributes.projectid"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Google Cloud Platform Cloud Monitoring (via Codeless Connector Framework) (Preview)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Google Cloud Platform Cloud Monitoring (via Codeless Connector Framework) (Preview)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "projectid": {
+              "defaultValue": "projectid",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "metrictype": {
+              "defaultValue": "metrictype",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "ClientId": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "ClientSecret": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "AuthorizationCode": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "commaSeparatedArray": "[[split(parameters('metrictype'), ',')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'GCPCloudMonitoringPolling', parameters('guidValue'), copyIndex())]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "GCPMonitorCCPDefinition",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "SENTINEL_GCP_MONITORING_LOGS"
+                },
+                "dataType": "GCPMonitoring",
+                "addOnAttributes": {
+                  "metrictype": "[[variables('commaSeparatedArray')[copyIndex()]]",
+                  "projectid": "[[parameters('projectid')]"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.timeSeries"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.nextPageToken",
+                  "pageSize": 100,
+                  "PageSizeParaName": "pageSize",
+                  "PageTokenParaName": "pageToken",
+                  "NextPageParaName": "pageToken"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "IsClientSecretInHeader": "true",
+                  "IsCredentialsInHeaders": "true",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
+                  "AuthorizationCode": "[[parameters('authorizationCode')]",
+                  "GrantType": "authorization_code",
+                  "TokenEndpoint": "https://oauth2.googleapis.com/token",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "authorizationEndpoint": "https://accounts.google.com/o/oauth2/auth",
+                  "authorizationEndpointQueryParameters": {
+                    "prompt": "consent",
+                    "access_type": "offline"
+                  },
+                  "scope": "https://www.googleapis.com/auth/monitoring.read",
+                  "redirectUri": "https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://monitoring.googleapis.com/v3/projects/',parameters('projectid'),'/timeSeries?filter=metric.type=\"',trim(variables('commaSeparatedArray')[copyIndex()]),'\"')]",
+                  "httpMethod": "GET",
+                  "queryParameters": {
+                    "interval.startTime": "{_QueryWindowStartTime}",
+                    "interval.endTime": "{_QueryWindowEndTime}"
+                  },
+                  "queryWindowInMin": 10,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQPS": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json"
+                  }
+                },
+                "isActive": true
+              },
+              "copy": {
+                "name": "copyObject",
+                "count": "[[length(variables('commaSeparatedArray'))]"
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Google Cloud Platform Cloud Monitoring data connector with template version 3.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion2')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId2'))]",
               "apiVersion": "2021-03-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "GenericUI",
               "properties": {
                 "connectorUiConfig": {
-                  "id": "[variables('_uiConfigId1')]",
-                  "title": "Google Cloud Platform Cloud Monitoring (using Azure Functions)",
+                  "id": "[variables('_uiConfigId2')]",
+                  "title": "[DEPRECATED] Google Cloud Platform Cloud Monitoring (using Azure Functions)",
                   "publisher": "Google",
-                  "descriptionMarkdown": "The Google Cloud Platform Cloud Monitoring data connector provides the capability to ingest [GCP Monitoring metrics](https://cloud.google.com/monitoring/api/metrics_gcp) into Microsoft Sentinel using the GCP Monitoring API. Refer to [GCP Monitoring API documentation](https://cloud.google.com/monitoring/api/v3) for more information.",
+                  "descriptionMarkdown": "The Google Cloud Platform Cloud Monitoring data connector provides the capability to ingest [GCP Monitoring metrics](https://cloud.google.com/monitoring/api/metrics_gcp) into Microsoft Sentinel using the GCP Monitoring API. Refer to [GCP Monitoring API documentation](https://cloud.google.com/monitoring/api/v3) for more information.\n\n<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>",
                   "additionalRequirementBanner": ">This data connector depends on a parser based on a Kusto Function to work as expected [**GCP_MONITORING**](https://aka.ms/sentinel-GCPMonitorDataConnector-parser) which is deployed with the Microsoft Sentinel Solution.",
                   "graphQueries": [
                     {
@@ -338,12 +944,12 @@
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2023-04-01-preview",
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
               "properties": {
-                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-                "contentId": "[variables('_dataConnectorContentId1')]",
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+                "contentId": "[variables('_dataConnectorContentId2')]",
                 "kind": "DataConnector",
-                "version": "[variables('dataConnectorVersion1')]",
+                "version": "[variables('dataConnectorVersion2')]",
                 "source": {
                   "kind": "Solution",
                   "name": "Google Cloud Platform Cloud Monitoring",
@@ -368,27 +974,27 @@
         "packageName": "[variables('_solutionName')]",
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
-        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentId": "[variables('_dataConnectorContentId2')]",
         "contentKind": "DataConnector",
-        "displayName": "Google Cloud Platform Cloud Monitoring (using Azure Functions)",
-        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
-        "id": "[variables('_dataConnectorcontentProductId1')]",
-        "version": "[variables('dataConnectorVersion1')]"
+        "displayName": "[DEPRECATED] Google Cloud Platform Cloud Monitoring (using Azure Functions)",
+        "contentProductId": "[variables('_dataConnectorcontentProductId2')]",
+        "id": "[variables('_dataConnectorcontentProductId2')]",
+        "version": "[variables('dataConnectorVersion2')]"
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2023-04-01-preview",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
       "dependsOn": [
-        "[variables('_dataConnectorId1')]"
+        "[variables('_dataConnectorId2')]"
       ],
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-        "contentId": "[variables('_dataConnectorContentId1')]",
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+        "contentId": "[variables('_dataConnectorContentId2')]",
         "kind": "DataConnector",
-        "version": "[variables('dataConnectorVersion1')]",
+        "version": "[variables('dataConnectorVersion2')]",
         "source": {
           "kind": "Solution",
           "name": "Google Cloud Platform Cloud Monitoring",
@@ -407,29 +1013,25 @@
       }
     },
     {
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId2'))]",
       "apiVersion": "2021-03-01-preview",
       "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
       "location": "[parameters('workspace-location')]",
       "kind": "GenericUI",
       "properties": {
         "connectorUiConfig": {
-          "title": "Google Cloud Platform Cloud Monitoring (using Azure Functions)",
+          "title": "[DEPRECATED] Google Cloud Platform Cloud Monitoring (using Azure Functions)",
           "publisher": "Google",
-          "descriptionMarkdown": "The Google Cloud Platform Cloud Monitoring data connector provides the capability to ingest [GCP Monitoring metrics](https://cloud.google.com/monitoring/api/metrics_gcp) into Microsoft Sentinel using the GCP Monitoring API. Refer to [GCP Monitoring API documentation](https://cloud.google.com/monitoring/api/v3) for more information.",
-          "graphQueries": [
-            {
-              "metricName": "GCP Monitoring logs",
-              "legend": "GCP_MONITORING_CL",
-              "baseQuery": "GCP_MONITORING_CL"
-            }
-          ],
-          "dataTypes": [
-            {
-              "name": "GCP_MONITORING_CL",
-              "lastDataReceivedQuery": "GCP_MONITORING_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
-            }
-          ],
+          "descriptionMarkdown": "The Google Cloud Platform Cloud Monitoring data connector provides the capability to ingest [GCP Monitoring metrics](https://cloud.google.com/monitoring/api/metrics_gcp) into Microsoft Sentinel using the GCP Monitoring API. Refer to [GCP Monitoring API documentation](https://cloud.google.com/monitoring/api/v3) for more information.\n\n<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>",
+          "graphQueries": {
+            "metricName": "GCP Monitoring logs",
+            "legend": "GCP_MONITORING_CL",
+            "baseQuery": "GCP_MONITORING_CL"
+          },
+          "dataTypes": {
+            "name": "GCP_MONITORING_CL",
+            "lastDataReceivedQuery": "GCP_MONITORING_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+          },
           "connectivityCriterias": [
             {
               "type": "IsConnectedQuery",
@@ -438,12 +1040,10 @@
               ]
             }
           ],
-          "sampleQueries": [
-            {
-              "description": "All GCP Monitoring logs",
-              "query": "GCP_MONITORING_CL\n| sort by TimeGenerated desc"
-            }
-          ],
+          "sampleQueries": {
+            "description": "All GCP Monitoring logs",
+            "query": "GCP_MONITORING_CL\n| sort by TimeGenerated desc"
+          },
           "availability": {
             "status": 1,
             "isPreview": false
@@ -533,7 +1133,7 @@
               "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\t\tGCP_PROJECT_ID\n\t\tGCP_METRICS\n\t\tGCP_CREDENTIALS_FILE_CONTENT\n\t\tWORKSPACE_ID\n\t\tSHARED_KEY\n\t\tlogAnalyticsUri (Optional)\n - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://WORKSPACE_ID.ods.opinsights.azure.us`. \n4. Once all application settings have been entered, click **Save**."
             }
           ],
-          "id": "[variables('_uiConfigId1')]",
+          "id": "[variables('_uiConfigId2')]",
           "additionalRequirementBanner": ">This data connector depends on a parser based on a Kusto Function to work as expected [**GCP_MONITORING**](https://aka.ms/sentinel-GCPMonitorDataConnector-parser) which is deployed with the Microsoft Sentinel Solution."
         }
       }
@@ -543,12 +1143,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Google Cloud Platform Cloud Monitoring",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Google%20Cloud%20Platform%20Cloud%20Monitoring/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://cloud.google.com/gcp\">Google Cloud Platform</a> Cloud Monitoring data connector provides the capability to ingest <a href=\"https://cloud.google.com/monitoring/api/metrics_gcp\">GCP Monitoring metrics</a> into Microsoft Sentinel using the GCP Monitoring API. Refer to <a href=\"https://cloud.google.com/monitoring/api/v3\">GCP Monitoring API documentation</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api\">Azure Monitor HTTP Data Collector API</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Google%20Cloud%20Platform%20Cloud%20Monitoring/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://cloud.google.com/gcp\">Google Cloud Platform</a> Cloud Monitoring data connector provides the capability to ingest <a href=\"https://cloud.google.com/monitoring/api/metrics_gcp\">GCP Monitoring metrics</a> into Microsoft Sentinel using the GCP Monitoring API. Refer to <a href=\"https://cloud.google.com/monitoring/api/v3\">GCP Monitoring API documentation</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://aka.ms/Log-Ingestion-API\">Log Ingestion API in Azure Monitor</a></p>\n</li>\n<li><p><a href=\"https://aka.ms/Sentinel-CCP_Platform\">Microsoft Sentinel Codeless Connector Framework</a></p>\n</li>\n</ol>\n<p><span style='color:red; font-weight:bold;'>NOTE</span>: Microsoft recommends installation of \"GCPMonitorCCPDefinition\" (via Codeless Connector Framework). This connector is build on the Codeless Connector Framework (CCF), which uses the Log Ingestion API, which replaces ingestion via the <a href='https://aka.ms/Sentinel-Logs_migration' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>. CCF-based data connectors also support <a href='https://aka.ms/Sentinel-DCR_Overview' style='color:#1890F1;'>Data Collection Rules</a> (DCRs) offering transformations and enrichment.</p>\n<p><span style='color:red; font-weight:bold;'>Important</span>: While the updated connector(s) can coexist with their legacy versions, running them together will result in duplicated data ingestion. You can disable the older versions of these connectors to avoid duplication of data..</p>\n<p><strong>Data Connectors:</strong> 2, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -580,8 +1180,13 @@
             },
             {
               "kind": "DataConnector",
-              "contentId": "[variables('_dataConnectorContentId1')]",
-              "version": "[variables('dataConnectorVersion1')]"
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId2')]",
+              "version": "[variables('dataConnectorVersion2')]"
             }
           ]
         },
