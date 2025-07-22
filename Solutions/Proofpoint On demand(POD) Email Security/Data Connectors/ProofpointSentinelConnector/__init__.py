@@ -52,9 +52,11 @@ class Proofpoint_api:
         self.gen_timeframe(time_delay_minutes=self.time_delay_minutes)
 
     def gen_timeframe(self, time_delay_minutes):
-        before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes)
-        self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
-        self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
+         """Generate time range for API queries with buffer and overlap to avoid missing events."""
+        before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes - 5)
+        self.before_time = before_time.strftime("%Y-%m-%dT%H:%M:%S.999999")
+        after_time = before_time - datetime.timedelta(minutes=65)
+        self.after_time = after_time.strftime("%Y-%m-%dT%H:%M:%S.000000")
         
     def check_and_split_msgParts(self, msg_parts, max_size=32000):
         # If msg_parts is a list or dictionary, convert it to a string (JSON format)
