@@ -262,8 +262,8 @@ Write-ScriptNotes
 # Add an Identity Provider
 New-OidcProvider
 New-ArnRole
-Write-Log -Message "Executing: aws iam get-role --role-name OIDC_$roleName" -LogFileName $LogFileName -Severity Verbose
-$roleArnObject = aws iam get-role --role-name "OIDC_$roleName"
+Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
+$roleArnObject = aws iam get-role --role-name $roleName
 $roleArn = ($roleArnObject | ConvertFrom-Json ).Role.Arn
 Write-Log -Message $roleArn -LogFileName $LogFileName -Severity Verbose
 
