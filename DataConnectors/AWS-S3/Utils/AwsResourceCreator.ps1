@@ -157,8 +157,9 @@ function New-S3Bucket
                 }
                 else
                 {
+                    $locationConfig = "{""LocationConstraint"":""$regionConfiguration""}"
                     Write-Log "Executing: aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1" -LogFileName $LogFileName -Severity Verbose
-                    $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1
+                    $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration $locationConfig 2>&1
                     Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
                 }
                     
