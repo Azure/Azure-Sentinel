@@ -10,7 +10,7 @@ Before deploying, ensure you have:
 - Required IAM permissions to configure AWS services.
 
 ## CloudFormation Templates
- Download Both the CloudFormation templates(Template 1: OpenID connect authentication deployment,Template 2: AWSCloudFront resources deployment) from connector UI page and deploy in your AWS environment.
+ Download Both the CloudFormation templates(Template 1: OpenID connect authentication deployment,Template 2: AWS Network Firewall Configuration) from connector UI page and deploy in your AWS environment.
   
 1. OpenID Connect
 
