@@ -41,6 +41,8 @@ query: |
     // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
     // Taking the first non-empty value based on potential IOC match availability
     | extend TI_ipEntity = NetworkSourceIP
+    | extend ThreatType = tostring(Data.indicator_types[0])
+    | extend IndicatorId = tostring(split(Id, "--")[2])
     // Picking up only IOC's that contain the entities we want
     | where TI_ipEntity != "NO_IP"
     // Exclude local addresses, using the ipv4_is_private operator
@@ -62,7 +64,9 @@ query: |
     on $left.TI_ipEntity == $right.SrcIpAddr
   | where imNWS_TimeGenerated < ValidUntil
   | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated, *) by Id, DstIpAddr
-  | project imNWS_TimeGenerated, Description, ActivityGroupNames, Id, ThreatType, ValidUntil, ConfidenceScore, TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Url
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ValidUntil, ConfidenceScore, TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Url
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -76,12 +80,12 @@ customDetails:
   EventTime: imNWS_TimeGenerated
   IoCDescription: Description
   ActivityGroupNames: ActivityGroupNames
-  IndicatorId: Id
+  IndicatorId: IndicatorId
   ThreatType: ThreatType
   IoCExpirationTime: ValidUntil
   IoCConfidenceScore: ConfidenceScore
 alertDetailsOverride:
   alertDisplayNameFormat: The IP {{SrcIpAddr}} of the web request matches an IP IoC
   alertDescriptionFormat: The source address {{SrcIpAddr}} of the web request for the URL {{Url}} matches a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence feed for more information about the indicator.
-version: 1.2.9
+version: 1.2.10
 kind: Scheduled
