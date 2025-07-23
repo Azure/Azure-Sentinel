@@ -95,12 +95,14 @@ class ImpervaFilesHandler:
                 if self.files_array is not None:
                     current_file = self.files_array[-1]
                 state.post(current_file)
+                
                 return files_arr
         except Exception as err:
             logging.error("Last point file detection error. Exception error text: {}".format(err))
 
     def download_files(self):
         files_for_download = self.last_file_point()
+        logging.info("files_for_download: {}".format(files_for_download))
         if files_for_download is not None:
             for file in files_for_download:
                 logging.info("Downloading file {}".format(file))
@@ -140,11 +142,13 @@ class ImpervaFilesHandler:
         if file_encryption_flag == -1:
             try:
                 events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
+                logging.info("event Data: {}".format(events_data))
             except Exception as err:
                 if 'while decompressing data: incorrect header check' in err.args[0]:
                     events_data = file_data.decode("utf-8")
                 else:
                     logging.error("Error during decompressing and decoding the file with error message {}.".format(err))                   
+        logging.info("events data: {}".format(events_data))
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
@@ -185,7 +189,7 @@ class ImpervaFilesHandler:
                 parsed_cef['EventGeneratedTime'] = ""
         else:
             parsed_cef['EventGeneratedTime'] = ""
-
+        logging.info("parsed_cef: {}".format(parsed_cef))
         return parsed_cef
                 
     def gen_chunks_to_object(self, object, chunksize=100):
