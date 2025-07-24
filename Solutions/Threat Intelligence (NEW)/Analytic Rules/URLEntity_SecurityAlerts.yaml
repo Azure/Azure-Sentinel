@@ -31,17 +31,14 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let URLRegex = "((https?|ftp|ldap|wss?|file):\\/\\/(([\\:\\%\\w\\_\\-]+(\\.|@))*((xn--)?[a-zA-Z0-9\\-]+\\.)+(xn--[a-z0-9]+|[A-Za-z]+)|\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{0,3})[.,:\\w@?^=%&\\/~+#-]*[\\w@?^=%&\\/~+#-])";
-  let SecurityEvents = materialize(SecurityAlert
+  let SecurityEvents = materialize( SecurityAlert
     | where TimeGenerated >= ago(dt_lookBack)
     | extend MSTI = case(AlertName has "TI map" and VendorName == "Microsoft" and ProductName == 'Azure Sentinel', true, false)
     | where MSTI == false
-    // Extract URL from JSON data
-    | mv-expand parse_json(Entities)
-    | where isnotempty(Entities.Url) or isnotempty(Entities.Urls)
-    | extend Url = coalesce(Entities.Url, Entities.Urls)
-    | mv-expand Url
-    | extend Url = tolower(Url)
-    // Extract hostname from JSON data for entity mapping
+    | mv-expand Entity = parse_json(Entities)
+    | extend RawUrl = coalesce(Entity.Url, Entity.Urls)
+    | mv-expand RawUrl
+    | extend Url = tostring(RawUrl)
     | extend Compromised_Host = tostring(parse_json(ExtendedProperties).["Compromised Host"])
     | extend Alert_TimeGenerated = TimeGenerated);
   let EventUrls = materialize(SecurityEvents | distinct Url | summarize make_list(Url));
@@ -50,13 +47,11 @@ query: |
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
   | where IndicatorType == "url"
   | extend Url = ObservableValue
-  | where isnotempty(Url)
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-  | where isnotempty(Url)
   | where TimeGenerated >= ago(ioc_lookBack)
   | where tolower(Url) in (EventUrls)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   | extend Description = tostring(parse_json(Data).description)
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;" 
    | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type
@@ -76,5 +71,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.2.9
+version: 1.2.10
 kind: Scheduled

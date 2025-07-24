@@ -1,0 +1,856 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for PingOne"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "PingOne",
+    "_solutionVersion": "3.0.1",
+    "solutionId": "azuresentinel.azure-sentinel-pingone",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "PingOneAuditLogsCCPDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "PingOneAuditLogsCCPDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Ping One (via Codeless Connector Framework) (Preview)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "PingOneAuditLogsCCPDefinition",
+                  "title": "Ping One (via Codeless Connector Framework) (Preview)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "This connector ingests **audit activity logs** from the PingOne Identity platform into Microsoft Sentinel using a Codeless Connector Framework.",
+                  "graphQueriesTableName": "PingOne_AuditActivitiesV2_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total audit events received",
+                      "legend": "Audit Events",
+                      "baseQuery": "PingOne_AuditActivitiesV2_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get sample audit activity events",
+                      "query": "PingOne_AuditActivitiesV2_CL\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "PingOne_AuditActivitiesV2_CL",
+                      "lastDataReceivedQuery": "PingOne_AuditActivitiesV2_CL\n | where TimeGenerated > ago(12h)\n | summarize Time=max(TimeGenerated)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": false,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect Ping One connector to Microsoft Sentinel",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "Before connecting to PingOne, ensure the following prerequisites are completed. Refer to the [document](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PingOne/README.md) for detailed setup instructions, including how to obtain client credentials and the environment ID."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 1. Client Credentials \n You'll need client credentials, including your client id and client secret."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 2. Environment Id  \n To generate token and gather logs from audit activities endpoint"
+                          }
+                        },
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "Environment ID",
+                                "columnValue": "properties.addOnAttributes.EnvironmentId"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "isPrimary": true,
+                            "label": "Add domain",
+                            "title": "Add domain",
+                            "subtitle": "Add domain",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Client ID",
+                                      "placeholder": "Enter ID of the client",
+                                      "type": "text",
+                                      "name": "clientId",
+                                      "required": true
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Client Secret",
+                                      "placeholder": "Enter your secret key",
+                                      "type": "password",
+                                      "name": "clientSecret",
+                                      "required": true
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Environment ID",
+                                      "placeholder": "Enter your environment Id ",
+                                      "type": "text",
+                                      "name": "environmentId",
+                                      "required": true
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Api domain",
+                                      "placeholder": "Enter your Api domain Eg.( pingone.com,pingone.eu etc )depending on the region credentials created for ",
+                                      "type": "text",
+                                      "name": "apidomain",
+                                      "required": true
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "PingOneDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-PingOne_AuditActivitiesV2_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "correlationId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "recordedAt",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "createdAt",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "internalCorrelation",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "actors",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "source",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "action",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "resources",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "result",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-PingOne_AuditActivitiesV2_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend Id = tostring(id), CorrelationId = tostring(correlationId), RecordedAt = todatetime(recordedAt), CreatedAt = todatetime(createdAt), InternalCorrelationSessionId = tostring(internalCorrelation.sessionId), ClientId = tostring(actors.client.id), ClientName = tostring(actors.client.name), ClientType = tostring(actors.client.type), UserId = tostring(actors.user.id), UserName = tostring(actors.user.name), UserEnvironmentId = tostring(actors.user.environment.id), UserPopulationId = tostring(actors.user.population.id), UserType = tostring(actors.user.type), SourceUserAgent = tostring(source.userAgent), SourceIpAddress = tostring(source.ipAddress), ActionType= tostring(action.type), ActionDescription= tostring(action.description), Resources = resources, ResultStatus = tostring(result.status), ResultDescription = tostring(result.description), TimeGenerated = todatetime(createdAt) | project Id, CorrelationId, RecordedAt, CreatedAt, InternalCorrelationSessionId, ClientId, ClientName, ClientType, UserId, UserName, UserEnvironmentId, UserPopulationId, UserType, SourceUserAgent, SourceIpAddress, ActionType, ActionDescription, Resources, ResultStatus, ResultDescription, TimeGenerated",
+                    "outputStream": "Custom-PingOne_AuditActivitiesV2_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "PingOne_AuditActivitiesV2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "PingOne_AuditActivitiesV2_CL",
+                  "columns": [
+                    {
+                      "name": "Id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CorrelationId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RecordedAt",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "InternalCorrelationSessionId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserEnvironmentId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserPopulationId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourceUserAgent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourceIpAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ActionType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ActionDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Resources",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "ResultStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResultDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "PingOneAuditLogsCCPDefinition",
+          "title": "Ping One (via Codeless Connector Framework) (Preview)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "This connector ingests **audit activity logs** from the PingOne Identity platform into Microsoft Sentinel using a Codeless Connector Framework.",
+          "graphQueriesTableName": "PingOne_AuditActivitiesV2_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total audit events received",
+              "legend": "Audit Events",
+              "baseQuery": "PingOne_AuditActivitiesV2_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get sample audit activity events",
+              "query": "PingOne_AuditActivitiesV2_CL\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "PingOne_AuditActivitiesV2_CL",
+              "lastDataReceivedQuery": "PingOne_AuditActivitiesV2_CL\n | where TimeGenerated > ago(12h)\n | summarize Time=max(TimeGenerated)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": false,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect Ping One connector to Microsoft Sentinel",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "Before connecting to PingOne, ensure the following prerequisites are completed. Refer to the [document](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PingOne/README.md) for detailed setup instructions, including how to obtain client credentials and the environment ID."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 1. Client Credentials \n You'll need client credentials, including your client id and client secret."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 2. Environment Id  \n To generate token and gather logs from audit activities endpoint"
+                  }
+                },
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Environment ID",
+                        "columnValue": "properties.addOnAttributes.EnvironmentId"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "isPrimary": true,
+                    "label": "Add domain",
+                    "title": "Add domain",
+                    "subtitle": "Add domain",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Client ID",
+                              "placeholder": "Enter ID of the client",
+                              "type": "text",
+                              "name": "clientId",
+                              "required": true
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Client Secret",
+                              "placeholder": "Enter your secret key",
+                              "type": "password",
+                              "name": "clientSecret",
+                              "required": true
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Environment ID",
+                              "placeholder": "Enter your environment Id ",
+                              "type": "text",
+                              "name": "environmentId",
+                              "required": true
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Api domain",
+                              "placeholder": "Enter your Api domain Eg.( pingone.com,pingone.eu etc )depending on the region credentials created for ",
+                              "type": "text",
+                              "name": "apidomain",
+                              "required": true
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Ping One (via Codeless Connector Framework) (Preview)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Ping One (via Codeless Connector Framework) (Preview)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "environmentId": {
+              "defaultValue": "environmentId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apidomain": {
+              "defaultValue": "apidomain",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'), '/Microsoft.SecurityInsights', '/PingOneAuditActivitiesPoller_', parameters('environmentId'), parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "PingOneAuditLogsCCPDefinition",
+                "dataType": "PingOne_AuditActivitiesV2_CL",
+                "addOnAttributes": {
+                  "EnvironmentId": "[[parameters('environmentId')]"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "grantType": "client_credentials",
+                  "tokenEndpoint": "[[concat('https://auth.',parameters('apidomain'),'/',parameters('environmentId'),'/as/token')]",
+                  "tokenEndpointHeaders": {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://api.', parameters('apidomain'), '/v1/environments/', parameters('environmentId'), '/activities')]",
+                  "httpMethod": "GET",
+                  "queryWindowInMin": 10,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba"
+                  },
+                  "queryParameters": {
+                    "filter": "recordedat gt \"{_QueryWindowStartTime}\" and recordedat lt \"{_QueryWindowEndTime}\""
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$._embedded.activities"
+                  ],
+                  "format": "json"
+                },
+                "dcrConfig": {
+                  "streamName": "Custom-PingOne_AuditActivitiesV2_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "paging": {
+                  "pagingType": "LinkHeader",
+                  "linkHeaderTokenJsonPath": "$._links.next.href"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "PingOne",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/PingOne/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.pingidentity.com/en/platform/solutions.html\">PingOne</a> solution provides the capability to ingest <a href=\"https://docs.pingidentity.com/pingone/p1_cloud__platform_main_landing_page.html\">PingOne audit activity logs</a> into Microsoft Sentinel using the PingOne Platform API.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs</p>\n<ol type=\"a\">\n<li><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Framework (CCF)</a></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "PingOne",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-04-20",
+        "lastPublishDate": "2025-04-20",
+        "providers": [
+          "PingIdentity"
+        ],
+        "categories": {
+          "domains": [
+            "Identity"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
