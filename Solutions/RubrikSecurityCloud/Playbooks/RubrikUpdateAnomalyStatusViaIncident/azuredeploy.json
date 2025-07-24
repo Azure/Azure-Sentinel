@@ -1,0 +1,1127 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Rubrik Update Anomaly Status Via Incident",
+        "description": "This playbook queries Rubrik Security Cloud to enrich the Anomaly event with additional information and internally calls RubrikUpdateAnomalyStatus playbook with additional anomaly information to resolve the anomaly.",
+        "prerequisites": [
+            "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
+            "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
+            "3. Rubrik custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.",
+            "4. Store Service account credentials in Key Vault and obtain keyvault name and tenantId",
+            "a. Create a Key Vault with unique name",
+            "b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively",
+            "5. Make sure that RubrikUpdateAnomalyStatus playbook is deployed before deploying RubrikUpdateAnomalyStatusViaIncident playbook."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection like keyvault.",
+            "1. Click the connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**b. Assign Role to close incident**",
+            "Assign role to this playbook.",
+            "1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add",
+            "2. Add role assignment",
+            "3. Assignment type: Job function roles -> Add 'Microsoft Sentinel Contributor' as a Role",
+            "4. Members: select managed identity for assigned access to and add your logic app as member",
+            "5. Click on review+assign",
+            "**c. Configurations in Microsoft Sentinel**",
+            "1. In Microsoft sentinel, analytical rules should be configured to trigger an incident which has Entities Mapping available for IP.",
+            "2. To manually run the playbook on a particular incident follow the below steps:",
+            "a. Go to Microsoft Sentinel -> <your workspace> -> Incidents",
+            "b. Select an incident.",
+            "c. In the right pane, click on Actions, and from the dropdown select the 'Run Playbook' option.",
+            "d. Click on the Run button beside this playbook.",
+            "**d. Configurations in Microsoft Sentinel**",
+            "1. In Microsoft Sentinel, analytical rules should be configured to trigger an incident. An incident should have the *ClusterId* - custom entity that contains clusterId of an event generated in rubrik, *ObjectId* - custom entity that contains objectId of an event generated in rubrik, *ObjectType* - custom entity that contains objectType of an event generated in rubrik, *ObjectName* -custom entity that contains objectName of an event generated in rubrik . It can be obtained from the corresponding field in Rubrik Anomaly Event logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.",
+            "2. Configure the automation rules to trigger the playbook."
+        ],
+        "prerequisitesDeployTemplateFile": "Azure-Sentinel/Solutions/RubrikSecurityCloud/Playbooks/RubrikCustomConnector/Rubrik_custom_conn.json",
+        "lastUpdateTime": "2025-03-18T00:00:00.000Z",
+        "entities": [ "account", "url" ],
+        "tags": [ "Anomaly", "Incident", "Rubrik" ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Rubrik"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RubrikUpdateAnomalyStatusViaIncident",
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Please do not keep 'PlaybookName' parameter empty, else you will receive validation failure"
+            }
+        },
+        "API Hostname": {
+            "type": "String",
+            "defaultValue": "rubrik-tme-rdp.my.rubrik.com",
+            "metadata": {
+                "description": "Hostname of the RubrikApi instance."
+            }
+        },
+        "Rubrik Connector name": {
+            "defaultValue": "RubrikCustomConnector",
+            "type": "String",
+            "metadata": {
+                "description": "Rubrik Custom Connector name"
+            }
+        },
+        "keyvaultName": {
+            "defaultValue": "RubrikSentinelKeyVault",
+            "type": "string"
+        },
+        "tenantId": {
+            "type": "string"
+        },
+        "UpdateAnomalyStatusPlaybookName": {
+            "type": "string",
+            "metadata": {
+                "description": "Playbook name that you have given while deployment of playbook RubrikUpdateAnomalyStatus(e.g.RubrikUpdateAnomalyStatus)"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "RubrikcustomconnectorConnectionName": "[concat('Rubrikcustomconnector-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Authentication": {
+                            "runAfter": {
+                                "For_Each_Alerts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['RubrikCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "client_id": "@body('Get_Client_ID')?['value']",
+                                    "client_secret": "@body('Get_Client_Secret')?['value']"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "User-Agent": "@variables('User_Agent')"
+                                },
+                                "path": "/api/client_token"
+                            }
+                        },
+                        "Does_Get_SnapshotFid_Status_Code_Equal_To_200_And_Response_Not_Contain_Errors": {
+                            "actions": {
+                                "Does_Get_Cdmid_Status_Code_Equal_To_200_And_Response_Not_Contain_Errors": {
+                                    "actions": {
+                                        "Does_Get_Anomaly_Type_Status_Code_Equal_To_200_And_Response_Not_Contain_Errors": {
+                                            "actions": {
+                                                "Does_isAnomaly_Equal_To_True_And_resolutionStatus_Equal_To_UNRESOLVED": {
+                                                    "actions": {
+                                                        "RubrikUpdateAnomalyStatus": {
+                                                            "type": "Workflow",
+                                                            "inputs": {
+                                                                "host":  {
+                                                        "workflow": {
+                                                                            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('UpdateAnomalyStatusPlaybookName'))]"
+                                                        },
+                                                        "triggerName":  "manual"
+                                                    },
+                                                                "body": {
+                                                                    "AccessToken": "@variables('Access_Token')",
+                                                                    "BaseUrl": "@variables('Base_URL')",
+                                                                    "UserAgent": "@variables('User_Agent')",
+                                                                    "ObjectName": "@variables('Object_Name')",
+                                                                    "anomalyId": "@variables('Anomaly_ID')",
+                                                                    "anomalyType": "@body('Parse_JSON_For_Get_Anomaly_Type')['data']['anomalyResultOpt']['anomalyType']",
+                                                                    "workloadId": "@variables('Object_ID')"
+                                                                }
+                                                            }
+                                                        },
+                                                        "Does_Resolve_Anomaly_Status_Code_Not_Equal_To_200": {
+                                                            "actions": {
+                                                                "Terminate_Due_To_Resolve_Anomaly_Failure": {
+                                                                    "type": "Terminate",
+                                                                    "inputs": {
+                                                                        "runStatus": "Failed",
+                                                                        "runError": {
+                                                                            "code": "@outputs('RubrikUpdateAnomalyStatus')['statusCode']",
+                                                                            "message": "Error: @{body('RubrikUpdateAnomalyStatus')}"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "RubrikUpdateAnomalyStatus": [
+                                                                    "Succeeded",
+                                                                    "TimedOut",
+                                                                    "Skipped",
+                                                                    "Failed"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Does_Resolve_Anomaly_Response_Not_Contain_No_Action": {
+                                                                        "actions": {
+                                                                            "Set_Incident_Close_Type": {
+                                                                                "type": "SetVariable",
+                                                                                "inputs": {
+                                                                                    "name": "Incident_Close_Type",
+                                                                                    "value": "@if(contains(body('RubrikUpdateAnomalyStatus'), 'false positive'), 'False Positive - Incorrect alert logic', 'True Positive - Suspicious activity')"
+                                                                                }
+                                                                            },
+                                                                            "Close_Incident_Due_To_Resolve_Anomaly_Or_Report_False_Positive": {
+                                                                                "runAfter": {
+                                                                                    "Set_Incident_Close_Type": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "ApiConnection",
+                                                                                "inputs": {
+                                                                                    "host": {
+                                                                                        "connection": {
+                                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                        }
+                                                                                    },
+                                                                                    "method": "put",
+                                                                                    "body": {
+                                                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                        "status": "Closed",
+                                                                                        "classification": {
+                                                                                            "ClassificationAndReason": "@variables('Incident_Close_Type')",
+                                                                                            "ClassificationReasonText": "@variables('Incident_Close_Comment')"
+                                                                                        }
+                                                                                    },
+                                                                                    "path": "/Incidents"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {
+                                                                            "Set_Incident_Close_Comment": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {}
+                                                                        },
+                                                                        "expression": {
+                                                                            "or": [
+                                                                                {
+                                                                                    "not": {
+                                                                                        "contains": [
+                                                                                            "@body('RubrikUpdateAnomalyStatus')",
+                                                                                            "No action"
+                                                                                        ]
+                                                                                    }
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Set_Incident_Close_Comment": {
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "Incident_Close_Comment",
+                                                                            "value": "@{body('RubrikUpdateAnomalyStatus')}"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "not": {
+                                                                            "equals": [
+                                                                                "@outputs('RubrikUpdateAnomalyStatus')['statusCode']",
+                                                                                200
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_JSON_For_Get_Anomaly_Type": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Close_Incident_Due_To_Anomaly_Is_Already_Resolved_Or_It_Is_Not_An_Anomaly": {
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "put",
+                                                                    "body": {
+                                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                        "status": "Closed",
+                                                                        "classification": {
+                                                                            "ClassificationAndReason": "TruePositive - SuspiciousActivity",
+                                                                            "ClassificationReasonText": "Due to anomaly is already resolved or it is not an anomaly"
+                                                                        }
+                                                                    },
+                                                                    "path": "/Incidents"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@body('Parse_JSON_For_Get_Anomaly_Type')['data']['anomalyResultOpt']['isAnomaly']",
+                                                                    "@true"
+                                                                ]
+                                                            },
+                                                            {
+                                                                "equals": [
+                                                                    "@body('Parse_JSON_For_Get_Anomaly_Type')['data']['anomalyResultOpt']['resolutionStatus']",
+                                                                    "UNRESOLVED"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Parse_JSON_For_Get_Anomaly_Type": {
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_Anomaly_Type')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "data": {
+                                                                    "properties": {
+                                                                        "anomalyResultOpt": {
+                                                                            "properties": {
+                                                                                "anomalyType": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "isAnomaly": {
+                                                                                    "type": "boolean"
+                                                                                },
+                                                                                "resolutionStatus": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "anomalyType",
+                                                                                "resolutionStatus",
+                                                                                "isAnomaly"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "anomalyResultOpt"
+                                                                    ],
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "data"
+                                                            ],
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Get_Anomaly_Type": [
+                                                    "Succeeded",
+                                                    "TimedOut",
+                                                    "Skipped",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Terminate_Due_To_Get_Anomaly_Type_Failure": {
+                                                        "type": "Terminate",
+                                                        "inputs": {
+                                                            "runStatus": "Failed",
+                                                            "runError": {
+                                                                "code": "@{outputs('Get_Anomaly_Type')['statusCode']}",
+                                                                "message": "Error: @{if(contains(body('Get_Anomaly_Type'), 'errors'), body('Get_Anomaly_Type')?['errors'][0]?['message'], body('Get_Anomaly_Type')?['message'])}"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@outputs('Get_Anomaly_Type')?['statusCode']",
+                                                            200
+                                                        ]
+                                                    },
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@body('Get_Anomaly_Type')",
+                                                                "errors"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Get_Anomaly_Type": {
+                                            "runAfter": {
+                                                "Parse_JSON_For_Get_Cdmid": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "@{variables('Base_URL')}/api/graphql",
+                                                "method": "POST",
+                                                "headers": {
+                                                    "Authorization": "Bearer @{variables('Access_Token')}",
+                                                    "Content-Type": "application/json",
+                                                    "User-Agent": "@variables('User_Agent')"
+                                                },
+                                                "body": {
+                                                    "query": "query AnomalyResultQuery($clusterUuid: UUID!, $snapshotId: String!) {  anomalyResultOpt(clusterUuid: $clusterUuid, snapshotId: $snapshotId) {    anomalyType    resolutionStatus    isAnomaly}}",
+                                                    "variables": {
+                                                        "clusterUuid": "@variables('Cluster_ID')",
+                                                        "snapshotId": "@body('Parse_JSON_For_Get_Cdmid')['data']['snapshot']['cdmId']"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Parse_JSON_For_Get_Cdmid": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get_Cdmid')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "data": {
+                                                            "properties": {
+                                                                "snapshot": {
+                                                                    "properties": {
+                                                                        "cdmId": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "cdmId"
+                                                                    ],
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "snapshot"
+                                                            ],
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "data"
+                                                    ],
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_Cdmid": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Skipped",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Terminate_Due_To_Get_Cdmid_Failure": {
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Failed",
+                                                    "runError": {
+                                                        "code": "@{outputs('Get_Cdmid')['statusCode']}",
+                                                        "message": "Error: @{if(contains(body('Get_Cdmid'), 'errors'), body('Get_Cdmid')?['errors'][0]?['message'], body('Get_Cdmid')?['message'])}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('Get_Cdmid')['statusCode']",
+                                                    200
+                                                ]
+                                            },
+                                            {
+                                                "not": {
+                                                    "contains": [
+                                                        "@body('Get_Cdmid')",
+                                                        "errors"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_Cdmid": {
+                                    "runAfter": {
+                                        "Set_Anomaly_ID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@{variables('Base_URL')}/api/graphql",
+                                        "method": "POST",
+                                        "headers": {
+                                            "Authorization": "Bearer @{variables('Access_Token')}",
+                                            "Content-Type": "application/json",
+                                            "User-Agent": "@variables('User_Agent')"
+                                        },
+                                        "body": {
+                                            "query": "query SnappableInvestigationsQuery($id: UUID!) {  snapshot(snapshotFid: $id) {    cdmId  }}\r\n",
+                                            "variables": {
+                                                "id": "@variables('Anomaly_ID')"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_For_Get_SnapshotFid": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_SnapshotFid')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "activitySeriesConnection": {
+                                                            "properties": {
+                                                                "edges": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "node": {
+                                                                                "properties": {
+                                                                                    "activitySeriesId": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "activitySeriesId"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "node"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "edges"
+                                                            ],
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "activitySeriesConnection"
+                                                    ],
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "required": [
+                                                "data"
+                                            ],
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Set_Anomaly_ID": {
+                                    "runAfter": {
+                                        "Parse_JSON_For_Get_SnapshotFid": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Anomaly_ID",
+                                        "value": "@{body('Parse_JSON_For_Get_SnapshotFid')?['data']?['activitySeriesConnection']?['edges'][0]?['node']?['activitySeriesId']}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_SnapshotFid": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_Due_To_Get_SnapshotFid_Failure": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Failed",
+                                            "runError": {
+                                                "code": "@{outputs('Get_SnapshotFid')['statusCode']}",
+                                                "message": "Error: @{if(contains(body('Get_SnapshotFid'), 'errors'), body('Get_SnapshotFid')?['errors'][0]?['message'], body('Get_SnapshotFid')?['message'])}"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('Get_SnapshotFid')?['statusCode']",
+                                            200
+                                        ]
+                                    },
+                                    {
+                                        "not": {
+                                            "contains": [
+                                                "@body('Get_SnapshotFid')",
+                                                "errors"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_Each_Alerts": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions": {
+                                "Parse_JSON_For_Alert": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_Each_Alerts')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema": {
+                                            "properties": {
+                                                "ClusterId": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "ObjectId": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "ObjectName": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "ObjectType": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Set_Cluster_ID": {
+                                    "runAfter": {
+                                        "Set_Object_Name": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Cluster_ID",
+                                        "value": "@body('Parse_JSON_For_Alert')?['ClusterId'][0]"
+                                    }
+                                },
+                                "Set_Object_ID": {
+                                    "runAfter": {
+                                        "Parse_JSON_For_Alert": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Object_ID",
+                                        "value": "@body('Parse_JSON_For_Alert')?['ObjectId'][0]"
+                                    }
+                                },
+                                "Set_Object_Name": {
+                                    "runAfter": {
+                                        "Set_Object_ID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Object_Name",
+                                        "value": "@body('Parse_JSON_For_Alert')?['ObjectName'][0]"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Client_ID": {
+                            "runAfter": {
+                                "Initialize_Start_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientId')}/value"
+                            }
+                        },
+                        "Get_Client_Secret": {
+                            "runAfter": {
+                                "Get_Client_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientSecret')}/value"
+                            }
+                        },
+                        "Get_SnapshotFid": {
+                            "runAfter": {
+                                "Initialize_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "@{variables('Base_URL')}/api/graphql",
+                                "method": "POST",
+                                "headers": {
+                                    "Authorization": "Bearer @{variables('Access_Token')}",
+                                    "Content-Type": "application/json",
+                                    "User-Agent": "@variables('User_Agent')"
+                                },
+                                "body": {
+                                    "query": "query EventSeriesListQuery($after: String, $filters: ActivitySeriesFilter, $first: Int, $sortBy: ActivitySeriesSortField, $sortOrder: SortOrder) {  activitySeriesConnection(    after: $after    first: $first    filters: $filters    sortBy: $sortBy    sortOrder: $sortOrder  ) {    edges {  node {        ...EventSeriesFragment      }}}}fragment EventSeriesFragment on ActivitySeries {  activitySeriesId }",
+                                    "variables": {
+                                        "filters": {
+                                            "clusterId": "@variables('Cluster_ID')",
+                                            "lastActivityStatus": [],
+                                            "lastActivityType": [
+                                                "ANOMALY"
+                                            ],
+                                            "lastUpdatedTimeGt": "@{variables('Start_Date')}",
+                                            "objectName": "@{variables('Object_Name')}",
+                                            "objectType": [],
+                                            "severity": []
+                                        },
+                                        "first": 40,
+                                        "sortBy": "OBJECT_NAME",
+                                        "sortOrder": "ASC"
+                                    }
+                                }
+                            }
+                        },
+                        "Initialize_Access_Token": {
+                            "runAfter": {
+                                "Is_Authentication_Failed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Access_Token",
+                                        "type": "string",
+                                        "value": "@{body('Authentication')?['access_token']}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Anomaly_ID": {
+                            "runAfter": {
+                                "Initialize_Cluster_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Anomaly_ID",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Base_URL": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name":  "Base_URL",
+                                        "type":  "string",
+                                        "value":  "[concat('https://', parameters('API Hostname'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Cluster_ID": {
+                            "runAfter": {
+                                "Initialize_Object_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Cluster_ID",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Incident_Start_Time": {
+                            "runAfter": {
+                                "Initialize_Incident_Close_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident_Start_Time",
+                                        "type": "string",
+                                        "value": "@triggerBody()?['object']?['properties']?['createdTimeUtc']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Object_ID": {
+                            "runAfter": {
+                                "Initialize_Object_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Object_ID",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Object_Name": {
+                            "runAfter": {
+                                "Initialize_User_Agent": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Object_Name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Start_Date": {
+                            "runAfter": {
+                                "Subtract_From_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Start_Date",
+                                        "type": "string",
+                                        "value": "@body('Subtract_from_time')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_User_Agent": {
+                            "runAfter": {
+                                "Initialize_Base_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "User_Agent",
+                                        "type": "string",
+                                        "value": "MSFTSentinel-3.4.0"
+                                    }
+                                ]
+                            }
+                        },
+                        "Is_Authentication_Failed": {
+                            "actions": {
+                                "Terminate_Due_To_Authentication_Failed": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "@{outputs('Authentication')['statusCode']}",
+                                            "message": "{\n  \"error\": \"@{body('Authentication')?['message']}\"\n}"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Authentication": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@outputs('Authentication')['statusCode']",
+                                                200
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Subtract_From_Time": {
+                            "runAfter": {
+                                "Initialize_Incident_Start_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Expression",
+                            "kind": "SubtractFromTime",
+                            "inputs": {
+                                "baseTime": "@variables('Incident_Start_Time')",
+                                "interval": 1,
+                                "timeUnit": "Day"
+                            }
+                        },
+                        "Initialize_Incident_Close_Type": {
+                            "runAfter": {
+                                "Initialize_Anomaly_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident_Close_Type",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Incident_Close_Comment": {
+                            "runAfter": {
+                                "Initialize_Incident_Close_Type": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident_Close_Comment",
+                                        "type": "string",
+                                        "value": "Resolved anomaly successfully"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "RubrikCustomConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+                                "connectionName": "[variables('RubrikcustomconnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RubrikUpdateAnomalyStatusViaIncident",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('RubrikcustomconnectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('RubrikcustomconnectorConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[parameters('tenantId')]",
+                    "token:grantType": "code",
+                    "vaultName": "[parameters('keyvaultName')]"
+                }
+            }
+        }
+    ]
+}

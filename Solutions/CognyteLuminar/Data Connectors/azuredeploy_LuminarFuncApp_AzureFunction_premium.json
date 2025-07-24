@@ -1,0 +1,290 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "defaultValue": "LuminarFuncApp",
+            "minLength": 1,
+            "maxLength": 20,
+            "type": "string"
+        },
+        "storageAccountType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_GRS",
+                "Standard_RAGRS"
+            ],
+            "metadata": {
+                "description": "Storage Account type"
+            }
+        },
+        "functionAppPlanSku": {
+            "type": "string",
+            "defaultValue": "EP1",
+            "allowedValues": [
+                "EP1",
+                "EP2",
+                "EP3"
+            ],
+            "metadata": {
+                "description": "Specifies the Azure Function hosting plan SKU."
+            }
+        },
+        "ApplicationID": {
+            "type": "string",
+            "defaultValue": "<Application (client) ID>",
+            "minLength": 1
+        },
+        "TenantID": {
+            "type": "string",
+            "defaultValue": "<Tenant ID>",
+            "minLength": 1
+        },
+        "ClientSecret": {
+            "type": "securestring",
+            "defaultValue": "<Application Client Secret>",
+            "minLength": 1
+        },
+        "LuminarAPIClientID": {
+            "type": "string",
+            "defaultValue": "<Luminar API Client ID>",
+            "minLength": 1
+        },
+        "LuminarAPIAccountID": {
+            "type": "string",
+            "defaultValue": "<Luminar API Account ID>",
+            "minLength": 1
+        },
+        "LuminarAPIClientSecret": {
+            "type": "securestring",
+            "defaultValue": "<Luminar API Client Secret>",
+            "minLength": 1
+        },
+        "LuminarInitialFetchDate": {
+            "type": "string",
+            "defaultValue": "YYYY-MM-DD",
+            "minLength": 1,
+            "maxLength": 10,
+            "metadata": {
+                "description": "The date from which to fetch data from Luminar API."
+            }
+        },
+        "TimeInterval": {
+            "type": "string",
+            "allowedValues": [
+                "Every 5 min",
+                "Every 10 min",
+                "Every 60 min",
+                "Every 6 hours",
+                "Every 12 hours",
+                "Every 24 hours"
+            ],
+            "defaultValue": "Every 6 hours",
+            "metadata": {
+                "description": "Select the Interval."
+            }
+        },
+        "AppInsightsWorkspaceResourceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
+            }
+        }
+    },
+    "variables": {
+        "PollingMap": {
+            "Every 5 min": "*/5 * * * *",
+            "Every 10 min": "*/10 * * * *",
+            "Every 60 min": "0 * * * *",
+            "Every 6 hours": "0 */6 * * *",
+            "Every 12 hours": "0 */12 * * *",
+            "Every 24 hours": "0 0 * * *"
+        },
+        "FunctionName": "[concat(toLower(parameters('FunctionName')), take(uniqueString(resourceGroup().id), 3))]",
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "Polling": "[variables('PollingMap')[parameters('TimeInterval')]]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2022-05-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "[parameters('storageAccountType')]"
+            },
+            "kind": "StorageV2"
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "[parameters('storageAccountType')]",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2023-01-01",
+            "name": "[format('{0}/{1}', variables('FunctionName'), 'default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "tier": "ElasticPremium",
+                "name": "[parameters('functionAppPlanSku')]",
+                "family": "EP"
+            },
+            "properties": {
+                "maximumElasticWorkerCount": 20,
+                "reserved": true
+            },
+            "kind": "elastic"
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "Application_Type": "web"
+            },
+            "kind": "web"
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp,linux",
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.11",
+                    "appSettings": [
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('FunctionName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName')), '2022-05-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[variables('FunctionName')]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "1"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]"
+                        },
+                        {
+                            "name": "ApplicationID",
+                            "value": "[parameters('ApplicationID')]"
+                        },
+                        {
+                            "name": "TenantID",
+                            "value": "[parameters('TenantID')]"
+                        },
+                        {
+                            "name": "ClientSecret",
+                            "value": "[parameters('ClientSecret')]"
+                        },
+                        {
+                            "name": "LuminarAPIClientID",
+                            "value": "[parameters('LuminarAPIClientID')]"
+                        },
+                        {
+                            "name": "LuminarAPIAccountID",
+                            "value": "[parameters('LuminarAPIAccountID')]"
+                        },
+                        {
+                            "name": "LuminarAPIClientSecret",
+                            "value": "[parameters('LuminarAPIClientSecret')]"
+                        },
+                        {
+                            "name": "LuminarInitialFetchDate",
+                            "value": "[parameters('LuminarInitialFetchDate')]"
+                        },
+                        {
+                            "name": "timeInterval",
+                            "value": "[parameters('TimeInterval')]"
+                        },
+                        {
+                            "name": "Polling",
+                            "value": "[variables('Polling')]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('FunctionName'), '/default/', tolower(variables('FunctionName')))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/extensions",
+            "apiVersion": "2022-03-01",
+            "name": "[format('{0}/{1}', variables('FunctionName'), 'zipdeploy')]",
+            "properties": {
+                "packageUri": "https://aka.ms/sentinel-CognyteLuminar-functionapp"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+            ]
+        }
+    ]
+}
