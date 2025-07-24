@@ -422,6 +422,8 @@ def process_activity_logs(admin_api: duo_client.Admin, start_ts, state_manager: 
     while True:
         events, next_offset = get_activity_logs(admin_api, mintime, maxtime, limit, next_offset)
         for event in events:
+            event['eventtype'] = 'activity'  # Add eventtype field to the event
+            event['host'] = CISCO_DUO_API_HOSTNAME  # Add host field to the event
             sentinel.send(event)
         sentinel.flush()
         logging.info('Saving activity logs last timestamp {}'.format(maxtime))
@@ -437,21 +439,22 @@ def get_activity_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, l
     logging.info('Making activity logs request: mintime={}, maxtime={}, next_offset={}'.format(mintime, maxtime, next_offset))
     try:
         params = {
-            'api_version': 2,
-            'mintime': mintime,
-            'maxtime': maxtime,
+            'mintime': str(mintime),
+            'maxtime': str(maxtime),
             'limit': str(limit),
             'sort': 'ts:asc'
         }
         if next_offset:
             params['next_offset'] = next_offset
-        res = admin_api.get_activity_logs(**params)
+        
+        # Use the generic json_api_call method for activity logs
+        res = admin_api.json_api_call('GET', '/admin/v2/logs/activity', params)
     except Exception as err:
         logging.info('Error while getting activity logs- {}'.format(err))
         if hasattr(err, 'status') and err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
-            res = admin_api.get_activity_logs(**params)
+            res = admin_api.json_api_call('GET', '/admin/v2/logs/activity', params)
         else:
             return [], None
 
@@ -504,21 +507,22 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit
     logging.info('Making telephony logs v2 request: mintime={}, maxtime={}, next_offset={}'.format(mintime, maxtime, next_offset))
     try:
         params = {
-            'api_version': 2,
-            'mintime': mintime,
-            'maxtime': maxtime,
+            'mintime': str(mintime),
+            'maxtime': str(maxtime),
             'limit': str(limit),
             'sort': 'ts:asc'
         }
         if next_offset:
             params['next_offset'] = next_offset
-        res = admin_api.get_telephony_log(**params)
+        
+        # Use the generic json_api_call method for telephony logs v2
+        res = admin_api.json_api_call('GET', '/admin/v2/logs/telephony', params)
     except Exception as err:
         logging.info('Error while getting telephony logs v2 {}'.format(err))
         if hasattr(err, 'status') and err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
-            res = admin_api.get_telephony_log(**params)
+            res = admin_api.json_api_call('GET', '/admin/v2/logs/telephony', params)
         else:
             return [], None
 
