@@ -422,8 +422,6 @@ def process_activity_logs(admin_api: duo_client.Admin, start_ts, state_manager: 
     while True:
         events, next_offset = get_activity_logs(admin_api, mintime, maxtime, limit, next_offset)
         for event in events:
-            event['eventtype'] = 'activity'  # Add eventtype field to the event
-            event['host'] = CISCO_DUO_API_HOSTNAME  # Add host field to the event
             sentinel.send(event)
         sentinel.flush()
         logging.info('Saving activity logs last timestamp {}'.format(maxtime))
@@ -492,7 +490,6 @@ def process_tele_logs(admin_api: duo_client.Admin, start_ts, state_manager: Stat
     while True:
         events, next_offset = get_tele_logs(admin_api, mintime, maxtime, limit, next_offset)
         for event in events:
-            event['eventtype'] = 'telephony'
             sentinel.send(event)
         sentinel.flush()
         logging.info('Saving telephony logs v2 last timestamp {}'.format(maxtime))
