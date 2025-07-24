@@ -31,17 +31,16 @@ query: |
   let IP_Indicators = ThreatIntelIndicators
   //extract key part of kv pair
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
        | extend NetworkSourceIP = toupper(ObservableValue)
        | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
-    | where isnotempty(NetworkSourceIP)
     | where TimeGenerated >= ago(ioc_lookBack)
     | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)
     | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
     | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
     | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-    | where IsActive == true and ValidUntil > now();
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
   // Perform a join between IP indicators and DNS events
   IP_Indicators
      | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
@@ -80,5 +79,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.4.5
+version: 1.4.6
 kind: Scheduled

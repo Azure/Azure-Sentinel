@@ -36,27 +36,24 @@ query: |
   ThreatIntelIndicators
   //extract key part of kv pair
         | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-        | where isnotempty(IndicatorType) and IndicatorType == "file"
+        | where IndicatorType == "file"
         | extend FileHashType = replace("'", "", substring(ObservableKey, indexof(ObservableKey, "hashes.") + 7, strlen(ObservableKey) - indexof(ObservableKey, "hashes.") - 7))
         | extend FileHashValue = toupper(ObservableValue)
-  | where isnotempty(FileHashValue)
   | where TimeGenerated >= ago(ioc_lookBack)
   | extend FileHashValue = toupper(FileHashValue)
   | extend IndicatorId = tostring(split(Id, "--")[2])
   | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
     | project-reorder *, FileHashType, FileHashValue, Type
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique ( union isfuzzy=true
     (SecurityEvent | where TimeGenerated >= ago(dt_lookBack)
         | where EventID in ("8003","8002","8005")
-        | where isnotempty(FileHash)
         | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID, FileHash = toupper(FileHash)
     ),
     (WindowsEvent | where TimeGenerated >= ago(dt_lookBack)
         | where EventID in ("8003","8002","8005")
-        | where isnotempty(EventData.FileHash)
         | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID, FileHash = toupper(EventData.FileHash)
     )
   )
@@ -97,5 +94,5 @@ entityMappings:
         columnName: FileHashValue
       - identifier: Algorithm
         columnName: FileHashType
-version: 1.4.7
+version: 1.4.8
 kind: Scheduled
