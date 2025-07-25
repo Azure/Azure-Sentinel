@@ -29,12 +29,13 @@ query: |
   PowerPlatformAdminActivity
   | where TimeGenerated >= ago (query_frequency)
   | where EventOriginalType == "PutConnection"
-  | extend Properties = tostring(PropertyCollection)
-  | extend SrcIpAddr = extract(@'"enduser.ip_address","Value":"([^"]+)"', 1, Properties)
-  | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string('::ffff:', '', SrcIpAddr), SrcIpAddr)
+  | extend Property = tostring(Properties)
+  | extend SrcIpAddr = extract(@"\""enduser\.ip_address\""\s*:\s*\""(.*?)\""", 1, Property)
+  | extend SrcIpAddr = iif(SrcIpAddr startswith "::ffff:", replace_string("::ffff:", "", SrcIpAddr), SrcIpAddr)
   | extend
-      EnvironmentId = extract(@'"powerplatform.analytics.resource.environment.id","Value":"([^"]+)"', 1, Properties),
-      ConnectionId = extract(@'"powerplatform.analytics.resource.connection.id","Value":"([^"]+)"', 1, Properties)
+      EnvironmentId = extract(@"\""powerplatform\.analytics\.resource\.environment\.id\""\s*:\s*\""(.*?)\""", 1, Property),
+      ConnectionId = extract(@"\""powerplatform\.analytics\.resource\.connection\.id\""\s*:\s*\""(.*?)\""", 1, Property)
+  | extend EnvironmentId = tolower(replace_string(EnvironmentId, "/providers/Microsoft.BusinessAppPlatform/environments/Default-", ""))
   | where EnvironmentId in~ (sensitive_environment_id)
   | extend
       AccountName = tostring(split(ActorName, "@")[0]),
@@ -66,6 +67,6 @@ alertDetailsOverride:
   alertDescriptionFormat: '{{ActorName}} added a new API connector in environment
     id {{EnvironmentId}}. This environment has been listed as sensitive.'
 customDetails:
-  Environment: EnvironmentId
   Connection: ConnectionId
-version: 3.2.0
+  Environment: EnvironmentId
+version: 3.2.3
