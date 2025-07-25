@@ -15,12 +15,12 @@ Before deploying this playbook, ensure the following prerequisites are completed
 1. Create an **Event-Based Workflow** in [Blink](https://docs.blinkops.com/docs/workflows/building-workflows/triggers/event-based-triggers/webhooks) that is configured to trigger via webhook.
 <img src="../Sentinel-Incident-Handler/Create_event_based_workflow.png" width="50%"/>
 
-<img src="../Sentinel-Incident-Handler/xdr_webhook.png" width="50%"/>
+<img src="../Sentinel-Incident-Handler/sentinel_webhook.png" width="50%"/>
 
 2. Note down the following required value from Blink:
    - **Blink Webhook Full URL** – the full HTTPS endpoint URL to trigger your Blink workflow.
 
-<img src="../Sentinel-Incident-Handler/xdr_webhook_config.png" width="50%"/>
+<img src="../Sentinel-Incident-Handler/Configure_Sentinel_Webhook.png" width="50%"/>
 
 ---
 
