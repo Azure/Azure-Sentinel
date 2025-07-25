@@ -28,9 +28,7 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let EmailUrlInfo_ = materialize(EmailUrlInfo
-      | where isnotempty(Url)
       | where TimeGenerated >= ago(dt_lookBack)
-      | extend Url = tolower(Url)
       | extend EmailUrlInfo_TimeGenerated = TimeGenerated);
   let EmailUrls = EmailUrlInfo_ | distinct Url | summarize make_list(Url);
   let EmailUrlDomains = EmailUrlInfo_ | distinct UrlDomain | summarize make_list(UrlDomain);
@@ -41,14 +39,12 @@ query: |
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
   | where IndicatorType == "url"
   | extend Url = ObservableValue
-  | where isnotempty(Url)
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   | extend IndicatorId = tostring(split(Id, "--")[2])
       | where TimeGenerated >= ago(ioc_lookBack)
-      | where (isnotempty(Url) or isnotempty(Url)) 
       | where tolower(Url) in (EmailUrls) or tolower(Url) in (EmailUrlDomains)
-      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-      | where IsActive == true and ValidUntil > now());
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil)));
   (union
       (TI | join kind=innerunique (EmailUrlInfo_) on Url),
       (TI | join kind=innerunique (EmailUrlInfo_) on $left.Url == $right.UrlDomain))
@@ -74,5 +70,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled

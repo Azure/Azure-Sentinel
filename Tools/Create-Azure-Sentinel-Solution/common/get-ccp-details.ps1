@@ -27,6 +27,24 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
             # check if dataconnectorDefinitions type exist in dc array
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions") {
                 Write-Host "CCP DataConnectorDefinition File Found, FileName is $file"
+
+                $isDynamicStreamName = $false;
+                $definitionInstructions = $fileContent.properties.connectorUiConfig.instructionSteps
+                $dataConnectorDefinitionFileInstructions = $definitionInstructions.psobject.properties.match('instructions').Count
+                if ($dataConnectorDefinitionFileInstructions.Count -gt 0) {
+                    $contextPaneContent = $definitionInstructions.instructions | Where-Object { $_.type -eq "ContextPane" }
+
+                    if ($null -ne $contextPaneContent) {
+                        $contextPaneContentDropDownObj = $definitionInstructions.instructions.parameters.instructionSteps.instructions | Where-Object { $_.type -eq "Dropdown" }
+
+                        if ($null -ne $contextPaneContentDropDownObj) {
+                            if ($contextPaneContentDropDownObj.parameters.name -eq "streamName") {
+                                $isDynamicStreamName = $true;
+                                Write-Host "Info: Dropdown Parameter with name 'streamName' found in Data Connector Definition file, so poller file StreamName and destinationTable value will be automatically in mainTemplate file!"
+                            }
+                        }
+                    }
+                }
                 if ($ccpDict.Count -le 0) {
                     # if single data connector definition has "id" property with multiple poller file names separated by comma
                     $hasIdProperty = $fileContent.properties.connectorUiConfig.psobject.properties.match('id').Count
@@ -54,6 +72,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                             IsProcessed = $false;
                             DCPollerName = "";
                             CCPBaseFolder = $ccpBaseFolderPath;
+                            isDynamicStreamName = $isDynamicStreamName;
                         }
                     } else {
                         [array]$ccpDict += [PSCustomObject]@{
@@ -74,6 +93,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                             IsProcessed = $false;
                             DCPollerName = "";
                             CCPBaseFolder = $ccpBaseFolderPath;
+                            isDynamicStreamName = $isDynamicStreamName;
                         }
                     }
                 } else {
@@ -95,6 +115,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                         IsProcessed = $false;
                         DCPollerName = "";
                         CCPBaseFolder = $ccpBaseFolderPath;
+                        isDynamicStreamName = $isDynamicStreamName;
                     }
                 }
             }
