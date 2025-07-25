@@ -1,0 +1,65 @@
+﻿id: c385944b-17b9-4b2b-921e-0e8d0341a675
+name: Conditional Access - Dynamic Group Exclusion Changes
+version: 1.0.0
+kind: Scheduled
+description: // Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- PrivilegeEscalation
+relevantTechniques:
+- T1484
+query: |-
+  // Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)
+  let monitoredGroups = dynamic(["Group1", "Group2"]);  // <-- Customize this list
+  AuditLogs
+  | where OperationName == "Update group"
+  | where AdditionalDetails[0].value == "DynamicMembership"
+  | extend DynamicGroupName = tostring(TargetResources[0].displayName)
+  | where DynamicGroupName in (monitoredGroups)
+  | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+  | extend accountName = tostring(split(modifiedBy, "@")[0])
+  | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+  | extend oldRule = tostring(TargetResources[0].modifiedProperties[0].oldValue)
+  | extend newRule = tostring(TargetResources[0].modifiedProperties[0].newValue)
+  | where oldRule != newRule
+  | project
+      TimeGenerated,
+      OperationName,
+      DynamicGroupName,
+      modifiedBy,
+      accountName,
+      upnSuffix,
+      result = Result,
+      oldRule,
+      newRule
+  | order by TimeGenerated desc
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: accountName
+  - identifier: UPNSuffix
+    columnName: upnSuffix
+suppressionEnabled: false
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+

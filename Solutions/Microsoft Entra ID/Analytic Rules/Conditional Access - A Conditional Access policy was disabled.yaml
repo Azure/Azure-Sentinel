@@ -1,0 +1,61 @@
+﻿id: 40702da1-ae8a-4e46-ac1f-9327ca6ef588
+name: Conditional Access - A Conditional Access policy was disabled
+version: 1.0.0
+kind: Scheduled
+description: A Conditional Access policy was disabled in Entra ID.
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+relevantTechniques:
+  - T1562.007
+query: |+
+  // A Conditional Access policy was disabled.
+  AuditLogs
+  | where OperationName in ("Update conditional access policy")
+  | extend stateOld = extractjson("$.state", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+  | extend stateNew = extractjson("$.state", tostring(TargetResources[0].modifiedProperties[0].newValue))
+  | where stateOld == "enabled" and stateNew == "disabled"
+  | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+  | extend accountName = tostring(split(modifiedBy, "@")[0])
+  | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      policy = TargetResources[0].displayName,
+      modifiedBy,
+      accountName,
+      upnSuffix,
+      result = Result,
+      stateOld,
+      stateNew
+  | order by TimeGenerated desc
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: accountName
+  - identifier: UPNSuffix
+    columnName: upnSuffix
+suppressionEnabled: false
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+
