@@ -1,13 +1,6 @@
 param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath, $instrumentationKey, $isPRMerged = $false)
 
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
-$customProperties = @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; }
-
-if ($instrumentationKey -ne '')
-{
-    Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "New Or Existing Solution" -CustomProperties $customProperties
-    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for newOrExistingSolution started for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
-}
 
 $isNewSolution = $true
 $solutionSupportedBy = ''
@@ -36,12 +29,27 @@ else {
             return $newDataFolderFilesWithoutExcludedFiles;
         }
 
-        #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
         if ($isPRMerged) {
-            git fetch --depth=1 origin master
-            $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+            $masterMergeCommitId = git log --format="%H" --merges --grep="Merge pull request #$pullRequestNumber" master
+            if ($null -ne $masterMergeCommitId) {
+                Write-Host "masterMergeCommitId $masterMergeCommitId"
+                $diff = git diff --diff-filter=d --name-only $masterMergeCommitId^ $masterMergeCommitId
+            } else {
+                Write-Host "PR not merged into master!"
+                exit 0;
+            }
         } else {
-            $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+            $masterMergeCommit = git show -s --format='%s' -1
+            Write-Host "masterMergeCommit $masterMergeCommit"
+            if ($masterMergeCommit -like "*Merge branch*") {
+                Write-Output "isNewSolution=$isNewSolution" >> $env:GITHUB_OUTPUT
+                Write-Output "solutionSupportedBy=" >> $env:GITHUB_OUTPUT
+                Write-Output "solutionOfferId=" >> $env:GITHUB_OUTPUT
+                Write-Output "solutionPublisherId=" >> $env:GITHUB_OUTPUT
+                exit 0
+            } else {
+                $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+            }
         }
         Write-Host "List of files in PR: $diff"
 
@@ -72,11 +80,6 @@ else {
                 $solutionMetadataFilePresent = filesList | Where-Object { $_ -like "Solutions/*SolutionMetadata.json" }
             }
             if ($solutionMetadataFilePresent.Count -le 0) {
-                if ($instrumentationKey -ne '')
-                {
-                    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : SolutionMetadata file not found so check in Data input file for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
-                }
-
                 # SOLUTIONMETADATA FILE NOT FOUND SO WE FIND OUR DATA IN DATA INPUT FILE
                 Write-Host "::warning::SolutionMetadata.json file not found."
                 $solutionDataFolder = "Solutions/" + $solutionName + '/Data/'
@@ -105,35 +108,22 @@ else {
                 Write-Host "jsonSolutionMetadataContent $jsonSolutionMetadataContent"
                 $offerId = $solutionMetadataFileContentObject.offerId
                 $publisherId = $solutionMetadataFileContentObject.publisherId
+                Write-Host "offerId is $offerId, publisherId is $publisherId";
             }
 
             if ($offerId -eq '') {
                 Write-Host "OfferId found is empty!"
-                if ($instrumentationKey -ne '')
-                {
-                    Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : OfferId value cannot be blank for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
-                }
             }
             else {
                 . ./.script/package-automation/catalogAPI.ps1
                 $offerDetails = GetCatalogDetails $offerId
+
                 if ($null -eq $offerDetails) {
                     Write-Host "OfferDetails not found for provided offerId $offerDetails"
                     $solutionSupportedBy = 'partner-supported-solution'
-
-                    if ($instrumentationKey -ne '')
-                    {
-                        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "NewOrExistingSolution : Based on OfferId $offerId, Offer Details were not found for Solution Name $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; }
-                    }
                 }
                 else {
                     $isNewSolution = $false
-
-                    if ($instrumentationKey -ne '')
-                    {
-                        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message 'NewOrExistingSolution : Based on OfferId $offerId, found for Solution Name : $solutionName, Job Run Id : $runId' -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; }
-                    }
-
                     # CHECK IF MICROSOFT OR PARTNER SUPPORTED. WHEN NULL WE WILL NOT ADD ANY LABEL
                     $isMicrosoftSupported = $offerDetails.supportUri.Contains('https://support.microsoft.com/')
                     if ($isMicrosoftSupported) {
@@ -150,11 +140,6 @@ else {
             Write-Output "solutionSupportedBy=$solutionSupportedBy" >> $env:GITHUB_OUTPUT
             Write-Output "solutionOfferId=$offerId" >> $env:GITHUB_OUTPUT
             Write-Output "solutionPublisherId=$publisherId" >> $env:GITHUB_OUTPUT
-
-            if ($instrumentationKey -ne '')
-            {
-                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message 'NewOrExistingSolution : Based on OfferId $offerId, found for Solution Name : $solutionName, Job Run Id : $runId' -Severity Information -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'EventName' = "New Or Existing Solution"; 'OfferId' = "$offerId"; 'SolutionSupportedBy' = "$solutionSupportedBy"; }
-            }
         }
     }
     catch {
@@ -165,10 +150,6 @@ else {
         Write-Output "solutionOfferId=" >> $env:GITHUB_OUTPUT
         Write-Output "solutionPublisherId=" >> $env:GITHUB_OUTPUT
 
-        if ($instrumentationKey -ne '')
-        {
-            Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "newOrExistingSolution : Error occured in catch block: $_"; 'EventName' = "New Or Existing Solution"; }
-        }
         exit 1
     }
 }
