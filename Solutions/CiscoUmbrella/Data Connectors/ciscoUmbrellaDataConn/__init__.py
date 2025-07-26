@@ -84,7 +84,14 @@ def main(mytimer: func.TimerRequest) -> None:
         'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
         'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
         'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10),
-        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
+        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10),
+        'dlp': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dlp', queue_size=10000, bulks_number=10),  # Added DLP
+        'ravpn': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ravpnlogs', queue_size=10000, bulks_number=10),
+        'audit': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_audit', queue_size=10000, bulks_number=10),
+        'ztna': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ztna', queue_size=10000, bulks_number=10),
+        'intrusion': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_intrusion', queue_size=10000, bulks_number=10),
+        'ztaflow': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ztaflow', queue_size=10000, bulks_number=10),
+        'fileevent': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_fileevent', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -98,7 +105,21 @@ def main(mytimer: func.TimerRequest) -> None:
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 sentinel = sentinel_dict['cloudfirewall']
             elif 'firewalllogs' in key.lower():
-                sentinel = sentinel_dict['firewall']    
+                sentinel = sentinel_dict['firewall']
+            elif 'dlplogs' in key.lower():  # Added DLP
+                sentinel = sentinel_dict['dlp']
+            elif 'ravpnlogs' in key.lower():  # Added RAVPN
+                sentinel = sentinel_dict['ravpn']
+            elif 'auditlogs' in key.lower(): # Added Audit
+                sentinel = sentinel_dict['audit']
+            elif 'ztnalogs' in key.lower():  # Added ZTNA
+                sentinel = sentinel_dict['ztna']
+            elif 'intrusionlogs' in key.lower():  # Added Intrusion
+                sentinel = sentinel_dict['intrusion']
+            elif 'ztaflowlogs' in key.lower():  # Added ZTA Flow
+                sentinel = sentinel_dict['ztaflow']
+            elif 'fileeventlogs' in key.lower():  # Added File Event
+                sentinel = sentinel_dict['fileevent']
             else:
                 # skip files of unknown types
                 continue
@@ -238,7 +259,8 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs', 'firewalllogs', 'cloudfirewalllogs', 'cdfwlogs',
+                   'dlplogs', 'ravpnlogs', 'auditlogs', 'ztnalogs', 'intrusionlogs', 'ztaflowlogs', 'fileeventlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -318,6 +340,45 @@ class UmbrellaClient:
                     event = {"message": convert_list_to_csv_line(row)}
                 event = self.convert_empty_string_to_null_values(event)
                 event['EventType'] = 'iplogs'
+                yield event
+                
+    def parse_csv_dlp(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 25:
+                # Adjust the field mapping as per Cisco DLP log format documentation
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'Event Type': row[1],
+                        'Unique Event ID': row[2],
+                        'Severity': row[3],
+                        'Identities': row[4],
+                        'Owner': row[5],
+                        'Name': row[6],
+                        'Application': row[7],
+                        'Destination': row[8],
+                        'Action': row[9],
+                        'Rule Name': row[10],
+                        'Data Classification': row[11],
+                        'Data Identifier': row[12],
+                        'Content Type': row[13],
+                        'File Size': row[14],
+                        'SHA256 Hash': row[15],
+                        'File Label': row[16],
+                        'Application Category Name': row[17],
+                        'Traffic Direction': row[18],
+                        'Private Resource Name': row[19],
+                        'Private Resource Group Name': row[20],
+                        'Destination Protocol': row[21],
+                        'Destination IP': row[22],
+                        'Destination Port': row[23],
+                        'Organization ID': row[24]
+                    }
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event = self.convert_empty_string_to_null_values(event)
+                event['EventType'] = 'dlplogs'
                 yield event
 
     def parse_csv_proxy(self, csv_file):
@@ -471,6 +532,11 @@ class UmbrellaClient:
                             event['Application Entity Category'] = row[50]
                         except IndexError:
                             pass
+                        # Version 12 — The same as version 11, but adds the Egress IP field to Proxy logs.
+                        try:
+                            event['Egress IP'] = row[51]
+                        except IndexError:
+                            pass
                         int_fields = [
                             'requestSize',
                             'responseSize',
@@ -559,11 +625,390 @@ class UmbrellaClient:
                         'ruleId': row[12],
                         'verdict': row[13]
                     }
+                    try:
+                        event['FQDNS'] = row[14]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination List IDs'] = row[15]
+                    except IndexError:
+                        pass
+                    try:
+                        event['First Packet Timestamp'] = row[16]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Last Packet Timestamp'] = row[17]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Packets Sent'] = row[18]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Packets Received'] = row[19]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Bytes Sent'] = row[20]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Bytes Received'] = row[21]
+                    except IndexError:
+                        pass
+                    try:
+                        event['FW Event ID'] = row[22]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination Country'] = row[23]
+                    except IndexError:
+                        pass
+                    try:
+                        event['AWS Region'] = row[24]
+                    except IndexError:
+                        pass
+                    try:
+                        event['App ID'] = row[25]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Private App ID'] = row[26]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Private Flow'] = row[27]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Posture ID'] = row[28]
+                    except IndexError:
+                        pass
+                    try:
+                        event['CASI Category IDs'] = row[29]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Traffic Source'] = row[30]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Content Category IDs'] = row[31]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Content Category List IDs'] = row[32]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Organization ID'] = row[33]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Egress IP'] = row[34]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Egress'] = row[35]
+                    except IndexError:
+                        pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'cloudfirewalllogs'
                 yield event
 
+    def parse_csv_ravpn(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 14:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'Host Name': row[1],
+                        'AWS Region': row[2],
+                        'Event Type': row[3],
+                        'Origin IDs': row[4],
+                        'Origin Type': row[5],
+                        'User ID': row[6],
+                        'Organization ID': row[7],
+                        'Retention Days': row[8],
+                        'Storage Location': row[9],
+                        'MSP Organization ID': row[10],
+                        'Session ID': row[11],
+                        'Session Type': row[12],
+                        'VPN Profile': row[13],
+                        'Public IP': row[14],
+                        'Assigned IP': row[15],
+                        'Connected At': row[16],
+                        'Disconnection Reason': row[17],
+                        'OS Version': row[18],
+                        'Any Connect Version': row[19],
+                    }
+                    try:
+                        event['ASA Syslog ID'] = row[20]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Device ID'] = row[21]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Machine ID'] = row[22]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Public IPv6'] = row[23]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Assigned IPv6'] = row[24]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Security Group Tag'] = row[25]
+                    except IndexError:
+                        pass
+                    try:
+                        event['DAP Record Name'] = row[26]
+                    except IndexError:
+                        pass
+                    try:
+                        event['DAP Connection Type'] = row[27]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Failed Reasons'] = row[28]
+                    except IndexError:
+                        pass
+                    try:
+                        event['log message'] = row[29]
+                    except IndexError:
+                        pass
+                    try:
+                        event['asa syslog severity'] = row[30]
+                    except IndexError:
+                        pass
+                    try:
+                        event['asa syslog class'] = row[31]
+                    except IndexError:
+                        pass
+                    try:
+                        event['asa syslog description'] = row[32]
+                    except IndexError:
+                        pass
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'ravpnlogs'
+                yield event
+
+    def parse_csv_audit(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 9:
+                    event = {
+                        'id': row[0],
+                        'Timestamp': self.format_date(row[1], self.input_date_format, self.output_date_format),
+                        'email': row[2],
+                        'user': row[3],
+                        'type': row[4],
+                        'action': row[5],
+                        'logged in from': row[6],
+                        'before': row[7],
+                        'after': row[8]
+                    }
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'auditlogs'
+                yield event
+
+    def parse_csv_ztna(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 29:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'identity email': row[1],
+                        'identity labels': row[2],
+                        'identity type labels': row[3],
+                        'hostname': row[4],
+                        'verdict': row[5],
+                        'client os': row[6],
+                        'client browser': row[7],
+                        'client geo location': row[8],
+                        'client ip': row[9],
+                        'ruleset id': row[10],
+                        'rule id': row[11],
+                        'private app group id': row[12],
+                        'private app id': row[13],
+                        'private resource id': row[14],
+                        'private resource group id': row[15],
+                        'step up auth type': row[16],
+                        'step up auth result': row[17],
+                        'step up auth token life': row[18],
+                        'posture id': row[19],
+                        'requested id fqdn': row[20],
+                        'resolved ip': row[21],
+                        'app Connector group id': row[22],
+                        'headend type': row[23],
+                        'duo device id': row[24],
+                        'duo device id string': row[25],
+                        'system password': row[26],
+                        'client firewall': row[27],
+                        'disk encryption': row[28],
+                        'anti malware agents': row[29]
+                    }
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'ztnalogs'
+                yield event
+
+    def parse_csv_ztaflow(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 23:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'identity email': row[1],
+                        'identity labels': row[2],
+                        'identity type labels': row[3],
+                        'organization id': row[4],
+                        'msp organization id': row[5],
+                        'hostname': row[6],
+                        'transaction id': row[7],
+                        'private resource id': row[8],
+                        'private resource group id': row[9],
+                        'app connector id': row[10],
+                        'app connector group id': row[11],
+                        'ruleset id': row[12],
+                        'rule id': row[13],
+                        'connection status': row[14],
+                        'connection failure reason': row[15],
+                        'headend type': row[16],
+                        'event type': row[17],
+                        'rxbytes': row[18],
+                        'txbytes': row[19],
+                        'egress ip': row[20],
+                        'egress port': row[21],
+                        'nt group id': row[22],
+                        'zta source port': row[23]
+                    }
+                    try:
+                        event['enforced by'] = row[24]
+                    except IndexError:
+                        pass
+                    try:
+                        event['ftd enforcement id'] = row[25]
+                    except IndexError:
+                        pass
+                    try:
+                        event['ftd enforcement name'] = row[26]
+                    except IndexError:
+                        pass
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'ztaflowlogs'
+                yield event
+
+    def parse_csv_fileevent(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 19:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'organization id': row[1],
+                        'retention policy': row[2],
+                        'aws region': row[3],
+                        'firewall event id': row[4],
+                        'file action': row[5],
+                        'disposition': row[6],
+                        'sha256': row[7],
+                        'direction': row[8],
+                        'threat name': row[9],
+                        'file static analysis': row[10],
+                        'threat score': row[11],
+                        'file type id': row[12],
+                        'file name': row[13],
+                        'file size': row[14],
+                        'archive file name': row[15],
+                        'archive depth': row[16],
+                        'archive sha': row[17],
+                        'dlp status': row[18]
+                    }
+                    try:
+                        event['enforced by'] = row[19]
+                    except IndexError:
+                        pass
+                    try:
+                        event['ftd enforcement id'] = row[20]
+                    except IndexError:
+                        pass
+                    try:
+                        event['ftd enforcement name'] = row[21]
+                    except IndexError:
+                        pass
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'fileeventlogs'
+                yield event
+
+    def parse_csv_intrusion(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 16:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'identities': row[1],
+                        'identity types': row[2],
+                        'generator id': row[3],
+                        'signature ID': row[4],
+                        'signature message': row[5],
+                        'signature List ID': row[6],
+                        'severity': row[7],
+                        'attack classification': row[8],
+                        'CVEs': row[9],
+                        'IP protocol': row[10],
+                        'session ID': row[11],
+                        'source IP': row[12],
+                        'source port': row[13],
+                        'destination IP': row[14],
+                        'destination Port': row[15],
+                        'action': row[16]
+                    }
+                    try:
+                        event['operation mode'] = row[17]
+                    except IndexError:
+                        pass
+                    try:
+                        event['policy resource ID'] = row[18]
+                    except IndexError:
+                        pass
+                    try:
+                        event['direction'] = row[19]
+                    except IndexError:
+                        pass
+                    try:
+                        event['firewall rule ID'] = row[20]
+                    except IndexError:
+                        pass
+                    try:
+                        event['IPS config type'] = row[21]
+                    except IndexError:
+                        pass
+                    try:
+                        event['AWS region'] = row[22]
+                    except IndexError:
+                        pass
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'intrusionlogs'
+                yield event
+    
     def parse_csv_fw(self, csv_file):
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
@@ -585,6 +1030,94 @@ class UmbrellaClient:
                         'ruleId': row[12],
                         'verdict': row[13]
                     }
+                    try:
+                        event['FQDNS'] = row[14]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination List IDs'] = row[15]
+                    except IndexError:
+                        pass
+                    try:
+                        event['First Packet Timestamp'] = row[16]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Last Packet Timestamp'] = row[17]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Packets Sent'] = row[18]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Packets Received'] = row[19]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Bytes Sent'] = row[20]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Bytes Received'] = row[21]
+                    except IndexError:
+                        pass
+                    try:
+                        event['FW Event ID'] = row[22]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination Country'] = row[23]
+                    except IndexError:
+                        pass
+                    try:
+                        event['AWS Region'] = row[24]
+                    except IndexError:
+                        pass
+                    try:
+                        event['App ID'] = row[25]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Private App ID'] = row[26]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Private Flow'] = row[27]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Posture ID'] = row[28]
+                    except IndexError:
+                        pass
+                    try:
+                        event['CASI Category IDs'] = row[29]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Traffic Source'] = row[30]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Content Category IDs'] = row[31]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Content Category List IDs'] = row[32]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Organization ID'] = row[33]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Egress IP'] = row[34]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Egress'] = row[35]
+                    except IndexError:
+                        pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'firewalllogs'
@@ -609,7 +1142,20 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_cdfw
             elif 'firewalllogs' in key.lower():
                 parser_func =  self.parse_csv_fw
-
+            elif 'dlplogs' in key.lower():  # Added DLP logs
+                parser_func = self.parse_csv_dlp
+            elif 'ravpnlogs' in key.lower():  # Added RAVPN logs
+                parser_func = self.parse_csv_ravpn
+            elif 'auditlogs' in key.lower():  # Added Audit logs
+                parser_func = self.parse_csv_audit
+            elif 'ztnalogs' in key.lower():  # Added ZTNA logs
+                parser_func = self.parse_csv_ztna
+            elif 'intrusionlogs' in key.lower():  # Added Intrusion logs
+                parser_func = self.parse_csv_intrusion
+            elif 'ztaflowlogs' in key.lower():  # Added ztaflowlogs logs
+                parser_func = self.parse_csv_ztaflow
+            elif 'fileeventlogs' in key.lower():  # Added fileeventlogs logs
+                parser_func = self.parse_csv_fileevent
             if parser_func:
                 file_events = 0
                 for event in parser_func(csv_file):
