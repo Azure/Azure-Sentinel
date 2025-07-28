@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.2       | 06-26-2025                     | Updated TI Map IP Entity to CommonSecurityLog **Analytical Rules** to exclude private ips |
 | 3.1.1       | 01-22-2025                     | Fixed feature flag configs for PMDTI, MDTI, and UploadAPI based on the new FeatureStates. Fix api-version and documentation link for UploadAPI. |
 | 3.1.0       | 01-15-2025                     | Updated feature flags for PMDTI and MDTI for GA, and Upload API for PP. |
 | 3.0.9		  | 04-12-2024					   | Modified DomainEntity_EmailUrlInfo **Analytic Rule** to resolve memory issues |
