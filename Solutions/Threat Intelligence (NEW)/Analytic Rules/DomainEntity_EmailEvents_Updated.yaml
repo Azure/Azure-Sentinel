@@ -33,25 +33,22 @@ query: |
   let TI = materialize(ThreatIntelIndicators
   | where TimeGenerated >= ago(ioc_lookBack)
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-  | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+  | where IndicatorType == "domain-name"
   | extend DomainName = tolower(ObservableValue)
-  | extend TI_DomainEntity = DomainName
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   | extend IndicatorId = tostring(split(Id, "--")[2])
-  | where isnotempty(DomainName)
-  | extend TI_Domain = tolower(DomainName)
-  | where TI_Domain in (SenderDomains) or TI_Domain in (RecipientDomains)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | where DomainName in (SenderDomains) or DomainName in (RecipientDomains)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   | extend Description = tostring(parse_json(Data).description)
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;");
   (union
-    (TI | join kind=innerunique (EmailEvents_) on $left.TI_Domain == $right.SenderFromDomain),
-    (TI | join kind=innerunique (EmailEvents_) on $left.TI_Domain == $right.RecipientEmailDomain))
+    (TI | join kind=innerunique (EmailEvents_) on $left.DomainName == $right.SenderFromDomain),
+    (TI | join kind=innerunique (EmailEvents_) on $left.DomainName == $right.RecipientEmailDomain))
   | where EmailEvents_TimeGenerated < ValidUntil
   | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
   | summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by Id, RecipientEmailAddress
-  | project EmailEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, DomainName, RecipientEmailAddress, SenderFromAddress, Subject, ConfidenceLevel, Type, TI_Domain, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation, EmailDirection
+  | project EmailEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, DomainName, RecipientEmailAddress, SenderFromAddress, Subject, ConfidenceLevel, Type, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation, EmailDirection
   | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])
   | extend timestamp = EmailEvents_TimeGenerated
 entityMappings:
@@ -63,5 +60,5 @@ entityMappings:
         columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled

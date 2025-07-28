@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.5       | 25-07-2025                     | Updated Entra id Conditional Access (prefix) **Analytical Rule** |
+| 3.3.4       | 10-07-2025                     | Updated **Analytical Rule** NRT_UseraddedtoPrivilgedGroups.yaml and UseraddedtoPrivilgedGroups.yaml
 | 3.3.3       | 03-06-2025                     | Updates to multiple **Playbooks** to improve documentation, streamline deployment instructions, and add links to detailed setup steps.							                    	   |
 | 3.3.2       | 08-05-2025                     | Removed the IP entity type and its associated field mappings (Address and IPAddress) in *DistribPassCrackAttempt.yaml* **Analytic Rule**.								                   |
 | 3.3.1       | 08-04-2025                     | Updated **Analytical Rule** [Anomalous sign-in location by user account and authenticating application]							                                                	   |

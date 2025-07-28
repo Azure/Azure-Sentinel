@@ -34,7 +34,7 @@ query: |
   let IP_TI = ThreatIntelIndicators
   //extract key part of kv pair
        | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-       | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+       | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
        | extend NetworkSourceIP = toupper(ObservableValue)
        | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | where TimeGenerated >= ago(ioc_lookBack)
@@ -45,8 +45,10 @@ query: |
     | where TI_ipEntity != "NO_IP"
     // Exclude local addresses, using the ipv4_is_private operator
     | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-    | where IsActive == true and ValidUntil > now();
+    | extend ThreatType = tostring(Data.indicator_types[0])
+    | extend IndicatorId = tostring(split(Id, "--")[2])
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
   let IP_TI_list = toscalar(IP_TI
     | summarize NIoCs = dcount(TI_ipEntity), IoCs = make_set(TI_ipEntity)
     | project IoCs = iff(NIoCs > HAS_ANY_MAX, dynamic([]), IoCs));
@@ -62,7 +64,9 @@ query: |
     on $left.TI_ipEntity == $right.SrcIpAddr
   | where imNWS_TimeGenerated < ValidUntil
   | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated, *) by IndicatorId, DstIpAddr
-  | project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ValidUntil, ConfidenceScore, TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Url, Type
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ValidUntil, Confidence, TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Url
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -79,9 +83,9 @@ customDetails:
   IndicatorId: IndicatorId
   ThreatType: ThreatType
   IoCExpirationTime: ValidUntil
-  IoCConfidenceScore: ConfidenceScore
+  IoCConfidenceScore: Confidence
 alertDetailsOverride:
   alertDisplayNameFormat: The IP {{SrcIpAddr}} of the web request matches an IP IoC
   alertDescriptionFormat: The source address {{SrcIpAddr}} of the web request for the URL {{Url}} matches a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence feed for more information about the indicator.
-version: 1.2.7
+version: 1.2.9
 kind: Scheduled

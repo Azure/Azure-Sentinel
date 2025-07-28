@@ -34,15 +34,15 @@ query: |
   ThreatIntelIndicators
   //extract key part of kv pair
         | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-        | where isnotempty(IndicatorType) and IndicatorType == "file"
+        | where IndicatorType == "file"
         | extend FileHashType = replace("'", "", substring(ObservableKey, indexof(ObservableKey, "hashes.") + 7, strlen(ObservableKey) - indexof(ObservableKey, "hashes.") - 7))
-        | extend FileHashValue = toupper(ObservableValue)
+        | extend FileHashValue = ObservableValue
         | extend IndicatorId = tostring(split(Id, "--")[2])
   | where isnotempty(FileHashValue)
   | where TimeGenerated > ago(ioc_lookBack)
   //  | where FileHashValue in (Hashes)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   | extend Description = tostring(parse_json(Data).description)
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
     | project-reorder *, FileHashType, FileHashValue, Type
@@ -73,5 +73,5 @@ entityMappings:
     fieldMappings:
       - identifier: HostName
         columnName: DeviceName
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
