@@ -95,6 +95,7 @@ class AzureSentinelConnector:
                     self.failed_sent_events_number += events_number
                     raise err
             else:
+                logging.info('checking data format : {}'.format(body))
                 logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
                 self.successfull_sent_events_number += events_number
                 break

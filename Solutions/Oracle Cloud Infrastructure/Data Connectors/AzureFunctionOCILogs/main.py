@@ -192,7 +192,8 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                             # Process "current" in "stateChange"
                             if "current" in event["data"]["stateChange"]:
                                 process_large_field(event["data"]["stateChange"], "current", FIELD_SIZE_LIMIT_BYTES)
-
+                    
+                    logging.info('Processed data:{}'.format(event))
                     sentinel.send(event)
 
         sentinel.flush()
