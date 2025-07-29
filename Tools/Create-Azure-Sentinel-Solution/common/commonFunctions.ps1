@@ -20,6 +20,7 @@ $global:parserCounter = 1
 $global:savedSearchCounter = 1
 $global:huntingQueryCounter = 1
 $global:watchlistCounter = 1
+$global:summaryRuleCounter = 1
 
 $global:DependencyCriteria = @();
 $global:customConnectorsList = @{};
@@ -45,6 +46,7 @@ $ContentKindDict.Add("LogicAppsCustomConnector", "lc")
 $ContentKindDict.Add("AutomationRule", "ar")
 $ContentKindDict.Add("ResourcesDataConnector", "rdc")
 $ContentKindDict.Add("Standalone", "sa")
+$ContentKindDict.Add("SummaryRule", "sr")
 
 function ReadFileContent($filePath) {
     try {
@@ -255,7 +257,7 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAct
                 if ($($val.PsObject.Properties).Count -eq 0) {
                     if ($key -eq "dataSources") {
                         $resourceObj.$key = "[variables('TemplateEmptyObject')]";
-                        if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+                        if (!$global:baseMainTemplate.variables.TemplateEmptyObject) {
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyObject" -NotePropertyValue "[json('{}')]"
                         }
                     } else {
@@ -313,7 +315,17 @@ function getQueryResourceLocation () {
 function getParserDetails($solutionName,$yaml,$isyaml)
 {
     $API = 'https://catalogapi.azure.com/offers?api-version=2018-08-01-beta&$filter=categoryIds%2Fany(cat%3A%20cat%20eq%20%27AzureSentinelSolution%27)%20or%20keywords%2Fany(key%3A%20contains(key%2C%27f1de974b-f438-4719-b423-8bf704ba2aef%27))'
-    $SolutionDataItems = $(Invoke-WebRequest -URI $API | ConvertFrom-Json).items
+    #$SolutionDataItems = $(Invoke-WebRequest -URI $API | ConvertFrom-Json).items
+
+    $SolutionDataItems = @()
+    $response = Invoke-WebRequest -Uri $API | ConvertFrom-Json
+    $SolutionDataItems += $response.items
+
+    while ($response.nextPageLink) {
+        $response = Invoke-WebRequest -Uri $response.nextPageLink | ConvertFrom-Json
+        $SolutionDataItems += $response.items
+    }
+
     $parserResourceType = [PSObject]@{
         templateSpecParserType = "Microsoft.OperationalInsights/workspaces/savedSearches"
         workspaceType = "Microsoft.OperationalInsights/workspaces"
@@ -914,30 +926,44 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             {
                                 $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
                             }
+
+                            $workbookOrderedSourceProps = [ordered]@{
+                                kind     = "Solution";
+                                name     = $contentToImport.Name;
+                                sourceId = "[variables('_solutionId')]"
+                            }
+
+                            $workbookOrderedProps = [ordered]@{
+                                description = "$dependencies.description";
+                                parentId  = "[variables('workbookId$global:workbookCounter')]"
+                                contentId = "[variables('_workbookContentId$global:workbookCounter')]";
+                                kind      = "Workbook";
+                                version   = "[variables('workbookVersion$global:workbookCounter')]";
+                                source    = [PSCustomObject]$workbookOrderedSourceProps
+                                author    = $authorDetails;
+                                support   = $baseMetadata.support;
+                            }
+
+                            if ($dependencies.PSObject.Properties['previewImages']) {
+                                $workbookOrderedProps.previewImages = $dependencies.previewImages
+                            }
+
+                            if ($dependencies.PSObject.Properties['previewImagesDark']) {
+                                $workbookOrderedProps.previewImagesDark = $dependencies.previewImagesDark
+                            }
+
+                            if($null -ne $workbookDependencies)
+                            {
+                                $workbookOrderedProps.dependencies = $workbookDependencies
+                            }
+
                             $workbookMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId$global:workbookCounter'),'/'))))]";
-                                properties = [PSCustomObject]@{
-                                    description = "$dependencies.description";
-                                    parentId  = "[variables('workbookId$global:workbookCounter')]"
-                                    contentId = "[variables('_workbookContentId$global:workbookCounter')]";
-                                    kind      = "Workbook";
-                                    version   = "[variables('workbookVersion$global:workbookCounter')]";
-                                    source    = [PSCustomObject]@{
-                                        kind     = "Solution";
-                                        name     = $contentToImport.Name;
-                                        sourceId = "[variables('_solutionId')]"
-                                    };
-                                    author    = $authorDetails;
-                                    support   = $baseMetadata.support;
-                                    #dependencies = $workbookDependencies;
-                                }
+                                properties = [PSCustomObject]$workbookOrderedProps
                             }
-                            if($null -ne $workbookDependencies)
-                            {
-                                $workbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $workbookDependencies
-                            }
+
                             if($workbookDescriptionText -ne "")
                             {
                                 $workbookMetadata | Add-Member -NotePropertyName "description" -NotePropertyValue $workbookDescriptionText
@@ -1825,15 +1851,33 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             $ccpConnector = $false
 
                             if ($null -eq $connectorData.graphQueries -or $connectorData.graphQueries.Count -eq 0) {
-                                $connectorData.graphQueries = Get-ValidArray $connectorData.graphQueries
+                                $graphQueriesValue = Get-ValidArray -inputArray $connectorData.graphQueries
+                                if ($graphQueriesValue -is [string]) {
+                                    $connectorData.graphQueries = $graphQueriesValue
+                                }
+                                else {
+                                    $connectorData.graphQueries = @($graphQueriesValue)
+                                }
                             }
 
                             if ($null -eq $connectorData.dataTypes -or $connectorData.dataTypes.Count -eq 0) {
-                                $connectorData.dataTypes = Get-ValidArray $connectorData.dataTypes
+                                $dataTypesValue = Get-ValidArray -inputArray $connectorData.dataTypes
+                                if ($dataTypesValue -is [string]) {
+                                    $connectorData.dataTypes = $dataTypesValue
+                                }
+                                else {
+                                    $connectorData.dataTypes = @($dataTypesValue)
+                                }
                             }
 
                             if ($null -eq $connectorData.sampleQueries -or $connectorData.sampleQueries.Count -eq 0) {
-                                $connectorData.sampleQueries = Get-ValidArray $connectorData.sampleQueries
+                                $sampleQueriesValue = Get-ValidArray -inputArray $connectorData.sampleQueries
+                                if ($sampleQueriesValue -is [string]) {
+                                    $connectorData.sampleQueries = $sampleQueriesValue
+                                }
+                                else {
+                                    $connectorData.sampleQueries = @($sampleQueriesValue)
+                                }
                             }
 
                             $templateSpecConnectorData = $connectorData
@@ -2106,8 +2150,22 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     $connectorObj = [PSCustomObject]@{}
                     # If direct title is available, assume standard connector format
                     if ($connectorData.title) {
-                        $graphQueriesValue = Get-ValidArray $connectorData.graphQueries;
-                        $dataTypesValue = Get-ValidArray $connectorData.dataTypes;
+                        $graphQueriesResult = Get-ValidArray -inputArray $connectorData.graphQueries
+                        if ($graphQueriesResult -is [string]) {
+                            $graphQueriesValue = $graphQueriesResult
+                        }
+                        else {
+                            $graphQueriesValue = @($graphQueriesResult)
+                        }
+
+                        $dataTypesResult = Get-ValidArray -inputArray $connectorData.dataTypes
+                        if ($dataTypesResult -is [string]) {
+                            $dataTypesValue = $dataTypesResult
+                        }
+                        else {
+                            $dataTypesValue = @($dataTypesResult)
+                        }
+
                         $standardConnectorUiConfig = [PSCustomObject]@{
                             title                 = $connectorData.title;
                             publisher             = $connectorData.publisher;
@@ -2128,7 +2186,14 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                         if(!$is1PConnector)
                         {
-                            $sampleQueriesValue = Get-ValidArray $connectorData.sampleQueries
+                            $sampleQueriesResult = Get-ValidArray -inputArray $connectorData.sampleQueries
+                            if ($sampleQueriesResult -is [string]) {
+                                $sampleQueriesValue = $sampleQueriesResult
+                            }
+                            else {
+                                $sampleQueriesValue = @($sampleQueriesResult)
+                            }
+
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $sampleQueriesValue;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "availability" -NotePropertyValue $connectorData.availability;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "permissions" -NotePropertyValue $connectorData.permissions;
@@ -3254,14 +3319,15 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                     'metadataApiVersion' = '2023-04-01-preview'
                     'templateSpecsVersionApiVersion' = '2023-04-01-preview'
-
+                    'summaryRulesApiVersion' = '2023-01-01-preview'
                     'resources' = @("Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
                                     "Microsoft.OperationalInsights/workspaces/providers/metadata",
                                     "Microsoft.OperationalInsights/workspaces/savedSearches",
                                     "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
                                     "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
                                     "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
-                                    "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions")
+                                    "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+                                    "Microsoft.OperationalInsights/workspaces/summaryLogs")
                     }
             }
             elseif ($version.Major -eq 2)

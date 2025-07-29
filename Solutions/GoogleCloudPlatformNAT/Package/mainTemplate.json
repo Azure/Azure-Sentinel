@@ -1,0 +1,733 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for GoogleCloudPlatformNAT"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "GoogleCloudPlatformNAT",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-gcp-nat",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "GCPNATLogsCCPDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "GCPNATLogsCCPDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Google Cloud Platform NAT (via Codeless Connector Framework) (Preview)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "GCPNATLogsCCPDefinition",
+                  "title": "Google Cloud Platform NAT (via Codeless Connector Framework) (Preview)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The Google Cloud Platform NAT data connector provides the capability to ingest Cloud NAT Audit logs and Cloud NAT Traffic logs into Microsoft Sentinel using the Compute Engine API. Refer the [Product overview](https://cloud.google.com/nat/docs/overview) document for more details.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "GCP NAT Audit Logs",
+                      "baseQuery": "GCPNATAudit"
+                    },
+                    {
+                      "metricName": "Total events received",
+                      "legend": "GCP NAT Logs",
+                      "baseQuery": "GCPNAT"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of GCP NAT logs",
+                      "query": "GCPNAT\n | take 10"
+                    },
+                    {
+                      "description": "Get Sample of GCP NAT Audit logs",
+                      "query": "GCPNATAudit\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "GCPNAT",
+                      "lastDataReceivedQuery": "GCPNAT\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    },
+                    {
+                      "name": "GCPNATAudit",
+                      "lastDataReceivedQuery": "GCPNATAudit\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+                        {
+                          "type": "MarkdownControlEnvBased",
+                          "parameters": {
+                            "prodScript": "#### 1. Setup the GCP environment \n Ensure to have the following resources from the GCP Console:\n Project ID, Project Name, GCP Subscription name for the project, Workload Identity Pool ID, Workspace Identity Provider ID, and a Service Account to establish the connection.\n For more information, refer the [Connector tutorial](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformNAT/Data%20Connectors/README.md) for log setup and authentication setup tutorial.\n\n Find the Log set up script [**here**](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPCloudNATLogsSetup/GCPCloudNATLogsSetup.tf)\n & the Authentication set up script [**here**](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPInitialAuthenticationSetup)",
+                            "govScript": "#### 1. Setup the GCP environment \n Ensure to have the following resources from the GCP Console:\n Project ID, Project Name, GCP Subscription name for the project, Workload Identity Pool ID, Workspace Identity Provider ID, and a Service Account to establish the connection.\n For more information, refer the [Connector tutorial](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformNAT/Data%20Connectors/README.md) for log setup and authentication setup tutorial.\n\n Find the Log set up script [**here**](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/GCP/Terraform/sentinel_resources_creation_gov/GCPCloudNATLogsSetup/GCPCloudNATLogsSetup.tf)\n & the Authentication set up script [**here**](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation_gov/GCPInitialAuthenticationSetupGov)"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Tenant ID: A unique identifier that is used as an input in the Terraform configuration within a GCP environment.",
+                            "fillWith": [
+                              "TenantId"
+                            ],
+                            "name": "TenantId",
+                            "disabled": true
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 2. Enable NAT logs \n In the Google Cloud Console, enable cloud logging if not enabled previously, and save the changes. Navigate to Cloud NAT section and click on Add origin to create backends as per link provided below. \n\n Reference Link: [Link to documentation](https://cloud.google.com/nat/docs/monitoring)"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 3. Connect new collectors \n To enable GCP Cloud NAT Logs for Microsoft Sentinel, click on Add new collector button, provide the required information in the pop up and click on Connect."
+                          }
+                        },
+                        {
+                          "type": "GCPGrid",
+                          "parameters": {}
+                        },
+                        {
+                          "type": "GCPContextPane",
+                          "parameters": {}
+                        }
+                      ],
+                      "title": "Connect GCP NAT to Microsoft Sentinel\n"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "GCPNATDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-GCPNAT": {
+                    "columns": [
+                      {
+                        "name": "insertId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "logName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "resource",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "timestamp",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "labels",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "jsonPayload",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "receiveTimestamp",
+                        "type": "datetime"
+                      }
+                    ]
+                  },
+                  "Custom-GCPNATAudit": {
+                    "columns": [
+                      {
+                        "name": "insertId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "logName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "resource",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "timestamp",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "jsonPayload",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "labels",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "receiveTimestamp",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "protoPayload",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "operation",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-GCPNAT"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend Labels=parse_json(labels), JsonPayload=parse_json(jsonPayload), Resource=parse_json(resource) | extend InsertId=insertId, LogName=logName, ReceiveTimestamp=receiveTimestamp, TimeGenerated=timestamp, GCPResourceType=tostring(Resource['type']), ProjectId=tostring(Resource['labels']['project_id']), Region=tostring(Resource['labels']['region']), RouterId=tostring(Resource['labels']['router_id']), GatewayName=tostring(Resource['labels']['gateway_name']), AllocationStatus=tostring(JsonPayload['allocation_status']), SrcIp=tostring(JsonPayload['connection']['src_ip']), SrcPort=tostring(JsonPayload['connection']['src_port']), DestIp=tostring(JsonPayload['connection']['dest_ip']), DestPort=tostring(JsonPayload['connection']['dest_port']), NatIp=tostring(JsonPayload['connection']['nat_ip']), NatPort=tostring(JsonPayload['connection']['nat_port']), Protocol=tostring(JsonPayload['connection']['protocol']), VmName=tostring(JsonPayload['endpoint']['vm_name']), EndpointRegion=tostring(JsonPayload['endpoint']['region']), EndpointZone=tostring(JsonPayload['endpoint']['zone']), ASN=tostring(JsonPayload['destination']['geo_location']['asn']), Country=tostring(JsonPayload['destination']['geo_location']['country']), City=tostring(JsonPayload['destination']['geo_location']['city']), DestinationRegion=tostring(JsonPayload['destination']['geo_location']['region']), Continent=tostring(JsonPayload['destination']['geo_location']['continent']) | where LogName endswith 'nat_flows' | project InsertId, LogName, ReceiveTimestamp, TimeGenerated, GCPResourceType, ProjectId, Region, RouterId, GatewayName, AllocationStatus, SrcIp, SrcPort, DestIp, DestPort, NatIp, NatPort, Protocol, VmName, EndpointRegion, EndpointZone, ASN, Country, City, DestinationRegion, Continent",
+                    "outputStream": "Microsoft-GCPNAT"
+                  },
+                  {
+                    "streams": [
+                      "Custom-GCPNATAudit"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend Labels=parse_json(labels), ProtoPayload=parse_json(protoPayload), Operation=parse_json(operation), Resource=parse_json(resource) | extend TimeGenerated=timestamp, InsertId=insertId, Severity=severity, LogName=logName, ReceiveTimestamp=receiveTimestamp, RootTriggerId=tostring(Labels['compute.googleapis.com/root_trigger_id']), GCPResourceType=tostring(Resource['type']), ResourceRegion=tostring(Resource['labels']['region']), RouterId=tostring(Resource['labels']['router_id']), ProjectId=tostring(Resource['labels']['project_id']), PayloadType=tostring(ProtoPayload['@type']), PrincipalEmail=tostring(ProtoPayload['authenticationInfo']['principalEmail']), PrincipalSubject=tostring(ProtoPayload['authenticationInfo']['principalSubject']), CallerIp=tostring(ProtoPayload['requestMetadata']['callerIp']), UserAgent=tostring(ProtoPayload['requestMetadata']['callerSuppliedUserAgent']), RequestAttributeTime=todatetime(ProtoPayload['requestMetadata']['requestAttributes']['time']), RequestAttributeAuth=tostring(ProtoPayload['requestMetadata']['requestAttributes']['auth']), RequestAttributeDestination=tostring(ProtoPayload['requestMetadata']['destinationAttributes']), PayloadRequestNats=tostring(ProtoPayload['request']['nats']), RequestType=tostring(ProtoPayload['request']['@type']), RequestName=tostring(ProtoPayload['request']['name']), RequestNetwork=tostring(ProtoPayload['request']['network']), EncryptedInterconnectRouter=tobool(ProtoPayload['request']['encryptedInterconnectRouter']), RequestRegion=tostring(ProtoPayload['request']['region']), RequestSelfLink=tostring(ProtoPayload['request']['selfLink']), RequestId=tostring(ProtoPayload['request']['id']), ServiceName=tostring(ProtoPayload['serviceName']), MethodName=tostring(ProtoPayload['methodName']), AuthorizationInfo=tostring(ProtoPayload['authorizationInfo']), GCPResourceName=tostring(ProtoPayload['resourceName']), ResponseType=tostring(ProtoPayload['response']['@type']), ResponseName=tostring(ProtoPayload['response']['name']), ResponseUser=tostring(ProtoPayload['response']['user']), ResponseTargetId=tostring(ProtoPayload['response']['targetId']), ResponseStatus=tostring(ProtoPayload['response']['status']), ResponseProgress=tostring(ProtoPayload['response']['progress']), ResponseStartTime=todatetime(ProtoPayload['response']['startTime']), ResponseRegion=tostring(ProtoPayload['response']['region']), ResponseSelfLinkWithId=tostring(ProtoPayload['response']['selfLinkWithId']), ResponseInsertTime=todatetime(ProtoPayload['response']['insertTime']), ResponseTargetLink=tostring(ProtoPayload['response']['targetLink']), ResponseSelfLink=tostring(ProtoPayload['response']['selfLink']), ResponseId=tostring(ProtoPayload['response']['id']), ResponseOperationType=tostring(ProtoPayload['response']['operationType']), ResponseErrors=tostring(ProtoPayload['response']['errors']), ResponseErrorCode=tostring(ProtoPayload['response']['error']['code']), ResponseErrorMessage=tostring(ProtoPayload['response']['error']['message']), ResourceLocation=tostring(ProtoPayload['resourceLocation']), OperationId=tostring(Operation['id']), OperationProducer=tostring(Operation['producer']), OperationFirst=tobool(Operation['first']), OperationLast=tobool(Operation['last']) | where GCPResourceType == 'gce_router' and ServiceName == 'compute.googleapis.com' and MethodName has 'v1.compute.routers.' | project TimeGenerated, InsertId, Severity, LogName, ReceiveTimestamp, RootTriggerId, GCPResourceType, ResourceRegion, RouterId, ProjectId, PayloadType, PrincipalEmail, PrincipalSubject, CallerIp, UserAgent, RequestAttributeTime, RequestAttributeAuth, RequestAttributeDestination, PayloadRequestNats, RequestType, RequestName, RequestNetwork, EncryptedInterconnectRouter, RequestRegion, RequestSelfLink, RequestId, ServiceName, MethodName, AuthorizationInfo, GCPResourceName, ResponseType, ResponseName, ResponseUser, ResponseTargetId, ResponseStatus, ResponseProgress, ResponseStartTime, ResponseRegion, ResponseSelfLinkWithId, ResponseInsertTime, ResponseTargetLink, ResponseSelfLink, ResponseId, ResponseOperationType, ResponseErrors, ResponseErrorCode, ResponseErrorMessage, ResourceLocation, OperationId, OperationProducer, OperationFirst, OperationLast",
+                    "outputStream": "Microsoft-GCPNATAudit"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "GCPNATLogsCCPDefinition",
+          "title": "Google Cloud Platform NAT (via Codeless Connector Framework) (Preview)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The Google Cloud Platform NAT data connector provides the capability to ingest Cloud NAT Audit logs and Cloud NAT Traffic logs into Microsoft Sentinel using the Compute Engine API. Refer the [Product overview](https://cloud.google.com/nat/docs/overview) document for more details.",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "GCP NAT Audit Logs",
+              "baseQuery": "GCPNATAudit"
+            },
+            {
+              "metricName": "Total events received",
+              "legend": "GCP NAT Logs",
+              "baseQuery": "GCPNAT"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of GCP NAT logs",
+              "query": "GCPNAT\n | take 10"
+            },
+            {
+              "description": "Get Sample of GCP NAT Audit logs",
+              "query": "GCPNATAudit\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "GCPNAT",
+              "lastDataReceivedQuery": "GCPNAT\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            },
+            {
+              "name": "GCPNATAudit",
+              "lastDataReceivedQuery": "GCPNATAudit\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+                {
+                  "type": "MarkdownControlEnvBased",
+                  "parameters": {
+                    "prodScript": "#### 1. Setup the GCP environment \n Ensure to have the following resources from the GCP Console:\n Project ID, Project Name, GCP Subscription name for the project, Workload Identity Pool ID, Workspace Identity Provider ID, and a Service Account to establish the connection.\n For more information, refer the [Connector tutorial](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformNAT/Data%20Connectors/README.md) for log setup and authentication setup tutorial.\n\n Find the Log set up script [**here**](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPCloudNATLogsSetup/GCPCloudNATLogsSetup.tf)\n & the Authentication set up script [**here**](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPInitialAuthenticationSetup)",
+                    "govScript": "#### 1. Setup the GCP environment \n Ensure to have the following resources from the GCP Console:\n Project ID, Project Name, GCP Subscription name for the project, Workload Identity Pool ID, Workspace Identity Provider ID, and a Service Account to establish the connection.\n For more information, refer the [Connector tutorial](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformNAT/Data%20Connectors/README.md) for log setup and authentication setup tutorial.\n\n Find the Log set up script [**here**](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/GCP/Terraform/sentinel_resources_creation_gov/GCPCloudNATLogsSetup/GCPCloudNATLogsSetup.tf)\n & the Authentication set up script [**here**](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation_gov/GCPInitialAuthenticationSetupGov)"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Tenant ID: A unique identifier that is used as an input in the Terraform configuration within a GCP environment.",
+                    "fillWith": [
+                      "TenantId"
+                    ],
+                    "name": "TenantId",
+                    "disabled": true
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 2. Enable NAT logs \n In the Google Cloud Console, enable cloud logging if not enabled previously, and save the changes. Navigate to Cloud NAT section and click on Add origin to create backends as per link provided below. \n\n Reference Link: [Link to documentation](https://cloud.google.com/nat/docs/monitoring)"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 3. Connect new collectors \n To enable GCP Cloud NAT Logs for Microsoft Sentinel, click on Add new collector button, provide the required information in the pop up and click on Connect."
+                  }
+                },
+                {
+                  "type": "GCPGrid",
+                  "parameters": {}
+                },
+                {
+                  "type": "GCPContextPane",
+                  "parameters": {}
+                }
+              ],
+              "title": "Connect GCP NAT to Microsoft Sentinel\n"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Microsoft",
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Google Cloud Platform NAT (via Codeless Connector Framework) (Preview)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "GCPServiceAccountEmail": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 4
+            },
+            "GCPProjectNumber": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "GCPWorkloadIdentityProviderId": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 4
+            },
+            "GCPProjectId": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 4
+            },
+            "GCPSubscriptionName": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 3
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Google Cloud Platform NAT (via Codeless Connector Framework) (Preview)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'GCPNATLogs', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GCP",
+              "properties": {
+                "connectorDefinitionName": "GCPNATLogsCCPDefinition",
+                "dataType": "GCPNAT",
+                "dcrConfig": {
+                  "streamName": "Custom-GCPNAT",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "serviceAccountEmail": "[[parameters('GCPServiceAccountEmail')]",
+                  "projectNumber": "[[parameters('GCPProjectNumber')]",
+                  "workloadIdentityProviderId": "[[parameters('GCPWorkloadIdentityProviderId')]"
+                },
+                "request": {
+                  "projectId": "[[parameters('GCPProjectId')]",
+                  "subscriptionNames": [
+                    "[[parameters('GCPSubscriptionName')]"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'GCPNATAuditLogs', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GCP",
+              "properties": {
+                "connectorDefinitionName": "GCPNATLogsCCPDefinition",
+                "dataType": "GCPNATAudit",
+                "dcrConfig": {
+                  "streamName": "Custom-GCPNATAudit",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "serviceAccountEmail": "[[parameters('GCPServiceAccountEmail')]",
+                  "projectNumber": "[[parameters('GCPProjectNumber')]",
+                  "workloadIdentityProviderId": "[[parameters('GCPWorkloadIdentityProviderId')]"
+                },
+                "request": {
+                  "projectId": "[[parameters('GCPProjectId')]",
+                  "subscriptionNames": [
+                    "[[concat(parameters('GCPSubscriptionName'),'_audit')]"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "GoogleCloudPlatformNAT",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/GoogleCloudPlatformNAT/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Google Cloud Platform NAT solution provides the capability to ingest <a href=\"https://cloud.google.com/nat/docs/monitoring\">Cloud NAT traffic logs</a> and <a href=\"https://cloud.google.com/nat/docs/audit-logging\">Cloud NAT Audit logs</a> into Microsoft Sentinel using the GCP Compute Engine API and GCP Logging API.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs</p>\n<ol type=\"a\">\n<li><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Platform (CCP)</a></li>\n</ol>\n<p><span style='color:red; font-weight:bold;'>NOTE</span>: Microsoft recommends installation of \"GCPNATLogsCCPDefinition\" (via Codeless Connector Framework). This connector is build on the Codeless Connector Framework (CCF), which uses the Log Ingestion API, which replaces ingestion via the <a href='https://aka.ms/Sentinel-Logs_migration' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>. CCF-based data connectors also support <a href='https://aka.ms/Sentinel-DCR_Overview' style='color:#1890F1;'>Data Collection Rules</a> (DCRs) offering transformations and enrichment.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/google_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "GoogleCloudPlatformNAT",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-05-29",
+        "providers": [
+          "Google"
+        ],
+        "categories": {
+          "domains": [
+            "Cloud Provider",
+            "Networking"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
