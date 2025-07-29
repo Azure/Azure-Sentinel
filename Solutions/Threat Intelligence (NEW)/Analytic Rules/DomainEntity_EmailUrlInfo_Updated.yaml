@@ -27,8 +27,7 @@ relevantTechniques:
 query: |
     let dt_lookBack = 1h; // Define the lookback period for email data as 1 hour
     let ioc_lookBack = 14d; // Define the lookback period for threat intelligence data as 14 days
-    let EmailUrlInfo_ = EmailUrlInfo
-    | where isnotempty(Url) or isnotempty(UrlDomain) // Filter for non-empty URLs or URL domains
+    let EmailUrlInfo_ = EmailUrlInfo| where isnotempty(Url) or isnotempty(UrlDomain) // Filter for non-empty URLs or URL domains
     | where TimeGenerated >= ago(dt_lookBack) // Filter for records within the lookback period
     | extend Url = tolower(Url), UrlDomain = tolower(UrlDomain) // Convert URLs and domains to lowercase
     | extend EmailUrlInfo_TimeGenerated = TimeGenerated; // Create a new column for the time generated
@@ -48,23 +47,31 @@ query: |
     | extend Description = tostring(parse_json(Data).description)
     | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
     | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, UrlLocation, NetworkMessageId; // Select relevant columns
-    let TI_Domains = ThreatIntelligenceIndicator
+    let TI_Domains = ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
-    | where isnotempty(DomainName) // Filter for non-empty domain names
-    | extend DomainName = tolower(DomainName) // Convert domain names to lowercase
-    | extend IndicatorId = tostring(split(IndicatorId, "--")[2]);
-    TI_Domains
-    | project-reorder *, Active, Tags, TrafficLightProtocolLevel, DomainName, Url, Type
+    | where isnotempty(ObservableValue) // Filter for non-empty domain names
+    | where ObservableKey == "domain-name:value"
+    | extend Active = IsActive
+    | extend TrafficLightProtocolLevel = AdditionalFields.TLPLevel
+    | extend DomainName = tolower(ObservableValue) // Convert domain names to lowercase
+    | extend IndicatorId = tostring(split(Id, "--")[2]);
+    let TI_Domains_UrlInfo = TI_Domains
+    | project-reorder *, Active, Tags, TrafficLightProtocolLevel, DomainName, Type
     | join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain // Join with email URL info on domain name
+    | extend ExpirationDateTime = ValidUntil
+    | extend Description = Data.description
+    | extend ThreatType =  Data.type
+    | extend ConfidenceScore = Confidence
+    | extend ActivityGroupNames = replace_string(tostring(parse_json(tostring(Data.labels))[0]),"ActivityGroup:","")
     | where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired
     | where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired
     | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, UrlDomain // Get the latest email info for each indicator
     | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId; // Select relevant columns
-    union TI_Urls, TI_Domains // Combine URL and domain threat intelligence data
+    union TI_Urls, TI_Domains_UrlInfo // Combine URL and domain threat intelligence data
     | extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column
     | join kind=inner (EmailEvents_) on NetworkMessageId // Join with email events on network message ID
     | where DeliveryAction !has "Blocked" // Filter out blocked delivery actions
-    | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0]); // Extract name and UPN suffix from recipient email address
+    | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0]); // Extract name and UPN suffix from recipient email address"
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -78,5 +85,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.0.3
+version: 1.0.4
 kind: Scheduled

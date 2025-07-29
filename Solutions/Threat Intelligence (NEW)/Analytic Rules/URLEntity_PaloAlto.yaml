@@ -32,13 +32,11 @@ query: |
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
   | where IndicatorType == "url"
   | extend Url = ObservableValue
-  | where isnotempty(Url)
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   // Picking up only IOC's that contain the entities we want
-  | where isnotempty(Url)
   | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
      | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
@@ -75,5 +73,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: PA_Url
-version: 1.2.5
+version: 1.2.6
 kind: Scheduled

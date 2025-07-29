@@ -44,12 +44,11 @@ query: |
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
   | where IndicatorType == "url"
   | extend Url = ObservableValue
-  | where isnotempty(Url)
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     | where TimeGenerated >= ago(ioc_lookBack)
-    | where isnotempty(Url) and tolower(Url) in (ClickedUrls)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-    | where IsActive == true and ValidUntil > now()
+    | where tolower(Url) in (ClickedUrls)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
     | project-rename TI_Url = Url, TI_Type = Type
     );
   (union isfuzzy=false (TI | join kind=innerunique (ChainReportID) on $left.TI_Url == $right.UrlChain),
@@ -76,5 +75,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.0.3
+version: 1.0.4
 kind: Scheduled
