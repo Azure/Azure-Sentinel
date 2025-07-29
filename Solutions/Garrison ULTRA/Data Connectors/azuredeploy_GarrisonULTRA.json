@@ -2,37 +2,57 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "workspace-name": {
+    "Workspace": {
       "defaultValue": "",
       "type": "string",
       "metadata": {
         "description": "Name of Log Analytics workspace in which to deploy resources"
       }
     },
-    "workspace-region": {
+    "workspace-location": {
       "defaultValue": "",
       "type": "string",
       "metadata": {
         "description": "Region of Log Analytics workspace in which to deploy resources (e.g. 'uksouth')"
       }
+    },
+    "workspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The unique identifier (GUID) of the Log Analytics workspace."
+      }
     }
   },
   "variables": {
-    "workspaceName": "[parameters('workspace-name')]",
-    "workspaceRegion": "[parameters('workspace-region')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "remoteLogTableName": "Garrison_ULTRARemoteLogs_CL",
     "auditLogTableName": "Garrison_ULTRAAuditLogs_CL",
     "dcrName": "gurl-dcr"
   },
   "resources": [
     {
+            "name": "[variables('dcrName')]",
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-09-01-preview",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "description": "Data collection endpoint for Garrsion Ultra",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                },
+                "configurationAccess": {
+                    "immutableId": "[variables('dcrName')]"
+                }
+            }
+        },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
-      "name": "[concat(variables('workspaceName'), '/', variables('remoteLogTableName'))]",
-      "location": "[variables('workspaceRegion')]",
+      "name": "[concat(parameters('Workspace'), '/', variables('remoteLogTableName'))]",
+      "location": "[parameters('workspace-location')]",
       "properties": {
         "plan": "Analytics",
-        "retentionInDays": "-1",
+        "retentionInDays": 40,
         "schema": {
           "name": "[variables('remoteLogTableName')]",
           "description": "Custom table for storing Garrison ULTRA Remote Logs",
@@ -95,17 +115,17 @@
             }
           ]
         },
-        "totalRetentionInDays": "-1"
+        "totalRetentionInDays": 40
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
-      "name": "[concat(variables('workspaceName'), '/', variables('auditLogTableName'))]",
-      "location": "[variables('workspaceRegion')]",
+      "name": "[concat(parameters('Workspace'), '/', variables('auditLogTableName'))]",
+      "location": "[parameters('workspace-location')]",
       "properties": {
         "plan": "Analytics",
-        "retentionInDays": "-1",
+        "retentionInDays": 4,
         "schema": {
           "name": "[variables('auditLogTableName')]",
           "description": "Custom table for storing Garrison ULTRA Audit Logs",
@@ -178,15 +198,15 @@
             }
           ]
         },
-        "totalRetentionInDays": "-1"
+        "totalRetentionInDays": 4
       }
     },
     {
       "type": "Microsoft.Insights/dataCollectionRules",
       "name": "[variables('dcrName')]",
-      "location": "[variables('workspaceRegion')]",
+      "location": "[parameters('workspace-location')]",
       "apiVersion": "2023-03-11",
-      "kind": "Direct",
+      "kind": null,
       "properties": {
         "streamDeclarations": {
           "Custom-GarrisonULTRARemoteLogs": {
@@ -310,8 +330,9 @@
         "destinations": {
           "logAnalytics": [
             {
-              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]",
-              "name": "workspace"
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "workspaceId": "[parameters('workspaceId')]",
+              "name": "[parameters('workspaceId')]"
             }
           ]
         },
@@ -321,31 +342,22 @@
               "Custom-GarrisonULTRARemoteLogs"
             ],
             "destinations": [
-              "workspace"
+              "[parameters('workspaceId')]"
             ],
-            "outputStream": "[concat('Custom-', variables('remoteLogTableName'))]"
+            "outputStream": "Custom-Garrison_ULTRARemoteLogs_CL"
           },
           {
             "streams": [
               "Custom-GarrisonULTRAAuditLogs"
             ],
             "destinations": [
-              "workspace"
+              "[parameters('workspaceId')]"
             ],
-            "outputStream": "[concat('Custom-', variables('auditLogTableName'))]"
+            "outputStream": "Custom-Garrison_ULTRAAuditLogs_CL"
           }
         ]
       }
     }
   ],
-  "outputs": {
-    "dataCollectionRuleImmutableId": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))).immutableId]"
-    },
-    "dataCollectionRuleLogsIngestionEndpoint": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))).endpoints.logsIngestion]"
-    }
-  }
+  "outputs": {}
 }
