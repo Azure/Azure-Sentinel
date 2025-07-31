@@ -38,7 +38,7 @@ class GreyNoiseStixGenerator:
             indicator_types=[gnIndicator["internet_scanner_intelligence"].get('classification')],
             pattern="[ipv4-addr:value = '{}']".format(gnIndicator.get('ip')),
             pattern_type=self.pattern_type,
-            valid_from=datetime.datetime.strptime(gnIndicator["internet_scanner_intelligence"].get('first_seen'), "%Y-%m-%d").isoformat()+'Z',
+            valid_from=(datetime.datetime.strptime(gnIndicator['first_seen'], "%Y-%m-%d") if 'first_seen' in gnIndicator else datetime.timezone.utc()).isoformat()+'Z',
             valid_until=self.valid_until,
             created_by_ref=self.created_by_ref,
             labels=gnIndicator["internet_scanner_intelligence"].get('tags'),
