@@ -1,0 +1,1230 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Onapsis",
+    "comments": "Solution template for Onapsis Integration"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Onapsis Integration",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "onapsis1753213196681. azure-sentinel-solution-onapsis-defend",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "Onapsis",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "OnapsisConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Onapsis Integration",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "Onapsis",
+                  "title": "Onapsis Integration",
+                  "publisher": "Onapsis SE",
+                  "logo": "OnapsisLogo.svg",
+                  "descriptionMarkdown": "Onapsis Integration is created to consolidate alerts, logging, and information gathered by Onapsis into Microsoft Sentinel. This solution enables security teams to ingest, monitor, and analyze Onapsis data within Sentinel, supporting faster detection, investigation, and response to risks in your environment.",
+                  "graphQueriesTableName": "Onapsis_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Onapsis_SID",
+                      "baseQuery": "{{graphQueriesTableName}} | project TimeGenerated, Onapsis_SID= SystemUniqueId"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample Events",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | where name_s == \"no data test\" | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+                      },
+                      {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign Monitoring Metrics Publisher role on data collection rules. Typically requires Azure RBAC Owner or User Access Administrator role."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Create ARM Resources and Provide the Required Permissions",
+                      "description": "We will create data collection rule (DCR) and data collection endpoint (DCE) resources. We will also create a Microsoft Entra app registration and assign the required permissions to it.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Automated deployment of Azure resources\nClicking on \"Deploy push connector resources\" will trigger the creation of DCR and DCE resources.\nIt will then create a Microsoft Entra app registration with client secret and grant permissions on the DCR. This setup enables data to be sent securely to the DCR using a OAuth v2 client credentials."
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "Deploy push connector resources",
+                            "applicationDisplayName": "Onapsis Integration push to Microsoft Sentinel"
+                          },
+                          "type": "DeployPushConnectorButton_test"
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Maintain the data collection endpoint details and authentication info in Onapsis Integration",
+                      "description": "Share the data collection endpoint URL and authentication info with the Onapsis Integration administrator to configure the Onapsis Integration to send data to the data collection endpoint.\n\nLearn more from [this blog series](https://community.Onapsis.com/t5/enterprise-resource-planning-blog-posts-by-members/ultimate-blog-series-Onapsis-logserv-integration-with-microsoft-sentinel/ba-p/14126401).",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "label": "Tenant ID | Use this value to configure as Tenant ID",
+                            "fillWith": [
+                              "TenantId"
+                            ]
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Entra Application ID | Use this value for the Client ID",
+                            "fillWith": [
+                              "ApplicationId"
+                            ],
+                            "placeholder": "Deploy push connector to get the Application ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Entra Application Secret | Use this value for the Token",
+                            "fillWith": [
+                              "ApplicationSecret"
+                            ],
+                            "placeholder": "Deploy push connector to get the Application Secret"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "LogIngestionURL | Use this value for the URL parameter",
+                            "fillWith": [
+                              "DataCollectionEndpoint"
+                            ],
+                            "placeholder": "Deploy push connector to get the DCE URI"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "DCR Immutable ID | Use this value for the DCR_ID parameter",
+                            "fillWith": [
+                              "DataCollectionRuleId"
+                            ],
+                            "placeholder": "Deploy push connector to get the DCR ID"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Onapsis"
+                },
+                "support": {
+                  "name": "Onapsis",
+                  "tier": "Partner",
+                  "email": "support@onapsis.com",
+                  "link": "https://onapsis.com/support/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Onapsis-DCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-Onapsis_CL": {
+                    "columns": [
+                      {
+                        "name": "incident_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "anomaly_score",
+                        "type": "real"
+                      },
+                      {
+                        "name": "asset_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "confidence",
+                        "type": "real"
+                      },
+                      {
+                        "name": "created_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "incident_detail",
+                        "type": "string"
+                      },
+                      {
+                        "name": "incident_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "job_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "matching_rule",
+                        "type": "string"
+                      },
+                      {
+                        "name": "module_category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "module_description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "module_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "system_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "username",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alarm_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "job_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "task_id",
+                        "type": "real"
+                      },
+                      {
+                        "name": "alarm_profile_id",
+                        "type": "real"
+                      },
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alarm_profile_matches",
+                        "type": "string"
+                      },
+                      {
+                        "name": "client",
+                        "type": "string"
+                      },
+                      {
+                        "name": "column_bname",
+                        "type": "string"
+                      },
+                      {
+                        "name": "column_profile",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detected_compliance",
+                        "type": "string"
+                      },
+                      {
+                        "name": "destination_port",
+                        "type": "string"
+                      },
+                      {
+                        "name": "downloaded_table",
+                        "type": "string"
+                      },
+                      {
+                        "name": "dst",
+                        "type": "string"
+                      },
+                      {
+                        "name": "erp_event_source",
+                        "type": "string"
+                      },
+                      {
+                        "name": "erp_host",
+                        "type": "string"
+                      },
+                      {
+                        "name": "erp_time",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "event_id",
+                        "type": "real"
+                      },
+                      {
+                        "name": "event_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "events",
+                        "type": "string"
+                      },
+                      {
+                        "name": "failed_ctls",
+                        "type": "string"
+                      },
+                      {
+                        "name": "fqdn",
+                        "type": "string"
+                      },
+                      {
+                        "name": "job_id",
+                        "type": "real"
+                      },
+                      {
+                        "name": "logline",
+                        "type": "string"
+                      },
+                      {
+                        "name": "modified",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "module_id",
+                        "type": "real"
+                      },
+                      {
+                        "name": "modules",
+                        "type": "string"
+                      },
+                      {
+                        "name": "osp_link",
+                        "type": "string"
+                      },
+                      {
+                        "name": "patch_applied",
+                        "type": "string"
+                      },
+                      {
+                        "name": "policy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "policy_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "program_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "protocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "reason",
+                        "type": "string"
+                      },
+                      {
+                        "name": "result",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sap_sec_notes",
+                        "type": "string"
+                      },
+                      {
+                        "name": "source_port",
+                        "type": "string"
+                      },
+                      {
+                        "name": "src",
+                        "type": "string"
+                      },
+                      {
+                        "name": "success",
+                        "type": "string"
+                      },
+                      {
+                        "name": "terminal_source",
+                        "type": "string"
+                      },
+                      {
+                        "name": "user_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "vulnerability_cvss",
+                        "type": "string"
+                      },
+                      {
+                        "name": "warning_ctls",
+                        "type": "string"
+                      },
+                      {
+                        "name": "category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "org_id",
+                        "type": "real"
+                      },
+                      {
+                        "name": "rolecollection_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "space_id",
+                        "type": "real"
+                      },
+                      {
+                        "name": "tenant",
+                        "type": "string"
+                      },
+                      {
+                        "name": "user",
+                        "type": "string"
+                      },
+                      {
+                        "name": "user_id",
+                        "type": "real"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-Onapsis_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-Onapsis_CL"
+                  },
+                  {
+                    "streams": [
+                      "Microsoft-ABAPAuditLog"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source",
+                    "outputStream": "Microsoft-ABAPAuditLog"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Onapsis_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "Onapsis_CL",
+                  "columns": [
+                    {
+                      "name": "incident_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "anomaly_score",
+                      "type": "real"
+                    },
+                    {
+                      "name": "asset_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "confidence",
+                      "type": "real"
+                    },
+                    {
+                      "name": "created_at",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "incident_detail",
+                      "type": "string"
+                    },
+                    {
+                      "name": "incident_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "job_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "matching_rule",
+                      "type": "string"
+                    },
+                    {
+                      "name": "module_category",
+                      "type": "string"
+                    },
+                    {
+                      "name": "module_description",
+                      "type": "string"
+                    },
+                    {
+                      "name": "module_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "system_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "username",
+                      "type": "string"
+                    },
+                    {
+                      "name": "alarm_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "job_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "task_id",
+                      "type": "real"
+                    },
+                    {
+                      "name": "alarm_profile_id",
+                      "type": "real"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "action",
+                      "type": "string"
+                    },
+                    {
+                      "name": "alarm_profile_matches",
+                      "type": "string"
+                    },
+                    {
+                      "name": "client",
+                      "type": "string"
+                    },
+                    {
+                      "name": "column_bname",
+                      "type": "string"
+                    },
+                    {
+                      "name": "column_profile",
+                      "type": "string"
+                    },
+                    {
+                      "name": "detected_compliance",
+                      "type": "string"
+                    },
+                    {
+                      "name": "destination_port",
+                      "type": "string"
+                    },
+                    {
+                      "name": "downloaded_table",
+                      "type": "string"
+                    },
+                    {
+                      "name": "dst",
+                      "type": "string"
+                    },
+                    {
+                      "name": "erp_event_source",
+                      "type": "string"
+                    },
+                    {
+                      "name": "erp_host",
+                      "type": "string"
+                    },
+                    {
+                      "name": "erp_time",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "event_id",
+                      "type": "real"
+                    },
+                    {
+                      "name": "event_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "events",
+                      "type": "string"
+                    },
+                    {
+                      "name": "failed_ctls",
+                      "type": "string"
+                    },
+                    {
+                      "name": "fqdn",
+                      "type": "string"
+                    },
+                    {
+                      "name": "job_id",
+                      "type": "real"
+                    },
+                    {
+                      "name": "logline",
+                      "type": "string"
+                    },
+                    {
+                      "name": "modified",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "module_id",
+                      "type": "real"
+                    },
+                    {
+                      "name": "modules",
+                      "type": "string"
+                    },
+                    {
+                      "name": "osp_link",
+                      "type": "string"
+                    },
+                    {
+                      "name": "patch_applied",
+                      "type": "string"
+                    },
+                    {
+                      "name": "policy",
+                      "type": "string"
+                    },
+                    {
+                      "name": "policy_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "program_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "protocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "reason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "result",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sap_sec_notes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "source_port",
+                      "type": "string"
+                    },
+                    {
+                      "name": "src",
+                      "type": "string"
+                    },
+                    {
+                      "name": "success",
+                      "type": "string"
+                    },
+                    {
+                      "name": "terminal_source",
+                      "type": "string"
+                    },
+                    {
+                      "name": "user_type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "vulnerability_cvss",
+                      "type": "string"
+                    },
+                    {
+                      "name": "warning_ctls",
+                      "type": "string"
+                    },
+                    {
+                      "name": "category",
+                      "type": "string"
+                    },
+                    {
+                      "name": "org_id",
+                      "type": "real"
+                    },
+                    {
+                      "name": "rolecollection_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "space_id",
+                      "type": "real"
+                    },
+                    {
+                      "name": "tenant",
+                      "type": "string"
+                    },
+                    {
+                      "name": "user",
+                      "type": "string"
+                    },
+                    {
+                      "name": "user_id",
+                      "type": "real"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "Onapsis",
+          "title": "Onapsis Integration",
+          "publisher": "Onapsis SE",
+          "logo": "OnapsisLogo.svg",
+          "descriptionMarkdown": "Onapsis Integration is created to consolidate alerts, logging, and information gathered by Onapsis into Microsoft Sentinel. This solution enables security teams to ingest, monitor, and analyze Onapsis data within Sentinel, supporting faster detection, investigation, and response to risks in your environment.",
+          "graphQueriesTableName": "Onapsis_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Onapsis_SID",
+              "baseQuery": "{{graphQueriesTableName}} | project TimeGenerated, Onapsis_SID= SystemUniqueId"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample Events",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | where name_s == \"no data test\" | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft Entra",
+                "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+              },
+              {
+                "name": "Microsoft Azure",
+                "description": "Permission to assign Monitoring Metrics Publisher role on data collection rules. Typically requires Azure RBAC Owner or User Access Administrator role."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Create ARM Resources and Provide the Required Permissions",
+              "description": "We will create data collection rule (DCR) and data collection endpoint (DCE) resources. We will also create a Microsoft Entra app registration and assign the required permissions to it.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Automated deployment of Azure resources\nClicking on \"Deploy push connector resources\" will trigger the creation of DCR and DCE resources.\nIt will then create a Microsoft Entra app registration with client secret and grant permissions on the DCR. This setup enables data to be sent securely to the DCR using a OAuth v2 client credentials."
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "Deploy push connector resources",
+                    "applicationDisplayName": "Onapsis Integration push to Microsoft Sentinel"
+                  },
+                  "type": "DeployPushConnectorButton_test"
+                }
+              ]
+            },
+            {
+              "title": "2. Maintain the data collection endpoint details and authentication info in Onapsis Integration",
+              "description": "Share the data collection endpoint URL and authentication info with the Onapsis Integration administrator to configure the Onapsis Integration to send data to the data collection endpoint.\n\nLearn more from [this blog series](https://community.Onapsis.com/t5/enterprise-resource-planning-blog-posts-by-members/ultimate-blog-series-Onapsis-logserv-integration-with-microsoft-sentinel/ba-p/14126401).",
+              "instructions": [
+                {
+                  "parameters": {
+                    "label": "Tenant ID | Use this value to configure as Tenant ID",
+                    "fillWith": [
+                      "TenantId"
+                    ]
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Entra Application ID | Use this value for the Client ID",
+                    "fillWith": [
+                      "ApplicationId"
+                    ],
+                    "placeholder": "Deploy push connector to get the Application ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Entra Application Secret | Use this value for the Token",
+                    "fillWith": [
+                      "ApplicationSecret"
+                    ],
+                    "placeholder": "Deploy push connector to get the Application Secret"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "LogIngestionURL | Use this value for the URL parameter",
+                    "fillWith": [
+                      "DataCollectionEndpoint"
+                    ],
+                    "placeholder": "Deploy push connector to get the DCE URI"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "DCR Immutable ID | Use this value for the DCR_ID parameter",
+                    "fillWith": [
+                      "DataCollectionRuleId"
+                    ],
+                    "placeholder": "Deploy push connector to get the DCR ID"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Onapsis"
+        },
+        "support": {
+          "name": "Onapsis",
+          "tier": "Partner",
+          "email": "support@onapsis.com",
+          "link": "https://onapsis.com/support/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Onapsis Integration",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "auth": {
+              "type": "object",
+              "defaultValue": {
+                "appId": "[[parameters('auth').appId]]",
+                "servicePrincipalId": "[[parameters('auth').servicePrincipalId]]"
+              }
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Onapsis Integration",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Onapsis"
+                },
+                "support": {
+                  "name": "Onapsis",
+                  "tier": "Partner",
+                  "email": "support@onapsis.com",
+                  "link": "https://onapsis.com/support/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'OnapsisPolling', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Push",
+              "properties": {
+                "connectorDefinitionName": "Onapsis",
+                "dcrConfig": {
+                  "dataCollectionRuleId": "{{dataCollectionRuleId}}",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-Onapsis_CL"
+                },
+                "auth": {
+                  "type": "Push",
+                  "appId": "[[parameters('auth').appId]",
+                  "servicePrincipalId": "[[parameters('auth').servicePrincipalId]"
+                },
+                "request": {
+                  "RetryCount": 1
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.messages"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Onapsis Integration",
+        "publisherDisplayName": "Onapsis",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Onapsis%20Integration/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Onapsis Integration provides the Onapsis RISE logs to Microsoft Sentinel, allowing SOC teams to ingest, monitor, and hunt across Onapsis data. This integration enhances security by enabling faster detection, investigation, and mitigation of risks within Onapsis RISE environments.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/onapsis_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Onapsis Integration",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Onapsis"
+        },
+        "support": {
+          "name": "Onapsis",
+          "email": "support@onapsis.com",
+          "tier": "Partner",
+          "link": "https://onapsis.com/support/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-07-17",
+        "lastPublishDate": "2025-07-17",
+        "providers": [
+          "Onapsis Platform"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Identity",
+            "Application",
+            "Cloud Provider"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
