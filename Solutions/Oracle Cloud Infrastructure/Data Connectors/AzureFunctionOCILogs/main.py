@@ -51,7 +51,7 @@ def main(mytimer: func.TimerRequest):
         cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
     else :
         cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
-    
+    logging.info('cursor {}'.format(cursor))
     process_events(stream_client, StreamOcid, cursor, limit, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
 
