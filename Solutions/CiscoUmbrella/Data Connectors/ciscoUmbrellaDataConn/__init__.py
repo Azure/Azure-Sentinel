@@ -862,7 +862,7 @@ class UmbrellaClient:
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
-                if len(row) >= 16:
+                if len(row) >= 29:
                     event = {
                         'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
                         'identities': row[1],
