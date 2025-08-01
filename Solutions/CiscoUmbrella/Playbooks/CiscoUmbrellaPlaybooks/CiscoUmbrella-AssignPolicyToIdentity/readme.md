@@ -29,8 +29,8 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Cisco Cloud Security Organization Id: Organization id in Cisco Cloud Security.
     * Cisco Cloud Security Policy Id: ID of the DNS or web policy to act upon.
     * Keyvault name: Name of the key vault where secrets are stored.
-    * Cloud Security API Client Id Key Name: Name of the Secrets field from Keyvault where Cisco Cloud Security "API Key" value is stored.
-    * Cloud Security API Secret Key Name: Name of the Secrets field from Keyvault where Cisco Cloud Security "Key Secret" value is stored.
+    * Umbrella API Client Id Key Name: Name of the Secrets field from Keyvault where Cisco Cloud Security "API Key" value is stored.
+    * Umbrella API Secret Key Name: Name of the Secrets field from Keyvault where Cisco Cloud Security "Key Secret" value is stored.
     * Host End Point: Default is "api.umbrella.com" and is used for any API call to Cisco Cloud Security REST API's.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-AssignPolicyToIdentity%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-AssignPolicyToIdentity%2Fazuredeploy.json)
