@@ -1,30 +1,32 @@
 """Module with BitSight class for interacting with BitSight APIs and posting data to Sentinel."""
 import base64
 import inspect
-import json
-
 import requests
+import time
 
-from ..SharedCode.azure_sentinel import MicrosoftSentinel
-from .bitsight_exception import BitSightException
+from azure.identity import AzureAuthorityHosts, DefaultAzureCredential
+from azure.monitor.ingestion import LogsIngestionClient
+from azure.core.exceptions import HttpResponseError, ClientAuthenticationError
+from .bitsight_exception import BitSightException, BitSightTimeOutException
 from .utils import CheckpointManager
-from .consts import API_TOKEN, BASE_URL, LOGS_STARTS_WITH, COMPANY_FETCH_QUERY
+from .consts import *
 from .logger import applogger
 
 
 class BitSight:
     """Class for handling BitSight API interactions."""
 
-    def __init__(self) -> None:
+    def __init__(self, start_time) -> None:
         """Initialize BitSight object."""
+        self.start_time = start_time
         self.headers = None
         self.base_url = BASE_URL
         self.api_token = API_TOKEN
         self.logs_starts_with = LOGS_STARTS_WITH
         self.error_logs = "{}(method={}) {}"
-        self.azuresentinel = MicrosoftSentinel()
         self.messages = {
-            403: "You cannot view this company as company might be removed from your portfolio."
+            403: "You cannot view this company as company might be removed from your portfolio.",
+            429: "You have reached your BitSight API rate limit. Please try again later.",
         }
 
     def check_environment_var_exist(self, environment_var):
@@ -84,22 +86,30 @@ class BitSight:
             applogger.exception("BitSight: GENERATE AUTH TOKEN: {}".format(error))
             raise BitSightException()
 
+    def check_timeout(self):
+        """Check if the function has timed out.
+
+        Raises:
+            BitSightTimeOutException: Raises exception if the function has timed out.
+        """
+        if int(time.time()) >= self.start_time + FUNCTION_APP_TIMEOUT_SECONDS:
+            raise BitSightTimeOutException()
+    
     def get_last_data_index(
-        self, company_names, checkpoint_obj: CheckpointManager, company_state, table_name
+        self, company_names, checkpoint_obj: CheckpointManager
     ):
         """Get the index for fetching last data.
 
         Args:
             company_names (list): List of company names.
             checkpoint_obj (CheckpointManager): CheckpointManager object.
-            company_state (str): State of the company.
-            table_name (str): Table name from which data should be fetched in case of checkpoint file corrupted.
 
         Returns:
             int: Index for fetching last data.
         """
-        last_company_name = checkpoint_obj.get_last_data(
-            company_state, company_name_flag=True, table_name=table_name, checkpoint_query=COMPANY_FETCH_QUERY
+        last_company_name = checkpoint_obj.get_checkpoint(
+            partition_key=COMPANY_CHECKPOINT_PARTITION_KEY,
+            row_key=COMPANY_CHECKPOINT_ROW_KEY
         )
         fetching_index = -1
         if last_company_name is not None:
@@ -147,69 +157,144 @@ class BitSight:
             BitSightException: Raised if an error occurs during the API request.
         """
         __method_name = inspect.currentframe().f_code.co_name
-        try:
-            resp = requests.get(url=url, headers=self.headers, params=query_parameter)
-            if resp.status_code == 403:
-                applogger.info("BitSight: get_bitsight_data: {} url={}".format(self.messages.get(resp.status_code, ""), url))
-                return None
-            resp.raise_for_status()
-            response = resp.json()
-            applogger.debug(
-                "BitSight: get_bitsight_data: Successfully got response for url: {}".format(
-                    url
+        for _ in range(RETRY_COUNT):
+            try:
+                self.check_timeout()
+                resp = requests.get(url=url, headers=self.headers, params=query_parameter)
+                if resp.status_code == 403:
+                    applogger.info(
+                        "BitSight: get_bitsight_data: {} url={}".format(
+                            self.messages.get(resp.status_code, ""), url
+                        )
+                    )
+                    return None
+                elif resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", RETRY_AFTER)) + 1
+                    if int(time.time()) + retry_after >= self.start_time + FUNCTION_APP_TIMEOUT_SECONDS:
+                        raise BitSightTimeOutException()
+                    applogger.info(
+                        "BitSight: get_bitsight_data: {} url={}, Retrying after {} seconds".format(
+                            self.messages.get(resp.status_code, ""), url, retry_after
+                        )
+                    )
+                    time.sleep(retry_after)
+                    continue
+                resp.raise_for_status()
+                response = resp.json()
+                applogger.debug(
+                    "BitSight: get_bitsight_data: Successfully got response for url: {}".format(
+                        url
+                    )
                 )
-            )
-            return response
-        except requests.exceptions.Timeout as err:
-            applogger.exception("BitSight: Request Timeout for {}: {}".format(url, err))
-            raise BitSightException()
-        except requests.ConnectionError as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
-            raise BitSightException()
-        except requests.HTTPError as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
-            raise BitSightException()
-        except requests.RequestException as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
-            raise BitSightException()
-        except Exception as err:
-            applogger.exception(
-                "BitSight: GET BITSIGHT DATA FOR {}: {}".format(url, err)
-            )
-            raise BitSightException()
+                return response
+            except BitSightTimeOutException:
+                raise BitSightTimeOutException()
+            except requests.exceptions.Timeout as err:
+                applogger.exception("BitSight: Request Timeout for {}: {}".format(url, err))
+                raise BitSightException()
+            except requests.exceptions.ConnectionError as err:
+                retry_after = RETRY_AFTER + 1
+                if int(time.time()) + retry_after >= self.start_time + FUNCTION_APP_TIMEOUT_SECONDS:
+                        raise BitSightTimeOutException()
+                applogger.error(
+                    "{}, Retrying after {} seconds".format(
+                        self.error_logs.format(self.logs_starts_with, __method_name, err), retry_after
+                    )
+                )
+                time.sleep(retry_after)
+                continue
+            except requests.HTTPError as err:
+                applogger.error(
+                    self.error_logs.format(self.logs_starts_with, __method_name, err)
+                )
+                raise BitSightException()
+            except requests.RequestException as err:
+                applogger.error(
+                    self.error_logs.format(self.logs_starts_with, __method_name, err)
+                )
+                raise BitSightException()
+            except Exception as err:
+                applogger.exception(
+                    "BitSight: GET BITSIGHT DATA FOR {}: {}".format(url, err)
+                )
+                raise BitSightException()
+        applogger.error(
+                    "BitSight: GET BITSIGHT DATA FOR {}: {}, Retry count exceeded".format(url, err)
+                )
+        raise BitSightException()
 
-    def send_data_to_sentinel(self, data, data_table, company_name, endpoint):
-        """To post the data into sentinel.
+    def send_data_to_sentinel(self, data, data_table, company_name=None, endpoint=None):
+        """
+        Post data to Azure Sentinel via the ingestion API.
 
         Args:
-            data (dict): data to post in sentinel
-            data_table (str): log type
-            company_name (str): company name
+            data (dict or list): Data to be ingested into Sentinel.
+            data_table (str): Log type/table name for ingestion.
+            company_name (str, optional): Name of the company for logging context. Defaults to None.
+            endpoint (str, optional): Endpoint name for logging context. Defaults to None.
+
+        Raises:
+            BitSightException: For any error during data upload to Sentinel.
         """
         try:
-            body = json.dumps(data, sort_keys=True)
-            post_data_status_code = self.azuresentinel.post_data(body, data_table)
-            if post_data_status_code >= 200 and post_data_status_code <= 299:
-                applogger.info(
-                    "BitSight: [status code {}] Successfully posted the {} of {} company.".format(
-                        post_data_status_code, endpoint, company_name
-                    )
+            # Determine appropriate Azure credentials
+            if ".us" in SCOPE:
+                creds = DefaultAzureCredential(authority=AzureAuthorityHosts.AZURE_GOVERNMENT)
+            else:
+                creds = DefaultAzureCredential()
+
+            azure_client = LogsIngestionClient(
+                AZURE_DATA_COLLECTION_ENDPOINT,
+                credential=creds,
+                credential_scopes=[SCOPE]
+            )
+
+            # Ensure data is a list for ingestion
+            if not isinstance(data, list):
+                data = [data] if isinstance(data, dict) else list(data)
+
+            dcr_stream = f"Custom-{data_table}"
+            azure_client.upload(rule_id=TABLE_NAME_RULE_ID_MAPPING.get(data_table), stream_name=dcr_stream, logs=data)
+
+        except ClientAuthenticationError as error:
+            if company_name is None:
+                applogger.error(
+                    "BitSight: Authentication error while uploading data to Sentinel. "
+                    f"Error: {error}"
                 )
             else:
                 applogger.error(
-                    "BitSight: [status code {}] The {} of {} company is not posted".format(
-                        post_data_status_code, endpoint, company_name
-                    )
+                    "BitSight: Authentication error while uploading data to Sentinel. "
+                    f"Endpoint: {endpoint}, Company: {company_name}. Error: {error}"
                 )
-                raise BitSightException()
-        except BitSightException:
-            raise BitSightException()
-        except Exception as err:
-            applogger.exception("BitSight: SEND DATA TO SENTINEL: {}".format(err))
-            raise BitSightException()
+            raise BitSightException(
+                f"Authentication error while uploading data to Sentinel: {error}"
+            )
+        except HttpResponseError as error:
+            if company_name is None:
+                applogger.error(
+                    "BitSight: HTTP response error while uploading data to Sentinel. "
+                    f"Error: {error}"
+                )
+            else:
+                applogger.error(
+                    "BitSight: HTTP response error while uploading data to Sentinel. "
+                    f"Endpoint: {endpoint}, Company: {company_name}. Error: {error}"
+                )
+            raise BitSightException(
+                f"HTTP response error while uploading data to Sentinel: {error}"
+            )
+        except Exception as error:
+            if company_name is None:
+                applogger.error(
+                    "BitSight: Unexpected error while uploading data to Sentinel. "
+                    f"Error: {error}"
+                )
+            else:
+                applogger.error(
+                    "BitSight: Unexpected error while uploading data to Sentinel. "
+                    f"Endpoint: {endpoint}, Company: {company_name}. Error: {error}"
+                )
+            raise BitSightException(
+                f"Unexpected error while uploading data to Sentinel: {error}"
+            )
