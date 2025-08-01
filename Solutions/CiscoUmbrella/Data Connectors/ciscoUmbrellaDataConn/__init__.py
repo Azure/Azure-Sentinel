@@ -728,62 +728,23 @@ class UmbrellaClient:
                         'Disconnection Reason': row[17],
                         'OS Version': row[18],
                         'Any Connect Version': row[19],
+                        'ASA Syslog ID': row[20],
+                        'Device ID': row[21],
+                        'Machine ID': row[22],
+                        'Public IPv6': row[23],
+                        'Assigned IPv6': row[24],
+                        'Security Group Tag': row[25],
+                        'DAP Record Name': row[26],
+                        'DAP Connection Type': row[27],
+                        'Failed Reasons': row[28],
+                        'log message': row[29],
+                        'asa syslog severity': row[30],
+                        'asa syslog class': row[31],
+                        'asa syslog description': row[32]
                     }
-                    try:
-                        event['ASA Syslog ID'] = row[20]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Device ID'] = row[21]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Machine ID'] = row[22]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Public IPv6'] = row[23]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Assigned IPv6'] = row[24]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Security Group Tag'] = row[25]
-                    except IndexError:
-                        pass
-                    try:
-                        event['DAP Record Name'] = row[26]
-                    except IndexError:
-                        pass
-                    try:
-                        event['DAP Connection Type'] = row[27]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Failed Reasons'] = row[28]
-                    except IndexError:
-                        pass
-                    try:
-                        event['log message'] = row[29]
-                    except IndexError:
-                        pass
-                    try:
-                        event['asa syslog severity'] = row[30]
-                    except IndexError:
-                        pass
-                    try:
-                        event['asa syslog class'] = row[31]
-                    except IndexError:
-                        pass
-                    try:
-                        event['asa syslog description'] = row[32]
-                    except IndexError:
-                        pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
-                event['EventType'] = 'ravpnlogs'
+                event['EventType'] = 'firewalllogs'
                 yield event
 
     def parse_csv_fw(self, csv_file):
