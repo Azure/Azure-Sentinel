@@ -817,38 +817,17 @@ class UmbrellaClient:
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
-                if len(row) >= 29:
+                if len(row) >= 9:
                     event = {
-                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
-                        'identity email': row[1],
-                        'identity labels': row[2],
-                        'identity type labels': row[3],
-                        'hostname': row[4],
-                        'verdict': row[5],
-                        'client os': row[6],
-                        'client browser': row[7],
-                        'client geo location': row[8],
-                        'client ip': row[9],
-                        'ruleset id': row[10],
-                        'rule id': row[11],
-                        'private app group id': row[12],
-                        'private app id': row[13],
-                        'private resource id': row[14],
-                        'private resource group id': row[15],
-                        'step up auth type': row[16],
-                        'step up auth result': row[17],
-                        'step up auth token life': row[18],
-                        'posture id': row[19],
-                        'requested id fqdn': row[20],
-                        'resolved ip': row[21],
-                        'app Connector group id': row[22],
-                        'headend type': row[23],
-                        'duo device id': row[24],
-                        'duo device id string': row[25],
-                        'system password': row[26],
-                        'client firewall': row[27],
-                        'disk encryption': row[28],
-                        'anti malware agents': row[29]
+                        'id': row[0],
+                        'Timestamp': self.format_date(row[1], self.input_date_format, self.output_date_format),
+                        'email': row[2],
+                        'user': row[3],
+                        'type': row[4],
+                        'action': row[5],
+                        'logged in from': row[6],
+                        'before': row[7],
+                        'after': row[8]
                     }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
