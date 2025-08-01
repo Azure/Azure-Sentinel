@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                   |
 |-------------|--------------------------------|------------------------------------------------------|
+| 3.1.0       | 31-07-2025                     | Updated Support details and publisherId in **SolutionMetadata.json**, updated Author details and Logo in **Solution_ProofPointPOD.json** from Microsoft to Proofpoint.|
 | 3.0.5       | 28-07-2025                     | Removed Deprecated **Data Connector**.							|  
 | 3.0.4       | 06-05-2025                     | Launching CCP **Data Connector** - *Proofpoint On Demand Email Security* from Public Preview to Global Availability.           |
 | 3.0.3       | 12-03-2025                     | Added new CCP **Data Connector** - *Proofpoint On Demand Email Security*.            |
