@@ -86,9 +86,7 @@ def main(mytimer: func.TimerRequest) -> None:
         'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10),
         'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10),
         'dlp': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dlp', queue_size=10000, bulks_number=10),  # Added DLP
-        'ravpn': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ravpnlogs', queue_size=10000, bulks_number=10),
-        'audit': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_audit', queue_size=10000, bulks_number=10),
-        'ztna': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ztna', queue_size=10000, bulks_number=10)
+        'ravpn': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ravpnlogs', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -105,12 +103,8 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel = sentinel_dict['firewall']
             elif 'dlplogs' in key.lower():  # Added DLP
                 sentinel = sentinel_dict['dlp']
-            elif 'ravpnlogs' in key.lower():  # Added RAVPN
+            elif 'ravpnlogs' in key.lower():  # Added DLP
                 sentinel = sentinel_dict['ravpn']
-            elif 'auditlogs' in key.lower(): # Added Audit
-                sentinel = sentinel_dict['audit']
-            elif 'ztnalogs' in key.lower():  # Added ZTNA
-                sentinel = sentinel_dict['ztna']
             else:
                 # skip files of unknown types
                 continue
@@ -250,7 +244,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs', 'dlplogs', 'ravpnlogs', 'auditlogs', 'ztnalogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs', 'dlplogs', 'ravpnlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -792,48 +786,6 @@ class UmbrellaClient:
                 event['EventType'] = 'ravpnlogs'
                 yield event
 
-    def parse_csv_audit(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
-        for row in csv_reader:
-            if len(row) > 1:
-                if len(row) >= 9:
-                    event = {
-                        'id': row[0],
-                        'Timestamp': self.format_date(row[1], self.input_date_format, self.output_date_format),
-                        'email': row[2],
-                        'user': row[3],
-                        'type': row[4],
-                        'action': row[5],
-                        'logged in from': row[6],
-                        'before': row[7],
-                        'after': row[8]
-                    }
-                else:
-                    event = {"message": convert_list_to_csv_line(row)}
-                event['EventType'] = 'auditlogs'
-                yield event
-
-    def parse_csv_ztna(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
-        for row in csv_reader:
-            if len(row) > 1:
-                if len(row) >= 9:
-                    event = {
-                        'id': row[0],
-                        'Timestamp': self.format_date(row[1], self.input_date_format, self.output_date_format),
-                        'email': row[2],
-                        'user': row[3],
-                        'type': row[4],
-                        'action': row[5],
-                        'logged in from': row[6],
-                        'before': row[7],
-                        'after': row[8]
-                    }
-                else:
-                    event = {"message": convert_list_to_csv_line(row)}
-                event['EventType'] = 'ztnalogs'
-                yield event
-    
     def parse_csv_fw(self, csv_file):
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
@@ -883,10 +835,7 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_dlp
             elif 'ravpnlogs' in key.lower():  # Added RAVPN logs
                 parser_func = self.parse_csv_ravpn
-            elif 'auditlogs' in key.lower():  # Added Audit logs
-                parser_func = self.parse_csv_audit
-            elif 'ztnalogs' in key.lower():  # Added ZTNA logs
-                parser_func = self.parse_csv_ztna
+
             if parser_func:
                 file_events = 0
                 for event in parser_func(csv_file):
