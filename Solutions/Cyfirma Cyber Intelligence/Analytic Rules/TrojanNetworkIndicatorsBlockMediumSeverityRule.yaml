@@ -1,0 +1,137 @@
+id: baa63d52-285d-43bf-a34e-8ed2fa260f9e
+name: CYFIRMA - Medium severity Trojan Network Indicators - Block Recommended Rule
+description: |
+  "This analytics rule detects network-based indicators flagged by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure. 
+  These indicators may represent attacker-controlled endpoints used for persistence, data exfiltration, or command delivery to compromised systems."
+version: 1.0.0
+kind: Scheduled
+severity: Medium
+enabled: false
+requiredDataConnectors:
+  - connectorId: CyfirmaCyberIntelligenceDC
+    dataTypes:
+      - CyfirmaIndicators_CL
+query: |
+  //Trojan Network Indicators - Block Recommended
+  let timeFrame= 5m;
+  CyfirmaIndicators_CL 
+  | where (ConfidenceScore < 80 and ConfidenceScore >= 50)
+      and TimeGenerated between (ago(timeFrame) .. now())
+      and pattern !contains 'file:hashes' and RecommendedActions has 'Block' and Roles has 'Trojan'
+  | extend IPv4 = extract(@"ipv4-addr:value\s*=\s*'([^']+)'", 1, pattern)
+  | extend IPv6 = extract(@"ipv6-addr:value\s*=\s*'([^']+)'", 1, pattern)
+  | extend URL = extract(@"url:value\s*=\s*'([^']+)'", 1, pattern)
+  | extend Domain = extract(@"domain-name:value\s*=\s*'([^']+)'", 1, pattern)
+  | extend parsed = parse_json(extensions)
+  | extend extensionKeys = bag_keys(parsed)
+  | mv-expand extensionKeys
+  | extend extensionKeyStr = tostring(extensionKeys)
+  | extend ext = parsed[extensionKeyStr]
+  | extend props = ext.properties
+  | extend 
+      extension_id = extensionKeyStr,
+      ASN_Owner = props.asn_owner,
+      ASN = props.asn,
+      ProviderName = 'CYFIRMA',
+      ProductName = 'DeCYFIR/DeTCT'
+  | project
+      IPv4,
+      IPv6,
+      URL,
+      Domain,
+      ThreatActors,
+      RecommendedActions,
+      Sources,
+      Roles,
+      Country,
+      IPAbuse,
+      name,
+      Description,
+      ConfidenceScore,
+      IndicatorID,
+      created,
+      modified,
+      valid_from,
+      Tags,
+      ThreatType,
+      TimeGenerated,
+      SecurityVendors,
+      ProductName,
+      ProviderName
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: GreaterThan
+triggerThreshold: 0
+suppressionDuration: 5m
+suppressionEnabled: true
+tactics:
+  - Impact
+  - Persistence
+  - DefenseEvasion
+  - CredentialAccess
+  - CommandAndControl
+  - Execution
+  - InitialAccess
+relevantTechniques:
+  - T1496
+  - T1053
+  - T1555
+  - T1090
+  - T1071
+  - T1204
+  - T1189
+  - T1053.005
+  - T1555.003
+  - T1071.001
+  - T1204.001
+alertDetailsOverride:
+  alertDisplayNameFormat: "High-Confidence Trojan Network Indicators - Block Recommended Rule - {{name}} "
+  alertDescriptionFormat: "{{Description}} - {{name}} "
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+customDetails:
+  ThreatActors: ThreatActors
+  Sources: Sources
+  RecommendedActions: RecommendedActions
+  Roles: Roles
+  Country: Country
+  Description: Description
+  ConfidenceScore: ConfidenceScore
+  SecurityVendors: SecurityVendors
+  IndicatorID: IndicatorID
+  Created: created
+  Modified: modified
+  ValidFrom: valid_from
+  Tags: Tags
+  ThreatType: ThreatType
+  TimeGenerated: TimeGenerated
+  IPAbuse: IPAbuse
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPv4
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPv6
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URL
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5m
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

@@ -1,0 +1,91 @@
+id: 87e7eb3f-bb8e-46e5-8807-d3fc63d0f676
+name: CYFIRMA - Attack Surface - Open Ports High Rule
+description: |
+  "This rule is triggered when CYFIRMA identifies open and publicly accessible ports on internet-facing assets. Exposed services may include SSH, RDP, HTTP, or other potentially sensitive ports, increasing the risk of unauthorized access, exploitation, or reconnaissance by threat actors. Monitoring open ports is critical to reducing the external attack surface and preventing misuse through brute force, service vulnerabilities, or protocol exploitation."
+version: 1.0.0
+kind: Scheduled
+severity: High
+requiredDataConnectors:
+  - connectorId: CyfirmaAttackSurfaceAlertsConnector
+    dataTypes:
+      - CyfirmaASOpenPortsAlerts_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - CommandAndControl
+  - Discovery
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1566
+  - T1071
+  - T1505
+query: |
+  // High Severity - Open Ports Exposure Detected
+  let timeFrame = 5m;
+  CyfirmaASOpenPortsAlerts_CL
+  | where severity == 'Critical' and TimeGenerated between (ago(timeFrame) .. now())
+  | extend Description=description, FirstSeen=first_seen, LastSeen=last_seen, RiskScore=risk_score, Domain=sub_domain, TopDomain=top_domain, NetworkIP=ip, AlertUID=alert_uid, UID=uid, WebServer=web_server, WebServerVersion=web_server_version, OpenPorts=open_ports, ProviderName="CYFIRMA", ProductName="DeCYFIR/DeTCT"
+  | project
+      TimeGenerated,
+      Description,
+      Domain,
+      TopDomain,
+      RiskScore,
+      FirstSeen,
+      LastSeen,
+      NetworkIP,
+      AlertUID,
+      UID,
+      WebServer,
+      WebServerVersion,
+      OpenPorts,
+      ProductName,
+      ProviderName
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: TopDomain
+      - identifier: DnsDomain
+        columnName: Domain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkIP
+customDetails:
+  TimeGenerated: TimeGenerated
+  RiskScore: RiskScore
+  FirstSeen: FirstSeen
+  LastSeen: LastSeen
+  AlertUID: AlertUID
+  UID: UID
+  WebServer: WebServer
+  WebServerVersion: WebServerVersion
+  OpenPorts: OpenPorts
+  Description: Description
+alertDetailsOverride:
+  alertDisplayNameFormat: "CYFIRMA - High Severity Open Ports Exposure Detected on Assets - Domain: {{Domain}}, IP: {{NetworkIP}}"
+  alertDescriptionFormat: "CYFIRMA - High Severity Open Ports Exposure Detected on Assets - {{Description}}"
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
