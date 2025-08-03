@@ -128,7 +128,6 @@ try {
         $offerDetails = GetCatalogDetails $offerId
         $userInputPackageVersion = $contentToImport.version
         $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
-        $packageVersion = '3.0.3'
         if ($packageVersion -ne $contentToImport.version) {
             $contentToImport.PSObject.Properties.Remove('version')
             $contentToImport | Add-Member -MemberType NoteProperty -Name 'version' -Value $packageVersion 
