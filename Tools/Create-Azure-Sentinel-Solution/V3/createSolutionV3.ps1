@@ -11,7 +11,7 @@ if ($null -eq $SolutionDataFolderPath -or $SolutionDataFolderPath -eq '') {
     Write-Host "Solution Data folder path specified is : $path"
 }
 
-$defaultPackageVersion = "3.0.3" # for templateSpec this will be 2.0.0
+$defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
 if ($path.length -eq 0)
