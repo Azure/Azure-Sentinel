@@ -28,6 +28,7 @@ $standardStreamMapping += @{ Key = 'SENTINEL_AWSCLOUDTRAIL'; Value = 'Microsoft-
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSCLOUDWATCH'; Value = 'Microsoft-AWSCloudWatch' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSGUARDDUTY'; Value = 'Microsoft-AWSGuardDuty' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSVPCFLOW'; Value = 'Microsoft-AWSVPCFlow' }
+$standardStreamMapping += @{ Key = 'SENTINEL_AWSVPCFLOW_CCP'; Value = 'Microsoft-AWSVPCFlow' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSWAF'; Value = 'Microsoft-AWSWAF' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWS_NETWORK_FIREWALL_ALERT_LOGS'; Value = 'Microsoft-AWSNetworkFirewallAlert' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWS_NETWORK_FIREWALL_FLOW_LOGS'; Value = 'Microsoft-AWSNetworkFirewallFlow' }
@@ -112,6 +113,7 @@ $standardStreamMapping += @{ Key = 'SENTINEL_GCPRESOURCEMANAGER'; Value = 'Micro
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPCOMPUTEENGINE'; Value = 'Microsoft-GCPComputeEngine'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPCLOUDSQL'; Value = 'Microsoft-GCPCloudSQL'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPCLOUDRUN'; Value = 'Microsoft-GCPCloudRun'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCP_IAM_LOGS'; Value = 'Microsoft-GCPIAM'}
 
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {
