@@ -18,6 +18,7 @@
         ResourceDevelopment,
         ImpairProcessControl,
         InhibitResponseFunction,
-        PreAttack
+        PreAttack,
+        Evasion
     }
 }
