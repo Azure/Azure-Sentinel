@@ -9,7 +9,7 @@ Write-ScriptNotes
 New-OidcProvider
 # Create new Arn Role
 New-ArnRole
-Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
+Write-Log -Message "Executing RoleArn: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
 $roleArnObject = aws iam get-role --role-name $roleName
 $roleArn = ($roleArnObject | ConvertFrom-Json ).Role.Arn
 Write-Log -Message $roleArn -LogFileName $LogFileName -Severity Verbose

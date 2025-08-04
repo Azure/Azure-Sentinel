@@ -257,7 +257,7 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAct
                 if ($($val.PsObject.Properties).Count -eq 0) {
                     if ($key -eq "dataSources") {
                         $resourceObj.$key = "[variables('TemplateEmptyObject')]";
-                        if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+                        if (!$global:baseMainTemplate.variables.TemplateEmptyObject) {
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyObject" -NotePropertyValue "[json('{}')]"
                         }
                     } else {
