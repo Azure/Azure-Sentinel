@@ -27,7 +27,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FUnisolate-MDEMachine%2FUnisolate-MDEMachine-alert-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftDefenderForEndpoint%2FPlaybooks%2FUnisolate-MDEMachine%2FUnisolate-MDEMachine-alert-trigger%2Fazuredeploy.json)
 
 ## Post Deployment Steps
-1. Assign Microsoft Sentinel Responder role to the managed identity. To do so, choose Identity blade under Settings of the Logic App Choose System assigned tab",
+1. Assign Microsoft Sentinel Responder role to the managed identity. To do so, choose Identity blade under Settings of the Logic App. Choose System assigned tab,
    - Click on Azure role assignments,
    - Click on Add role assignments,
    - Select Scope - Resource group,
