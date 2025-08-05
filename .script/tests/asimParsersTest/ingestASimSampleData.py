@@ -505,7 +505,7 @@ resourceGroupName = "v-amol"
 subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
 dataCollectionEndpointname = "TestAmol"
 endpoint_uri = "https://testamol-s1wi.centralus-1.ingest.monitor.azure.com"
-workspace_id = "your-workspace-id"  # Replace with your actual workspace ID
+workspace_id = "5b8e8aa3-8102-4c8c-aa5d-3ce5a96f0be6"  # Replace with your actual workspace ID
 
 # below details are where you want to send the data
 # workspace_id = "WorkspaceId"  # Replace with your actual workspace ID
@@ -1270,6 +1270,7 @@ def main():
         
         # Continue with the rest of the ingestion logic only if not in local debug mode
         log_ingestion_supported = True
+        DEBUG_LOCAL = False  # Set to False for production ingestion
         if not DEBUG_LOCAL:
             if log_ingestion_supported == True and table_type =="custom_log":
                 flag=0 #flag value is used to check if DCR is created for the table or not
