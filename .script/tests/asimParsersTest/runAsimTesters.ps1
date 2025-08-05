@@ -10,8 +10,6 @@ $reset = "`e[0m"
 
 # Parser exclusion file path
 $ParserExclusionsFilePath ="$($PSScriptRoot)/ExclusionListForASimTests.csv"
-# Sentinel repository URL
-$SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel.git"
 
 Class Parser {
     [string] $Name
@@ -28,56 +26,37 @@ Class Parser {
 }
 
 function run {
-    Write-Host "This is the script from PR."
-    # Check if upstream remote already exists
-    $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
-
-    if (-not $remoteExists) {
-        Write-Host "Adding upstream remote..."
-        Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+    Write-Host "ASIM Parser Tester Script"
+    
+    # Get user input for YAML file path
+    $yamlFilePath = Read-Host "Please enter the full path to the ASIM YAML parser file you want to test"
+    
+    # Validate the file exists
+    if (-not (Test-Path $yamlFilePath)) {
+        Write-Host "::error::File not found: $yamlFilePath"
+        throw "The specified YAML file does not exist."
     }
-
-    # Fetch the latest changes from upstream repositories
-    Write-Host "Fetching latest changes from upstream..."
-    Invoke-Expression "git fetch upstream" *> $null
-
-    # Get modified ASIM Parser files along with their status
-    $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
-    # Split the output into lines
-    $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
-    # Initialize an empty array to store the file names and their status
+    
+    # Validate it's a YAML file
+    if (-not ($yamlFilePath -like "*.yaml" -or $yamlFilePath -like "*.yml")) {
+        Write-Host "::error::Invalid file type. Please provide a YAML file (.yaml or .yml extension)."
+        throw "Invalid file type."
+    }
+    
+    # Initialize the global modified files array with the user-provided file
     $global:modifiedFiles = @()
-    # Iterate over the lines
-    foreach ($line in $modifiedFilesStatusLines) {
-        # Split the line into status and file name
-        $parts = $line -split "\t"
-        # Assigning the first part to $status and the last part to $file
-        $status = $parts[0]
-        $file = $parts[-1]  # -1 index refers to the last element
-        # Check if the file is a YAML file
-        if ($file -like "*.yaml") {
-            # Add the file name and status to the array
-            $global:modifiedFiles += New-Object PSObject -Property @{
-                Name = $file
-                Status = switch -Regex ($status) {
-                    "A" { "Added" }
-                    "M" { "Modified" }
-                    "D" { "Deleted" }
-                    "R" { "Renamed" }
-                    default { "Unknown" }
-                }
-            }
-        }
+    $global:modifiedFiles += New-Object PSObject -Property @{
+        Name = $yamlFilePath
+        Status = "UserProvided"
     }
-    # Print the file names and their status
-    Write-Host "${green}The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:${reset}"
-    foreach ($file in $modifiedFiles) {
-        Write-Host ${yellow}("{0} ({1})" -f $file.Name, $file.Status)${reset}
-    }
+    
+    # Print the file that will be tested
+    Write-Host "${green}The following ASIM parser file will be tested. 'Schema' and 'Data' tests will be performed:${reset}"
+    Write-Host ${yellow}("$yamlFilePath (User Provided)")${reset}
     Write-Host "***************************************************"
 
-    # Call testSchema function for each modified parser file
-    $modifiedFiles | ForEach-Object { testSchema $_.Name }
+    # Call testSchema function for the provided parser file
+    testSchema $yamlFilePath
 }
 
 function testSchema([string] $ParserFile) {
@@ -91,13 +70,27 @@ function testSchema([string] $ParserFile) {
             $modifiedFiles[$i].Name = $functionName
         }
     }
-    $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
+    
+    # Extract schema from the YAML file content
+    $Schema = ""
+    if ($parsersAsObject.Normalization -and $parsersAsObject.Normalization.Schema) {
+        $Schema = $parsersAsObject.Normalization.Schema
+        Write-Host "${green}Schema automatically detected from YAML file: $Schema${reset}"
+    } elseif ($ParserFile -match "Parsers[/\\]ASim([/\\][^/\\]+)") {
+        # Fallback: extract from file path
+        $Schema = $matches[1].Replace('\', '').Replace('/', '')
+        Write-Host "${yellow}Schema extracted from file path: $Schema${reset}"
+    } else {
+        # Last resort: ask user for schema if it can't be determined
+        $Schema = Read-Host "Please enter the ASIM schema name (e.g., Authentication, DNS, NetworkSession, etc.)"
+    }
+    
     if ($parsersAsObject.Parsers -or ($parsersAsObject.ParserName -like "*Empty")){
         Write-Host "***************************************************"
         Write-Host "${yellow}The parser '$functionName' is a union or empty parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
-        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
+        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema, $parsersAsObject.ParserParams))
     }
 }
 
@@ -131,8 +124,8 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
             if ($resultsArray.Count) {
                 # Iterate over the modified files
                 foreach ($file in $modifiedFiles) {
-                    # Check if the file name matches and the status is 'Added'
-                    if ($file.Name -eq $name -and $file.Status -eq 'Added') {
+                    # Check if the file name matches and the status is 'Added' or 'UserProvided'
+                    if ($file.Name -eq $name -and ($file.Status -eq 'Added' -or $file.Status -eq 'UserProvided')) {
                         # Iterate over the test results
                         for ($i = 0; $i -lt $resultsArray.Count; $i++) {
                             # Check if the test result contains the specified strings
@@ -146,29 +139,82 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 $resultsArray | ForEach-Object { $TestResults += "$($_.Result)`r`n" }
                 Write-Host $TestResults
                 $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
+                $WarningCount = ($resultsArray | Where-Object { $_.Result -like "(0) Warning:*" }).Count
+                
+                # Extract detailed error messages for better diagnostics
+                $ErrorMessages = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }) | ForEach-Object { $_.Result }
+                $WarningMessages = ($resultsArray | Where-Object { $_.Result -like "(0) Warning:*" }) | ForEach-Object { $_.Result }
+                
                 $IgnoreParserIsSet = IgnoreValidationForASIMParsers | Where-Object { $name -like "$_*" }
                 if ($Errorcount -gt 0 -and $IgnoreParserIsSet)
                 {
-                    $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
+                    $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s) and $WarningCount warning(s)"
                     Write-Host "::error::$FinalMessage"
+                    Write-Host "::error::Detailed error messages:"
+                    foreach ($errorMsg in $ErrorMessages) {
+                        Write-Host "::error::  - $errorMsg"
+                    }
+                    if ($WarningMessages.Count -gt 0) {
+                        Write-Host "::warning::Warning messages:"
+                        foreach ($warningMsg in $WarningMessages) {
+                            Write-Host "::warning::  - $warningMsg"
+                        }
+                    }
                     Write-Host "::warning::The parser '$name' is listed in the parser exclusions file. Therefore, this workflow run will not fail because of it. To allow this parser to cause the workflow to fail, please remove its name from the exclusions list file located at: '$ParserExclusionsFilePath'"
                 }
                 elseif ($Errorcount -gt 0) {
-                    $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
-                    Write-Host "::error:: $FinalMessage"
-                    throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
+                    $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s) and $WarningCount warning(s)"
+                    Write-Host "::error::$FinalMessage"
+                    Write-Host "::error::Detailed error messages:"
+                    foreach ($errorMsg in $ErrorMessages) {
+                        Write-Host "::error::  - $errorMsg"
+                    }
+                    if ($WarningMessages.Count -gt 0) {
+                        Write-Host "::warning::Warning messages:"
+                        foreach ($warningMsg in $WarningMessages) {
+                            Write-Host "::warning::  - $warningMsg"
+                        }
+                    }
+                    Write-Host "::error::Please review the above error details and fix the issues in your YAML parser file."
+                    throw "Test failed with $Errorcount error(s). See detailed error messages above." # Commented out to allow the script to continue running
                 } else {
-                    $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
-                    Write-Host "${green}$FinalMessage${reset}"
+                    $FinalMessage = "'$name' '$kind' - test completed successfully with no errors"
+                    if ($WarningCount -gt 0) {
+                        $FinalMessage += " and $WarningCount warning(s)"
+                        Write-Host "${yellow}$FinalMessage${reset}"
+                        Write-Host "::warning::Warning messages:"
+                        foreach ($warningMsg in $WarningMessages) {
+                            Write-Host "::warning::  - $warningMsg"
+                        }
+                    } else {
+                        Write-Host "${green}$FinalMessage${reset}"
+                    }
                 }
             } else {
                 Write-Host "::warning::$name $kind - test completed. No records found"
             }
         }
     } catch {
-        Write-Host "::error::  -- $_"
-        Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
-        throw $_ # Commented out to allow the script to continue running
+        $errorMessage = $_.Exception.Message
+        $errorDetails = $_.Exception.ToString()
+        
+        Write-Host "::error::An exception occurred while running the '$kind' test for parser '$name':"
+        Write-Host "::error::Error Message: $errorMessage"
+        
+        # Check if there's additional response content (common with Azure API errors)
+        $responseContent = ((Get-Error -Newest 1)?.Exception)?.Response?.Content
+        if ($responseContent) {
+            Write-Host "::error::Response Content: $responseContent"
+        }
+        
+        # Provide more context about the query that failed
+        Write-Host "::error::Failed Query:"
+        Write-Host "::error::$query"
+        
+        Write-Host "::error::Full Exception Details:"
+        Write-Host "::error::$errorDetails"
+        
+        throw "Test execution failed for '$name' '$kind' test. See detailed error information above." # Commented out to allow the script to continue running
     }
 }
 
