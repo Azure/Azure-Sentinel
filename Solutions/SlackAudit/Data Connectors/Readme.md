@@ -7,7 +7,7 @@
 
 ## Introduction
 
-The Slack Codeless Connector for Microsoft Sentinel enables seamless integration of Slack Audit logs with Microsoft Sentinel without the need for custom code. Developed as part of the Codeless Connector Platform(CCP), this connector simplifies the process of collecting and ingesting audit logs from Slack into Sentinel.
+The Slack Codeless Connector for Microsoft Sentinel enables seamless integration of Slack Audit logs with Microsoft Sentinel without the need for custom code. Developed as part of the Codeless Connector Framework(CCF), this connector simplifies the process of collecting and ingesting audit logs from Slack into Sentinel.
 
 <a name="step2">
 
