@@ -1,0 +1,57 @@
+﻿id: 0459a1b5-909d-4783-9e27-24536b05a47f
+name: Conditional Access - A new Conditional Access policy was created
+version: 1.0.0
+kind: Scheduled
+description: A new Conditional Access policy was created in Entra ID.
+severity: Informational
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+relevantTechniques:
+  - T1562.007
+query: |+
+  // A new Conditional Access policy was created.
+  AuditLogs
+  | where OperationName in ("Add conditional access policy")
+  | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+  | extend accountName = tostring(split(modifiedBy, "@")[0])
+  | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      policy = TargetResources[0].displayName,
+      modifiedBy,
+      accountName,
+      upnSuffix,
+      result = Result,
+      newPolicy = TargetResources[0].modifiedProperties[0].newValue
+  | order by TimeGenerated desc
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: accountName
+  - identifier: UPNSuffix
+    columnName: upnSuffix
+suppressionEnabled: false
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+
