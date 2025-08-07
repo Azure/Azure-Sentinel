@@ -1,5 +1,5 @@
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
+$global:workspaceId = "5b8e8aa3-8102-4c8c-aa5d-3ce5a96f0be6" #"cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
 
 # ANSI escape code for green text
 $green = "`e[32m"
@@ -109,7 +109,7 @@ function testParser([Parser] $parser) {
     Write-Host "***************************************************"
     Write-Host "${yellow}Running 'Data' tests for '$($parser.Name)' parser${reset}"
     # Test with only last 30 minutes of data.
-    $dataTest = "$parserAsletStatement`r`n$letStatementName | where TimeGenerated >= ago(30min) | invoke ASimDataTester('$($parser.Schema)')"
+    $dataTest = "$parserAsletStatement`r`n$letStatementName | where TimeGenerated >= ago(100h) | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
 }
