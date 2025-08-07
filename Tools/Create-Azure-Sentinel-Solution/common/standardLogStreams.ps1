@@ -1,8 +1,8 @@
 # Standard Tables in Microsoft Sentinel mapping for Scuba and Streams.
 $standardStreamMapping = @()
 
-  # key is the Data connector poller StreamName and value is the DCR file streamName
-  # Example: For GCP audit, data connector poller file, 'StreamName' should be 'SENTINEL_GCP_AUDIT_LOGS' and in dcr file 'stream' should be 'Microsoft-GCPAuditLogs' which is your standard table name. Here SENTINEL_GCP_AUDIT_LOGS is used for Scuba.
+# key is the Data connector poller StreamName and value is the DCR file streamName
+# Example: For GCP audit, data connector poller file, 'StreamName' should be 'SENTINEL_GCP_AUDIT_LOGS' and in dcr file 'stream' should be 'Microsoft-GCPAuditLogs' which is your standard table name. Here SENTINEL_GCP_AUDIT_LOGS is used for Scuba.
 
 $standardStreamMapping += @{ Key = 'SAP_ABAPAUDITLOG'; Value = 'Microsoft-ABAPAuditLog'}
 $standardStreamMapping += @{ Key = 'SECURITY_ALERT_DATA'; Value = 'Microsoft-SecurityAlert'}
@@ -92,21 +92,20 @@ $standardStreamMapping += @{ Key = 'USAGE_METERING'; Value = 'Microsoft-Usage'}
 $standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watchlist'}
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB'; Value = 'Microsoft-WindowsEvent'}
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Microsoft-WindowsEvent'}
-$standardStreamMapping += @{ Key = 'SENTINEL_AWSS3SERVERACCESS'; Value = 'Microsoft-AWSS3ServerAccess'}
 
 
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {
   param (
-      [string]$key
+    [string]$key
   )
 
   # Iterate through each hashtable in the array
   foreach ($pair in $standardStreamMapping) {
-      # Explicitly check if the 'Key' property matches the key you're looking for
-      if ($pair["Key"] -eq $key) {
-          return $pair["Value"]  # Key found
-      }
+    # Explicitly check if the 'Key' property matches the key you're looking for
+    if ($pair["Key"] -eq $key) {
+      return $pair["Value"]  # Key found
+    }
   }
 
   return $null  # Key not found

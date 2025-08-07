@@ -16,10 +16,10 @@ For ingesting data into Microsoft Sentinel , We need few of the resources create
 
    ![image](https://github.com/user-attachments/assets/1666158e-8295-4c2f-a8c7-16ede37b8fb1)
    
-4. Open the Terraform script [GCPVPCFlowLogSetup](https://github.com/manishkumar1991/MonitorYourInfraHealth/blob/main/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPVPCFlowLogsSetup/GCPVPCFlowLogSetup.tf) and copy its contents
+4. Open the Terraform script [GCPVPCFlowLogSetup](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPVPCFlowLogsSetup/GCPVPCFlowLogSetup.tf) and copy its contents
 5. Create a directory in your Cloud Shell environment, enter it, and create a new blank file.
-   mkdir {directory-name} && cd {directory-name} && touch initauth.tf
-6. Open initauth.tf in the Cloud Shell editor and paste the contents of the script file into it.
+   mkdir {directory-name} && cd {directory-name} && touch GCPVPCFlowLogSetup.tf
+6. Open GCPVPCFlowLogSetup.tf in the Cloud Shell editor and paste the contents of the script file into it.
 7. Once you pasted the content of terraform script , do remember to change the project id inside terrform script at line number 13 and then save it
    
    ![image](https://github.com/user-attachments/assets/e77ec777-ebad-4d6e-ba20-600a264c8967)

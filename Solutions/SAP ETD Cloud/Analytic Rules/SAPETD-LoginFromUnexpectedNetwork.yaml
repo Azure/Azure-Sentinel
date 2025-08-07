@@ -13,34 +13,35 @@ requiredDataConnectors:
   - connectorId: SAPETDAlerts
     dataTypes:
       - SAPETDAlerts_CL
-queryFrequency: 1h
-queryPeriod: 2d
+queryFrequency: 5m
+queryPeriod: 30m
 triggerOperator: gt
 triggerThreshold: 0
-tactics: []
+tactics: 
+  - Discovery
 relevantTechniques: []
 query: |
-  let regex_ip = @"user_ip:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})";
-  let regex_user = @"user_name:(\w+)";
-  let regex_sid = @"sid:(\w{3})";
-  let regex_client = @"client:(\d{3})";
-  let regex_instance_name = @"instance_name:(\w+)";
-  let regex_instance_host = @"instance_host:([\w-]+)";
+  let AuditTimeAgo = 60m;
+  let regex_sid = @"^([A-Z0-9]{3})/"; 
+  let regex_client = @"/(\d{3})$";
   let SAPNetworks = _GetWatchlist('SAP - Networks');
   SAPETDAlerts_CL
-  | mv-expand TriggeringEvents
-  | extend sapOriginalEvent = tostring(TriggeringEvents.OriginalEvent)
-  | extend Id_ = TriggeringEvents.Id
-  | extend extracted_user_ip = extract(regex_ip, 1, sapOriginalEvent)
-  | extend extracted_sap_user = extract(regex_user, 1, sapOriginalEvent)
-  | extend extracted_sid = extract(regex_sid, 1, sapOriginalEvent)
-  | extend extracted_client = extract(regex_client, 1, sapOriginalEvent)
-  | extend extracted_instance_name = extract(regex_instance_name, 1, sapOriginalEvent)
-  | extend extracted_instance_host = extract(regex_instance_host, 1, sapOriginalEvent)
+  | where TimeGenerated > ago(AuditTimeAgo)
+  | where PatternName in ("Logon from external with SAP standard users","Access via unallowed IP Address")
+  | mv-expand NormalizedTriggeringEvents
+  | extend sapOriginalEvent = tostring(NormalizedTriggeringEvents)
+  | extend Id_ = NormalizedTriggeringEvents.Id
+  | extend extracted_user_ip = tostring(NormalizedTriggeringEvents.NetworkIPAddressInitiator)
+  | where isnotempty(extracted_user_ip)
+  | extend extracted_sap_user = NormalizedTriggeringEvents.UserAccountTargeted
+  | extend extracted_sid = extract(regex_sid, 1, tostring(NormalizedTriggeringEvents.SystemIdActor))
+  | extend extracted_client = extract(regex_client, 1, tostring(NormalizedTriggeringEvents.SystemIdActor))
+  | extend extracted_instance_name = NormalizedTriggeringEvents.NetworkHostnameActor
+  | extend extracted_instance_host = NormalizedTriggeringEvents.NetworkHostnameInitiator
   | evaluate ipv4_lookup(SAPNetworks, extracted_user_ip, Network, return_unmatched = true)
   | where isempty(Network)
-  | project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status
-  | extend GeoLocation= iff(ipv4_is_private( extracted_user_ip), dynamic({"IsPrivate": true}), geo_info_from_ip_address(extracted_user_ip))
+  | project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status, NormalizedTriggeringEvents
+  | extend GeoLocation= iff(ipv4_is_private(extracted_user_ip), dynamic({"IsPrivate": true}), geo_info_from_ip_address(extracted_user_ip))
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 entityMappings:
@@ -65,4 +66,4 @@ alertDetailsOverride:
 customDetails:
   SAP_User: extracted_sap_user
   ETD_AlertNumber: AlertId
-version: 1.0.1
+version: 1.0.3
