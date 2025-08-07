@@ -1,0 +1,524 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Guardicore Centra Security Overview\n---\n\nThis workbook provides comprehensive visibility into your Guardicore Centra security environment, allowing you to monitor agent health, security policies, network connectivity, and security incidents. Use the various sections below to analyze your security posture and identify potential issues."
+      },
+      "name": "introduction"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "🌐 Network Activity Insights",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "Analyze your network traffic patterns, identify your most active systems, and discover public-facing assets that might need additional security attention."
+            },
+            "name": "network-section-description"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let timeWindow = 24h;\nlet sourceConnections = GuardicoreConnections_CL \n| where TimeGenerated >= ago(timeWindow)\n| distinct source_node_id_g, destination_node_id_g, id_g, count_d, TimeGenerated\n| summarize SourceConnections = tolong(sum(count_d)) by source_node_id_g\n| project AssetId = tostring(source_node_id_g), SourceConnections;\nlet destConnections = GuardicoreConnections_CL \n| where TimeGenerated >= ago(timeWindow)\n| distinct source_node_id_g, destination_node_id_g, id_g, count_d, TimeGenerated\n| summarize DestinationConnections = tolong(sum(count_d)) by destination_node_id_g\n| project AssetId = tostring(destination_node_id_g), DestinationConnections;\n// Get asset data directly with simpler approach\nlet assetData = GuardicoreAssets_CL\n| where TimeGenerated >= ago(timeWindow)\n| summarize arg_max(TimeGenerated, *) by id_g\n| project AssetId = tostring(id_g), AssetName = name_s, IPAddresses = ip_addresses_s, Status = status_s;\nsourceConnections\n| join kind=fullouter (destConnections) on AssetId\n| extend \n    SourceConnections = iif(isnull(SourceConnections), 0, SourceConnections),\n    DestinationConnections = iif(isnull(DestinationConnections), 0, DestinationConnections),\n    TotalConnections = SourceConnections + DestinationConnections\n| where isnotempty(AssetId) and AssetId != \"\"\n| top 10 by TotalConnections desc\n| join kind=leftouter (assetData) on AssetId\n| project AssetName, Status, SourceConnections, DestinationConnections, TotalConnections, AssetId\n| order by TotalConnections desc",
+              "size": 0,
+              "title": "Highest Traffic Assets - Daily Report",
+              "noDataMessage": "No connection data found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "SourceConnections",
+                    "formatter": 8,
+                    "formatOptions": {
+                      "min": 0,
+                      "palette": "blue"
+                    }
+                  },
+                  {
+                    "columnMatch": "DestinationConnections",
+                    "formatter": 8,
+                    "formatOptions": {
+                      "min": 0,
+                      "palette": "greenBlue"
+                    }
+                  },
+                  {
+                    "columnMatch": "TotalConnections",
+                    "formatter": 8,
+                    "formatOptions": {
+                      "min": 0,
+                      "palette": "purple"
+                    },
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": true
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "AssetId",
+                    "formatter": 5
+                  }
+                ]
+              },
+              "tileSettings": {
+                "showBorder": false
+              }
+            },
+            "customWidth": "50",
+            "name": "top-talkers-table",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let internetAssets = GuardicoreConnections_CL | where TimeGenerated >= ago(24h) | where source_node_type_s == \"internet\" | where destination_node_type_s == \"asset\" | distinct destination_node_id_g; let recentLabelData = GuardicoreLabels_CL | where TimeGenerated >= ago(24h); let max_ts = toscalar( recentLabelData | summarize max(sampling_timestamp_d) ); let latest_label_data = recentLabelData | where sampling_timestamp_d == max_ts;\n\nlatest_label_data | mv-expand static_asset = parse_json(static_assets_s) | extend static_asset_id = tostring(static_asset.id) | where static_asset_id in (internetAssets) | project TimeGenerated, LabelId = id_g, LabelName = name_s, LabelKey = key_s, LabelValue = value_s, AssetId = static_asset_id, AssetName = tostring(static_asset.name) | union ( GuardicoreLabels_CL | where TimeGenerated >= ago(24h) | mv-expand dynamic_asset = parse_json(dynamic_assets_s) | extend dynamic_asset_id = tostring(dynamic_asset.id) | where dynamic_asset_id in (internetAssets) | project TimeGenerated, LabelId = id_g, LabelName = name_s, LabelKey = key_s, LabelValue = value_s, AssetId = dynamic_asset_id, AssetName = tostring(dynamic_asset.name) ) | summarize arg_max(TimeGenerated, *) by LabelId, AssetId | project LabelId, LabelKey, LabelValue, AssetId, AssetName",
+              "size": 0,
+              "title": "Internet-Facing Assets (Grouped by Labels)",
+              "noDataMessage": "No internet-facing assets found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "LabelId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "AssetId",
+                    "formatter": 5
+                  }
+                ],
+                "hierarchySettings": {
+                  "treeType": 1,
+                  "groupBy": [
+                    "LabelKey",
+                    "LabelValue"
+                  ],
+                  "expandTopLevel": true
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "internet-facing-assets",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          }
+        ]
+      },
+      "name": "network-activity-section"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "📊 Agent Health Monitor",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "This section provides visibility into the health status of your Guardicore agents. Track missing agents and monitor trends over time to ensure complete coverage of your environment."
+            },
+            "name": "agent-section-description"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "16e7897b-dcc1-4647-b6d2-f1b92f3a1e74",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "time_quantity",
+                  "type": 1,
+                  "isRequired": true,
+                  "typeSettings": {
+                    "paramValidationRules": [
+                      {
+                        "regExp": "[0-9]+",
+                        "match": true,
+                        "message": "Must be a number"
+                      }
+                    ]
+                  },
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "value": "1",
+                  "label": "Agent Inactive Period"
+                },
+                {
+                  "id": "5d915662-3c3d-425c-b325-967b8512ddad",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "time_unit",
+                  "label": "Inactive Period Unit",
+                  "type": 2,
+                  "isRequired": true,
+                  "typeSettings": {
+                    "additionalResourceOptions": [],
+                    "showDefault": false
+                  },
+                  "jsonData": "[\"Minutes\", \"Hours\", \"Days\"]",
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "value": "Minutes"
+                }
+              ],
+              "style": "above",
+              "queryType": 8
+            },
+            "name": "agent-time-parameters"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let time_amount = case(\n        '{time_unit}' == 'Minutes', timespan('{time_quantity}m'),\n        '{time_unit}' == 'Hours', timespan('{time_quantity}h'),\n        '{time_unit}' == 'Days', timespan('{time_quantity}d'),\n        timespan('24h')\n);\nlet recentData = GuardicoreAgents_CL\n| where TimeGenerated >= ago(7d);\n\nlet max_ts = toscalar(\n    recentData\n    | summarize max(sampling_timestamp_d)\n);\nrecentData\n| where sampling_timestamp_d == max_ts\n| where unixtime_milliseconds_todatetime(last_seen_d) < ago(time_amount)\n| project \n    AgentName = display_name_s, \n    AgentID=asset_id_g, \n    LastSeen = unixtime_milliseconds_todatetime(last_seen_d)",
+              "size": 0,
+              "title": "Missing Agents",
+              "noDataMessage": "No missing agents found - all agents are reporting as expected",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "LastSeen",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": false,
+                      "formatName": "fullDateTimePattern"
+                    }
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "missing-agents-table",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let time_amount = case(\n        '{time_unit}' == 'Minutes', timespan('{time_quantity}m'),\n        '{time_unit}' == 'Hours', timespan('{time_quantity}h'),\n        '{time_unit}' == 'Days', timespan('{time_quantity}d'),\n        timespan('24h')\n);\n\nlet startDate = endofday(ago(7d));\nlet endDate = endofday(now());\nlet all_days = range day from startDate to endDate step 1d;\n\nlet rawData = GuardicoreAgents_CL\n| where TimeGenerated >= startDate\n| extend sampling_ts = unixtime_seconds_todatetime(sampling_timestamp_d)\n| extend day = endofday(sampling_ts);\n\nlet daily_max_ts = rawData\n| summarize max_ts = max(sampling_ts) by day;\n\nlet daily_missing_counts = rawData\n| join kind=inner (\n    daily_max_ts\n) on day, $left.sampling_ts == $right.max_ts\n| where unixtime_milliseconds_todatetime(last_seen_d) < (day - time_amount)\n| summarize missing_agents = count() by day;\n\nall_days\n| join kind=leftouter (daily_missing_counts) on day\n| extend missing_agents = coalesce(missing_agents, 0)\n| sort by day asc\n| where day > startDate and day != endDate\n| project day = format_datetime(day, 'yyyy-MM-dd'), missing_agents",
+              "size": 0,
+              "title": "📉 Missing Agent Trend",
+              "noDataMessage": "No data available for the specified time range",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "MissingCount",
+                    "label": "Missing Agents",
+                    "color": "#E81123"
+                  }
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true,
+                      "minimumFractionDigits": 0,
+                      "maximumFractionDigits": 0
+                    }
+                  },
+                  "min": 0
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "missing-agents-trend",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          }
+        ]
+      },
+      "name": "agent-health-section"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "🔒 Security Policy Analysis",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "Monitor your security policy configuration and enforcement. This section shows active policy rules and their distribution by action type."
+            },
+            "name": "policy-section-description"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let startDate = endofday(ago(7d));\nlet endDate = endofday(now());\nlet all_days = range day from startDate to endDate step 1d;\n\nlet rawData = GuardicorePolicyRules_CL\n| where TimeGenerated >= startDate\n| extend sampling_ts = unixtime_seconds_todatetime(sampling_timestamp_d)\n| extend day = endofday(sampling_ts);\n\nlet daily_max_ts = rawData\n| summarize max_ts = max(sampling_ts) by day;\n\nlet daily_counts = rawData\n| join kind=inner (\n    daily_max_ts\n) on day, $left.sampling_ts == $right.max_ts\n| summarize value = count() by day;\n\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend value = coalesce(value, 0)\n| sort by day asc\n| where day > startDate and day != endDate\n| project day = format_datetime(day, 'yyyy-MM-dd'), value",
+              "size": 1,
+              "title": "📋 Active Security Rules",
+              "noDataMessage": "No policy rules found in the specified time range",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "ActiveRules",
+                    "label": "Active Rules",
+                    "color": "#0078D4"
+                  }
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  },
+                  "min": 0
+                }
+              }
+            },
+            "customWidth": "60",
+            "name": "active-rules-trend",
+            "styleSettings": {
+              "maxWidth": "60%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let recentData = GuardicorePolicyRules_CL\n| where TimeGenerated >= ago(24h);\n\nlet max_ts = toscalar(\n    recentData\n    | summarize max(sampling_timestamp_d)\n);\n\nrecentData\n| where sampling_timestamp_d == max_ts\n| summarize count = count() by action_s\n| extend actionFormatted = replace(\"_\", \" \", tolower(action_s))\n| extend actionFormatted = strcat(toupper(substring(actionFormatted, 0, 1)), substring(actionFormatted, 1))\n| project Action = actionFormatted, Count = count\n| order by Count desc",
+              "size": 0,
+              "title": "🔍 Rules by Action Type",
+              "noDataMessage": "No policy rules found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Allow",
+                    "color": "#4CAF50"
+                  },
+                  {
+                    "seriesName": "Block",
+                    "color": "#E81123"
+                  },
+                  {
+                    "seriesName": "Alert",
+                    "color": "#FF8C00"
+                  }
+                ]
+              }
+            },
+            "customWidth": "40",
+            "name": "rule-action-distribution",
+            "styleSettings": {
+              "maxWidth": "40%"
+            }
+          }
+        ]
+      },
+      "name": "security-policy-section"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Security Incident Analysis",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "Analyze security incidents and connection patterns to identify potential threats and policy violations in your environment."
+            },
+            "name": "incidents-section-description"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "GuardicoreConnections_CL\n| where unixtime_milliseconds_todatetime(slot_start_time_d) >= ago(24h)\n| summarize arg_max(TimeGenerated, *) by id_g\n| extend verdict = replace(\"_\", \" \", policy_verdict_s)\n| summarize total_count = sum(count_d) by verdict",
+              "size": 0,
+              "title": "Connection Policy Verdicts (Last 24 Hours)",
+              "noDataMessage": "No connection data found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "allow",
+                    "label": "Allow",
+                    "color": "#4CAF50"
+                  },
+                  {
+                    "seriesName": "block",
+                    "label": "Block",
+                    "color": "#E81123"
+                  },
+                  {
+                    "seriesName": "alert",
+                    "label": "Alert",
+                    "color": "#FF8C00"
+                  }
+                ]
+              }
+            },
+            "customWidth": "33",
+            "name": "connection-verdicts-chart",
+            "styleSettings": {
+              "maxWidth": "33%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "GuardicoreIncidents_CL \n| where unixtime_milliseconds_todatetime(time_d) >= ago(24h) \n| summarize arg_max(TimeGenerated, *) by id_g\n| extend type = replace(\"_\", \" \", type_s)\n| extend type = tostring(iff(type == \"\", \"other\", type))\n| summarize count() by type",
+              "size": 0,
+              "title": "Incident Types (Last 24 Hours)",
+              "noDataMessage": "No incidents found in the specified time range",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "deception",
+                    "color": "#8E24AA"
+                  },
+                  {
+                    "seriesName": "port scan",
+                    "color": "#FF8F00"
+                  },
+                  {
+                    "seriesName": "ransomware",
+                    "color": "#E81123"
+                  },
+                  {
+                    "seriesName": "lateral movement",
+                    "color": "#0078D4"
+                  }
+                ]
+              }
+            },
+            "customWidth": "33",
+            "name": "incident-types-chart",
+            "styleSettings": {
+              "maxWidth": "33%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "GuardicoreIncidents_CL \n| where unixtime_milliseconds_todatetime(time_d) >= ago(24h) \n| summarize arg_max(TimeGenerated, *) by id_g\n| extend severity = replace(\"_\", \" \", severity_s)\n| extend severity = tostring(iff(severity == \"\", \"unknown\", severity))\n| summarize count() by severity\n| order by severity asc",
+              "size": 0,
+              "title": "Incidents by Severity (Last 24 Hours)",
+              "noDataMessage": "No incidents found in the specified time range",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "critical",
+                    "color": "#E81123"
+                  },
+                  {
+                    "seriesName": "high",
+                    "color": "#FF8C00"
+                  },
+                  {
+                    "seriesName": "medium",
+                    "color": "#FFD700"
+                  },
+                  {
+                    "seriesName": "low",
+                    "color": "#4CAF50"
+                  }
+                ]
+              }
+            },
+            "customWidth": "33",
+            "name": "incident-severity-chart",
+            "styleSettings": {
+              "maxWidth": "33%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "GuardicoreConnections_CL \n| where unixtime_milliseconds_todatetime(slot_start_time_d) >= ago(24h) \n| summarize arg_max(TimeGenerated, *) by id_g\n| where destination_port_d > 0\n| summarize total_count = sum(count_d) by tostring(toint(destination_port_d))\n| top 10 by total_count desc\n| extend Port = strcat(destination_port_d, \" \", case(\n  destination_port_d == 80, \"(HTTP)\",\n  destination_port_d == 443, \"(HTTPS)\",\n  destination_port_d == 22, \"(SSH)\",\n  destination_port_d == 3389, \"(RDP)\",\n  destination_port_d == 21, \"(FTP)\",\n  destination_port_d == 25, \"(SMTP)\",\n  destination_port_d == 53, \"(DNS)\",\n  destination_port_d == 445, \"(SMB)\",\n  destination_port_d == 3306, \"(MySQL)\",\n  destination_port_d == 1433, \"(MSSQL)\",\n  \"\"))\n| project Port, Count = total_count",
+              "size": 0,
+              "title": "Top Destination Ports (Last 24 Hours)",
+              "noDataMessage": "No connection data found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "Port",
+                "yAxis": [
+                  "Count"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Count",
+                    "color": "#0078D4"
+                  }
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  }
+                }
+              }
+            },
+            "name": "top-ports-chart"
+          }
+        ]
+      },
+      "name": "security-incidents-section"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/195e58c9-a052-4f34-aff2-d67c13145f29/resourcegroups/strategicalliances-rg/providers/microsoft.operationalinsights/workspaces/sentinel-integration"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
