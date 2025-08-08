@@ -32,13 +32,13 @@ To ingest data into Microsoft Sentinel, we need to create and configure few reso
    - Role ARN
    - SQS Queue URL
 
-5. In Microsoft Sentinel, navigate to the Data Connectors page and find the AWS Security Hub Findings connector.
+5. In Microsoft Sentinel, navigate to the Data Connectors page and find the AWS S3 Server Access Logs connector.
 
 6. Click on "Add new collector" and fill in the required information:
    - Role ARN: Enter the Role ARN obtained from the CloudFormation stack.
    - Queue URL: Enter the SQS Queue URL obtained from the CloudFormation stack.
 
-7. Click "Connect" to enable the AWS Security Hub Findings connector.
+7. Click "Connect" to enable the AWS S3 Server Access Logs connector.
 
 ### Additional Information
 
