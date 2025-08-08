@@ -49,26 +49,24 @@ query: |
   | summarize make_list(domain);
   let Domain_Indicators = materialize(ThreatIntelIndicators
   | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
-  | where isnotempty(IndicatorType) and IndicatorType == "domain-name"
+  | where IndicatorType == "domain-name"
   | extend DomainName = tolower(ObservableValue)
-  | where isnotempty(DomainName)
   | where TimeGenerated >= ago(ioc_lookBack)
-  | extend TI_DomainEntity = tolower(DomainName)
-  | where TI_DomainEntity in (AlertDomains)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
-  | where IsActive == true and ValidUntil > now()
+  | where DomainName in (AlertDomains)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
   | extend Description = tostring(parse_json(Data).description)
   | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;");
   Domain_Indicators
   // Using innerunique to keep performance fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (SecurityAlerts) on $left.TI_DomainEntity == $right.domain
+  | join kind=innerunique (SecurityAlerts) on $left.DomainName == $right.domain
   | where Alert_TimeGenerated < ValidUntil
   | summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by Id, AlertName
   | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
   | extend Url = DomainName
-  | project Alert_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type, TI_DomainEntity
+  | project Alert_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type
   | extend timestamp = Alert_TimeGenerated
-  | project-reorder *, ConfidenceScore, DomainName, AlertName, Alert_TimeGenerated, ProviderName, AlertSeverity, Entities, Type, TI_DomainEntity, timestamp
+  | project-reorder *, ConfidenceScore, DomainName, AlertName, Alert_TimeGenerated, ProviderName, AlertSeverity, Entities, Type, timestamp
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -82,5 +80,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.4.3
+version: 1.4.4
 kind: Scheduled

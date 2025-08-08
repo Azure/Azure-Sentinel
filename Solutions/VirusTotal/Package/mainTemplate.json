@@ -33,7 +33,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "VirusTotal",
-    "_solutionVersion": "3.0.0",
+    "_solutionVersion": "3.0.1",
     "solutionId": "azuresentinel.azure-sentinel-solution-virustotal",
     "_solutionId": "[variables('solutionId')]",
     "Get-VirusTotalDomainReport-alert-trigger": "Get-VirusTotalDomainReport-alert-trigger",
@@ -45,6 +45,7 @@
     "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
+    "blanks": "[replace('b', 'b', '')]",
     "Get-VirusTotalDomainReport-incident-trigger": "Get-VirusTotalDomainReport-incident-trigger",
     "_Get-VirusTotalDomainReport-incident-trigger": "[variables('Get-VirusTotalDomainReport-incident-trigger')]",
     "playbookVersion2": "1.0",
@@ -121,7 +122,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalDomainReport-AlertTriggered Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalDomainReport-AlertTriggered Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -132,9 +133,9 @@
             }
           },
           "variables": {
-            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
-            "VirusTotalConnectionName": "[[concat('virustotal-',parameters('PlaybookName'))]",
+            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+            "AzureSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "VirusTotalConnectionName": "[[concat('VirusTotal-',parameters('PlaybookName'))]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/virustotal')]",
@@ -274,7 +275,7 @@
                               "inputs": {
                                 "body": {
                                   "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                  "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely harmless<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                  "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']} which indicates likely harmless domain.<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                 },
                                 "host": {
                                   "connection": {
@@ -320,7 +321,7 @@
                                 "inputs": {
                                   "body": {
                                     "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely malicous<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']} which indicates likely malicious domain.<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                   },
                                   "host": {
                                     "connection": {
@@ -371,7 +372,7 @@
                               }
                             },
                             "method": "get",
-                            "path": "/api/v3/domains/@{encodeURIComponent(split(items('For_each')?['Url'], '/')[2])}"
+                            "path": "/api/v3/domains/@{encodeURIComponent(if(greater(length(split(items('For_each')?['Url'], '/')), 2), split(items('For_each')?['Url'], '/')[2], items('For_each')?['Url']))}"
                           }
                         }
                       },
@@ -441,31 +442,31 @@
           ],
           "metadata": {
             "comments": "This playbook will take each URL entity and query VirusTotal for domain info (https://developers.virustotal.com/v3.0/reference#domain-info).",
-            "title": "URL Enrichment - Virus Total domain report - Alert Triggered",
+            "title": "URL Enrichment - Virus Total Domain Report - Alert Triggered",
             "description": "This playbook will take each URL entity and query VirusTotal for Domain info (https://developers.virustotal.com/v3.0/reference#domain-info).",
             "prerequisites": [
-              "Register on VirusTotal portal and get an API key."
+              "VirusTotal API key, Register to VirusTotal community. [Register here](https://www.virustotal.com/gui/join-us)"
             ],
             "postDeployment": [
               "1. Authorize/Configure all the connections.",
-              "2. Assign Microsoft Sentinel Responder Role to playbook."
+              "2. Assign Microsoft Sentinel Responder Role to playbook.",
+              "3. After deployment, attach this playbook to an **automation rule** and map URL entity so it runs when the incident is created.",
+              "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalDomainReport/readme.md)"
             ],
-            "lastUpdateTime": "2023-02-03T00:00:00Z",
+            "lastUpdateTime": "2025-05-28T00:00:00Z",
             "entities": [
               "URL"
             ],
             "tags": [
               "Enrichment"
             ],
-            "releaseNotes": [
-              {
-                "version": "1.0.1",
-                "title": "URL Enrichment - Virus Total domain report",
-                "notes": [
-                  "Initial version"
-                ]
-              }
-            ]
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -490,7 +491,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalDomainReport-IncidentTriggered Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalDomainReport-IncidentTriggered Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -501,9 +502,9 @@
             }
           },
           "variables": {
-            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
-            "VirusTotalConnectionName": "[[concat('virustotal-',parameters('PlaybookName'))]",
+            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+            "AzureSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "VirusTotalConnectionName": "[[concat('VirusTotal-',parameters('PlaybookName'))]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/virustotal')]",
@@ -597,7 +598,7 @@
                               "inputs": {
                                 "body": {
                                   "incidentArmId": "@triggerBody()?['object']?['id']",
-                                  "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely harmless<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                  "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']} which indicates likely harmless domain.<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                 },
                                 "host": {
                                   "connection": {
@@ -638,7 +639,7 @@
                                 "inputs": {
                                   "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely malicous<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']} which indicates likely malicious domain.<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                   },
                                   "host": {
                                     "connection": {
@@ -699,7 +700,7 @@
                               }
                             },
                             "method": "get",
-                            "path": "/api/v3/domains/@{encodeURIComponent(split(items('For_each')?['Url'], '/')[2])}"
+                            "path": "/api/v3/domains/@{encodeURIComponent(if(greater(length(split(items('For_each')?['Url'], '/')), 2), split(items('For_each')?['Url'], '/')[2], items('For_each')?['Url']))}"
                           },
                           "type": "ApiConnection"
                         }
@@ -741,7 +742,7 @@
                     "value": {
                       "azureloganalyticsdatacollector": {
                         "connectionId": "[[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
-                        "connectionName": "[[variables('AzureSentinelConnectionName')]",
+                        "connectionName": "[[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
                         "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]"
                       },
                       "azuresentinel": {
@@ -792,30 +793,31 @@
             }
           ],
           "metadata": {
-            "title": "URL Enrichment - Virus Total domain report  - Incident Triggered",
+            "title": "URL Enrichment - Virus Total Domain Report - Incident Triggered",
             "description": "This playbook will take each URL entity and query VirusTotal for Domain Report (https://developers.virustotal.com/v3.0/reference#domain-info). It will write the results to Log Analytics and add a comment to the incident.",
             "prerequisites": [
-              "Register to Virus Total community for an API key."
+              "VirusTotal API key, Register to VirusTotal community. [Register here](https://www.virustotal.com/gui/join-us)"
             ],
             "postDeployment": [
-              "After deployment, attach this playbook to an **automation rule** so it runs when the incident is created."
+              "1. Authorize/Configure all the connections.",
+              "2. Assign Microsoft Sentinel Responder Role to playbook.",
+              "3. After deployment, attach this playbook to an **automation rule** and map URL entity so it runs when the incident is created.",
+              "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalDomainReport/readme.md)"
             ],
-            "lastUpdateTime": "2022-07-20T00:00:00Z",
+            "lastUpdateTime": "2025-05-28T00:00:00Z",
             "entities": [
               "URL"
             ],
             "tags": [
               "Enrichment"
             ],
-            "releaseNotes": [
-              {
-                "version": "1.0.0",
-                "title": "URL Enrichment - Virus Total domain report",
-                "notes": [
-                  "Initial version"
-                ]
-              }
-            ]
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -840,7 +842,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalFileInfo-AlertTriggered Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalFileInfo-AlertTriggered Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -851,9 +853,9 @@
             }
           },
           "variables": {
-            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
-            "VirusTotalConnectionName": "[[concat('virustotal-', parameters('PlaybookName'))]",
+            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+            "AzureSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "VirusTotalConnectionName": "[[concat('VirusTotal-', parameters('PlaybookName'))]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/virustotal')]",
@@ -1039,7 +1041,7 @@
                                 "inputs": {
                                   "body": {
                                     "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
+                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely malicious.<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
                                   },
                                   "host": {
                                     "connection": {
@@ -1159,14 +1161,15 @@
             }
           ],
           "metadata": {
-            "title": "FileHash Enrichment - Virus Total report - Alert Triggered",
+            "title": "FileHash Enrichment - Virus Total Report - Alert Triggered",
             "description": "This playbook will take each File Hash entity and query VirusTotal for file report (https://developers.virustotal.com/v3.0/reference#file-info).",
             "prerequisites": [
-              "Register on VirusTotal portal and get an API key."
+              "Register on VirusTotal portal and get an API key. [Register here](https://www.virustotal.com/gui/join-us)"
             ],
             "postDeployment": [
               "1. Authorize/Configure all the connections.",
-              "2. Assign Microsoft Sentinel Responder Role to playbook."
+              "2. Assign Microsoft Sentinel Responder Role to playbook.",
+              "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalFileInfo/readme.md)"
             ],
             "lastUpdateTime": "2023-02-03T00:00:00Z",
             "entities": [
@@ -1176,15 +1179,13 @@
               "Enrichment"
             ],
             "comments": "This playbook will take each File Hash entity and query VirusTotal for file report (https://developers.virustotal.com/v3.0/reference#file-info).",
-            "releaseNotes": [
-              {
-                "version": "1.0.1",
-                "title": "FileHash Enrichment - Virus Total report",
-                "notes": [
-                  "Initial version"
-                ]
-              }
-            ]
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -1209,7 +1210,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalFileInfo-IncidentTriggered Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalFileInfo-IncidentTriggered Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion4')]",
@@ -1220,9 +1221,9 @@
             }
           },
           "variables": {
-            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
-            "VirusTotalConnectionName": "[[concat('virustotal-', parameters('PlaybookName'))]",
+            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+            "AzureSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "VirusTotalConnectionName": "[[concat('VirusTotal-', parameters('PlaybookName'))]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/virustotal')]",
@@ -1316,7 +1317,7 @@
                               "inputs": {
                                 "body": {
                                   "incidentArmId": "@triggerBody()?['object']?['id']",
-                                  "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely harmless<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
+                                  "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely harmless.<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
                                 },
                                 "host": {
                                   "connection": {
@@ -1357,7 +1358,7 @@
                                 "inputs": {
                                   "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
+                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely malicious.<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
                                   },
                                   "host": {
                                     "connection": {
@@ -1511,30 +1512,31 @@
             }
           ],
           "metadata": {
-            "title": "FileHash Enrichment - Virus Total report - Incident Triggered",
+            "title": "FileHash Enrichment - Virus Total Report - Incident Triggered",
             "description": "This playbook will take each File Hash entity and query VirusTotal for file report (https://developers.virustotal.com/v3.0/reference#file-info).",
             "prerequisites": [
-              "- You will need to register to Virus Total community for an API key"
+              "Register on VirusTotal portal and get an API key. [Register here](https://www.virustotal.com/gui/join-us)"
             ],
             "postDeployment": [
-              "After deployment, attach this playbook to an **automation rule** so it runs when the incident is created."
+              "1. Authorize/Configure all the connections.",
+              "2. Assign Microsoft Sentinel Responder Role to playbook.",
+              "3. After deployment, attach this playbook to an **automation rule** and map FileHash entity so it runs when the incident is created.",
+              "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalFileInfo/readme.md)"
             ],
-            "lastUpdateTime": "2022-07-20T00:00:00Z",
+            "lastUpdateTime": "2025-05-29T00:00:00Z",
             "entities": [
               "FileHash"
             ],
             "tags": [
               "Enrichment"
             ],
-            "releaseNotes": [
-              {
-                "version": "1.0.0",
-                "title": "FileHash Enrichment - Virus Total report",
-                "notes": [
-                  "Initial version"
-                ]
-              }
-            ]
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -1559,7 +1561,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalIPReport-AlertTriggered Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalIPReport-AlertTriggered Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion5')]",
@@ -1570,9 +1572,9 @@
             }
           },
           "variables": {
-            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
-            "VirusTotalConnectionName": "[[concat('virustotal-', parameters('PlaybookName'))]",
+            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+            "AzureSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "VirusTotalConnectionName": "[[concat('VirusTotal-', parameters('PlaybookName'))]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
@@ -1758,7 +1760,7 @@
                                 "inputs": {
                                   "body": {
                                     "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                    "message": "<p>Virus Total IP Report found for @{items('For_each')?['Address']}<br>\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"</p>"
+                                    "message": "<p>Virus Total IP Report found for @{items('For_each')?['Address']}<br>\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely malicious.<br>\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"</p>"
                                   },
                                   "host": {
                                     "connection": {
@@ -1878,16 +1880,17 @@
             }
           ],
           "metadata": {
-            "title": "IP Enrichment - Virus Total report - Alert Triggered",
+            "title": "IP Enrichment - Virus Total Report - Alert Triggered",
             "description": "This playbook will take each IP entity and query VirusTotal for IP Address Report (https://developers.virustotal.com/v3.0/reference#ip-info). It will write the results to Log Analytics and add a comment to the incident.",
             "prerequisites": [
-              "Register on VirusTotal portal and get an API key."
+              "Register on VirusTotal portal and get an API key. [Register here](https://www.virustotal.com/gui/join-us)"
             ],
             "postDeployment": [
               "1. Authorize/Configure all the connections.",
-              "2. Assign Microsoft Sentinel Responder Role to playbook."
+              "2. Assign Microsoft Sentinel Responder Role to playbook.",
+              "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalIPReport/readme.md)"
             ],
-            "lastUpdateTime": "2023-02-03T00:00:00Z",
+            "lastUpdateTime": "2025-05-29T00:00:00Z",
             "entities": [
               "IP"
             ],
@@ -1895,15 +1898,13 @@
               "Enrichment"
             ],
             "comments": "This playbook will take each IP entity and query VirusTotal for IP Address Report (https://developers.virustotal.com/v3.0/reference#ip-info). It will write the results to Log Analytics and add a comment to the incident. You will need to register to their community for an API key.",
-            "releaseNotes": [
-              {
-                "version": "1.0.1",
-                "title": "IP Enrichment - Virus Total report",
-                "notes": [
-                  "Initial version"
-                ]
-              }
-            ]
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -1928,7 +1929,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalIPReport-IncidentTriggered Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalIPReport-IncidentTriggered Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion6')]",
@@ -1939,9 +1940,9 @@
             }
           },
           "variables": {
-            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
-            "VirusTotalConnectionName": "[[concat('virustotal-', parameters('PlaybookName'))]",
+            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+            "AzureSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "VirusTotalConnectionName": "[[concat('VirusTotal-', parameters('PlaybookName'))]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
@@ -2035,7 +2036,7 @@
                               "inputs": {
                                 "body": {
                                   "incidentArmId": "@triggerBody()?['object']?['id']",
-                                  "message": "<p>Virus Total IP Report found for @{items('For_each')?['Address']}<br>\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely harmless<br>\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"</p>"
+                                  "message": "<p>Virus Total IP Report found for @{items('For_each')?['Address']}<br>\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely harmless.<br>\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"</p>"
                                 },
                                 "host": {
                                   "connection": {
@@ -2076,7 +2077,7 @@
                                 "inputs": {
                                   "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>Virus Total IP Report found for @{items('For_each')?['Address']}<br>\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"</p>"
+                                    "message": "<p>Virus Total IP Report found for @{items('For_each')?['Address']}<br>\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely malicious.<br>\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"</p>"
                                   },
                                   "host": {
                                     "connection": {
@@ -2230,30 +2231,31 @@
             }
           ],
           "metadata": {
-            "title": "IP Enrichment - Virus Total report  - Incident Triggered",
+            "title": "IP Enrichment - Virus Total Report  - Incident Triggered",
             "description": "This playbook will take each IP entity and query VirusTotal for IP Address Report (https://developers.virustotal.com/v3.0/reference#ip-info). It will write the results to Log Analytics and add a comment to the incident.",
             "prerequisites": [
-              "- You will need to register to Virus Total community for an API key"
+              "Register on VirusTotal portal and get an API key. [Register here](https://www.virustotal.com/gui/join-us)"
             ],
             "postDeployment": [
-              "After deployment, attach this playbook to an **automation rule** so it runs when the incident is created."
+              "1. Authorize/Configure all the connections.",
+              "2. Assign Microsoft Sentinel Responder Role to playbook.",
+              "3. After deployment, attach this playbook to an **automation rule** and map FileHash entity so it runs when the incident is created.",
+              "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalIPReport/readme.md)"
             ],
-            "lastUpdateTime": "2022-07-20T00:00:00Z",
+            "lastUpdateTime": "2025-05-29T00:00:00Z",
             "entities": [
               "IP"
             ],
             "tags": [
               "Enrichment"
             ],
-            "releaseNotes": [
-              {
-                "version": "1.0.0",
-                "title": "IP Enrichment - Virus Total report",
-                "notes": [
-                  "Initial version"
-                ]
-              }
-            ]
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -2278,7 +2280,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalURLReport-AlertTriggered Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalURLReport-AlertTriggered Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion7')]",
@@ -2289,9 +2291,9 @@
             }
           },
           "variables": {
-            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
-            "VirusTotalConnectionName": "[[concat('virustotal-',parameters('PlaybookName'))]",
+            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+            "AzureSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "VirusTotalConnectionName": "[[concat('VirusTotal-',parameters('PlaybookName'))]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/virustotal')]",
@@ -2425,7 +2427,7 @@
                               "inputs": {
                                 "body": {
                                   "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                  "message": "<p>Virus Total URL Report found for @{items('For_each')?['Url']}<br>\nSuspious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
+                                  "message": "<p>Virus Total URL Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
                                 },
                                 "host": {
                                   "connection": {
@@ -2466,7 +2468,7 @@
                                 "inputs": {
                                   "body": {
                                     "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                    "message": "<p>Virus Total URL Report found for @{items('For_each')?['Url']}<br>\nSuspious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
+                                    "message": "<p>Virus Total URL Report found for @{items('For_each')?['Url']}<br>\nSuspious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
                                   },
                                   "host": {
                                     "connection": {
@@ -2631,16 +2633,17 @@
             }
           ],
           "metadata": {
-            "title": "URL Enrichment - Virus Total report - Alert Triggered",
+            "title": "URL Enrichment - Virus Total Report - Alert Triggered",
             "description": "This playbook will take each URL entity and query VirusTotal for info (https://developers.virustotal.com/v3.0/reference#url-info).",
             "prerequisites": [
-              "Register on VirusTotal portal and get an API key."
+              "Register on VirusTotal portal and get an API key. [Register here](https://www.virustotal.com/gui/join-us)"
             ],
             "postDeployment": [
               "1. Authorize/Configure all the connections.",
-              "2. Assign Microsoft Sentinel Responder Role to playbook."
+              "2. Assign Microsoft Sentinel Responder Role to playbook.",
+              "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalIPReport/readme.md)"
             ],
-            "lastUpdateTime": "2023-02-03T00:00:00Z",
+            "lastUpdateTime": "2025-05-29T00:00:00Z",
             "entities": [
               "URL"
             ],
@@ -2648,15 +2651,13 @@
               "Enrichment"
             ],
             "comments": "This playbook will take each URL entity and query VirusTotal for info (https://developers.virustotal.com/v3.0/reference#url-info).",
-            "releaseNotes": [
-              {
-                "version": "1.0.1",
-                "title": "URL Enrichment - Virus Total report",
-                "notes": [
-                  "Initial version"
-                ]
-              }
-            ]
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -2681,7 +2682,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalURLReport-IncidentTriggered Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalURLReport-IncidentTriggered Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion8')]",
@@ -2692,9 +2693,9 @@
             }
           },
           "variables": {
-            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
-            "VirusTotalConnectionName": "[[concat('virustotal-',parameters('PlaybookName'))]",
+            "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+            "AzureSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "VirusTotalConnectionName": "[[concat('VirusTotal-',parameters('PlaybookName'))]",
             "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azureloganalyticsdatacollector')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/virustotal')]",
@@ -2812,7 +2813,7 @@
                               "inputs": {
                                 "body": {
                                   "incidentArmId": "@triggerBody()?['object']?['id']",
-                                  "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
+                                  "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
                                 },
                                 "host": {
                                   "connection": {
@@ -2853,7 +2854,7 @@
                                 "inputs": {
                                   "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
+                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
                                   },
                                   "host": {
                                     "connection": {
@@ -3018,30 +3019,31 @@
             }
           ],
           "metadata": {
-            "title": "URL Enrichment - Virus Total report - Incident Triggered",
+            "title": "URL Enrichment - Virus Total Report - Incident Triggered",
             "description": "This playbook will take each URL entity and query VirusTotal for info (https://developers.virustotal.com/v3.0/reference#url-info).",
             "prerequisites": [
-              "- You will need to register to Virus Total community for an API key"
+              "Register on VirusTotal portal and get an API key. [Register here](https://www.virustotal.com/gui/join-us)"
             ],
             "postDeployment": [
-              "After deployment, attach this playbook to an **automation rule** so it runs when the incident is created."
+              "1. Authorize/Configure all the connections.",
+              "2. Assign Microsoft Sentinel Responder Role to playbook.",
+              "3. After deployment, attach this playbook to an **automation rule** and map FileHash entity so it runs when the incident is created.",
+              "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalIPReport/readme.md)"
             ],
-            "lastUpdateTime": "2022-07-20T00:00:00Z",
+            "lastUpdateTime": "2025-05-29T00:00:00Z",
             "entities": [
               "URL"
             ],
             "tags": [
               "Enrichment"
             ],
-            "releaseNotes": [
-              {
-                "version": "1.0.0",
-                "title": "Handle MDE device Id missing case",
-                "notes": [
-                  "- Added steps to handle if the entity from sentinel incident doesn't provide the MDE device ID."
-                ]
-              }
-            ]
+            "releaseNotes": {
+              "version": "1.1",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
           }
         },
         "packageKind": "Solution",
@@ -3066,7 +3068,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Get-VirusTotalIPReport-EntityTrigger Playbook with template version 3.0.0",
+        "description": "Get-VirusTotalIPReport-EntityTrigger Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion9')]",
@@ -3315,12 +3317,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "VirusTotal",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> <em>There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</em></p>\n<p>The <a href=\"https://www.virustotal.com/gui/\">VirusTotal</a> solution for Microsoft Sentinel contains Playbooks that can help enrich incident information with threat information and intelligence for IPs, file hashes and URLs from VirusTotal. Enriched information can help drive focused investigations in Security Operations.</p>\n<p><strong>Playbooks:</strong> 9</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VirusTotal/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.virustotal.com/gui/\">VirusTotal</a> solution for Microsoft Sentinel contains Playbooks that can help enrich incident information with threat information and intelligence for IPs, file hashes and URLs from VirusTotal. Enriched information can help drive focused investigations in Security Operations.</p>\n<p><strong>Playbooks:</strong> 9</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",

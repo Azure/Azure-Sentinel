@@ -1,0 +1,84 @@
+[
+  {
+    "name": "SalesforceServiceCloudPolling",
+    "apiVersion": "2022-12-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "connectorDefinitionName": "SalesforceServiceCloudCCPDefinition",
+      "dataType": "SalesforceServiceCloudV2_CL",
+      "dcrConfig": {
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
+        "streamName": "Custom-SalesforceServiceCloudV2_CL"
+      },
+      "auth": {
+        "type": "OAuth2",
+        "ClientSecret": "{{clientSecret}}",
+        "ClientId": "{{clientId}}",
+        "TokenEndpoint": "{{salesforceDomainName}}/services/oauth2/token",
+        "tokenEndpointHeaders": {
+          "Accept": "application/json",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "TokenEndpointQueryParameters": {},
+        "grantType": "client_credentials"
+      },
+      "request": {
+        "apiEndpoint": "{{salesforceDomainName}}/services/data/v44.0/query",
+        "httpMethod": "GET",
+        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+        "rateLimitQPS": 10,
+        "queryWindowInMin": 60,
+        "retryCount": 3,
+        "timeoutInSeconds": 60,
+        "headers": {
+          "Accept": "application/json",
+          "User-Agent": "Scuba"
+        },
+        "queryParameters": {
+          "q": "{{queryType}}[0]"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [ "$.records" ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "NextPageUrl",
+        "nextPageTokenJsonPath": "$.nextRecordsUrl",
+        "nextPageUrl": "{{salesforceDomainName}}",
+        "isNextPageTokenRelativeUrl": true
+      },
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetchLogFileData",
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project logFileUrl = res.LogFile"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetchLogFileData": {
+          "shouldJoinNestedData": true,
+          "joinedDataStepName": "LogData",
+          "request": {
+            "httpMethod": "GET",
+            "apiEndpoint": "{{salesforceDomainName}}$logFileUrl$",
+            "headers": {
+              "Accept": "application/json",
+              "User-Agent": "Scuba"
+            }
+          },
+          "response": {
+            "format": "csv",
+            "eventsJsonPaths": [ "$" ],
+            "HasCsvHeader": true
+          }
+        }
+      }
+    }
+  }
+]
