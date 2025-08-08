@@ -1,0 +1,60 @@
+id: bc3bb047-70b8-4a4b-ac21-e3b1172881a4
+name: TI map IP entity to EmailEvents
+description: |
+  Identifies a match in EmailEvents table from any I IOC from TI
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - EmailEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let EmailEvents_ = materialize(
+  EmailEvents
+  | where isnotempty(RecipientEmailAddress) and isnotempty(SenderFromAddress) and isnotempty(SenderIPv4) and TimeGenerated >= ago(dt_lookBack) and DeliveryAction !has "Blocked" | project-rename  EmailEvents_TimeGenerated = TimeGenerated);
+  let SenderIP = EmailEvents_ | distinct  SenderIPv4 | summarize make_list(SenderIPv4);
+  let TI = materialize(
+  ThreatIntelIndicators
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+  | where isnotempty(IndicatorType) and IndicatorType == "ipv4-addr"
+  | where IsActive == true and ValidUntil > now()
+  | extend TI_IP = tolower(ObservableValue)
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | extend IndicatorId = tostring(split(Id, "--")[2])
+  | where isnotempty(TI_IP)
+  | where TI_IP in (SenderIP)
+  | extend Description = tostring(parse_json(Data).description)
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;");
+  (union
+    (TI | join kind=innerunique (EmailEvents_) on $left.TI_IP == $right.SenderIPv4))
+  | where EmailEvents_TimeGenerated < ValidUntil
+  | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
+  | project EmailEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, SenderIPv4, RecipientEmailAddress, SenderFromAddress, Subject, ConfidenceLevel, Type, TI_IP, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation, EmailDirection
+  | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])
+  | extend timestamp = EmailEvents_TimeGenerated
+entityMappings:
+  - entityType: ÏP
+    fieldMappings:
+      - identifier: IpAddress
+        columnName: SenderIPv4
+version: 1.0.0
+kind: Scheduled
