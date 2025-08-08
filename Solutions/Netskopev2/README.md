@@ -9,7 +9,7 @@ The **Netskope Microsoft Sentinel Solution** integrates Netskope logs (events, a
 
 ### Data Connectors
 1. **NetskopeAlertsEvents_RestAPI_CCP** *(Recommended)*  
-   Fetches alerts and events from Netskope using Microsoft's Codeless Connector Platform.
+   Fetches alerts and events from Netskope using Microsoft's Codeless Connector Framework.
 2. **NetskopeDataConnector** *(Deprecated)*  
    Azure Functions–based data connector to fetch alerts and events from Netskope.
 3. **NetskopeWebTransactionsDataConnector** *(Deprecated)*  
