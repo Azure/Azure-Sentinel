@@ -4,6 +4,7 @@ from pydantic import BaseModel, field_validator
 
 
 class GuardicoreConnection(BaseModel):
+    slot_identifier: Optional[str] = ""
     id: str
     connection_type: str
     count: int
