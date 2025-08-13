@@ -1,7 +1,15 @@
 # Netskope Microsoft Sentinel Solution
+## Quick Links
+- **Alerts & Events (CCF):** [Sending Alerts and Events to Microsoft Sentinel using the Codeless Connector Platform](https://community.netskope.com/discussions-37/sending-alerts-and-events-to-microsoft-sentinel-using-the-codeless-connector-platform-6910)
+- **Web Transactions (CCF):** [Integration: Web Transactions from Netskope Log Streaming to Microsoft Sentinel](https://community.netskope.com/discussions-37/integration-web-transactions-from-netskope-log-streaming-to-microsoft-sentinel-7646)
+- **Netskope Log Streaming Connector Documentation:** [View Documentation](https://docs.netskope.com/en/log-streaming/)
+
+
 
 ## Overview
-The **Netskope Microsoft Sentinel Solution** integrates Netskope logs (events, alerts, and WebTransactions) into **Microsoft Sentinel** for centralized monitoring and investigation.
+The **Netskope Microsoft Sentinel Solution** integrates Netskope logs (events, alerts, and WebTransactions) into **Microsoft Sentinel** for centralized monitoring and investigation.  
+
+> **Note:** Work to update this solution is currently **in progress**. For any questions, please contact **tech-alliances@netskope.com**.
 
 ---
 
@@ -26,5 +34,6 @@ The **Netskope Microsoft Sentinel Solution** integrates Netskope logs (events, a
 ---
 
 ## Support
+- [tech-alliances@netskope.com](mailto:tech-alliances@netskope.com)
 - [Netskope Documentation](https://docs.netskope.com)
 - [Microsoft Sentinel Documentation](https://learn.microsoft.com/azure/sentinel)
