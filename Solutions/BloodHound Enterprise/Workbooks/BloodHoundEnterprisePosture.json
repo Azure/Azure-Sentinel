@@ -2,22 +2,15 @@
   "version": "Notebook/1.0",
   "items": [
     {
-      "type": 1,
-      "content": {
-        "json": "# Posture"
-      },
-      "name": "posture"
-    },
-    {
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
         "parameters": [
           {
-            "id": "868cc59a-f969-451f-9d87-e6c554cb54e3",
+            "id": "f589d987-9e0a-4655-a467-94872a600db9",
             "version": "KqlParameterItem/1.0",
-            "name": "time_range",
-            "label": "Time Range",
+            "name": "time",
+            "label": "Time Range Picker",
             "type": 4,
             "isRequired": true,
             "typeSettings": {
@@ -67,134 +60,187 @@
                 {
                   "durationMs": 7776000000
                 }
-              ],
-              "allowCustom": true
-            },
-            "timeContext": {
-              "durationMs": 86400000
+              ]
             },
             "value": {
-              "durationMs": 7776000000
+              "durationMs": 3600000
             }
           },
           {
-            "id": "586cb0f9-15b3-4887-bf7a-842121615cb0",
+            "id": "7b2610f8-46b2-4b21-ba57-3988c0b79e46",
             "version": "KqlParameterItem/1.0",
-            "name": "domain_name",
-            "label": "Domain",
+            "name": "bhe_tenant",
+            "label": "BHE Tenant",
             "type": 2,
-            "description": "Domain to display",
             "isRequired": true,
-            "query": "BloodHoundLogs_CL\n| where data_type == \"posture\"\n| extend domainNameType = strcat(domain_name, \" (\", domain_type, \")\")\n| distinct domain_id, domainNameType\n| order by domainNameType",
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "BHEPostureStatsData_CL \n| where isnotempty(tenant_url)\n| summarize arg_max(TimeGenerated, *) by tenant_url\n| extend display_name = replace_string(tenant_url, @\"https://\", \"\")\n| extend display_name = replace_string(display_name, @\"http://\", \"\")\n| extend display_name = replace_string(display_name, @\"/\", \"\") \n| project tenant_url, display_name\n",
             "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
               "showDefault": false
             },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "time",
+            "defaultValue": "value::all",
             "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces",
-            "value": "S-1-5-21-3702535222-3822678775-2090119576"
+            "resourceType": "microsoft.operationalinsights/workspaces"
           }
         ],
-        "style": "above",
+        "style": "pills",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces"
       },
-      "name": "parameters - 2"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "## Domain Exposure %"
-      },
-      "name": "text - 3"
+      "name": "parameters - 3"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundLogs_CL\n| where data_type == \"posture\"\n| where created_at {time_range}\n| where domain_id == '{domain_name}'\n| summarize max(exposure_index/100) by bin(created_at, 1d), domain_name",
+        "query": "BHEPostureStatsData_CL \n| summarize arg_max(TimeGenerated, *) by id\n| where tenant_url in~ ({bhe_tenant})\n| where isnotempty(domain_name)\n| extend domain = domain_name\n| extend created_at_dt = todatetime(created_at)\n| extend exposure = round(todouble(exposure_index) * 100, 0)\n| summarize max_exposure = max(exposure) by created_at_dt, domain\n| order by created_at_dt asc\n\n",
         "size": 0,
         "aggregation": 5,
+        "title": "Domain Exposure",
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "areachart",
-        "chartSettings": {
-          "xSettings": {
-            "dateFormatSettings": {
-              "formatName": "shortDateTimePattern",
-              "showUtcTime": true
-            }
+        "visualization": "timechart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "domain",
+            "formatter": 1
           },
-          "ySettings": {
-            "numberFormatSettings": {
-              "unit": 0,
-              "options": {
-                "style": "percent",
-                "useGrouping": true
-              }
+          "leftContent": {
+            "columnMatch": "max_exposure",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
             },
-            "min": 0,
-            "max": 1
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "domain",
+            "formatter": 1
+          },
+          "centerContent": {
+            "columnMatch": "max_exposure",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {
+          "xAxis": "created_at_dt",
+          "yAxis": [
+            "max_exposure"
+          ],
+          "group": "domain",
+          "createOtherGroup": null,
+          "showLegend": true
+        },
+        "mapSettings": {
+          "locInfo": "LatLong",
+          "sizeSettings": "max_exposure",
+          "sizeAggregation": "Sum",
+          "legendMetric": "max_exposure",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "type": "heatmap",
+            "colorAggregation": "Sum",
+            "nodeColorField": "max_exposure",
+            "heatmapPalette": "greenRed"
           }
         }
       },
       "name": "query - 2"
     },
     {
-      "type": 1,
+      "type": 3,
       "content": {
-        "json": "## Critical Attack Paths"
+        "version": "KqlItem/1.0",
+        "query": "BHEPostureStatsData_CL \n| summarize arg_max(TimeGenerated, *) by id\n| where tenant_url in~ ({bhe_tenant})\n| where isnotempty(domain_name)\n| extend domain = domain_name\n| extend created_at_dt = todatetime(created_at)\n| summarize max_critical_risk_count = max(tolong(critical_risk_count)) by created_at_dt, domain\n| order by created_at_dt asc\n",
+        "size": 1,
+        "aggregation": 5,
+        "title": "Critical Attack Paths",
+        "timeContextFromParameter": "time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "domain",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "max_critical_risk_count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {
+          "xAxis": "created_at_dt",
+          "yAxis": [
+            "max_critical_risk_count"
+          ],
+          "group": "domain",
+          "createOtherGroup": null,
+          "showLegend": true
+        }
       },
-      "name": "text - 5"
+      "name": "query - 2"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "BloodHoundLogs_CL\n| where data_type == \"posture\"\n| where created_at {time_range} \n| where domain_id == '{domain_name}'\n| summarize max(finding_count) by bin(created_at, 1d), domain_name",
+        "query": "BHEPostureStatsData_CL \n| summarize arg_max(TimeGenerated, *) by id\n| where tenant_url in~ ({bhe_tenant})\n| where isnotempty(domain_name)\n| extend domain = domain_name\n| extend created_at_dt = todatetime(created_at)\n| summarize max_tier_zero_count = max(tolong(tier_zero_count)) by created_at_dt, domain\n| order by created_at_dt asc\n",
         "size": 0,
         "aggregation": 5,
+        "title": "Tier Zero count",
+        "timeContextFromParameter": "time",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "areachart",
+        "visualization": "timechart",
         "chartSettings": {
-          "xSettings": {
-            "dateFormatSettings": {
-              "formatName": "shortDateTimePattern",
-              "showUtcTime": true
-            }
-          }
+          "showLegend": true
         }
       },
       "name": "query - 4"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "## Tier Zero Count"
-      },
-      "name": "text - 6"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "BloodHoundLogs_CL\n| where data_type == \"posture\"\n| where created_at {time_range} \n| where domain_id == '{domain_name}'\n| summarize max(tier_zero_count) by bin(created_at, 1d), domain_name",
-        "size": 0,
-        "aggregation": 5,
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "areachart",
-        "chartSettings": {
-          "xSettings": {
-            "dateFormatSettings": {
-              "formatName": "shortDateTimePattern",
-              "showUtcTime": true
-            }
-          }
-        }
-      },
-      "name": "query - 7"
     }
   ],
+  "fallbackResourceIds": [
+    "/subscriptions/8487150a-2b54-4945-9a15-7aae2d005a3d/resourcegroups/specterops/providers/microsoft.operationalinsights/workspaces/specterops-log-analytics-workspace"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
