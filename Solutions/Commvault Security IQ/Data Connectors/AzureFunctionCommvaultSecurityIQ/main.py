@@ -9,7 +9,7 @@ import azure.functions as func
 import json
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceNotFoundError
-from azure.identity import DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential # Import ManagedIdentityCredential
 from azure.keyvault.secrets import SecretClient
 import os
 
@@ -154,7 +154,16 @@ def main(mytimer: func.TimerRequest) -> None:
         raise Exception("Lookout: Invalid Log Analytics Uri.")
     try:
         logging.debug("Initializing Azure credentials and secret client.")
-        credential = DefaultAzureCredential()
+        
+        # Read client ID from environment variable
+        client_id = os.environ.get('AZURE_CLIENT_ID')
+        if not client_id:
+            logging.warning("AZURE_CLIENT_ID environment variable not set. Falling back to DefaultAzureCredential.")
+            credential = DefaultAzureCredential()
+        else:
+            credential = ManagedIdentityCredential(client_id=client_id)
+            logging.info(f"Using ManagedIdentityCredential with client ID: {client_id}")
+
         secret_client = SecretClient(vault_url=f"https://{key_vault_name}.vault.azure.net", credential=credential)
         try:
             secret_name = "environment-endpoint-url"
@@ -604,40 +613,78 @@ def fetch_file_details(job_id, subclient_id) -> tuple[list, list]:
     """
 
     folders_list = []
-    if job_id is None:
+    try:
+        if job_id is None:
+            return [], []
+        files_list = []
+        try:
+            files_list = get_files_list(job_id)
+        except Exception as e:
+            logging.warning(f"Error in get_files_list for job_id {job_id}: {e}")
+            files_list = []
+        folder_response = []
+        try:
+            folder_response = get_subclient_content_list(subclient_id)
+        except Exception as e:
+            logging.warning(f"Error in get_subclient_content_list for subclient_id {subclient_id}: {e}")
+            folder_response = []
+        if folder_response:
+            for resp in folder_response:
+                try:
+                    folders_list.append(resp.get(Constants.path_key, ""))
+                except Exception as e:
+                    logging.warning(f"Error extracting path_key from folder_response: {e}")
+        return files_list, folders_list
+    except Exception as e:
+        logging.warning(f"Error in fetch_file_details: {e}")
         return [], []
-    files_list = get_files_list(job_id)
-    folder_response = get_subclient_content_list(subclient_id)
-    if folder_response:
-        for resp in folder_response:
-            folders_list.append(resp[Constants.path_key])
-    return files_list, folders_list
-
 
 def get_job_details(job_id, url, headers):
-    f_url = f"{url}/Job/{job_id}"
-    logging.info(f"Headers keys for Job details request: {list(headers.keys())}")
-    response = requests.get(f_url, headers=headers)
-    data = response.json()
-    if ("totalRecordsWithoutPaging" in data) and (
-            int(data["totalRecordsWithoutPaging"]) > 0
-    ):
-        logging.info(f"Job Details for job_id : {job_id}")
-        logging.info(data)
-        return data
-    else:
-        logging.info(f"Failed to get Job Details for job_id : {job_id}")
-        logging.info(data)
+    try:
+        if not job_id:
+            logging.warning("job_id is missing or empty in get_job_details.")
+            return None
+        f_url = f"{url}/Job/{job_id}"
+        logging.info(f"Headers keys for Job details request: {list(headers.keys())}")
+        response = requests.get(f_url, headers=headers)
+        data = response.json()
+        if ("totalRecordsWithoutPaging" in data) and (
+                int(data["totalRecordsWithoutPaging"]) > 0
+        ):
+            logging.info(f"Job Details for job_id : {job_id}")
+            logging.info(data)
+            return data
+        else:
+            logging.info(f"Failed to get Job Details for job_id : {job_id}")
+            logging.info(data)
+            return None
+    except Exception as e:
+        logging.warning(f"Error in get_job_details for job_id {job_id}: {e}")
         return None
-
-
 def get_user_details(client_name):
-    f_url = f"{url}/Client/byName(clientName='{client_name}')"
-    logging.info(f"Headers keys for Client byName request: {list(headers.keys())}")
-    response = requests.get(f_url, headers=headers).json()
-    user_id = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userId', None)
-    user_name = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userName', None)
-    return user_id, user_name
+    try:
+        if not client_name:
+            logging.warning("originating_client is missing or empty.")
+            return None, None
+        f_url = f"{url}/Client/byName(clientName='{client_name}')"
+        logging.info(f"Headers keys for Client byName request: {list(headers.keys())}")
+        response = requests.get(f_url, headers=headers).json()
+        user_id = None
+        user_name = None
+        try:
+            user_id = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userId', None)
+        except Exception as e:
+            logging.warning(f"Error extracting user_id: {e}")
+            user_id = None
+        try:
+            user_name = response.get('clientProperties', [{}])[0].get('clientProps', {}).get('securityAssociations', {}).get('associations', [{}])[0].get('userOrGroup', [{}])[0].get('userName', None)
+        except Exception as e:
+            logging.warning(f"Error extracting user_name: {e}")
+            user_name = None
+        return user_id, user_name
+    except Exception as e:
+        logging.warning(f"Error in get_user_details for client_name {client_name}: {e}")
+        return None, None
 
 
 def get_incident_details(message: str) -> dict | None:
@@ -670,12 +717,11 @@ def get_incident_details(message: str) -> dict | None:
         job_details = get_job_details(job_id,url,headers)
         if job_details is None:
             print(f"Invalid job [{job_id}]")
-            return None
         job_start_time = int(
-            job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobStartTime")
+            job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobStartTime",0)
         )
         job_end_time = int(
-            job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobEndTime")
+            job_details.get("jobs", [{}])[0].get("jobSummary", {}).get("jobEndTime",0)
         )
         subclient_id = (
             job_details.get("jobs", [{}])[0]

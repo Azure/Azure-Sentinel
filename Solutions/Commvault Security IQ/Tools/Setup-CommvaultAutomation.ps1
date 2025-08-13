@@ -114,15 +114,11 @@ function Get-CurrentSP {
         }
         else {
             Write-LogMessage "Could not automatically detect version in response" "WARNING"
-            $manualVersion = Read-Host -Prompt "Please enter the Service Pack version manually (from the API response)"
-            if ($manualVersion -match '^\d+$') {
-                return [int]$manualVersion
-            }
             return $null
         }
     } 
     catch {
-        Write-LogMessage "Error fetching current Service Pack: $_" "ERROR"
+        Write-LogMessage "Error fetching current Service Pack: $_" "WARNING"
         Write-LogMessage "This could be due to an expired/invalid access token or network issues" "WARNING"
         return $null
     }
@@ -140,6 +136,18 @@ function New-AccessToken {
         Write-LogMessage "Key Vault '$keyVaultName' not found or you don't have access. Error: $_" "ERROR"
         Write-LogMessage "Please ensure the Key Vault exists and you have proper permissions before running this function again" "WARNING"
         return $false
+    }
+
+    # Check if refresh-token already exists
+    try {
+        $refreshTokenSecret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name "refresh-token" -ErrorAction Stop
+        if ($refreshTokenSecret) {
+            Write-LogMessage "Refresh token already exists in Key Vault. Skipping token creation." "INFO"
+            return $true
+        }
+    }
+    catch {
+        Write-LogMessage "Refresh token not found in Key Vault. Proceeding with token creation." "INFO"
     }
 
     try {
@@ -164,12 +172,10 @@ function New-AccessToken {
 
     $currentSP = Get-CurrentSP -keyVaultName $keyVaultName
     if (-not $currentSP) {
-        Write-LogMessage "Failed to fetch current Service Pack version. Cannot proceed with token creation." "ERROR"
-        return $false
+        Write-LogMessage "Failed to fetch current Service Pack version." "WARNING"
+        $currentSP = 38
     }
-    
-    Write-Host "Current Service Pack Version: $currentSP"
-    
+        
     if ($currentSP -ge 38) {
         $createTokenUrl = "$environmentEndpointUrl/V4/AccessToken"
         $timestamp = [int]([datetime]::UtcNow - [datetime]'1970-01-01').TotalSeconds
@@ -187,35 +193,6 @@ function New-AccessToken {
                 $newRefreshToken = $tokenResponse.tokenInfo.refreshToken
                 $tokenExpiryTimestamp = $tokenResponse.tokenInfo.tokenExpiryTimestamp
                 try {
-                    $secretNames = @("access-token", "refresh-token", "token-expiry-timestamp")
-                    foreach ($secretName in $secretNames) {
-                        $existingSecret = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name $secretName -ErrorAction SilentlyContinue
-                        if ($existingSecret) {
-                            Write-LogMessage "Purging old secret: $secretName" "INFO"
-                            Remove-AzKeyVaultSecret -VaultName $keyVaultName -Name $secretName -Force -ErrorAction SilentlyContinue
-                            $waitTime = 0
-                            $maxWait = 60
-                            while ($waitTime -lt $maxWait) {
-                                $deleted = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name $secretName -InRemovedState -ErrorAction SilentlyContinue
-                                if ($deleted) { break }
-                                Start-Sleep -Seconds 2
-                                $waitTime += 2
-                            }
-                            try {
-                                Write-LogMessage "Attempting to purge deleted secret: $secretName" "INFO"
-                                Remove-AzKeyVaultSecret -VaultName $keyVaultName -Name $secretName -Force -InRemovedState -ErrorAction SilentlyContinue
-                            } catch {}
-                            $waitTime = 0
-                            while ($waitTime -lt $maxWait) {
-                                $deleted = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name $secretName -InRemovedState -ErrorAction SilentlyContinue
-                                if (-not $deleted) { break }
-                                Start-Sleep -Seconds 2
-                                $waitTime += 2
-                            }
-                        } else {
-                            Write-LogMessage "Secret $secretName does not exist. Skipping deletion." "INFO"
-                        }
-                    }
                     Set-AzKeyVaultSecret -VaultName $keyVaultName -Name "access-token" -SecretValue (ConvertTo-SecureString $newAccessToken -AsPlainText -Force) -ErrorAction Stop
                     Set-AzKeyVaultSecret -VaultName $keyVaultName -Name "refresh-token" -SecretValue (ConvertTo-SecureString $newRefreshToken -AsPlainText -Force) -ErrorAction Stop
                     Set-AzKeyVaultSecret -VaultName $keyVaultName -Name "token-expiry-timestamp" -SecretValue (ConvertTo-SecureString $tokenExpiryTimestamp -AsPlainText -Force) -ErrorAction Stop
@@ -242,7 +219,6 @@ function New-AccessToken {
     } 
     else {
         Write-LogMessage "Service Pack version is $currentSP (< 38). No new refresh token created." "WARNING"
-        Write-LogMessage "This version doesn't support the refresh token creation API. Please upgrade to SP version 38 or later" "INFO"
         return $true
     }
 }
@@ -309,17 +285,23 @@ function New-AndPublish-Runbook {
     catch {
         Write-LogMessage "Failed to import script: $_" "ERROR"
         Write-LogMessage "Manual steps: Upload the script from $runbookPath to the runbook '$runbookName'" "WARNING"
+        # Cleanup temp file before returning
+        try { Remove-Item -Path $runbookPath -ErrorAction SilentlyContinue } catch { Write-LogMessage "Failed to delete temp file $runbookPath: $_" "WARNING" }
         return $false
     }
     try {
         Publish-AzAutomationRunbook -AutomationAccountName $automationAccountName `
                                   -ResourceGroupName $automationResourceGroupName `
                                   -Name $runbookName -ErrorAction Stop
+        # Cleanup temp file after successful import/publish
+        try { Remove-Item -Path $runbookPath -ErrorAction SilentlyContinue } catch { Write-LogMessage "Failed to delete temp file $runbookPath: $_" "WARNING" }
         return $true
     }
     catch {
         Write-LogMessage "Failed to publish runbook: $_" "ERROR"
         Write-LogMessage "Manual steps: Publish the runbook '$runbookName' in the Azure portal" "WARNING"
+        # Cleanup temp file before returning
+        try { Remove-Item -Path $runbookPath -ErrorAction SilentlyContinue } catch { Write-LogMessage "Failed to delete temp file $runbookPath: $_" "WARNING" }
         return $false
     }
 }
@@ -458,49 +440,62 @@ $LogAnalyticsResourceGroupName = Get-ResourceGroupName -promptMessage "Enter the
 $automationResourceGroupName = $LogAnalyticsResourceGroupName
 Write-LogMessage "Using '$automationResourceGroupName' for both Log Analytics workspace and Automation Account" "INFO"
 
-$automationAccountName = "Commvault-Automation-Account"
-Write-LogMessage "Checking for Automation Account: $automationAccountName"
+$proceedAutomation = Read-Host "Do you want to create/check the Automation Account and publish runbooks? (Y/N)"
+if ($proceedAutomation -eq "Y" -or $proceedAutomation -eq "y") {
+    $automationAccountName = "Commvault-Automation-Account"
+    Write-LogMessage "Checking for Automation Account: $automationAccountName"
 
-try {
-    $automationAccount = Get-AzAutomationAccount -ResourceGroupName $automationResourceGroupName -Name $automationAccountName -ErrorAction SilentlyContinue
-    
-    if (-not $automationAccount) {
-        Write-LogMessage "Automation account '$automationAccountName' not found. Creating new account..." "INFO"
-        
-        try {
-            $location = (Get-AzResourceGroup -Name $automationResourceGroupName).Location
-            New-AzAutomationAccount -ResourceGroupName $automationResourceGroupName -Name $automationAccountName -Location $location -ErrorAction Stop
-            Write-LogMessage "Automation account '$automationAccountName' created successfully" "SUCCESS"
+    try {
+        $automationAccount = Get-AzAutomationAccount -ResourceGroupName $automationResourceGroupName -Name $automationAccountName -ErrorAction SilentlyContinue
+        if (-not $automationAccount) {
+            Write-LogMessage "Automation account '$automationAccountName' not found. Creating new account..." "INFO"
+            try {
+                $location = (Get-AzResourceGroup -Name $automationResourceGroupName).Location
+                New-AzAutomationAccount -ResourceGroupName $automationResourceGroupName -Name $automationAccountName -Location $location -ErrorAction Stop
+                Write-LogMessage "Automation account '$automationAccountName' created successfully" "SUCCESS"
+            }
+            catch {
+                Write-LogMessage "Failed to create automation account: $_" "ERROR"
+                Write-LogMessage "Manual steps: Create an automation account named '$automationAccountName' in resource group '$automationResourceGroupName'" "WARNING"
+            }
         }
-        catch {
-            Write-LogMessage "Failed to create automation account: $_" "ERROR"
-            Write-LogMessage "Manual steps: Create an automation account named '$automationAccountName' in resource group '$automationResourceGroupName'" "WARNING"
+        else {
+            Write-LogMessage "Automation account '$automationAccountName' already exists" "SUCCESS"
         }
     }
-    else {
-        Write-LogMessage "Automation account '$automationAccountName' already exists" "SUCCESS"
+    catch {
+        Write-LogMessage "Error checking for automation account: $_" "ERROR"
+        Write-LogMessage "Manual steps: Create an automation account named '$automationAccountName' in resource group '$automationResourceGroupName'" "WARNING"
     }
+
+    Write-LogMessage "Creating and publishing runbooks..."
+    try {
+        New-AndPublish-Runbook -runbookName "Commvault_Disable_IDP" `
+            -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_IDP.py" `
+            -automationAccountName $automationAccountName `
+            -automationResourceGroupName $automationResourceGroupName
+    } catch {
+        Write-LogMessage "Failed to create/publish runbook Commvault_Disable_IDP: $_" "ERROR"
+    }
+    try {
+        New-AndPublish-Runbook -runbookName "Commvault_Disable_User" `
+            -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_User.py" `
+            -automationAccountName $automationAccountName `
+            -automationResourceGroupName $automationResourceGroupName
+    } catch {
+        Write-LogMessage "Failed to create/publish runbook Commvault_Disable_User: $_" "ERROR"
+    }
+    try {
+        New-AndPublish-Runbook -runbookName "Commvault_Disable_Data_Aging" `
+            -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_Data_Aging.py" `
+            -automationAccountName $automationAccountName `
+            -automationResourceGroupName $automationResourceGroupName
+    } catch {
+        Write-LogMessage "Failed to create/publish runbook Commvault_Disable_Data_Aging: $_" "ERROR"
+    }
+} else {
+    Write-LogMessage "Skipping Automation Account creation and runbook publishing as per user request." "INFO"
 }
-catch {
-    Write-LogMessage "Error checking for automation account: $_" "ERROR"
-    Write-LogMessage "Manual steps: Create an automation account named '$automationAccountName' in resource group '$automationResourceGroupName'" "WARNING"
-}
-
-Write-LogMessage "Creating and publishing runbooks..."
-New-AndPublish-Runbook -runbookName "Commvault_Disable_IDP" `
-    -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_IDP.py" `
-    -automationAccountName $automationAccountName `
-    -automationResourceGroupName $automationResourceGroupName
-
-New-AndPublish-Runbook -runbookName "Commvault_Disable_User" `
-    -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_User.py" `
-    -automationAccountName $automationAccountName `
-    -automationResourceGroupName $automationResourceGroupName
-
-New-AndPublish-Runbook -runbookName "Commvault_Disable_Data_Aging" `
-    -githubFileUrl "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Commvault%20Security%20IQ/Playbooks/Runbooks/Commvault_Disable_Data_Aging.py" `
-    -automationAccountName $automationAccountName `
-    -automationResourceGroupName $automationResourceGroupName
 
 Write-LogMessage "Retrieving Log Analytics workspaces in resource group '$LogAnalyticsResourceGroupName'"
 try {
