@@ -20,12 +20,22 @@
         "author": {
             "name": "Tanium"
         },
-        "parameterTemplateVersion": "3.0.0"
+        "parameterTemplateVersion": "3.2.0"
     },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "Tanium-MSDefenderHealth",
             "type": "string"
+        },
+        "KeyVaultConnectionName": {
+            "defaultValue": "Tanium-GeneralHostInfo-KeyVault-WebConn",
+            "type": "string",
+            "metadata": {
+                "description": "The name to use for the Azure Key Vault Connector in the Logic App. (This will exist as an API Connection in your subscription)"
+            }
+        },
+        "KeyVaultName": {
+            "type": "String"
         },
         "AzureSentinelConnectionName": {
             "defaultValue": "Tanium-MSDefenderHealth-Sentinel-WebConn",
@@ -45,13 +55,6 @@
             "type": "string",
             "metadata": {
                 "description": "The resource group name for the existing Azure Integration Account"
-            }
-        },
-        "TaniumApiToken": {
-            "defaultValue": "",
-            "type": "securestring",
-            "metadata": {
-                "description": "The Tanium API Token used for this logic app. The logic app will be restricted to the level of access available to the user who generated the token."
             }
         },
         "TaniumServerHostname": {
@@ -81,6 +84,24 @@
             }
         },
         {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('KeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('KeyVaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                }
+            }
+        },
+        {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2019-05-01",
             "name": "[parameters('PlaybookName')]",
@@ -107,12 +128,6 @@
                         "$connections": {
                             "defaultValue": {},
                             "type": "Object"
-                        },
-                        "TaniumApiToken": {
-                            "type": "securestring",
-                            "metadata": {
-                                "description": "The Tanium API Token provides access to the Tanium Server. Access is restricted to the level of access available to the user who generated the token."
-                            }
                         },
                         "TaniumApiGatewayApi": {
                             "type": "String"
@@ -458,7 +473,7 @@
                                                         },
                                                         "headers": {
                                                             "Content-Type": "application/json",
-                                                            "session": "@parameters('TaniumApiToken')"
+                                                            "session": "@{body('Get_secret')?['value']}"
                                                         },
                                                         "method": "POST",
                                                         "uri": "@parameters('TaniumApiGatewayApi')"
@@ -672,10 +687,15 @@
                                         },
                                         "headers": {
                                             "Content-Type": "application/json",
-                                            "session": "@parameters('TaniumApiToken')"
+                                            "session": "@{body('Get_secret')?['value']}"
                                         },
                                         "method": "POST",
                                         "uri": "@parameters('TaniumApiGatewayApi')"
+                                    },
+                                    "runAfter": {
+                                        "Get_secret": [
+                                            "SUCCEEDED"
+                                        ]
                                     },
                                     "runtimeConfiguration": {
                                         "secureData": {
@@ -701,7 +721,7 @@
                                                 },
                                                 "headers": {
                                                     "Content-Type": "application/json",
-                                                    "session": "@parameters('TaniumApiToken')"
+                                                    "session": "@{body('Get_secret')?['value']}"
                                                 },
                                                 "method": "POST",
                                                 "uri": "@parameters('TaniumApiGatewayApi')"
@@ -794,6 +814,26 @@
                                             "SUCCEEDED"
                                         ]
                                     }
+                                },
+                                "Get_secret": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/secrets/@{encodeURIComponent('TaniumApiToken')}/value"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs",
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
                                 }
                             },
                             "runAfter": {
@@ -868,6 +908,7 @@
                 },
                 "parameters": {
                     "$connections": {
+                        "type": "Object",
                         "value": {
                             "azuresentinel": {
                                 "connectionName": "[parameters('AzureSentinelConnectionName')]",
@@ -878,11 +919,18 @@
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
+                            },
+                            "keyvault": {
+                                "connectionName": "[parameters('KeyVaultConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('KeyVaultConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             }
                         }
-                    },
-                    "TaniumApiToken": {
-                        "value": "[parameters('TaniumApiToken')]"
                     },
                     "TaniumApiGatewayApi": {
                         "value": "[variables('TaniumApiGatewayApi')]"
