@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.0.6       | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
 | 3.0.5       | 10-04-2024                     | Updated Entity Mappings InsiderRiskyAccessByApplication.yaml             |
 | 3.0.4       | 07-11-2023                     | Modified text as there is rebranding from Azure Active Directory to Microsoft Entra ID. |
 | 3.0.3       | 10-10-2023                     | Updated **Workbook** template to replace the datatype InformationProtectionLogs_CL to MicrosoftPurviewInformationProtection                                                                                     |

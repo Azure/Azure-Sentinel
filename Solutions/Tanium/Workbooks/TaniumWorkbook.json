@@ -50,7 +50,7 @@
           }
         ]
       },
-      "name": "links - 8"
+      "name": "horizontal tabs"
     },
     {
       "type": 12,
@@ -61,15 +61,84 @@
           {
             "type": 1,
             "content": {
-              "json": "## Top mission critical computers with CVSS hits >= 9.0"
+              "json": "## Vulnerability Distribution by OS\nDistribution of all CVEs in the environment by OS"
             },
-            "name": "text - 2"
+            "name": "visualization title"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumComplyVulnerabilities_CL \n| join TaniumMainAsset_CL on Computer_Name_s| where CVSS_Score_s startswith \"9\"\n| extend Host_0_HostName = Computer_Name_s\n| extend Malware_0_Name = CVE_s\n| extend IP_0_Address = IP_Address_s\n| summarize count() by Computer_Name_s | limit 4\n| sort by count_\n",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyVulnerabilities_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n    \n    \nTaniumComplyVulnerabilities_CL\n|where TimeGenerated >= lastRunTime\n    and Scan_Type_s != 'container registries'\n|distinct CVE_s, Computer_Name_s, Operating_System_Generation_s\n|summarize count() by Operating_System_Generation_s",
+              "size": 0,
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "chartSettings": {
+                "group": "Operating_System_Generation_s",
+                "createOtherGroup": 25
+              }
+            },
+            "name": "query - 4"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## Critical Vulnerability Distribution by OS\nBreakdown of operating systems with critical CVEs (score >= 9.0). Based on the CVSS v3 standard"
+            },
+            "name": "visualization title"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyVulnerabilities_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n\nTaniumComplyVulnerabilities_CL \n| where TimeGenerated >= lastRunTime\n    and CVSS_v3_Score_d >=9.0 \n| summarize count() by Operating_System_Generation_s\n| sort by count_",
+              "size": 4,
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Operating_System_Generation_s",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "count_",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                },
+                "showBorder": false
+              }
+            },
+            "name": "query - 3"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## Computers with most # of Critical Vulnerabilities\nTop 10 endpoints, sorted by # of critical CVEs (score >= 9.0). Based on the CVSS v3 standard"
+            },
+            "name": "visualization title"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyVulnerabilities_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n\nTaniumComplyVulnerabilities_CL \n| where Scan_Type_s != 'container registries'\n    and TimeGenerated >= lastRunTime\n    and CVSS_v3_Score_d >=9.0\n| summarize count() by Computer_Name_s \n| limit 10\n| sort by count_",
               "size": 4,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -128,159 +197,76 @@
               }
             },
             "name": "query - 2"
-          },
+          },          
           {
             "type": 1,
             "content": {
-              "json": "## Top operating systems with CVSS hits >= 9.0"
+              "json": "## Vulnerability Distribution by Year\nDistribution of all CVEs in the environment by year"
             },
-            "name": "text - 4"
+            "name": "visualization title"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumComplyVulnerabilities_CL \n| join TaniumMainAsset_CL on Computer_Name_s| where CVSS_Score_s startswith \"9\"\n| extend Host_0_HostName = Computer_Name_s\n| extend Malware_0_Name = CVE_s\n| extend IP_0_Address = IP_Address_s\n| summarize count() by Operating_System_Generation_s\n| sort by count_",
-              "size": 4,
+              "query": "let getCveYear = (s:string) { substring(s, 4, 4) };\nlet checkCveYearExists = (s:string) { iff(s startswith 'CVE-', getCveYear(s), 'Not Specified') };\nlet extractCveYear = (year:string,cve:string) { iff(year != '', year, checkCveYearExists(cve)) };\n\nlet lastRunTime = toscalar(\n    TaniumComplyVulnerabilities_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n    \nlet Vulnerabilities = \nTaniumComplyVulnerabilities_CL\n|where TimeGenerated >= lastRunTime\n|extend ParsedCveYear = extractCveYear(CVE_Year_s, CVE_s);\n\nVulnerabilities\n| distinct ParsedCveYear,Computer_Name_s, CVE_s\n| extend Year = strcat('Year ', ParsedCveYear)\n| summarize count() by Year, ParsedCveYear\n| sort by ParsedCveYear asc",
+              "size": 0,
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "chartSettings": {
+                "xAxis": "Year",
+                "group": "ParsedCveYear",
+                "createOtherGroup": 100
+              }
+            },
+            "name": "query - 3"
+          },          
+          {
+            "type": 1,
+            "content": {
+              "json": "## Vulnerability Distribution by Severity\nDistribution of all CVEs in the environment by Severity. Based on the CVSS v3 standard"
+            },
+            "name": "visualization title"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyVulnerabilities_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n    \nTaniumComplyVulnerabilities_CL\n|where TimeGenerated >= lastRunTime\n|distinct CVE_s,CVSS_v3_Severity_s\n|summarize count() by CVSS_v3_Severity_s\n",
+              "size": 0,
               "timeContext": {
                 "durationMs": 2592000000
               },
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "piechart",
-              "tileSettings": {
-                "titleContent": {
-                  "columnMatch": "Operating_System_Generation_s",
-                  "formatter": 1
-                },
-                "leftContent": {
-                  "columnMatch": "count_",
-                  "formatter": 12,
-                  "formatOptions": {
-                    "palette": "auto"
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "High",
+                    "color": "orange"
                   },
-                  "numberFormat": {
-                    "unit": 17,
-                    "options": {
-                      "maximumSignificantDigits": 3,
-                      "maximumFractionDigits": 2
-                    }
-                  }
-                },
-                "showBorder": false
-              }
-            },
-            "name": "query - 3"
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "## Vulnerability distribution by year"
-            },
-            "name": "text - 2"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "TaniumComplyVulnerabilities_CL\n|distinct CVE_Year_s,Computer_Name_s, CVE_s\n|summarize count() by CVE_Year_s\n|render barchart  \n|sort by CVE_Year_s asc",
-              "size": 0,
-              "timeContext": {
-                "durationMs": 2592000000
-              },
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces"
-            },
-            "name": "query - 3"
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "## Vulnerability Distribution by OS"
-            },
-            "name": "text - 5"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "TaniumComplyVulnerabilities_CL\n|distinct CVE_s, Computer_Name_s, Operating_System_Generation_s\n|summarize count() by Operating_System_Generation_s\n|render barchart",
-              "size": 0,
-              "timeContext": {
-                "durationMs": 2592000000
-              },
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces"
-            },
-            "name": "query - 4"
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "## Vulnerability Distribution by Severity"
-            },
-            "name": "text - 6"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "TaniumComplyVulnerabilities_CL\n|distinct CVE_s,Severity_s\n|summarize count() by Severity_s",
-              "size": 0,
-              "timeContext": {
-                "durationMs": 2592000000
-              },
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "graph",
-              "tileSettings": {
-                "showBorder": false,
-                "titleContent": {
-                  "columnMatch": "Severity_s",
-                  "formatter": 1
-                },
-                "leftContent": {
-                  "columnMatch": "count_",
-                  "formatter": 12,
-                  "formatOptions": {
-                    "palette": "auto"
+                  {
+                    "seriesName": "Medium",
+                    "color": "yellow"
                   },
-                  "numberFormat": {
-                    "unit": 17,
-                    "options": {
-                      "maximumSignificantDigits": 3,
-                      "maximumFractionDigits": 2
-                    }
+                  {
+                    "seriesName": "Critical",
+                    "color": "redBright"
+                  },
+                  {
+                    "seriesName": "Unscored",
+                    "color": "blue"
+                  },
+                  {
+                    "seriesName": "Low",
+                    "color": "green"
                   }
-                }
-              },
-              "graphSettings": {
-                "type": 2,
-                "topContent": {
-                  "columnMatch": "Severity_s",
-                  "formatter": 1
-                },
-                "centerContent": {
-                  "columnMatch": "count_",
-                  "formatter": 1,
-                  "numberFormat": {
-                    "unit": 17,
-                    "options": {
-                      "maximumSignificantDigits": 3,
-                      "maximumFractionDigits": 2
-                    }
-                  }
-                },
-                "nodeIdField": "Severity_s",
-                "graphOrientation": 3,
-                "showOrientationToggles": false,
-                "nodeSize": null,
-                "staticNodeSize": 100,
-                "colorSettings": null,
-                "hivesMargin": 5
-              },
-              "textSettings": {
-                "style": "bignumber"
+                ]
               }
             },
             "name": "query - 7"
@@ -288,15 +274,15 @@
           {
             "type": 1,
             "content": {
-              "json": "## System Outliers (Based on CVE Count & Aggregate CVSS Score)\n"
+              "json": "## Compliance Outliers\nFor each endpoint, sums up the all of its associated CVSS v3 scores. Higher numbers indicate endpoints requiring more attention"
             },
-            "name": "text - 14"
+            "name": "visualization title"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumComplyVulnerabilities_CL\n|join kind=inner TaniumMainAsset_CL on Computer_Name_s\n|distinct CVE_s,Computer_Name_s,CVSS_Score_s, Operating_System_Generation_s\n|summarize  CVECount=dcount(CVE_s), cvss_endpoint_score=sum(todecimal(CVSS_Score_s)) by Computer_Name_s, Operating_System_Generation_s\n|project cvss_endpoint_score, CVECount, Computer_Name_s, Operating_System_Generation_s\n|render scatterchart\n|sort by cvss_endpoint_score asc",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyVulnerabilities_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n    \nTaniumComplyVulnerabilities_CL\n|where TimeGenerated >= lastRunTime\n    and Scan_Type_s != 'container registries'\n    and CVSS_v3_Severity_s != 'Unscored'\n|distinct CVE_s,Computer_Name_s,CVSS_v3_Score_d, Operating_System_Generation_s\n|summarize  CVECount=dcount(CVE_s), cvss_endpoint_score=sum(todecimal(CVSS_v3_Score_d)) by Computer_Name_s, Operating_System_Generation_s\n|sort by cvss_endpoint_score asc",
               "size": 0,
               "timeContext": {
                 "durationMs": 604800000
@@ -371,48 +357,295 @@
           {
             "type": 1,
             "content": {
-              "json": "## Compliance Benchmark - Pass Rate"
+              "json": "## Comply Findings Summary\nFor each unique combination of Benchmark (e.g. CIS) and Profile (e.g. Level 1), shows the % of endpoints that are compliant"
             },
-            "name": "text - 10"
+            "name": "visualization title"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumComplyCompliance_CL | where  Rule_ID_s <> \"\"\n|summarize  Total=count(), Pass=countif(Status_Category_s has \"Pass\"), Fail=countif(Status_Category_s has \"Fail\")\n|extend PassRate=(Pass*1.0/Total)*100\n|project PassRate",
-              "size": 1,
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyCompliance_CL\n    | order by TimeGenerated desc\n    | distinct  bin(TimeGenerated, 5m)\n    | limit 1);\n\nTaniumComplyCompliance_CL\n| where TimeGenerated >= lastRunTime\n    and Rule_ID_s != ''\n    and Rule_ID_s != '[no results]'\n    and Status_Category_s != 'Error'\n| extend Benchmark = Standard_s\n| extend Profile = Profile_s\n| project Benchmark, Profile, Status_Category_s\n| summarize FindingsCount = count() by Benchmark, Profile, Status_Category_s\n| evaluate pivot(Status_Category_s, sum(FindingsCount))\n| extend Findings = Pass + Fail + Informational\n| extend PercentCompliantEndpoints = (Pass*1.0/Findings)\n| project PercentCompliantEndpoints",
+              "size": 0,
               "timeContext": {
-                "durationMs": 604800000
+                "durationMs": 86400000
               },
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "tiles",
+              "visualization": "stat",
               "tileSettings": {
-                "titleContent": {
-                  "columnMatch": "PassRate",
-                  "formatter": 12,
-                  "formatOptions": {
-                    "palette": "redBright"
+                "showBorder": false
+              },
+              "statSettings": {
+                "valueField": "PercentCompliantEndpoints",
+                "valueAggregation": "Average",
+                "colorSettings": {
+                  "type": "static",
+                  "mode": "background",
+                  "heatmapPalette": "greenRed",
+                  "thresholdsGrid": []
+                },
+                "iconSettings": {
+                  "thresholdsGrid": []
+                },
+                "numberFormatSettings": {
+                  "unit": 0,
+                  "options": {
+                    "style": "percent",
+                    "useGrouping": true,
+                    "maximumFractionDigits": 0
                   }
                 },
-                "showBorder": false
+                "tagText": "Average",
+                "valueFontStyle": "auto",
+                "valueTooltipSettings": {
+                  "tooltip": "hello"
+                }
               }
             },
-            "name": "query - 11"
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "## Top 10 Benchmark Failures"
-            },
-            "name": "text - 12"
+            "customWidth": "25",
+            "name": "query - 17"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumComplyCompliance_CL \n|where  Rule_ID_s <> \"\" and Status_Category_s has \"fail\"\n|summarize Count=count() by RuleID=Rule_ID_s\n|top 10 by Count",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyCompliance_CL\n    | order by TimeGenerated desc\n    | distinct  bin(TimeGenerated, 5m)\n    | limit 1);\n\nTaniumComplyCompliance_CL\n| where TimeGenerated >= lastRunTime\n    and Rule_ID_s != ''\n    and Rule_ID_s != '[no results]'\n    and Status_Category_s != 'Error'\n| extend Benchmark = Standard_s\n| extend Profile = Profile_s\n| project Benchmark, Profile, Status_Category_s\n| summarize FindingsCount = count() by Benchmark, Profile, Status_Category_s\n| evaluate pivot(Status_Category_s, sum(FindingsCount))\n| extend Findings = Pass + Fail + Informational\n| extend PercentCompliantEndpoints = (Pass*1.0/Findings)\n| summarize median = percentile(PercentCompliantEndpoints, 50)\n",
               "size": 0,
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "stat",
+              "tileSettings": {
+                "showBorder": false
+              },
+              "statSettings": {
+                "valueAggregation": "None",
+                "colorSettings": {
+                  "type": "static",
+                  "mode": "background",
+                  "heatmapPalette": "greenRed",
+                  "thresholdsGrid": []
+                },
+                "iconSettings": {
+                  "thresholdsGrid": []
+                },
+                "numberFormatSettings": {
+                  "unit": 0,
+                  "options": {
+                    "style": "percent",
+                    "useGrouping": true,
+                    "maximumFractionDigits": 0
+                  }
+                },
+                "tagText": "Median",
+                "valueFontStyle": "auto",
+                "valueTooltipSettings": {
+                  "tooltip": "hello"
+                }
+              }
+            },
+            "customWidth": "25",
+            "name": "query - 17 - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyCompliance_CL\n    | order by TimeGenerated desc\n    | distinct  bin(TimeGenerated, 5m)\n    | limit 1);\n\nTaniumComplyCompliance_CL\n| where TimeGenerated >= lastRunTime\n    and Rule_ID_s != ''\n    and Rule_ID_s != '[no results]'\n    and Status_Category_s != 'Error'\n| extend Benchmark = Standard_s\n| extend Profile = Profile_s\n| project Benchmark, Profile, Status_Category_s\n| summarize FindingsCount = count() by Benchmark, Profile, Status_Category_s\n| evaluate pivot(Status_Category_s, sum(FindingsCount))\n| extend Findings = Pass + Fail + Informational\n| extend PercentCompliantEndpoints = (Pass*1.0/Findings)\n| project PercentCompliantEndpoints",
+              "size": 0,
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "stat",
+              "tileSettings": {
+                "showBorder": false
+              },
+              "statSettings": {
+                "valueField": "PercentCompliantEndpoints",
+                "valueAggregation": "Max",
+                "colorSettings": {
+                  "type": "static",
+                  "mode": "background",
+                  "heatmapPalette": "greenRed",
+                  "thresholdsGrid": []
+                },
+                "iconSettings": {
+                  "thresholdsGrid": []
+                },
+                "numberFormatSettings": {
+                  "unit": 0,
+                  "options": {
+                    "style": "percent",
+                    "useGrouping": true,
+                    "maximumFractionDigits": 0
+                  }
+                },
+                "tagText": "Max",
+                "valueFontStyle": "auto",
+                "valueTooltipSettings": {
+                  "tooltip": "hello"
+                }
+              }
+            },
+            "customWidth": "25",
+            "name": "query - 17 - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyCompliance_CL\n    | order by TimeGenerated desc\n    | distinct  bin(TimeGenerated, 5m)\n    | limit 1);\n\nTaniumComplyCompliance_CL\n| where TimeGenerated >= lastRunTime\n    and Rule_ID_s != ''\n    and Rule_ID_s != '[no results]'\n    and Status_Category_s != 'Error'\n| extend Benchmark = Standard_s\n| extend Profile = Profile_s\n| project Benchmark, Profile, Status_Category_s\n| summarize FindingsCount = count() by Benchmark, Profile, Status_Category_s\n| evaluate pivot(Status_Category_s, sum(FindingsCount))\n| extend Findings = Pass + Fail + Informational\n| extend PercentCompliantEndpoints = (Pass*1.0/Findings)\n| project PercentCompliantEndpoints",
+              "size": 0,
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "stat",
+              "tileSettings": {
+                "showBorder": false
+              },
+              "statSettings": {
+                "valueField": "PercentCompliantEndpoints",
+                "valueAggregation": "Min",
+                "colorSettings": {
+                  "type": "static",
+                  "mode": "background",
+                  "heatmapPalette": "greenRed",
+                  "thresholdsGrid": []
+                },
+                "iconSettings": {
+                  "thresholdsGrid": []
+                },
+                "numberFormatSettings": {
+                  "unit": 0,
+                  "options": {
+                    "style": "percent",
+                    "useGrouping": true,
+                    "maximumFractionDigits": 0
+                  }
+                },
+                "tagText": "Min",
+                "valueFontStyle": "auto",
+                "valueTooltipSettings": {
+                  "tooltip": "hello"
+                }
+              }
+            },
+            "customWidth": "25",
+            "name": "query - 17 - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyCompliance_CL\n    | order by TimeGenerated desc\n    | distinct  bin(TimeGenerated, 5m)\n    | limit 1);\n\nTaniumComplyCompliance_CL\n| where TimeGenerated >= lastRunTime\n    and Rule_ID_s != ''\n    and Rule_ID_s != '[no results]'\n    and Status_Category_s != 'Error'\n| extend Benchmark = Standard_s\n| extend Profile = Profile_s\n| project Benchmark, Profile, Status_Category_s\n| summarize FindingsCount = count() by Benchmark, Profile, Status_Category_s\n| evaluate pivot(Status_Category_s, sum(FindingsCount))\n| extend ['Total Findings'] = Pass + Fail + Informational\n| extend ['% of Compliant Endpoints'] = (todecimal(Pass)/todecimal(['Total Findings']))\n| project Benchmark, Profile, ['% of Compliant Endpoints'], ['Total Findings'], Pass, Fail, Informational\n",
+              "size": 0,
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "% of Compliant Endpoints",
+                    "formatter": 0,
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "percent"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "% Compliant Endpoints",
+                    "formatter": 0,
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "percent"
+                      }
+                    }
+                  }
+                ],
+                "sortBy": [
+                  {
+                    "itemKey": "Benchmark",
+                    "sortOrder": 1
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "Benchmark",
+                  "sortOrder": 1
+                }
+              ]
+            },
+            "name": "query - 16"
+          },          
+          {
+            "type": 1,
+            "content": {
+              "json": "## Top Compliance Failures\nShows the Benchmark and Profile combinations that have resulted in high counts or rates of failure"
+            },
+            "name": "visualization title"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "02d52897-0eb4-448e-94a0-6376a2e79f0f",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "BenchmarkFailuresLimit",
+                  "label": "Limit to",
+                  "type": 1,
+                  "isRequired": true,
+                  "typeSettings": {
+                    "paramValidationRules": [
+                      {
+                        "regExp": "\\b([1-9]|[1-9]{1}[0-9]{1}|[1-9]{1}[0-9]{2})\\b",
+                        "match": true,
+                        "message": "Must be between 1 and 999"
+                      }
+                    ]
+                  },
+                  "criteriaData": [
+                    {
+                      "criteriaContext": {
+                        "operator": "Default",
+                        "resultValType": "static",
+                        "resultVal": "10"
+                      }
+                    }
+                  ],
+                  "timeContext": {
+                    "durationMs": 86400000
+                  }
+                }
+              ],
+              "style": "above",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 20"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyCompliance_CL\n    | order by TimeGenerated desc\n    | distinct  bin(TimeGenerated, 5m)\n    | limit 1);\n\nTaniumComplyCompliance_CL\n| where TimeGenerated >= lastRunTime\n    and Rule_ID_s != ''\n    and Rule_ID_s != '[no results]'\n    and Status_Category_s != 'Error'\n| extend Benchmark = Standard_s\n| extend Profile = Profile_s\n| extend ['Rule Id'] = Rule_ID_s\n| extend Rule = Rule_s\n| project Benchmark, Profile, ['Rule Id'], Rule, Status_Category_s\n| where Status_Category_s  == 'Fail'\n| summarize ['Failed Count'] = count() by Benchmark, Profile, ['Rule Id'], Rule\n| order by ['Failed Count'] desc\n| limit {BenchmarkFailuresLimit}\n",
+              "size": 0,
+              "title": "By Failure Count",
               "timeContext": {
                 "durationMs": 2592000000
               },
@@ -420,6 +653,35 @@
               "resourceType": "microsoft.operationalinsights/workspaces"
             },
             "name": "query - 13"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let lastRunTime = toscalar(\n    TaniumComplyCompliance_CL\n    | order by TimeGenerated desc\n    | distinct  bin(TimeGenerated, 5m)\n    | limit 1);\n\nTaniumComplyCompliance_CL\n| where TimeGenerated >= lastRunTime\n    and Rule_ID_s != ''\n    and Rule_ID_s != '[no results]'\n    and Status_Category_s != 'Error'\n| extend Benchmark = Standard_s\n| extend Profile = Profile_s\n| project Benchmark, Profile, Status_Category_s\n| summarize FindingsCount = count() by Benchmark, Profile, Status_Category_s\n| evaluate pivot(Status_Category_s, sum(FindingsCount))\n| extend Findings = Pass + Fail + Informational\n| extend ['% of Failures'] = (Fail*1.0/Findings)\n| order by ['% of Failures'] desc\n| limit {BenchmarkFailuresLimit}\n",
+              "size": 0,
+              "title": "By Failure %",
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "% of Failures",
+                    "formatter": 0,
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "percent"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "name": "query - 13 - Copy"
           }
         ]
       },
@@ -429,7 +691,7 @@
         "value": "Comply"
       },
       "customWidth": "100",
-      "name": "cvss_group",
+      "name": "comply group",
       "styleSettings": {
         "maxWidth": "100"
       }
@@ -443,37 +705,41 @@
           {
             "type": 1,
             "content": {
-              "json": "## Unmanaged OS Platform\n"
+              "json": "## Unmanaged Devices by OS\nCount of unmanaged assets by Operating System. Nmap (Level 3+) scans are required"
             },
-            "name": "text - 0"
+            "name": "visualization title"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumDiscoverUnmanagedAssets_CL\n|where Os_s <> \"\" \n|distinct MacAddress_s,Os_s\n|summarize count() by Os_s\n",
+              "query": "let lastRunTime = toscalar(\n    TaniumDiscoverUnmanagedAssets_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n    \n    TaniumDiscoverUnmanagedAssets_CL\n    | where TimeGenerated >= lastRunTime and Os_s <> '' \n    | distinct MacAddress_s, Os_s\n    | summarize count() by Os_s\n    \n    ",
               "size": 0,
               "timeContext": {
                 "durationMs": 2592000000
               },
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "piechart"
+              "visualization": "piechart",
+              "chartSettings": {
+                "group": "Os_s",
+                "createOtherGroup": 20
+              }
             },
-            "name": "query - 1"
+            "name": "visualization title"
           },
           {
             "type": 1,
             "content": {
-              "json": "## Unmanaged Device Type"
+              "json": "## Unmanaged Devices by Manufacturer\nCount of unmanaged assets by manufacturer. All scan types applicable"
             },
-            "name": "text - 2"
+            "name": "visualization title"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumDiscoverUnmanagedAssets_CL\n|where MacOrganization_s <> \"\" \n|distinct MacAddress_s,MacOrganization_s\n|summarize count() by MacOrganization_s",
+              "query": "let lastRunTime = toscalar(\nTaniumDiscoverUnmanagedAssets_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);\n\nTaniumDiscoverUnmanagedAssets_CL\n|where TimeGenerated >= lastRunTime and  MacOrganization_s <> '' \n|distinct MacAddress_s, MacOrganization_s\n|summarize count() by MacOrganization_s",
               "size": 0,
               "timeContext": {
                 "durationMs": 2592000000
@@ -487,22 +753,32 @@
           {
             "type": 1,
             "content": {
-              "json": "## Unmanaged Open Ports"
+              "json": "##  Unmanaged Devices by Open Ports\nCounts which ports are most frequently found open on unmanaged assets. Level 4 scans required for port data"
             },
-            "name": "text - 4"
+            "name": "visualization title"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumDiscoverUnmanagedAssets_CL\n|where Ports_s <> \"\" \n|distinct MacAddress_s,Ports_s\n|summarize count() by Ports_s\n\n",
+              "query": "let lastRunTime = toscalar(\n    TaniumDiscoverUnmanagedAssets_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n\nTaniumDiscoverUnmanagedAssets_CL\n| where TimeGenerated >= lastRunTime\n    and Ports_s != '' \n| distinct MacAddress_s,Ports_s\n| extend dPort = parse_json(strcat('[', Ports_s, ']'))\n| mv-expand  dPort\n| extend Port = strcat('Port ', tostring(dPort))\n| project MacAddress_s, Port\n| summarize count() by Port;",
               "size": 0,
               "timeContext": {
                 "durationMs": 2592000000
               },
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "piechart"
+              "visualization": "piechart",
+              "chartSettings": {
+                "group": "Port",
+                "createOtherGroup": 6,
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Other",
+                    "color": "redBright"
+                  }
+                ]
+              }
             },
             "name": "query - 5"
           },
@@ -511,13 +787,13 @@
             "content": {
               "json": "## All Unmanaged Assets"
             },
-            "name": "text - 6"
+            "name": "visualization title"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumDiscoverUnmanagedAssets_CL\n| where HostName_s <> \"\"\n| project Hostname=HostName_s, MacAddres=MacAddress_s, IPAddress, MacOrganization=MacOrganization_s, LastDiscoveredTime=LastDiscoveredAt_s\n| sort by LastDiscoveredTime",
+              "query": "let lastRunTime = toscalar(\n    TaniumDiscoverUnmanagedAssets_CL\n    | extend roundedTime = bin(TimeGenerated, 1m) \n    | distinct roundedTime    \n    | order by roundedTime desc     \n    | limit 1);\n    \n    TaniumDiscoverUnmanagedAssets_CL\n    | where TimeGenerated >= lastRunTime and HostName_s <> ''\n    | project ['Host Name']=HostName_s, ['Mac Address']=MacAddress_s, ['IP Address']=IPAddress, ['Mac Organization']=MacOrganization_s, ['Last Discovered At']=LastDiscoveredAt_t\n    | sort by ['Last Discovered At']",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
@@ -541,12 +817,12 @@
       "content": {
         "version": "NotebookGroup/1.0",
         "groupType": "editable",
-        "title": "MIcrosoft Tooling Health ",
+        "title": "Microsoft Tooling Health ",
         "items": [
           {
             "type": 1,
             "content": {
-              "json": "## Defender AV Status"
+              "json": "## Microsoft Defender Installation Status\nShows distribution of endpoints with Microsoft Defender installed"
             },
             "name": "text - 0"
           },
@@ -554,20 +830,37 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumDefenderHealth_CL\n|where Antivirus_State_s <> \"\"\n|summarize count () by Antivirus_State_s\n|project Antivirus_State=Antivirus_State_s, Count=count_\n|render piechart    \n",
+              "query": "let cleanLeft = (s:string) { iff(s startswith '[\"', substring(s,2), s) };\nlet cleanRight = (s:string) { iff(s endswith '\"]', substring(s, 0, strlen(s) - 2), s) };\nlet clean = (s:string) { cleanLeft(cleanRight(s)) };\nlet status = (s:string) { iff(s == 'True', 'Installed', iff(s == 'False', 'Not Installed', iff(s == '', 'Unknown', s)))};\n\nlet lastRunTime = toscalar(\nTaniumDefenderHealth_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);    \n\nlet MsftDefenderHealth =\nTaniumDefenderHealth_CL\n| where TimeGenerated >= lastRunTime\n| extend ComputerName = clean(Computer_Name_s)\n| extend Status = status(clean(Is_Defender_Installed_s))\n| project ComputerName, Status, TimeGenerated;\n\nMsftDefenderHealth\n| summarize Endpoints = count () by Status",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
               },
               "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces"
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Installed",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "Not Installed",
+                    "color": "redBright"
+                  },
+                  {
+                    "seriesName": "Unknown",
+                    "color": "orange"
+                  }
+                ]
+              }
             },
             "name": "query - 1"
           },
           {
             "type": 1,
             "content": {
-              "json": "## Defender AV Process Status"
+              "json": "## Microsoft Defender Health Status\nFor endpoints with Defender installed, shows Defender health status counts"
             },
             "name": "text - 2"
           },
@@ -575,20 +868,113 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumDefenderHealth_CL\n|where Defender_Process_s <> \"\"\n|summarize count () by Defender_Process_s\n|project Defender_Process_Status=Defender_Process_s, Count=count_\n|render piechart    \n",
+              "query": "let cleanLeft = (s:string) { iff(s startswith '[\"', substring(s,2), s) };\nlet cleanRight = (s:string) { iff(s endswith '\"]', substring(s, 0, strlen(s) - 2), s) };\nlet clean = (s:string) { cleanLeft(cleanRight(s)) };\nlet installationStatus = (s:string) { iff(s == 'True', 'Installed', iff(s == 'False', 'Not Installed', iff(s == '', 'Unknown', s)))};\nlet status = (s:string) { iff(s == 'True', 'Healthy', iff(s == 'False', 'Unhealthy', s))};\n\nlet lastRunTime = toscalar(\nTaniumDefenderHealth_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime\n| order by roundedTime desc\n| limit 1);\n\nlet MsftDefenderHealth =\nTaniumDefenderHealth_CL\n| where TimeGenerated >= lastRunTime\n| extend ComputerName = clean(Computer_Name_s)\n| extend IsDefenderInstalled = installationStatus(clean(Is_Defender_Installed_s))\n| extend Status = status(clean(Is_Defender_Healthy_s))\n| project ComputerName, IsDefenderInstalled, Status, TimeGenerated;\n\nMsftDefenderHealth\n| where IsDefenderInstalled == 'Installed'\n| summarize Endpoints = count () by Status",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
               },
               "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces"
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Healthy",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "Unhealthy",
+                    "color": "redBright"
+                  }
+                ]
+              }
             },
             "name": "query - 3"
           },
           {
             "type": 1,
             "content": {
-              "json": "## Defender AV Signature Update Age"
+              "json": "## Microsoft Defender AntiMalware Status\nFor endpoints with Defender installed and in a healthy state, shows AntiMalware service status"
+            },
+            "name": "text - 22"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let cleanLeft = (s:string) { iff(s startswith '[\"', substring(s,2), s) };\nlet cleanRight = (s:string) { iff(s endswith '\"]', substring(s, 0, strlen(s) - 2), s) };\nlet clean = (s:string) { cleanLeft(cleanRight(s)) };\nlet installationStatus = (s:string) { iff(s == 'True', 'Installed', iff(s == 'False', 'Not Installed', iff(s == '', 'Unknown', s)))};\nlet defenderHealth = (s: string) { iif(s == 'True', 'Healthy', iff(s == 'False', 'Unhealthy', s))};\nlet malwareStatus = (s:string) { iff(s == 'True', 'Enabled', iff(s == 'False', 'Not Enabled', iff(s == '', 'Unknown', s)))};\n\nlet lastRunTime = toscalar(\nTaniumDefenderHealth_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);   \n\nlet MsftDefenderHealth =\nTaniumDefenderHealth_CL\n| where TimeGenerated >= lastRunTime\n| extend ComputerName = clean(Computer_Name_s)\n| extend IsDefenderInstalled = installationStatus(clean(Is_Defender_Installed_s))\n| extend DefenderHealth = defenderHealth(clean(Is_Defender_Healthy_s))\n| extend IsAntiMalwareEnabled = malwareStatus(clean(Is_AntiMalware_Service_Enabled_s))\n| project ComputerName, IsDefenderInstalled, DefenderHealth, IsAntiMalwareEnabled, TimeGenerated;\n\nMsftDefenderHealth\n| where IsDefenderInstalled == 'Installed' and DefenderHealth == 'Healthy'\n| summarize Endpoints = count () by IsAntiMalwareEnabled\n",
+              "size": 0,
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Enabled",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "Unknown",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "Not Enabled",
+                    "color": "redBright"
+                  }
+                ]
+              }
+            },
+            "name": "query - 32"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## Microsoft Defender AntiSpyware Status\n For endpoints with Defender installed and in a healthy state, shows AntiSpyware service status"
+            },
+            "name": "text - 21"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let cleanLeft = (s:string) { iff(s startswith '[\"', substring(s,2), s) };\nlet cleanRight = (s:string) { iff(s endswith '\"]', substring(s, 0, strlen(s) - 2), s) };\nlet clean = (s:string) { cleanLeft(cleanRight(s)) };\nlet installationStatus = (s:string) { iff(s == 'True', 'Installed', iff(s == 'False', 'Not Installed', iff(s == '', 'Unknown', s)))};\nlet defenderHealth = (s: string) { iif(s == 'True', 'Healthy', iff(s == 'False', 'Unhealthy', s))};\nlet spywareStatus = (s:string) { iff(s == 'True', 'Enabled', iff(s == 'False', 'Not Enabled', iff(s == '', 'Unknown', s)))};\n\nlet lastRunTime = toscalar(\nTaniumDefenderHealth_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);   \n\nlet MsftDefenderHealth =\nTaniumDefenderHealth_CL\n| where TimeGenerated >= lastRunTime\n| extend ComputerName = clean(Computer_Name_s)\n| extend IsDefenderInstalled = installationStatus(clean(Is_Defender_Installed_s))\n| extend DefenderHealth = defenderHealth(clean(Is_Defender_Healthy_s))\n| extend IsAntiSpywareEnabled = spywareStatus(clean(Is_AntiSpyware_Service_Enabled_s))\n| project ComputerName, IsDefenderInstalled, DefenderHealth, IsAntiSpywareEnabled, TimeGenerated;\n\nMsftDefenderHealth\n| where IsDefenderInstalled == 'Installed' and DefenderHealth == 'Healthy'\n| summarize Endpoints = count () by IsAntiSpywareEnabled",
+              "size": 0,
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Enabled",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "N/A on Mac",
+                    "color": "blue"
+                  },
+                  {
+                    "seriesName": "Not Enabled",
+                    "color": "redBright"
+                  },
+                  {
+                    "seriesName": "Unknown",
+                    "color": "orange"
+                  }
+                ]
+              }
+            },
+            "name": "query - 31"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## Microsoft Defender AntiSpyware Signature Update Age\nFor endpoints with Defender installed and AntiSpyware enabled, shows endpoints that need signature updates"
             },
             "name": "text - 4"
           },
@@ -596,13 +982,24 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumDefenderHealth_CL\n|where Signature_Update_Age_s <> \"\"\n|summarize count () by Signature_Update_Age=Signature_Update_Age_s\n|project Signature_Update_Age=Signature_Update_Age, Count=count_\n|render columnchart    ",
+              "query": "let cleanLeft = (s:string) { iff(s startswith '[\"', substring(s,2), s) };\nlet cleanRight = (s:string) { iff(s endswith '\"]', substring(s, 0, strlen(s) - 2), s) };\nlet clean = (s:string) { cleanLeft(cleanRight(s)) };\nlet installationStatus = (s:string) { iff(s == 'True', 'Installed', iff(s == 'False', 'Not Installed', iff(s == '', 'Unknown', s)))};\nlet spywareStatus = (s:string) { iff(s == 'True', 'Enabled', iff(s == 'False', 'Not Enabled', iff(s == '', 'Unknown', s)))};\n\nlet lastRunTime = toscalar(\nTaniumDefenderHealth_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);   \n\nlet MsftDefenderHealth =\nTaniumDefenderHealth_CL\n| where TimeGenerated >= lastRunTime\n| extend ComputerName = clean(Computer_Name_s)\n| extend IsDefenderInstalled = installationStatus(clean(Is_Defender_Installed_s))\n| extend IsAntiSpywareEnabled = spywareStatus(clean(Is_AntiSpyware_Service_Enabled_s))\n| extend SignatureUpdateAge = toint(clean(AntiSpyware_Signature_Days_Age_s))\n| project ComputerName, SignatureUpdateAge, IsDefenderInstalled, IsAntiSpywareEnabled, TimeGenerated;\n\nMsftDefenderHealth\n| where IsDefenderInstalled == 'Installed' and IsAntiSpywareEnabled == 'Enabled'\n| summarize Endpoints = count () by UpdateAge = strcat(SignatureUpdateAge, ' Days'), SignatureUpdateAge\n| order by SignatureUpdateAge desc",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
               },
               "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces"
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "chartSettings": {
+                "xAxis": "UpdateAge",
+                "yAxis": "Endpoints",
+                "xSettings": {
+                  "label": "Age (Days)"
+                },
+                "ySettings": {
+                  "label": "Count"
+                }
+              }
             },
             "name": "query - 5"
           }
@@ -614,7 +1011,7 @@
         "value": "Microsoft Tooling Health"
       },
       "customWidth": "50",
-      "name": "group - 5"
+      "name": "tooling health column 1"
     },
     {
       "type": 12,
@@ -626,7 +1023,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## MEMCM Health Status"
+              "json": "## Microsoft Configuration Manager Health Status\nDisplays health status for endpoints managed by Configuration Manager (formerly known as SCCM). Will not display properly if Configuration Manager is not set up"
             },
             "name": "text - 0"
           },
@@ -647,7 +1044,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## MEMCM Health Issues"
+              "json": "## Microsoft Configuration Manager Health Distribution\nDisplays distribution of health status of endpoints managed by Configuration Manager. Will not display properly if Configuration Manager is not set up"
             },
             "name": "text - 2"
           },
@@ -673,7 +1070,7 @@
         "value": "Microsoft Tooling Health"
       },
       "customWidth": "50",
-      "name": "sccm_group"
+      "name": "tooling health column 2"
     },
     {
       "type": 12,
@@ -684,7 +1081,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Intel Names over time"
+              "json": "## Alerts by Intel Documents over time\nVisualization of how often the top intel docs (detection rules) generated alerts over the last 30 days"
             },
             "name": "text - 1"
           },
@@ -705,7 +1102,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Threat Response Alert Types"
+              "json": "## Threat Response Alerts by Intel Document Type\nBreakdown of how often each intel document type generates alerts"
             },
             "name": "text - 2"
           },
@@ -726,7 +1123,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## THR Alert by User\n"
+              "json": "## Threat Response Alerts by User\nBreakdown of how often each user generates Tanium alerts"
             },
             "name": "text - 4"
           },
@@ -747,7 +1144,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Threat Response Alerts by Process Name"
+              "json": "## Threat Response Alerts by Process Name\nBreakdown of the alerting processes that come up most frequently"
             },
             "name": "text - 6"
           },
@@ -768,7 +1165,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## All Alerts by Computer Name"
+              "json": "## Threat Response Alerts by Computer Name and Intel\nBreakdown of the endpoint and intel combinations that generate the most alerts"
             },
             "name": "text - 8"
           },
@@ -804,7 +1201,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Reboot Required"
+              "json": "## Endpoints requiring Reboot\nCount of endpoints that require a reboot"
             },
             "name": "text - 0"
           },
@@ -812,7 +1209,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumHighUptime_CL\n|project TimeGenerated, Computer_Name_s,Reboot_Required_s\n|where Reboot_Required_s contains \"Yes\"\n|count",
+              "query": "\nlet lastRunTime = toscalar(\nTaniumHighUptime_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);    \n\nTaniumHighUptime_CL\n| where TimeGenerated >= lastRunTime\n|project TimeGenerated, Computer_Name_s,Reboot_Required_s\n|where Reboot_Required_s contains 'Yes'\n|count",
               "size": 4,
               "timeContext": {
                 "durationMs": 86400000
@@ -832,7 +1229,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Endpoints with High Uptime (>30 days)"
+              "json": "## Endpoints with High Uptime\nDisplays endpoints that have not rebooted in >=30 days. May indicate missing patches on Windows machines"
             },
             "name": "text - 2"
           },
@@ -840,7 +1237,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumHighUptime_CL\n|where High_Uptime_s !in (\"Less than 30\", \"N/A\")\n|extend Days=split(High_Uptime_s,\" \",0)\n|project Computer_Name=Computer_Name_s,toint(Days=Days[0])",
+              "query": "let cleanLeft = (s:string) { iff(s startswith '[\"', substring(s,2), s) };\nlet cleanRight = (s:string) { iff(s endswith '\"]', substring(s, 0, strlen(s) - 2), s) };\nlet clean = (s:string) { cleanLeft(cleanRight(s)) };\nlet parseDayCount = (s:string) { toint(split(s, ' ', 0)[0]) };\n\nlet lastRunTime = toscalar(\nTaniumHighUptime_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);  \n\nTaniumHighUptime_CL\n| where TimeGenerated >= lastRunTime and High_Uptime_s contains 'days'\n| extend Days=parseDayCount(High_Uptime_s)\n| project ['Computer Name']=clean(Computer_Name_s), Days",
               "size": 1,
               "timeContext": {
                 "durationMs": 86400000
@@ -878,7 +1275,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Patch Compliance - All Patches"
+              "json": "## Patch Compliance\nDisplays distribution of patch compliance across all endpoints"
             },
             "name": "text - 4",
             "styleSettings": {
@@ -889,20 +1286,59 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumPatchListCompliance_CL\n|where Patch_List_Name_s == \"All Patches\"\n|summarize count () by Compliance_Status_s\n|render piechart ",
+              "query": "let getIndex = (s:string) { array_index_of(parse_json(s), 'All Patches') };\nlet getDisplayOrder = (s:string) { iff(s startswith 'Over', 101, iff(s == 'Compliant', 0, split(s, ' ', 0)[0])) };\n\nlet lastRunTime = toscalar(\nTaniumPatchListCompliance_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);  \n\nTaniumPatchListCompliance_CL\n| where TimeGenerated >= lastRunTime and Patch_List_Name_s contains 'All Patches'\n| extend patchIndex = getIndex(Patch_List_Name_s)\n| extend PatchId = parse_json(Patch_List_Id_s)[patchIndex]\n| extend ComplianceStatus = tostring(parse_json(Compliance_Status_s)[patchIndex])\n| extend OrderValue = getDisplayOrder(ComplianceStatus)\n| project Computer_Name_s, ComplianceStatus, OrderValue\n| summarize Endpoints = count (), SortOrder = min(OrderValue) by ComplianceStatus\n| order by SortOrder desc\n",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
               },
               "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces"
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "group": "ComplianceStatus",
+                "createOtherGroup": 20,
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "1 - 5 missing",
+                    "color": "turquoise"
+                  },
+                  {
+                    "seriesName": "Over 100 missing",
+                    "color": "redBright"
+                  },
+                  {
+                    "seriesName": "Compliant",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "51 - 100 missing",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "26 - 50 missing",
+                    "color": "yellow"
+                  },
+                  {
+                    "seriesName": "11 - 25 missing",
+                    "color": "purple"
+                  },
+                  {
+                    "seriesName": "6 - 10 missing",
+                    "color": "lightBlue"
+                  },
+                  {
+                    "seriesName": "Other",
+                    "color": "amethyst"
+                  }
+                ]
+              }
             },
             "name": "query - 5"
           },
           {
             "type": 1,
             "content": {
-              "json": "## Severity of missing Patches\n"
+              "json": "## Severity of Missing Patches\nDisplays distribution of severity of missing patches across all endpoints"
             },
             "name": "text - 6"
           },
@@ -910,20 +1346,45 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumPatchListApplicability_CL\n|where Superseded_s has \"False\" and Install_Status_s has \"Not Installed\"\n|summarize count() by Severity_s\n|render piechart ",
+              "query": "let lastRunTime = toscalar(\nTaniumPatchListApplicability_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);  \n\nTaniumPatchListApplicability_CL\n| where TimeGenerated >= lastRunTime\n| extend PatchId = parse_json(Patch_List_Ids_s)\n| extend Title = parse_json(Title_s)\n| extend InstallStatus = parse_json(Install_Status_s)\n| extend Superseded = parse_json(Superseded_s)\n| extend Severity = parse_json(Severity_s)\n| mv-expand PatchId, Title, InstallStatus, Superseded, Severity\n| project PatchId, Title, InstallStatus, Superseded, Severity\n| where InstallStatus == 'Not Installed'\n    and Superseded == 'False'\n| distinct tostring(PatchId), tostring(Title), tostring(Severity)\n| summarize PatchCount = count() by Severity",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
               },
               "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces"
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Moderate",
+                    "color": "yellow"
+                  },
+                  {
+                    "seriesName": "None",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "Low",
+                    "color": "blue"
+                  },
+                  {
+                    "seriesName": "Important",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "Critical",
+                    "color": "redBright"
+                  }
+                ]
+              }
             },
             "name": "query - 7"
           },
           {
             "type": 1,
             "content": {
-              "json": "## Patch by install status"
+              "json": "## Patch Tool Health\n Displays health of built-in OS patching tools on Windows and Linux"
             },
             "name": "text - 8"
           },
@@ -931,23 +1392,35 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumPatchListApplicability_CL\n|where Superseded_s has \"false\"\n|summarize count() by Install_Status_s,Severity_s",
+              "query": "let cleanStatus = (s:string) { iff(s == '[no results]', 'No Results', iff(s == 'TSE-Error: Error', 'TSE-Error', s)) };\nlet lastRunTime = toscalar(\nTaniumPatchCoverageStatus_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);  \n\nTaniumPatchCoverageStatus_CL\n| where TimeGenerated >= lastRunTime\n    and Status_s != 'Unsuppported'\n    and Status_s != 'N/A on Tanium Client Container'\n    and Status_s != 'An exception occurred, please see Patch sensors.log file for details.'\n    and Status_s != ''\n| extend Status = cleanStatus(Status_s)\n| summarize count() by Status",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
               },
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "categoricalbar",
+              "visualization": "piechart",
               "chartSettings": {
                 "seriesLabelSettings": [
                   {
-                    "seriesName": "Not Installed",
-                    "color": "red"
+                    "seriesName": "Needs Attention",
+                    "color": "orange"
                   },
                   {
-                    "seriesName": "Installed",
+                    "seriesName": "TSE-Error",
+                    "color": "redBright"
+                  },
+                  {
+                    "seriesName": "Optimal",
                     "color": "green"
+                  },
+                  {
+                    "seriesName": "Initializing",
+                    "color": "purple"
+                  },
+                  {
+                    "seriesName": "No Results",
+                    "color": "blue"
                   }
                 ]
               }
@@ -957,7 +1430,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Important/Critical Missing Patches by Year"
+              "json": "## Critical/Important Missing Patches by Year\nDisplays the distribution of Critical or Important patches by the patch's year of release"
             },
             "name": "text - 10"
           },
@@ -965,14 +1438,21 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "TaniumPatchListApplicability_CL\n|distinct Title_s,Install_Status_s,Severity_s,Release_Date_s\n|where Install_Status_s has \"Not Installed\"\n|where Severity_s in (\"Critical\", \"Important\")\n|extend Year=(split(Release_Date_s,\"/\",2))\n|summarize count() by Year=tostring(Year[0])",
+              "query": "let getReleaseYear = (s:string){ split(s,'/',2)[0] };\n\nlet lastRunTime = toscalar(\nTaniumPatchListApplicability_CL\n| extend roundedTime = bin(TimeGenerated, 1m) \n| distinct roundedTime    \n| order by roundedTime desc     \n| limit 1);  \n\nTaniumPatchListApplicability_CL\n| where TimeGenerated >= lastRunTime\n| extend PatchId = parse_json(Patch_List_Ids_s)\n| extend Title = parse_json(Title_s)\n| extend KbArticle = parse_json(KB_Articles_s)\n| extend InstallStatus = parse_json(Install_Status_s)\n| extend Severity = parse_json(Severity_s)\n| extend Superseded = parse_json(Superseded_s)\n| extend ReleaseDate = parse_json(Release_Date_s)\n| mv-expand PatchId, Title, KbArticle, InstallStatus, Severity, ReleaseDate, Superseded\n| where InstallStatus == 'Not Installed'\n    and (Severity == 'Critical' or Severity == 'Important')\n    and Superseded == 'False'\n| extend ReleaseYear = strcat('Year ', getReleaseYear(ReleaseDate))\n| where Title != ''\n| distinct tostring(Title), tostring(ReleaseYear), tostring(Severity)\n| summarize Patches = count() by ReleaseYear, Severity\n| order by ReleaseYear asc",
               "size": 0,
               "timeContext": {
                 "durationMs": 86400000
               },
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "categoricalbar"
+              "visualization": "categoricalbar",
+              "chartSettings": {
+                "xAxis": "ReleaseYear",
+                "yAxis": [
+                  "Patches"
+                ],
+                "createOtherGroup": 100
+              }
             },
             "name": "query - 11"
           }

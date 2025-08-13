@@ -1,0 +1,66 @@
+id: 1b1061be-2595-4492-af6d-1c8a5fc9576d
+kind: Scheduled
+name: Dataverse - Removal of blocked file extensions
+description: Identifies modifications to an environment's blocked file extensions
+  and extracts the removed extension.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1629
+query: |
+  let query_frequency = 1h;
+  let default_attachments = split('ade;adp;app;asa;ashx;asmx;asp;bas;bat;cdx;cer;chm;class;cmd;com;config;cpl;crt;csh;dll;exe;fxp;hlp;hta;htr;htw;ida;idc;idq;inf;ins;isp;its;jar;js;jse;ksh;lnk;mad;maf;mag;mam;maq;mar;mas;mat;mau;mav;maw;mda;mdb;mde;mdt;mdw;mdz;msc;msh;msh1;msh1xml;msh2;msh2xml;mshxml;msi;msp;mst;ops;pcd;pif;prf;prg;printer;pst;reg;rem;scf;scr;sct;shb;shs;shtm;shtml;soap;stm;tmp;url;vb;vbe;vbs;vsmacros;vss;vst;vsw;ws;wsc;wsf;wsh', ";");
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message == "Update" and EntityName =~ 'organization'
+  | mv-expand Fields
+  | where Fields.Name == "blockedattachments"
+  | extend
+      UpdatedAttachments = split(tostring(Fields.Value), ";"),
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | extend RemovedAttachments = set_difference(default_attachments, UpdatedAttachments)
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      InstanceUrl,
+      RemovedAttachments,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Blocked file extension removed in {{InstanceUrl}} '
+  alertDescriptionFormat: '{{UserId}} modified environment blocked extensions list.
+    {{UserId}} removed the following extensions {{RemovedAttachments}}.'
+version: 3.2.0

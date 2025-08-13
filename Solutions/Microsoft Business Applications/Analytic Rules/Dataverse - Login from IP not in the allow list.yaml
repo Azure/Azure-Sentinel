@@ -1,0 +1,77 @@
+id: 81c693fe-f6c4-4352-bc10-3526f6e22637
+kind: Scheduled
+name: Dataverse - Login from IP not in the allow list
+description: Identifies logons from IPv4 addresses not matching IPv4 subnets maintained
+  on an allow list. This analytics rule uses the NetworkAddresses watchlist template.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1190
+  - T1133
+query: |
+  // Use static IP address or CIDR list specified in the
+  // NetworkAddresses watchlist template with tag "AllowDataverse"
+  let allowed_networks = MSBizAppsNetworkAddresses()
+      | where Tags has "AllowDataverse"
+      | summarize by IPSubnet;
+  let query_frequency = 1h;
+  let watchlist_entries_count = toscalar (allowed_networks
+      | summarize count());
+  let dataverse_signin_activity = materialize(
+      DataverseActivity
+      | where watchlist_entries_count > 0
+      | where TimeGenerated >= ago (query_frequency)
+      | where Message == "UserSignIn" and isnotempty(ClientIp)
+      | summarize FirstEvent = arg_min(TimeGenerated, *) by UserId, ClientIp, InstanceUrl
+      );
+  let authorized_ip_addresses = dataverse_signin_activity
+      | evaluate ipv4_lookup(allowed_networks, ClientIp, IPSubnet);
+  dataverse_signin_activity
+  | join kind=leftanti(authorized_ip_addresses) on ClientIp
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      FirstEvent,
+      UserId,
+      ClientIp,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Login from IP not on the allow list in {{InstanceUrl}} '
+  alertDescriptionFormat: Sign-in activity detected in {{InstanceUrl}} from an IP
+    {{ClientIp}} not on the allow list.
+version: 3.2.0

@@ -1,0 +1,108 @@
+id: d7c9549c-7246-4555-8e53-d7b0db546764
+kind: Scheduled
+name: Dataverse - Unusual sign-in following disabled IP address-based cookie binding
+  protection
+description: Identifies previously unseen IP and user agents in a Dataverse instance
+  following disabling of cookie binding protection. See https://docs.microsoft.com/power-platform/admin/block-cookie-replay-attack
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1629
+query: |
+  let query_frequency = 1h;
+  let query_lookback = 14d;
+  let cookie_lifetime = 24h;
+  let cookie_binding_disabled_events = DataverseActivity
+      | where TimeGenerated >= ago(query_lookback)
+      | where Message == "Update" and EntityName == "organization"
+      | mv-expand Fields
+      | where Fields.Name == "enableipbasedcookiebinding" and Fields.Value == 'False'
+      | summarize CookieBindingDisabled = min(TimeGenerated) by CookieBindingDisabledBy = UserId, InstanceUrl;
+  let current_activity = cookie_binding_disabled_events
+      | join kind=inner(DataverseActivity
+          | where UserId !endswith "@onmicrosoft.com" and UserId !endswith "@microsoft.com"
+          | where isnotempty(ClientIp) and isnotempty(UserAgent)
+          | where TimeGenerated >= ago(query_frequency + cookie_lifetime)
+          | summarize LatestEvent = arg_max(TimeGenerated, *) by UserId, ClientIp, InstanceUrl)
+          on InstanceUrl;
+  let users_switched_ip = current_activity
+      | summarize IPCount = count() by UserId, InstanceUrl
+      | where IPCount > 1
+      | join kind=inner (current_activity) on UserId, InstanceUrl
+      | summarize arg_max(LatestEvent, *) by UserId, InstanceUrl;
+  users_switched_ip
+  | join kind = inner (DataverseActivity
+      | where TimeGenerated >= ago (query_lookback)
+      | where UserId !endswith "@onmicrosoft.com" and UserId !endswith "@microsoft.com"
+      | where isnotempty(ClientIp) and isnotempty(UserAgent)
+      | project-rename
+          HistoricalTime = TimeGenerated,
+          HistoricalIP = ClientIp,
+          HistoricalAgent = UserAgent)
+      on UserId, InstanceUrl
+  | where HistoricalTime >= ago(query_lookback) and HistoricalTime < LatestEvent
+  | summarize
+      HistoricalIPs = make_set(HistoricalIP, 100),
+      HistoricalAgents = make_set(HistoricalAgent, 100)
+      by
+      UserId,
+      UserAgent,
+      ClientIp,
+      InstanceUrl,
+      LatestEvent,
+      CookieBindingDisabled,
+      CookieBindingDisabledBy
+  | where (HistoricalIPs !has ClientIp) and (HistoricalAgents !has UserAgent)
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      LatestEvent,
+      UserId,
+      ClientIp,
+      UserAgent,
+      InstanceUrl,
+      HistoricalIPs,
+      HistoricalAgents,
+      CookieBindingDisabled,
+      CookieBindingDisabledBy,
+      AccountName,
+      UPNSuffix,
+      CloudAppId
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: Dataverse - Unusual sign-in after IP address-based cookie
+    binding disabled
+  alertDescriptionFormat: IP address-based cookie binding was disabled by in {{InstanceUrl}}.
+    Following this, sign-in events from new IP {{ClientIp}}  for {{UserId}} were detected.
+customDetails: {}
+version: 3.2.0

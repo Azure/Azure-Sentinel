@@ -1,7 +1,7 @@
-import { PlaybookValidationError } from "../validationError";
-import { ArmTemplate } from "./Models/armTemplateModels";
-import { PlaybookMetadataSupportedEntityTypes, PlaybookTemplateMetadata } from "./Models/playbookTemplateMetadata";
-import { isNullOrWhitespace, isPlaybookUsingGalleryMetadata } from "./playbookARMTemplateUtils";
+import { PlaybookValidationError } from "../validationError.js";
+import { ArmTemplate } from "./Models/armTemplateModels.js";
+import { PlaybookMetadataSupportedEntityTypes, PlaybookTemplateMetadata } from "./Models/playbookTemplateMetadata.js";
+import { isNullOrWhitespace, isPlaybookUsingGalleryMetadata } from "./playbookARMTemplateUtils.js";
 
 export function validateTemplateMetadata(filePath: string, playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata>): void {
     if (!isPlaybookUsingGalleryMetadata(playbookARMTemplate)) {

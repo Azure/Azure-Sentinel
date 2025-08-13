@@ -2,7 +2,7 @@
 
 ## Summary
 
-This playbook queries Rubrik Security Cloud to enrich the Anomaly event with additional information regarding the Ransomware analysis, results from sensitive data scans, (to aid in incident prioritization), and additional information about the Rubrik cluster. Also it retrieves suspiciousFiles information associated with anomalous snapshot and internally calls RubrikAnomalyGenerateDownloadableLink playbook to get downloadable links and enrich the anomaly incident.
+This playbook queries Rubrik Security Cloud to enrich the Anomaly event with additional information regarding the Ransomware analysis, results from sensitive data scans, (to aid in incident prioritization), and additional information about the Rubrik cluster. Also it retrieves suspiciousFiles information associated with anomalous snapshot and internally calls RubrikAnomalyGenerateDownloadableLink playbook to get downloadable links and enrich the anomaly incident and RubrikUpdateAnomalyStatus playbook to resolve or report false positive unresolved anomaly.
 
 ### Prerequisites
 
@@ -12,7 +12,7 @@ This playbook queries Rubrik Security Cloud to enrich the Anomaly event with add
 4. Store Service account credentials in Key Vault and obtain keyvault name and tenantId
     a. Create a Key Vault with unique name
     b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively
-5. Make sure that RubrikAnomalyGenerateDownloadableLink playbook is deployed before deploying RubrikAnomalyAnalysis playbook.
+5. Make sure that RubrikAnomalyGenerateDownloadableLink and RubrikUpdateAnomalyStatus playbook are deployed before deploying RubrikAnomalyAnalysis playbook.
 
 ### Deployment instructions
 
@@ -23,6 +23,7 @@ This playbook queries Rubrik Security Cloud to enrich the Anomaly event with add
     * keyvaultname: Name of keyvault where secrets are stored.
     * tenantId: TenantId where keyvault is located.
     * DownloadableLinkGeneratePlaybookName: Playbook name which is deployed as part of prerequisites
+    * UpdateAnomalyStatusPlaybookName: Playbook name which is deployed as part of prerequisites
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikAnomalyAnalysis%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikAnomalyAnalysis%2Fazuredeploy.json)
 
@@ -38,3 +39,11 @@ Once deployment is complete, authorize each connection like keyvault.
 4. Sign in
 5. Click Save
 6. Repeat steps for other connections
+
+#### b. Assign Role to close incident
+Assign role to this playbook.
+1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add
+2. Add role assignment
+3. Assignment type: Job function roles -> Add 'Microsoft Sentinel Contributor' as a Role
+4. Members: select managed identity for assigned access to and add your logic app as member
+5. Click on review+assign

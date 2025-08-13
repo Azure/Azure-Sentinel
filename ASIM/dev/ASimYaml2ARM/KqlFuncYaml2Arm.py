@@ -200,9 +200,9 @@ for f in files:
         logging.debug ('Generating ARM template')
         # generate the ARM template
         armTemplate = copy.deepcopy(func_arm_template)
-        armTemplate['resources'][0]['resources'][0]['name'] = Alias
-        armTemplate['resources'][0]['resources'][0]['properties']['query'] = Query
-        armTemplate['resources'][0]['resources'][0]['properties']['category'] = Category
+        armTemplate['resources'][0]['name'] = f"[concat(parameters('Workspace'), '/{Alias}')]"
+        armTemplate['resources'][0]['properties']['query'] = Query
+        armTemplate['resources'][0]['properties']['category'] = Category
         if params:
             Parameters = ""
             for param in params:
@@ -220,9 +220,9 @@ for f in files:
                 if Parameters != "":
                     Parameters = f'{Parameters},'
                 Parameters = Parameters + ParamString
-            armTemplate['resources'][0]['resources'][0]['properties']['functionParameters'] =  Parameters
-        armTemplate['resources'][0]['resources'][0]['properties']['FunctionAlias'] = Alias
-        armTemplate['resources'][0]['resources'][0]['properties']['displayName'] = Title
+            armTemplate['resources'][0]['properties']['functionParameters'] =  Parameters
+        armTemplate['resources'][0]['properties']['FunctionAlias'] = Alias
+        armTemplate['resources'][0]['properties']['displayName'] = Title
 
         logging.debug ('Writing ARM template')
         # Write template

@@ -1,0 +1,45 @@
+id: e5c65f1f-2bf8-4b42-af8b-1f6adfeda0cc
+name: detect-impacket-wmiexec
+description: |
+  This query looks for signs of impacket wmiexec module usage. May hit other wmi execution-like techniques too.
+  Author: Jouni Mikkola
+  More info: https://threathunt.blog/impacket-part-2/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+  - DeviceNetworkEvents
+  - DeviceProcessEvents
+tactics:
+- Execution
+relevantTechniques:
+  - T1047
+query: |
+ let LookupTime = 30d;
+  let GetRareWMIProcessLaunches = materialize (
+  DeviceEvents
+  | where Timestamp > ago(LookupTime)
+  | where ActionType == @"ProcessCreatedUsingWmiQuery"
+  | where isnotempty(FileName)
+  | summarize count() by SHA1, InitiatingProcessCommandLine
+  | where count_ < 5 | distinct SHA1); 
+  DeviceEvents 
+  | where Timestamp > ago(LookupTime)
+  | where ActionType == @"ProcessCreatedUsingWmiQuery"
+  | where SHA1 in~ (GetRareWMIProcessLaunches)
+  | where isnotempty(FileName)
+  | project DeviceName, WMIProcessLaunchTimestmap = Timestamp, ProcessLaunchedByWMI = tolower(FileName), ProcessLaunchedByWMICommandLine = tolower(ProcessCommandLine), ProcessLaunchedByWMICreationTime = ProcessCreationTime, ProcessLaunchedByWMISHA1 = tolower(SHA1), ProcessLaunchedByWMIID = ProcessId, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessParentCreationTime, InitiatingProcessParentFileName
+  | join kind=leftouter (
+  DeviceProcessEvents
+  | where Timestamp > ago(LookupTime)
+  | where InitiatingProcessSHA1 in~ (GetRareWMIProcessLaunches)
+  |project DeviceName, ChildProcessTimestamp = Timestamp, ProcessLaunchedByWMI = tolower(InitiatingProcessFileName), ProcessLaunchedByWMICommandLine = tolower(InitiatingProcessCommandLine), ProcessLaunchedByWMICreationTime = InitiatingProcessCreationTime, ProcessLaunchedByWMISHA1 = tolower(InitiatingProcessSHA1), ProcessLaunchedByWMIID = InitiatingProcessId, WMIchild = FileName, WMIChildCommandline = ProcessCommandLine
+  ) on DeviceName, ProcessLaunchedByWMI, ProcessLaunchedByWMICommandLine, ProcessLaunchedByWMISHA1, ProcessLaunchedByWMIID
+  | join kind=leftouter (
+  DeviceNetworkEvents
+  | where Timestamp > ago(LookupTime)
+  | where InitiatingProcessSHA1 in~ (GetRareWMIProcessLaunches)
+  |project DeviceName, ChildProcessTimestamp = Timestamp, ProcessLaunchedByWMI = tolower(InitiatingProcessFileName), ProcessLaunchedByWMICommandLine = tolower(InitiatingProcessCommandLine), ProcessLaunchedByWMICreationTime = InitiatingProcessCreationTime, ProcessLaunchedByWMISHA1 = tolower(InitiatingProcessSHA1), ProcessLaunchedByWMIID = InitiatingProcessId, WMIProcessRemoteIP = RemoteIP, WMIProcessRemoteURL = RemoteUrl
+  ) on DeviceName, ProcessLaunchedByWMI, ProcessLaunchedByWMICommandLine, ProcessLaunchedByWMISHA1, ProcessLaunchedByWMIID
+  | where isnotempty(WMIProcessRemoteIP) or isnotempty(WMIchild)
+  | summarize ConnectedAddresses = make_set(WMIProcessRemoteIP), ConnectedURLs = make_set(WMIProcessRemoteURL), LaunchedProcessNames = make_set(WMIchild), LaunchedProcessCmdlines = make_set(WMIChildCommandline) by DeviceName, ProcessLaunchedByWMI, ProcessLaunchedByWMICommandLine, ProcessLaunchedByWMICreationTime, ProcessLaunchedByWMISHA1, ProcessLaunchedByWMIID

@@ -7,7 +7,7 @@ import hmac
 import requests
 import os
 import azure.functions as func
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 
 def build_signature(date: str, content_length: int, method: str, content_type: str, resource: str, shared_key: str, customer_id: str) -> str:
@@ -46,7 +46,7 @@ class TransmitSecurityConnector:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        response = requests.get(endpoint, headers=headers)
+        response = requests.post(endpoint, headers=headers, json={})
         response.raise_for_status()
         return response.json()
 
@@ -66,10 +66,8 @@ class AzureSentinel:
         self.log_analytics_uri = log_analytics_uri
         self.shared_key = shared_key
         self.customer_id = customer_id
-        self.success_user_events = 0
-        self.success_admin_events = 0
-        self.failed_user_events = 0
-        self.failed_admin_events = 0
+        self.success_events = 0
+        self.failed_events = 0
         self.chunksize = 10000
 
     def post_results(self, data: List[Dict], table: str):
@@ -77,15 +75,11 @@ class AzureSentinel:
             body = json.dumps(chunk)
             self.post_data(body, len(chunk), table)
 
-    def increase_counters(self, chunk_count: int, table: str, status: str):
-        if table == "TransmitSecurityUserActivity" and status == "success":
-            self.success_user_events += chunk_count
-        elif table == "TransmitSecurityAdminActivity" and status == "success":
-            self.success_admin_events += chunk_count
-        elif table == "TransmitSecurityUserActivity" and status == "fail":
-            self.failed_user_events += chunk_count
-        elif table == "TransmitSecurityAdminActivity" and status == "fail":
-            self.failed_admin_events += chunk_count
+    def increase_counters(self, chunk_count: int, status: str):
+        if status == "success":
+            self.success_events += chunk_count
+        elif status == "fail":
+            self.failed_events += chunk_count
 
     def post_data(self, body: str, chunk_count: int, table: str):
         method = 'POST'
@@ -104,10 +98,10 @@ class AzureSentinel:
         response = requests.post(uri, data=body, headers=headers)
         if 200 <= response.status_code <= 299:
             logging.info(f"Chunk processed ({chunk_count} events)")
-            self.increase_counters(chunk_count, table, "success")
+            self.increase_counters(chunk_count, "success")
         else:
             logging.error(f"Error sending events to Azure Sentinel. Response code: {response.status_code}")
-            self.increase_counters(chunk_count, table, "fail")
+            self.increase_counters(chunk_count, "fail")
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -116,34 +110,30 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.warning("The timer is past due!")
 
     logging.info(f"Python timer trigger function ran at {utc_timestamp}")
-    
+
     try:
-        user_activity_endpoint = os.getenv('TransmitSecurityUserActivityEndpoint', None)
-        admin_activity_endpoint = os.getenv('TransmitSecurityAdminActivityEndpoint', None)
+        pull_endpoint = os.getenv('TransmitSecurityPullEndpoint', None)
         token_endpoint = os.getenv('TransmitSecurityTokenEndpoint', '')
         client_id = os.getenv('TransmitSecurityClientID', '')
         client_secret = os.getenv('TransmitSecurityClientSecret', '')
-        user_activity_tbl_name = "TransmitSecurityUserActivity"
-        admin_activity_tbl_name = "TransmitSecurityAdminActivity"
+        table_name = "TransmitSecurityActivity"
         customer_id = os.getenv('WorkspaceID', '')
         shared_key = os.getenv('WorkspaceKey', '')
         log_analytics_uri = os.getenv('logAnalyticsUri', f'https://{customer_id}.ods.opinsights.azure.com')
 
-        if not user_activity_endpoint and not admin_activity_endpoint:
-            raise ValueError("One of the endpoints is required to be set.")
-    
+        if not pull_endpoint:
+            raise ValueError("The TransmitSecurityPullEndpoint environment variable is required.")
+
         connector = TransmitSecurityConnector(token_endpoint, client_id, client_secret)
         azure_sentinel = AzureSentinel(log_analytics_uri, shared_key, customer_id)
-        
+
         token = connector.get_access_token()
-        config = zip([user_activity_endpoint, admin_activity_endpoint], [user_activity_tbl_name, admin_activity_tbl_name])
-        for endpoint, table in config:
-            if endpoint:
-                logging.info(f"Processing events for {table}")
-                events = connector.fetch_events(token, endpoint)
-                while events:
-                    azure_sentinel.post_results(events, table)
-                    events = connector.fetch_events(token, endpoint)
+
+        logging.info(f"Processing events for {table_name}")
+        events = connector.fetch_events(token, pull_endpoint)
+        while events:
+            azure_sentinel.post_results(events, table_name)
+            events = connector.fetch_events(token, pull_endpoint)
 
     except ValueError as ve:
         logging.error(f"Configuration error: {ve}")
@@ -155,5 +145,5 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.error(f"Unexpected error: {e}")
         raise
 
-    logging.info(f"Events processed successfully - Admin: {azure_sentinel.success_admin_events}, User: {azure_sentinel.success_user_events}")
-    logging.info(f"Events failed - Admin: {azure_sentinel.failed_admin_events}, User: {azure_sentinel.failed_user_events}")
+    logging.info(f"Events processed successfully: {azure_sentinel.success_events}")
+    logging.info(f"Events failed: {azure_sentinel.failed_events}")

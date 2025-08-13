@@ -352,7 +352,7 @@ namespace Helios2Sentinel
 
         private static async Task<dynamic> FetchAlerts(long startDateUsecs, long endDateUsecs, ILogger log)
         {
-            string requestUriString = $"https://helios-sandbox2.cohesity.com/v2/mcm/alert-service/alerts?startTimeUsecs={startDateUsecs}&maxAlerts=1000&endTimeUsecs={endDateUsecs}&alertCategoryList=Security";
+            string requestUriString = $"https://helios.cohesity.com/v2/mcm/alert-service/alerts?startTimeUsecs={startDateUsecs}&maxAlerts=1000&endTimeUsecs={endDateUsecs}&alertCategoryList=Security";
             log.LogInformation("requestUriString --> " + requestUriString);
             using HttpClient client = new();
             client.DefaultRequestHeaders.Accept.Clear();

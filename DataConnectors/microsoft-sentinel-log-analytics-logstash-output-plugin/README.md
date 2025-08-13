@@ -3,8 +3,8 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.1.0  
-Released on: 2023-07-23
+Plugin version: v1.1.3  
+Released on: 2024-10-10
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -22,12 +22,12 @@ Microsoft Sentinel provides Logstash output plugin to Log analytics workspace us
 
 The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.
 
-If you do not have a direct internet connection, you can install the plugin to another logstash installation, and then export and import a plugin bundle to the offline host. For more information, see [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
+If you do not have a direct internet connection, you can install the plugin to another logstash installation, and then export and import a plugin bundle to the offline host. For more information, see [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).  
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - 7.0 - 7.17.13
 - 8.0 - 8.9
-- 8.11 - 8.14
+- 8.11 - 8.15
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
@@ -236,3 +236,23 @@ Which will produce this content in the sample file:
 	}
 ]
 ```
+
+
+## Known issues
+ 
+When using Logstash installed on a Docker image of Lite Ubuntu, the following warning may appear:
+
+```
+java.lang.RuntimeException: getprotobyname_r failed
+```
+
+To resolve it, use the following commands to install the *netbase* package within your Dockerfile:
+```bash
+USER root
+RUN apt install netbase -y
+```
+For more information, see [JNR regression in Logstash 7.17.0 (Docker)](https://github.com/elastic/logstash/issues/13703).
+
+If your environment's event rate is low considering the number of allocated Logstash workers, we recommend increasing the value of *plugin_flush_interval* to 60 or more. This change will allow each worker to batch more events before uploading to the Data Collection Endpoint (DCE).  You can monitor the ingestion payload using [DCR metrics](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-monitor#dcr-metrics).
+For more information on *plugin_flush_interval*, see the [Optional Configuration table](https://learn.microsoft.com/azure/sentinel/connect-logstash-data-connection-rules#optional-configuration) mentioned earlier.
+
