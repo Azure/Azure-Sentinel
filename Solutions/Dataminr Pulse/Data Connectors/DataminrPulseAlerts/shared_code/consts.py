@@ -4,7 +4,7 @@ BASE_URL = os.environ.get("BaseURL")
 ENDPOINTS = {
     "authentication": "auth/2/token",
     "get_lists": "account/2/get_lists",
-    "add_integration_settings": "integration/1/settings/",
+    "add_integration_settings": "integration/1/settings",
 }
 LOGS_STARTS_WITH = "DataminrPulseAlerts:"
 ALERTS_TABLE_NAME = os.environ.get('AlertsTableName')
