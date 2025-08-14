@@ -46,8 +46,8 @@ function Copy-AzOperationalInsightsTable {
         [string]$TargetTableName,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet('Analytics', 'Basic')]
-        [string]$TablePlan = "Basic"
+        [ValidateSet('Analytics', 'Auxiliary')]
+        [string]$TablePlan = "Auxiliary"
     )
 
     try {

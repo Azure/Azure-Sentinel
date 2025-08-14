@@ -210,7 +210,9 @@ $standardStreamMapping += @{ Key = 'SENTINEL_GCPCOMPUTEENGINE'; Value = 'Microso
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPCLOUDSQL'; Value = 'Microsoft-GCPCloudSQL'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPCLOUDRUN'; Value = 'Microsoft-GCPCloudRun'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_IAM_LOGS'; Value = 'Microsoft-GCPIAM'}
-
+$standardStreamMapping += @{ Key = 'SENTINEL_AWSS3SERVERACCESS'; Value = 'Microsoft-AWSS3ServerAccess'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCP_IDS_LOGS'; Value = 'Microsoft-GCPIDS'}
+$standardStreamMapping += @{ Key = 'ILUMIO_INSIGHTS'; Value = 'Microsoft-IlumioInsights'}
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {
   param (
