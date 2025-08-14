@@ -157,9 +157,13 @@ def process_large_field(event_section, field_name, field_size_limit,max_part=10)
 
 
 def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, limit, sentinel: AzureSentinelConnector, start_ts):
+    logging.info('Starting event processing')
+    logging.info(f'Initial cursor: {initial_cursor}')
     cursor = initial_cursor
     while True:
         get_response = client.get_messages(stream_id, cursor, limit=limit, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
+        logging.info(f'Get response: {get_response}')
+        logging.info(f'Get response data: {get_response.data}')
         if not get_response.data:
             return
 
