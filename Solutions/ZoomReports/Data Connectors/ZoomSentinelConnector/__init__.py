@@ -197,6 +197,12 @@ class Zoom:
                 r = requests.get(url=self.base_url + report_type_suffix,
                              params=query_params,
                              headers=self.headers)
+                logging.info("Api Response: {}".format(r)) 
+                logging.info("report_type_suffix: {}".format(report_type_suffix)) 
+                logging.info("Base URl: {}".format(self.base_url)) 
+                logging.info("Params: {}".format(query_params))
+                logging.info("Headers: {}".format(self.headers))
+
                 if (r.status_code in self.error_statuses) or (error==True):
                     error=False
                     continue ## To Do: Need to add delay 
