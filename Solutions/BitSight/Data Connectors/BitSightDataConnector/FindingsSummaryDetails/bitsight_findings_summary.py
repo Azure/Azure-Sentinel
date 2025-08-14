@@ -5,7 +5,7 @@ import time
 
 from ..SharedCode import consts
 from ..SharedCode.bitsight_client import BitSight
-from ..SharedCode.bitsight_exception import BitSightException, BitSightTimeOutException
+from ..SharedCode.bitsight_exception import BitSightException
 from ..SharedCode.get_logs_data import get_logs_data
 from ..SharedCode.logger import applogger
 from ..SharedCode.utils import CheckpointManager
@@ -20,7 +20,7 @@ class BitSightFindingsSummary(BitSight):
         Args:
             start_time (float): The start time for data fetching.
         """
-        super().__init__(start_time)
+        super().__init__()
         self.start_time = start_time
         self.check_env_var = self.check_environment_var_exist(
             [
@@ -30,64 +30,49 @@ class BitSightFindingsSummary(BitSight):
                 {"companies_list": consts.COMPANIES},
             ]
         )
-        self.checkpoint_obj = CheckpointManager(
-            connection_string=consts.CONN_STRING,
-            table_name=consts.FINDINGS_SUMMARY_CHECKPOINT_TABLE
+        self.checkpoint_obj = CheckpointManager()
+        self.findings_summary_company_state = self.checkpoint_obj.get_state(
+            "findings_summary_company"
+        )
+        self.findings_summary_details_state = self.checkpoint_obj.get_state(
+            "findings_summary_details"
         )
         self.generate_auth_token()
 
     def get_findings_summary_data_into_sentinel(self):
         """Fetch findings summary data and post it to Sentinel."""
-        try:
-            if not self.check_env_var:
-                raise BitSightException(
-                    "{} {} Some Environment variables are not set hence exiting the app.".format(
-                        self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
-                    )
-                )
-            applogger.info(
-                "{} {} Fetching companies from companies table.".format(
+        if not self.check_env_var:
+            raise BitSightException(
+                "{} {} Some Environment variables are not set hence exiting the app.".format(
                     self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
                 )
             )
-            logs_data, flag = get_logs_data()
-            if not flag:
-                applogger.info(
-                    "{} {} Companies are not available yet.".format(
-                        self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
-                    )
-                )
-                return
-
-            applogger.info(
-                "{} {} Fetched companies from companies table.".format(
-                    self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
-                )
+        applogger.info(
+            "{} {} Fetching companies from companies table.".format(
+                self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
             )
-            logs_data = sorted(logs_data, key=lambda x: x["name"])
-            company_names = [data["name"] for data in logs_data]
-
-            if consts.COMPANIES.strip().lower() == "all":
-                self.get_all_companies_findings_summary_details(company_names, logs_data)
-            else:
-                self.get_specific_company_findings_summary_details(company_names, logs_data)
-        except BitSightTimeOutException:
-            applogger.error(
-                "{} {} 9:00 mins executed hence stopping the function app.".format(
+        )
+        logs_data, flag = get_logs_data()
+        if not flag:
+            applogger.info(
+                "{} {} Companies are not available yet.".format(
                     self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
                 )
             )
             return
-        except BitSightException as err:
-            raise BitSightException(err)
-        except KeyError as err:
-            applogger.error(
-                "BitSight: KeyError while getting company details: {}".format(err)
+
+        applogger.info(
+            "{} {} Fetched companies from companies table.".format(
+                self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
             )
-            raise BitSightException()
-        except Exception as err:
-            applogger.error("BitSight: Exception: {}".format(err))
-            raise BitSightException(err)
+        )
+        logs_data = sorted(logs_data, key=lambda x: x["name_s"])
+        company_names = [data["name_s"] for data in logs_data]
+
+        if consts.COMPANIES.strip().lower() == "all":
+            self.get_all_companies_findings_summary_details(company_names, logs_data)
+        else:
+            self.get_specific_company_findings_summary_details(company_names, logs_data)
 
     def get_all_companies_findings_summary_details(self, company_names, logs_data):
         """Fetch findings summary details for all companies and post them to Sentinel.
@@ -96,36 +81,38 @@ class BitSightFindingsSummary(BitSight):
             company_names (list): List of company names.
             logs_data (list): List of log data.
         """
-        try:
-            count_companies = 0
-            fetching_index = self.get_last_data_index(
-                company_names, self.checkpoint_obj
-            )
-            for company_index in range(fetching_index + 1, len(logs_data)):
-                company_name = logs_data[company_index].get("name")
-                self.check_timeout()
-                company_guid = logs_data[company_index].get("guid")
-                self.get_findings_summary_data(company_name, company_guid)
-                count_companies += 1
-                self.checkpoint_obj.set_checkpoint(
-                    partition_key=consts.COMPANY_CHECKPOINT_PARTITION_KEY,
-                    row_key=consts.COMPANY_CHECKPOINT_ROW_KEY,
-                    value=company_name
+        count_companies = 0
+        fetching_index = self.get_last_data_index(
+            company_names, self.checkpoint_obj, self.findings_summary_company_state, table_name=consts.FINDINGS_SUMMARY_TABLE_NAME
+        )
+        for company_index in range(fetching_index + 1, len(logs_data)):
+            company_name = logs_data[company_index].get("name_s")
+            if int(time.time()) >= self.start_time + 540:
+                applogger.info(
+                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching from {}.".format(
+                        self.logs_starts_with,
+                        consts.FINDINGS_SUMMARY_FUNC_NAME,
+                        company_name,
+                    )
                 )
-            applogger.info(
-                "{} {} Posted {} companies data.".format(
-                    self.logs_starts_with,
-                    consts.FINDINGS_SUMMARY_FUNC_NAME,
-                    count_companies,
-                )
+                break
+            company_guid = logs_data[company_index].get("guid_g")
+            self.get_findings_summary_data(company_name, company_guid)
+            count_companies += 1
+            self.checkpoint_obj.save_checkpoint(
+                self.findings_summary_company_state,
+                company_name,
+                "findings_summary",
+                "{}_{}".format(consts.FINDINGS_SUMMARY_TABLE_NAME, "Company_Checkpoint"),
+                company_name_flag=True,
             )
-        except BitSightTimeOutException:
-            raise BitSightTimeOutException()
-        except BitSightException:
-            raise BitSightException()
-        except Exception as err:
-            applogger.error("BitSight: GET FINDING SUMMARY DETAILS ERROR: {}".format(err))
-            raise BitSightException()
+        applogger.info(
+            "{} {} Posted {} companies data.".format(
+                self.logs_starts_with,
+                consts.FINDINGS_SUMMARY_FUNC_NAME,
+                count_companies,
+            )
+        )
 
     def get_specific_company_findings_summary_details(self, company_names, logs_data):
         """Fetch findings summary details for specified companies and post them to Sentinel.
@@ -139,34 +126,34 @@ class BitSightFindingsSummary(BitSight):
                 self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
             )
         )
-        try:
-            count_companies = 0
-            companies_to_get = self.get_specified_companies_list(
-                company_names, consts.COMPANIES
-            )
-            company_names = list(map(str.lower, company_names))
+        count_companies = 0
+        companies_to_get = self.get_specified_companies_list(
+            company_names, consts.COMPANIES
+        )
+        company_names = list(map(str.lower, company_names))
 
-            for company in companies_to_get:
-                self.check_timeout()
-                index = company_names.index(company)
-                company_name = logs_data[index].get("name")
-                company_guid = logs_data[index].get("guid")
-                self.get_findings_summary_data(company_name, company_guid)
-                count_companies += 1
-            applogger.info(
-                "{} {} Posted {} companies data.".format(
-                    self.logs_starts_with,
-                    consts.FINDINGS_SUMMARY_FUNC_NAME,
-                    count_companies,
+        for company in companies_to_get:
+            if int(time.time()) >= self.start_time + 540:
+                applogger.info(
+                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching after {}".format(
+                        self.logs_starts_with,
+                        consts.FINDINGS_SUMMARY_FUNC_NAME,
+                        company,
+                    )
                 )
+                break
+            index = company_names.index(company)
+            company_name = logs_data[index].get("name_s")
+            company_guid = logs_data[index].get("guid_g")
+            self.get_findings_summary_data(company_name, company_guid)
+            count_companies += 1
+        applogger.info(
+            "{} {} Posted {} companies data.".format(
+                self.logs_starts_with,
+                consts.FINDINGS_SUMMARY_FUNC_NAME,
+                count_companies,
             )
-        except BitSightTimeOutException:
-            raise BitSightTimeOutException()
-        except BitSightException:
-            raise BitSightException()
-        except Exception as err:
-            applogger.error("BitSight: GET FINDING SUMMARY DETAILS ERROR: {}".format(err))
-            raise BitSightException()
+        )
 
     def get_findings_summary_data(self, company_name, company_guid):
         """Fetch findings summary data for a specific company and post it to Sentinel.
@@ -215,8 +202,6 @@ class BitSightFindingsSummary(BitSight):
 
             # delete rating field after post.
             del findings_summary_results
-        except BitSightTimeOutException:
-            raise BitSightTimeOutException()
         except BitSightException:
             applogger.error(
                 "{} {} Exception occurred in get_findings_summary_data method.".format(
@@ -247,61 +232,52 @@ class BitSightFindingsSummary(BitSight):
             company_name (str): Name of the company.
             company_guid (str): GUID of the company.
         """
-        try:
-            checkpoint_key = "{}".format(company_guid)
-            checkpoint_value = self.checkpoint_obj.get_checkpoint(
-                partition_key=consts.DATA_CHECKPOINT_PARTITION_KEY,
-                row_key=checkpoint_key
-            )
-            last_checkpoint_company = json.loads(checkpoint_value) if checkpoint_value else []
-            last_checkpoint_company = (
-                last_checkpoint_company if last_checkpoint_company else []
-            )
-            findings_summary_endpoint = consts.ENDPOINTS[
-                "findings_summary_endpoint_path"
-            ].format(company_guid)
-            end_date = findings_summary_data.get("end_date")
-            start_date = findings_summary_data.get("start_date")
-            stats = findings_summary_data.get("stats", [])
+        last_data = self.checkpoint_obj.get_last_data(
+            self.findings_summary_details_state, table_name=consts.FINDINGS_SUMMARY_TABLE_NAME
+        )
+        last_checkpoint_company = self.checkpoint_obj.get_endpoint_last_data(
+            last_data, "findings_summary", company_guid
+        )
+        last_checkpoint_company = (
+            last_checkpoint_company if last_checkpoint_company else []
+        )
+        findings_summary_endpoint = consts.ENDPOINTS[
+            "findings_summary_endpoint_path"
+        ].format(company_guid)
+        checkpoint_key = "{}".format(company_guid)
+        end_date = findings_summary_data.get("end_date")
+        start_date = findings_summary_data.get("start_date")
+        stats = findings_summary_data.get("stats", [])
 
-            for stat in stats:
-                self.check_timeout()
-                for vulnerability in vulnerabilities_response:
-                    self.check_timeout()
-                    if stat.get("name") == vulnerability.get("display_name"):
-                        stat["description"] = vulnerability.get("description")
-                        stat["severity"] = vulnerability.get("severity")
-                        stat["end_date"] = end_date
-                        stat["start_date"] = start_date
-                        stat["Company"] = company_name
+        for stat in stats:
+            for vulnerability in vulnerabilities_response:
+                if stat.get("name") == vulnerability.get("display_name"):
+                    stat["description"] = vulnerability.get("description")
+                    stat["severity"] = vulnerability.get("severity")
+                    stat["end_date"] = end_date
+                    stat["start_date"] = start_date
+                    stat["Company"] = company_name
 
-                        body = json.dumps(stat, sort_keys=True)
-                        data_hash = hashlib.sha512(body.encode())
-                        result_hash = data_hash.hexdigest()
-                        if (
-                            last_checkpoint_company
-                            and result_hash not in last_checkpoint_company
-                        ) or not last_checkpoint_company:
-                            last_checkpoint_company.append(result_hash)
-                            self.send_data_to_sentinel(
-                                stat,
-                                consts.FINDINGS_SUMMARY_TABLE_NAME,
-                                company_name,
-                                findings_summary_endpoint,
-                            )
-            self.checkpoint_obj.set_checkpoint(
-                partition_key=consts.DATA_CHECKPOINT_PARTITION_KEY,
-                row_key=checkpoint_key,
-                value=json.dumps(last_checkpoint_company)
-            )
-        except BitSightTimeOutException:
-            raise BitSightTimeOutException()
-        except BitSightException:
-            raise BitSightException()
-        except Exception as err:
-            applogger.exception(
-                "{} {} Error: {}".format(
-                    self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME, err
-                )
-            )
-            raise BitSightException()
+                    body = json.dumps(stat, sort_keys=True)
+                    data_hash = hashlib.sha512(body.encode())
+                    result_hash = data_hash.hexdigest()
+                    if (
+                        last_checkpoint_company
+                        and result_hash not in last_checkpoint_company
+                    ) or not last_checkpoint_company:
+                        last_checkpoint_company.append(result_hash)
+                        self.send_data_to_sentinel(
+                            stat,
+                            consts.FINDINGS_SUMMARY_TABLE_NAME,
+                            company_name,
+                            findings_summary_endpoint,
+                        )
+
+        self.checkpoint_obj.save_checkpoint(
+            self.findings_summary_details_state,
+            last_data,
+            "findings_summary",
+            "{}_{}".format(consts.FINDINGS_SUMMARY_TABLE_NAME, "Checkpoint"),
+            checkpoint_key,
+            last_checkpoint_company,
+        )
