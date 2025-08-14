@@ -1,0 +1,39 @@
+id: 1aac7737-d52f-483d-b225-6a27c1b29a9e
+name: Contrast ADR - DLP SQL Injection Correlation
+description: |
+  'Detects successful SQL injection attacks identified by Contrast ADR and correlates them with WAF/DLP logs. This rule identifies critical database security breaches that have bypassed initial defenses and may result in data exfiltration or unauthorized database access.'
+severity: Critical
+status: Available
+requiredDataConnectors:
+  - connectorId: ContrastADRDataConnector
+    dataTypes:
+      - ContrastADR_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+query: |
+  ContrastADR_CL
+  | where result_s =~ "EXPLOITED" and rule_s =~ "SQL-INJECTION"
+  | project-rename hostname_s = host_hostname_s
+  | join kind= inner (WAFLogs_CL | where TimeGenerated >= ago(5m)) on hostname_s
+alertDetailsOverride:
+  alertDisplayNameFormat: 'CRITICAL: SQL Injection Exploited by Contrast ADR on {{application_name_s}}'
+  alertDescriptionFormat: 'Confirmed active SQL Injection attack on {{request_headers_referer_s}} endpoint of {{application_name_s}} - potential data breach in progress'
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT30M
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+      - IP
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - AttackType
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+kind: Scheduled
+version: 1.0.0
