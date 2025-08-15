@@ -1,0 +1,60 @@
+﻿id: 2ce7f00d-3b3c-41b9-ae9a-b79c19d2394e
+name: Conditional Access - A Conditional Access user/group/role exclusion has changed
+version: 1.0.0
+kind: Scheduled
+description: A Conditional Access user/group/role exclusion has changed in Azure AD.
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Persistence
+- DefenseEvasion
+- CredentialAccess
+relevantTechniques:
+- T1098
+- T1078
+query: |+
+  // A Conditional Access user/group/role exclusion has changed.
+  AuditLogs
+  | where OperationName in ("Update conditional access policy")
+  | extend excludeUsersOld = extractjson("$.conditions.users.excludeUsers", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+  | extend excludeGroupsOld = extractjson("$.conditions.users.excludeGroups", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+  | extend excludeRolesOld = extractjson("$.conditions.users.excludeRoles", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+  | extend excludeUsersNew = extractjson("$.conditions.users.excludeUsers", tostring(TargetResources[0].modifiedProperties[0].newValue))
+  | extend excludeGroupsNew = extractjson("$.conditions.users.excludeGroups", tostring(TargetResources[0].modifiedProperties[0].newValue))
+  | extend excludeRolesNew = extractjson("$.conditions.users.excludeRoles", tostring(TargetResources[0].modifiedProperties[0].newValue))
+  | where excludeUsersOld != excludeUsersNew or excludeGroupsOld != excludeGroupsNew or excludeRolesOld != excludeRolesNew
+  | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+  | extend accountName = tostring(split(modifiedBy, "@")[0])
+  | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+  | project TimeGenerated, OperationName, policy = TargetResources[0].displayName, modifiedBy, accountName, upnSuffix, result = Result,
+            excludeUsersOld, excludeUsersNew, excludeGroupsOld, excludeGroupsNew, excludeRolesOld, excludeRolesNew
+  | order by TimeGenerated desc
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: accountName
+  - identifier: UPNSuffix
+    columnName: upnSuffix
+suppressionEnabled: false
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+

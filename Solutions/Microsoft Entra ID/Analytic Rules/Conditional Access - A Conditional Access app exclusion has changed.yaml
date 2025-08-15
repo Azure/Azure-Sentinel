@@ -1,0 +1,62 @@
+﻿id: 0990a481-3bc8-4682-838c-313918dd858c
+name: Conditional Access - A Conditional Access app exclusion has changed
+version: 1.0.0
+kind: Scheduled
+description: A Conditional Access app exclusion has changed in Entra ID.
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |+
+  // A Conditional Access app exclusion has changed.
+  AuditLogs
+  | where OperationName in ("Update conditional access policy")
+  | extend excludeApplicationsOld = extractjson("$.conditions.applications.excludeApplications", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+  | extend excludeApplicationsNew = extractjson("$.conditions.applications.excludeApplications", tostring(TargetResources[0].modifiedProperties[0].newValue))
+  | where excludeApplicationsOld != excludeApplicationsNew
+  | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+  | extend accountName = tostring(split(modifiedBy, "@")[0])
+  | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      policy = TargetResources[0].displayName,
+      modifiedBy,
+      accountName,
+      upnSuffix,
+      result = Result,
+      excludeApplicationsOld,
+      excludeApplicationsNew
+  | order by TimeGenerated desc
+
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: accountName
+  - identifier: UPNSuffix
+    columnName: upnSuffix
+suppressionEnabled: false
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+
