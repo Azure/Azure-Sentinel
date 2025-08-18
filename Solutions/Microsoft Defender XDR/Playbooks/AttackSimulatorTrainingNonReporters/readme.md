@@ -18,8 +18,8 @@ This playbook will execute using an incident based trigger and determine which m
     * Workflow Name: Enter the name of the Logic App to deploy (Default: TriggerASTNonReporting)
     * Email Address: Enter an email address. This will only control the 'Created By' field in the admin portal for any simulations created by the runbook. (This does _not_ modify the sender email address for emails sent via this runbook, which is configured as part of the Attack Simulator payload.)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSolutions%2FMicrosoft%2520Defender%2520XDR%2FPlaybooks%2FAttackSimulatorTrainingNonReporters%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSolutions%2FMicrosoft%2520Defender%2520XDR%2FPlaybooks%2FAttackSimulatorTrainingNonReporters%2Fazuredeploy.json)
 
 
 ## Post-Deployment instructions
