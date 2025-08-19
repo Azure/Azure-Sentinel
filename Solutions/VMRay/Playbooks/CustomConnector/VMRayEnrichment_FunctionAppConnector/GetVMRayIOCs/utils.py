@@ -404,11 +404,11 @@ def get_static_data(
             {
                 "source_name": "VMRay Threat Intelligence",
                 "description": f"Sample ID {sample_id}\nSubmission ID {submission_id}",
-                "url": f"{vmrayBaseURL}/sample/{sample_id}#summary",
+                "url": f"{vmrayBaseURL}/samples/{sample_id}#summary",
             }
         ],
         "name": name,
-        "description": f"Sample URL: {vmrayBaseURL}/sample/{sample_id}#summary,"
+        "description": f"Sample URL: {vmrayBaseURL}/samples/{sample_id}#summary,"
         f"\nAnalysis IDs: {analysis},\nCategories: {categories}",
         "indicator_types": [indicator.get("ioc_type", "")],
         "pattern": pattern,
