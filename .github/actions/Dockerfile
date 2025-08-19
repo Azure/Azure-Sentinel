@@ -4,19 +4,19 @@ FROM mcr.microsoft.com/powershell:latest
 ARG SolutionName
 
 ARG mainTemplateChanged
-ENV mainTemplateChanged ${mainTemplateChanged}
+ENV mainTemplateChanged=${mainTemplateChanged}
 
 ARG createUiChanged
-ENV createUiChanged ${createUiChanged}
+ENV createUiChanged=${createUiChanged}
 
-ENV sname ${SolutionName}
-ENV sname1 $SolutionName
+ENV sname=${SolutionName}
+ENV sname1=$SolutionName
 RUN echo "mainTemplateChanged ${mainTemplateChanged}"
 RUN echo "createUiChanged ${createUiChanged}"
 
 LABEL version="v1.0"
 
-WORKDIR ./Solutions/$SolutionName
+WORKDIR /app/Solutions/$SolutionName
 
 COPY ./Solutions/$SolutionName dist
 COPY ./.github/actions/entrypoint.ps1 dist

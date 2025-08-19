@@ -6,7 +6,7 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligenceUploadIndicatorsAPI
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
 queryFrequency: 15m
 queryPeriod: 1d
 triggerOperator: gt
@@ -18,7 +18,7 @@ tactics:
 relevantTechniques:
   - T1098
   - T1078
-customDetails: 
+customDetails:
   ActorInformation: RecordedFuturePortalLink
 incidentConfiguration:
   createIncident: true
@@ -35,30 +35,31 @@ alertDetailsOverride:
       value: RecordedFuturePortalLink
 query: |
   let ioc_lookBack = 1d;
-  // The source table (imWebSession) can be replaced by any infrastructure table containing Url data.
-  // The following workbook: Recorded Future - Url Correlation will help researching available data and selecting tables and columns  
-  imWebSession
+  // The source table (_Im_WebSession) is a ASIM parser table, but can be replaced by any infrastructure table containing Url data.
+  // The following workbook: Recorded Future - Url Correlation will help researching available data and selecting tables and columns
+  _Im_WebSession
   | where isnotempty(Url)
   | extend lowerUrl=tolower(Url)
   | join kind=inner (
-  ThreatIntelligenceIndicator
+  ThreatIntelIndicators
   // Only look for IOCs
-  | where isnotempty(Url)
+  | where ObservableKey == 'url:value'
+  | where isnotempty(ObservableValue)
   // Only look at Recorded Future Threat Hunt Indicators.
-  | where Description startswith "Recorded Future - Threat Hunt"
-  // Only work with the latest indicators  
+  | where Data.description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators
   | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  | extend lowerUrl=tolower(Url)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | extend lowerUrl=tolower(ObservableValue)
   ) on lowerUrl
-  // select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Url
-  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
-  | project Url, Description, Type, TimeGenerated, RecordedFuturePortalLink
+  // select column from the source table to match with Recorded Future ThreatIntelIndicators $left.Url
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']
+  | project Url=ObservableValue, Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink
 entityMappings:
   - entityType: URL
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.0.4
+version: 1.1.0
 kind: Scheduled

@@ -1,0 +1,33 @@
+id: 0e37c1a4-86cd-4641-a514-28a431824369
+name: Spam and Phish allowed to inbox by Admin Overrides
+description: |
+  This query helps in reviewing malicious emails allowed due to admin overrides
+description-detailed: |
+  This query helps in reviewing malicious emails allowed due to admin defined detection overrides in Defender for Office 365
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let TimeStart = startofday(ago(30d));
+  let TimeEnd = startofday(now());
+  let baseQuery = EmailEvents
+  | where TimeGenerated >= TimeStart
+  | where ConfidenceLevel != "" and OrgLevelPolicy!="" and OrgLevelAction == "Allow" and DeliveryAction == "Delivered";
+  let spam=baseQuery
+  | where ThreatTypes has 'Spam'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Allowed Spam";
+  let phish=baseQuery
+  | where ThreatTypes has 'Phish'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Allowed Phish";
+  union spam,phish
+  | project Count, Details, Timestamp
+  | render timechart
+version: 1.0.0

@@ -1,19 +1,23 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 3.3.1       | 08-04-2025                     | Updated **Analytical Rule** [Anomalous sign-in location by user account and authenticating application]								   |
-| 3.3.0       | 28-01-2025                     | Added new **Analytic Rule** AzureRBAC to the Solution									|	    			
-| 3.2.10      | 19-12-2024                     | Updated **Analytical Rule** MFARejectedbyUser.yaml								|	    			
-| 3.2.9       | 27-08-2024                     | Updated **Analytical Rule** for missing TTP	    																																		|
-| 3.2.8       | 19-08-2024                     | Exclude Result Reason "RoleAssignmentExists"	from **Analytic Rule** [NRT PIM Elevation Request Rejected]                						                        |
-| 3.2.7       | 12-06-2024                     | Fixed the bugs from **Analytic Rules**        																																		|
-| 3.2.6       | 06-06-2024                     | Successful logon from IP and failure from a different IP fixes       																												        |
-| 3.2.5       | 28-05-2024                     | Updated Entity mappings and changed description in **Analytic Rule**         																												|
-| 3.2.4       | 21-03-2024                     | Used the make-series operator instead of Make_list          																																|
-| 3.2.3       | 13-03-2024                     | Removed uses of BlastRadius from query section of **Hunting Queries** where it was used incorrectly																						|
-| 3.2.2       | 13-03-2024                     | Updated **Analytic Rule** ExplicitMFADeny                                                                                                                                  				|
-| 3.2.1       | 16-02-2024                     | Fixed entity mapping of **Analytic Rule** NRT_NewAppOrServicePrincipalCredential.yaml                                                                                                      |
-| 3.2.0       | 05-02-2024                     | 1 **Analytic Rule** added PossibleSignInfromAzureBackdoor NRT_NewAppOrServicePrincipalCredential                                                                                           |
-| 3.0.11      | 17-01-2024                     | 1 **Analytic Rule** Fixed wrong capitalization for identifier ResourceId                                                                                                                   |
+| 3.3.5       | 25-07-2025                     | Updated Entra id Conditional Access (prefix) **Analytical Rule** |
+| 3.3.4       | 10-07-2025                     | Updated **Analytical Rule** NRT_UseraddedtoPrivilgedGroups.yaml and UseraddedtoPrivilgedGroups.yaml
+| 3.3.3       | 03-06-2025                     | Updates to multiple **Playbooks** to improve documentation, streamline deployment instructions, and add links to detailed setup steps.							                    	   |
+| 3.3.2       | 08-05-2025                     | Removed the IP entity type and its associated field mappings (Address and IPAddress) in *DistribPassCrackAttempt.yaml* **Analytic Rule**.								                   |
+| 3.3.1       | 08-04-2025                     | Updated **Analytical Rule** [Anomalous sign-in location by user account and authenticating application]							                                                	   |
+| 3.3.0       | 28-01-2025                     | Added new **Analytic Rule** AzureRBAC to the Solution.								                                                                                                    	|	    			
+| 3.2.10      | 19-12-2024                     | Updated **Analytical Rule** MFARejectedbyUser.yaml.								                                                                                                        |	    			
+| 3.2.9       | 27-08-2024                     | Updated **Analytical Rule** for missing TTP.	    																																		|
+| 3.2.8       | 19-08-2024                     | Exclude Result Reason "RoleAssignmentExists" from **Analytic Rule** [NRT PIM Elevation Request Rejected].                						                                            |
+| 3.2.7       | 12-06-2024                     | Fixed the bugs from **Analytic Rules**.        																																    		|
+| 3.2.6       | 06-06-2024                     | Successful logon from IP and failure from a different IP fixes.       																												        |
+| 3.2.5       | 28-05-2024                     | Updated Entity mappings and changed description in **Analytic Rule**.         																												|
+| 3.2.4       | 21-03-2024                     | Used the make-series operator instead of Make_list.          																																|
+| 3.2.3       | 13-03-2024                     | Removed uses of BlastRadius from query section of **Hunting Queries** where it was used incorrectly.																						|
+| 3.2.2       | 13-03-2024                     | Updated **Analytic Rule** ExplicitMFADeny.                                                                                                                                  				|
+| 3.2.1       | 16-02-2024                     | Fixed entity mapping of **Analytic Rule** NRT_NewAppOrServicePrincipalCredential.yaml.                                                                                                      |
+| 3.2.0       | 05-02-2024                     | 1 **Analytic Rule** added PossibleSignInfromAzureBackdoor NRT_NewAppOrServicePrincipalCredential.                                                                                           |
+| 3.0.11      | 17-01-2024                     | 1 **Analytic Rule** Fixed wrong capitalization for identifier ResourceId.                                                                                                                   |
 | 3.0.10      | 26-12-2023                     | 1 **Analytic Rule** Modified by adding "GroupMembership" instead of "Admin" condition for better extraction of admin accounts from the identity infotable.                                 |
 | 3.0.9       | 28-11-2023                     | 2 **Analytic Rules** Modified by Adding Entity Mapping to (GuestAccountsAddedinAADGroupsOtherThanTheOnesSpecified.yaml) and Changed timerange of (SigninPasswordSpray.yaml) from 3d to 1d. |
 | 3.0.8       | 21-11-2023                     | 1 **Analytic Rules** Fixed issue that was causing multiple triggers for the same event.                                                                                                    |

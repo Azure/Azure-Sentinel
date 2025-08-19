@@ -71,7 +71,7 @@ try {
     }
 
     # identify in active resource parameters
-    $resourceContent = $mainTemplateFileContent.resources | Where-Object { $_.type -eq 'Microsoft.OperationalInsights/workspaces/providers/contentTemplates' }
+    $resourceContent = $mainTemplateFileContent.resources | Where-Object { $_.type -eq 'Microsoft.OperationalInsights/workspaces/providers/contentTemplates' -and $_.properties.contentKind -eq "ResourcesDataConnector"  }
 
     if ($null -ne $resourceContent -and $resourceContent.Count -gt 0) {
       $resourceLevelInvalidFields = @();
