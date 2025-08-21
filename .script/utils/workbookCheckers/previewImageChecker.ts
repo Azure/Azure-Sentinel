@@ -7,21 +7,24 @@ const skipListFile = "./.script/utils/workbookCheckers/WorkbookPreviewImageValid
 const WorkbookPreviewImageValidationSkipList = fs.existsSync(skipListFile) ? JSON.parse(fs.readFileSync(skipListFile, "utf8")).skipList : [];
 
 function isAllPng(previewImagesFileNames: Array<string>): boolean {
+    log("Running isAllPng");
     return previewImagesFileNames.every((previewImageFileName: string) => previewImageFileName.toLowerCase().endsWith('.png'));
 }
 
 function isAllIncludeBlackOrWhite(previewImagesFileNames: Array<string>): boolean {
+    log("Running isAllIncludeBlackOrWhite");
     return previewImagesFileNames.every((previewImageFileName: string) => 
-        ["Black", "black", "white", "White"].some(color => previewImageFileName.includes(color))
+        ["Black", "black", "white", "White", "Light", "light", "Dark", "dark"].some(color => previewImageFileName.includes(color))
     );
 }
 
 function isMissingImages(previewImagesFileNames: Array<string>): boolean {
+    log("Running isMissingImages);
     let blackImageCount: number = 0;
     let whiteImageCount: number = 0;
     previewImagesFileNames.forEach((filename) => {
-        if (filename.includes("black") || filename.includes("Black")) blackImageCount++;
-        if (filename.includes("white") || filename.includes("White")) whiteImageCount++;
+        if (filename.includes("black") || filename.includes("Black") || filename.includes("Dark") || filename.includes("dark")) blackImageCount++;
+        if (filename.includes("white") || filename.includes("White") || filename.includes("Light") || filename.includes("light")) whiteImageCount++;
     });
     return blackImageCount === 0 || whiteImageCount === 0;
 }
@@ -33,14 +36,17 @@ export function isValidPreviewImageFileNames(items: Array<WorkbookMetadata>) {
           return; // Skip this validation for this workbook
       }
     if (!isAllPng(workbookMetadata.previewImagesFileNames)) {
+        log("Done Running isAllPng");
         throw new WorkbookValidationError(`Invalid Preview Images for workbook ${workbookMetadata.workbookKey}. All preview images must be png files`);
     }
     
     if (!isAllIncludeBlackOrWhite(workbookMetadata.previewImagesFileNames)) {
+        log("Done Running isAllIncludeBlackOrWhite");
         throw new WorkbookValidationError(`Invalid Preview Images for workbook ${workbookMetadata.workbookKey}. All preview image file names must include either "Black" or "White"`);
     }
 
     if (isMissingImages(workbookMetadata.previewImagesFileNames)) {
+        log("Done Running isMissingImages);
         throw new WorkbookValidationError(`Preview Image Validation failed for ${workbookMetadata.workbookKey}. Preview images must contain at least one white background image and one image black background image.`);
     }
   });
