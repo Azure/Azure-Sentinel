@@ -10,14 +10,28 @@ import { isUniqueKeys } from "./utils/workbookCheckers/uniqueWorkbookKeyChecker.
 
 export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCode> {
   let workbooksMetadata = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  console.log("Reading workbooksMetadataSchema.json");
   let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/workbooksMetadataSchema.json", "utf8"));
+  console.log("Done Reading workbooksMetadataSchema.json");
 
+  console.log("Running isValidSchema");
   isValidSchema(workbooksMetadata, schema);
+  console.log("Done Running isValidSchema");
+  console.log("Running isUniqueKeys");
   isUniqueKeys(workbooksMetadata);
+  console.log("Done Running isUniqueKeys");
+  console.log("Running isValidPreviewImageFileNames");
   isValidPreviewImageFileNames(workbooksMetadata);
+  console.log("Done Running isValidPreviewImageFileNames");
+  console.log("Running doDefinedLogoImageFilesExists");
   doDefinedLogoImageFilesExist(workbooksMetadata);
+  console.log("Done Running doDefinedLogoImageFilesExists");
+  console.log("Running doDefinedPreviewImageFilesExist");
   doDefinedPreviewImageFilesExist(workbooksMetadata);
+  console.log("Done Running doDefinedPreviewImageFilesExist");
+  console.log("Running isVersionIncrementedOnModification");
   await isVersionIncrementedOnModification(workbooksMetadata);
+  console.log("Done Running isVersionIncrementedOnModification");
   
   return ExitCode.SUCCESS;
 } 
