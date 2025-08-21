@@ -8,6 +8,7 @@ const WorkbookPreviewImageValidationSkipList = fs.existsSync(skipListFile) ? JSO
 
 function isAllPng(previewImagesFileNames: Array<string>): boolean {
     console.log("Running isAllPng");
+    console.log(previewImagesFileNames);
     return previewImagesFileNames.every((previewImageFileName: string) => previewImageFileName.toLowerCase().endsWith('.png'));
 }
 
