@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.1.5       | 19-08-2025                     | Retracted the CrowdStrike API Data Connector (via Codeless Connector Framework) from the solution as there are major issues for Authentication and duplicatation of logs.The connector will be released again after the fix. |
 | 3.1.4       | 04-07-2025                     | Added new **CCF Connector** to the Solution *CrowdStrike API Data Connector*.<br/>Removed *Crowdstrike Falcon Data Replicator* - Function App **Data Connector**.<br/>Updated Connectors description. |
 | 3.1.3       | 24-06-2025                     | Removed "DEPRECATED" label from the *Crowdstrike Falcon Data Replicator V2* - **Data connector**. <br/> Updated Solution description.                                      |
 | 3.1.2       | 03-06-2025                     | Crowdstrike Falcon S3 **CCF connector** moving to GA.                                    |
