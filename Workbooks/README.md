@@ -1,4 +1,4 @@
-# How to contribute new workbook
+# How to contribute new workbook (Standalone and Solution)
 
 This assumes you already have a workbook that you want to share as a Microsoft Sentinel template.<br/>
 Once this process is completed, Microsoft Sentinel users will be able to save an instance of your template that will visualize the data in their own workspace. 
@@ -23,9 +23,10 @@ To learn how to create workbooks - go to [workbooks documentation](https://docs.
 This pull request will contain:
 
 * The screenshots of your workbook. Place them under [workbooks/images/preview](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Preview). <br/>Please be consistent with the filename conventions - the dark theme filename should contain the word _"black"_ and the light theme image should contain the word _"white"_.
-* The gallery template json of your workbook. Place it directly under workbooks [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks).
-* (optional) A logo that you want the workbook to display. Place it under [workbooks/images/logos](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Logos) - if not supplied - it will be the generic workbooks logo. <br/>
-This logo should be in SVG format.
+* The gallery template json of your workbook. Place it directly under workbooks.<br/>
+      Standalone - [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks) <br/>
+      Solution   - [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/[SolutionName]/Workbooks)
+* A logo that workbook to display will be a genetic workbooks logo.
 * Change workbooksMetadata.json [file](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json), so that it will contain a new section, which will include:
 
    ```
@@ -40,7 +41,11 @@ This logo should be in SVG format.
     
     "dataConnectorsDependencies": [],//Relevant connectors
     
-    "previewImagesFileNames": [ ],//The relative path of the preview images you saved under workbooks/images/previews
+    "previewImagesFileNames": [ ],//The relative path of the preview images for standalone workbook you saved under workbooks/images/previews
+
+    "previewImages": [],//The relative path of the preview images for solution workbook you saved under workbooks/images/previews 
+
+    "previewImagesDark": [],//The relative path of the preview images for solution workbook you saved under workbooks/images/previews  
     
     "version": "1.0", // if this is a new workbook - this should be "1.0"
     
@@ -63,6 +68,8 @@ This logo should be in SVG format.
       "dataTypesDependencies": [ "CommonSecurityLog" ],
       "dataConnectorsDependencies": [ "PaloAlto" ],
       "previewImagesFileNames": [ "PaloAltoOverviewWhite1.png", "PaloAltoOverviewBlack1.png", "PaloAltoOverviewWhite2.png", "PaloAltoOverviewBlack2.png", "PaloAltoOverviewWhite3.png", "PaloAltoOverviewBlack3.png" ],
+      "previewImages": ["PaloAltoOverviewWhite1.png", "PaloAltoOverviewWhite2.png", "PaloAltoOverviewWhite3.png",],
+      "previewImagesDark": ["PaloAltoOverviewBlack1.png", "PaloAltoOverviewBlack2.png","PaloAltoOverviewBlack3.png"],
       "version": "1.1",
       "title": "Palo Alto overview",
       "templateRelativePath": "PaloAltoOverview.json",
@@ -71,7 +78,7 @@ This logo should be in SVG format.
       },
    
   
-  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>  
+  After this PR is approved and completed, and once publishing is scheduled via Microsoft Partner Center, the workbooks in Sentinel will be synced with the ones in GitHub.<br/>  
   
  
 # How to update an existing workbook
