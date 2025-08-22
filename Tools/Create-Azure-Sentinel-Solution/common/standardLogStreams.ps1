@@ -81,15 +81,12 @@ $standardStreamMapping += @{ Key = 'OFFICEPOWERPLATFORMADMIN_RESTAPI'; Value = '
 $standardStreamMapping += @{ Key = 'OFFICEPOWERAPPSRESOURCE_RESTAPI'; Value = 'Microsoft-PowerPlatformConnectorActivity'}
 $standardStreamMapping += @{ Key = 'OFFICEPOWERPLATFORMADMINDLP_RESTAPI'; Value = 'Microsoft-PowerPlatformDlpActivity'}
 $standardStreamMapping += @{ Key = 'OFFICEPROJECT_RESTAPI'; Value = 'Microsoft-ProjectActivity'}
-$standardStreamMapping += @{ Key = 'SECURITY_ALERT_DATA'; Value = 'Microsoft-SecurityAlert'}
-$standardStreamMapping += @{ Key = 'SENTINEL_SECURITY_ALERT_DATA'; Value = 'Microsoft-SecurityAlert'}
 $standardStreamMapping += @{ Key = 'SECURITY_EVENT_BLOB'; Value = 'Microsoft-SecurityEvent'}
 $standardStreamMapping += @{ Key = 'SECURITY_INCIDENT_DATA'; Value = 'Microsoft-SecurityIncident'}
 $standardStreamMapping += @{ Key = 'SENTINEL_HEALTH'; Value = 'Microsoft-SentinelHealth'}
 $standardStreamMapping += @{ Key = 'THREAT_INTELLIGENCE_INDICATOR_DATA'; Value = 'Microsoft-ThreatIntelligenceIndicator'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGURLCLICKEVENTS'; Value = 'Microsoft-UrlClickEvents'}
 $standardStreamMapping += @{ Key = 'USAGE_METERING'; Value = 'Microsoft-Usage'}
-$standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watchlist'}
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB'; Value = 'Microsoft-WindowsEvent'}
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Microsoft-WindowsEvent'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GKE_AUDIT_LOGS'; Value = 'Microsoft-GKEAudit'}
@@ -101,8 +98,6 @@ $standardStreamMapping += @{ Key = 'SENTINEL_GKE_APPLICATION'; Value = 'Microsof
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSSecurityHubFindings'}
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver'}
 $standardStreamMapping += @{ Key = 'SAP_ABAPAUDITLOG'; Value = 'Microsoft-ABAPAuditLog' }
-$standardStreamMapping += @{ Key = 'SECURITY_ALERT_DATA'; Value = 'Microsoft-SecurityAlert' }
-$standardStreamMapping += @{ Key = 'SENTINEL_SECURITY_ALERT_DATA'; Value = 'Microsoft-SecurityAlert' }
 $standardStreamMapping += @{ Key = 'LINUX_NAGIOSALERTS_BLOB'; Value = 'Microsoft-Alert' }
 $standardStreamMapping += @{ Key = 'OMSALERTS_BLOB'; Value = 'Microsoft-Alert' }
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGALERTEVIDENCE'; Value = 'Microsoft-AlertEvidence' }
@@ -133,7 +128,6 @@ $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHU
 $standardStreamMapping += @{ Key = 'SECURITY_CISCO_ASA_BLOB'; Value = 'Microsoft-CommonSecurityLog' }
 $standardStreamMapping += @{ Key = 'SECURITY_CEF_BLOB'; Value = 'Microsoft-CommonSecurityLog' }
 $standardStreamMapping += @{ Key = 'COMPUTER_GROUP_BLOB'; Value = 'Microsoft-ComputerGroup' }
-$standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watchlist' }
 $standardStreamMapping += @{ Key = 'OFFICEDATAVERSE_RESTAPI'; Value = 'Microsoft-DataverseActivity' }
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGDEVICEEVENTS'; Value = 'Microsoft-DeviceEvents' }
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGDEVICEFILECERTIFICATEINFO'; Value = 'Microsoft-DeviceFileCertificateInfo' }
@@ -182,20 +176,15 @@ $standardStreamMapping += @{ Key = 'OFFICEPOWERBI_RESTAPI'; Value = 'Microsoft-P
 $standardStreamMapping += @{ Key = 'OFFICEPOWERPLATFORMADMIN_RESTAPI'; Value = 'Microsoft-PowerPlatformAdminActivity' }
 $standardStreamMapping += @{ Key = 'OFFICEPOWERAPPSRESOURCE_RESTAPI'; Value = 'Microsoft-PowerPlatformConnectorActivity' }
 $standardStreamMapping += @{ Key = 'OFFICEPOWERPLATFORMADMINDLP_RESTAPI'; Value = 'Microsoft-PowerPlatformDlpActivity' }
-$standardStreamMapping += @{ Key = 'OFFICEPROJECT_RESTAPI'; Value = 'Microsoft-ProjectActivity' }
-$standardStreamMapping += @{ Key = 'SECURITY_ALERT_DATA'; Value = 'Microsoft-SecurityAlert' }
-$standardStreamMapping += @{ Key = 'SENTINEL_SECURITY_ALERT_DATA'; Value = 'Microsoft-SecurityAlert' }
 $standardStreamMapping += @{ Key = 'SECURITY_EVENT_BLOB'; Value = 'Microsoft-SecurityEvent' }
 $standardStreamMapping += @{ Key = 'SECURITY_INCIDENT_DATA'; Value = 'Microsoft-SecurityIncident' }
 $standardStreamMapping += @{ Key = 'SENTINEL_HEALTH'; Value = 'Microsoft-SentinelHealth' }
 $standardStreamMapping += @{ Key = 'THREAT_INTELLIGENCE_INDICATOR_DATA'; Value = 'Microsoft-ThreatIntelligenceIndicator' }
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGURLCLICKEVENTS'; Value = 'Microsoft-UrlClickEvents' }
 $standardStreamMapping += @{ Key = 'USAGE_METERING'; Value = 'Microsoft-Usage' }
-$standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watchlist' }
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB'; Value = 'Microsoft-WindowsEvent' }
 $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Microsoft-WindowsEvent' }
 $standardStreamMapping += @{ Key = 'SENTINEL_GOOGLEWORKSPACEREPORTS'; Value = 'Microsoft-GoogleWorkspaceReports' }
-
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSSecurityHubFindings' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver' }
 $standardStreamMapping += @{ Key = 'CROWDSTRIKE_VULNERABILITIES'; Value = 'Microsoft-CrowdStrikeVulnerabilities' }
@@ -211,6 +200,11 @@ $standardStreamMapping += @{ Key = 'SENTINEL_GCPCLOUDSQL'; Value = 'Microsoft-GC
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPCLOUDRUN'; Value = 'Microsoft-GCPCloudRun'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_IAM_LOGS'; Value = 'Microsoft-GCPIAM'}
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSS3SERVERACCESS'; Value = 'Microsoft-AWSS3ServerAccess'}
+$standardStreamMapping += @{ Key = 'SENTINEL_GCP_IDS_LOGS'; Value = 'Microsoft-GCPIDS'}
+$standardStreamMapping += @{ Key = 'ILUMIO_INSIGHTS'; Value = 'Microsoft-IlumioInsights'}
+$standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-FlowLog'; Value = 'Microsoft-AWSNetworkFirewallFlow'}
+$standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-TlsLog'; Value = 'Microsoft-AWSNetworkFirewallTls'}
+$standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-AlertLog'; Value = 'Microsoft-AWSNetworkFirewallAlert'}
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {
   param (
