@@ -129,6 +129,11 @@ try{
     Write-Host "Creating Logic App workflow $LogicAppName in resource group $resourceGroupName"
     New-AzResourceGroupDeployment -ResourceGroupName $resourceGroupName -TemplateFile "./LogicApp.json" -workflowName $LogicAppName -location $location -tenantId $tenantId -clientId $sp.AppId -clientSecret $secureSpSecret -immutableId $immutableId -dcrIngestionEndpoint $getDcrIngestionEndpoint -tableName $tableName
     Write-Host "Logic App workflow $LogicAppName created successfully in resource group $resourceGroupName."
+
+    $trigger = Get-AzLogicAppTriggerCallbackUrl -ResourceGroupName "secops" -Name "dcrDemo" -TriggerName "When_a_HTTP_request_is_received"
+    $triggerUrl = $trigger.Value
+
+    Write-Host "Logic App Trigger URL: $triggerUrl"
 } catch {
     Write-Host "Failed to create Logic App workflow: $($_.Exception.Message)"
 }
