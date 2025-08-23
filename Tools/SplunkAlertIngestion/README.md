@@ -6,7 +6,6 @@ Permissions needed:
 
 PowerShell script can be run from Azure Cloud Shell:
 - Upload DCR, LogicApp and main.ps1 to your Azure Cloud Shell
-- Run the script with all the required parameters
-  ./main.ps1 -ServicePrincipalName "" -tableName "" -workspaceResourceId "" -dataCollectionRuleName "" -location ""
+- Run the script with all the required parameters (./main.ps1 -ServicePrincipalName "" -tableName "" -workspaceResourceId "" -dataCollectionRuleName "" -location "")
 
 
