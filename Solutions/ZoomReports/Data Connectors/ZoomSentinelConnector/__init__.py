@@ -200,7 +200,14 @@ class Zoom:
         error=False    
         for _ in range(self.retry):
             try:
-                
+                logging.info("Getting report: {}".format(report_type_suffix))
+                logging.info("Query Params: {}".format(query_params))
+                logging.info("Headers: {}".format(self.headers))
+                logging.info("URL: {}".format(self.base_url + report_type_suffix))      
+                logging.info("Retry Attempt: {}".format(_+1))
+                logging.info("Error Status: {}".format(error))
+                logging.info("Status Codes for Retry: {}".format(self.error_statuses))
+                logging.info("Retry Count: {}".format(self.retry))
                 r = requests.get(url=self.base_url + report_type_suffix,
                              params=query_params,
                              headers=self.headers)
