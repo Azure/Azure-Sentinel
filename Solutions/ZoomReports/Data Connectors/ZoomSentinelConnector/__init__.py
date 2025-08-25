@@ -115,6 +115,7 @@ class Zoom:
             try:
                 base64String = base64.b64encode(
                     f"{self.client_id}:{self.client_secret}".encode('utf-8')).decode("ascii")
+                logging.info("Base64String: {}".format(base64String))
                 headersfortokens = {
                     'Accept': 'application/json',
                     'authorization': "Basic " + base64String,
@@ -126,6 +127,12 @@ class Zoom:
                 oauth_token = requests.post(url=self.token_url,
                                             params=query_params,
                                             headers=headersfortokens)
+                logging.info("OAuth Token Response: {}".format(oauth_token))
+                logging.info("Token URL: {}".format(self.token_url))
+                logging.info("Params: {}".format(query_params))
+                logging.info("Headers: {}".format(headersfortokens))
+                logging.info("Status Code: {}".format(oauth_token.status_code))
+                logging.info("Response Text: {}".format(oauth_token.text))
                 if (oauth_token.status_code in self.error_statuses) or (error==True):
                     error=False
                     continue ## To Do: Need to add delay 
