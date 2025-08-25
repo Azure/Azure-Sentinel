@@ -61,14 +61,14 @@ query: |
       PowerPlatformAdminActivity
       | where TimeGenerated >= ago (query_lookback)
       | where EventOriginalType == "CreatePowerApp"
-      | extend Properties = tostring(PropertyCollection)
-      | extend SrcIpAddr = extract(@'"enduser.ip_address","Value":"([^"]+)"', 1, Properties)
-      | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string(SrcIpAddr, '::ffff:', ''), SrcIpAddr)
-      | extend AppId = extract(@'"powerplatform.analytics.resource.power_app.id","Value":"([^"]+)"', 1, Properties)
-      | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
-      | extend
-          AppName = extract(@'"powerplatform.analytics.resource.power_app.display_name","Value":"([^"]+)"', 1, Properties),
-          EnvironmentId = extract(@'"powerplatform.analytics.resource.environment.id","Value":"([^"]+)"', 1, Properties)
+      | extend Property = tostring(Properties)
+      | extend SrcIpAddr = extract(@"\""enduser\.ip_address\""\s*:\s*\""(.*?)\""", 1, Property)
+      | extend SrcIpAddr = iif(SrcIpAddr startswith "::ffff:", replace_string(SrcIpAddr, "::ffff:", ""), SrcIpAddr)
+      | extend AppId = extract(@"\""powerplatform\.analytics\.resource\.power_app\.id\""\s*:\s*\""(.*?)\""", 1, Property)
+      | extend AppId = tolower(replace_string(AppId, "/providers/Microsoft.PowerApps/apps/", ""))
+      | extend AppName = extract(@"\""powerplatform\.analytics\.resource\.power_app\.display_name\""\s*:\s*\""(.*?)\""", 1, Property),
+           EnvironmentId = extract(@"\""powerplatform\.analytics\.resource\.environment\.id\""\s*:\s*\""(.*?)\""", 1, Property)
+      | extend EnvironmentId = tolower(replace_string(EnvironmentId, "/providers/Microsoft.BusinessAppPlatform/environments/Default-", ""))
       | project-rename
           AppCreatedTime = TimeGenerated,
           AppCreator = ActorName,
@@ -82,9 +82,9 @@ query: |
           PowerPlatformAdminActivity
           | where TimeGenerated >= ago (query_lookback)
           | where EventOriginalType == "LaunchPowerApp"
-          | where PropertyCollection has_any (distinct_apps)
-          | extend Properties = tostring(PropertyCollection)
-          | extend AppName = extract(@'"powerplatform.analytics.resource.power_app.display_name","Value":"([^"]+)"', 1, Properties)
+          | where Properties has_any (distinct_apps)
+          | extend Property2 = tostring(Properties)
+          | extend AppName = extract(@"\""powerplatform\.analytics\.resource\.power_app\.display_name\""\s*:\s*\""(.*?)\""", 1, Property2)
           | summarize FirstAppLaunchTime = min(TimeGenerated) by ActorName, AppName)
           on AppName
       | where FirstAppLaunchTime > AppCreatedTime
@@ -196,8 +196,8 @@ alertDetailsOverride:
     app {{AppName}}.  Click here to navigate to the Power Apps Portal to examine the
     app: https://make.powerapps.com/environments/{{EnvironmentId}}/apps'
 customDetails:
-  Environment: EnvironmentId
-  PowerAppsAppName: AppName
-  PowerAppsApp: AppId
   AppCreator: AppCreator
-version: 3.2.0
+  Environment: EnvironmentId
+  PowerAppsApp: AppId
+  PowerAppsAppName: AppName
+version: 3.2.3
