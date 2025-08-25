@@ -11,7 +11,7 @@ Before deploying, ensure you have:
 - Required IAM permissions to configure AWS services (IAM, S3, SQS, CloudFront).
 
 ## CloudFormation Template
-Download the CloudFormation template from the [GitHub Repository](https://github.com/v-sreddyt/AWS-CloudFront/tree/main/Cloud%20Formation%20Template) and deploy it in your AWS environment.
+ Download Both the CloudFormation templates(Template 1: OpenID connect authentication deployment,Template 2: AWSCloudFront resources deployment) from connector UI page and deploy in your AWS environment.
 1. OIDC Web Identity Provider
 
    The OIDC (OpenID Connect) Web Identity Provider allows AWS services to securely authenticate using an external identity provider without managing long-term credentials. The CloudFormation template configures OIDC as a trusted identity provider in AWS, enabling secure role-based access for forwarding AWS CloudFront logs to Microsoft Sentinel.
