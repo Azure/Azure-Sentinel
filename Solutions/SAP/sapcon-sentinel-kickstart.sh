@@ -456,24 +456,42 @@ if [ "$os" == "ubuntu" ]; then
 	fi
 
 elif [ "$os" == '"rhel"' ]; then
-	#RHEL
-	echo 'Updating package lists'
-	sudo yum update -y --disablerepo='*' --enablerepo='*microsoft*' >/dev/null
-	install_package "nc" "yum install -y"
-	install_package "jq" "yum install -y"
+    # RHEL / CentOS / Fedora handling
+    echo 'Updating package lists'
+    sudo yum update -y --disablerepo='*' --enablerepo='*microsoft*' >/dev/null
+    install_package "nc" "yum install -y"
+    install_package "jq" "yum install -y"
 
-	if [ "$MODE" != "cfgf" ]; then
-		sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc >/dev/null
-		echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/azure-cli.repo >/dev/null
-		echo "Installing Azure CLI"
-		sudo yum install azure-cli -y >/dev/null
-	fi
-	sudo yum install -y yum-utils >/dev/null
-	sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo >/dev/null
-	echo "Installing Docker"
-	sudo yum install docker-ce docker-ce-cli containerd.io -y >/dev/null
-	sudo systemctl enable docker.service
-	sudo systemctl start docker.service
+    if [ "$MODE" != "cfgf" ]; then
+        sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc >/dev/null
+        echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" \
+            | sudo tee /etc/yum.repos.d/azure-cli.repo >/dev/null
+        echo "Installing Azure CLI"
+        sudo yum install azure-cli -y >/dev/null
+    fi
+
+    # Detect OS family and version
+    os_id=$(awk -F= '/^ID=/{print $2}' /etc/os-release | tr -d '"')
+    os_ver_id=$(awk -F= '/^VERSION_ID=/{print $2}' /etc/os-release | tr -d '"' | cut -d. -f1)
+
+    sudo yum install -y yum-utils >/dev/null
+
+    if [[ "$os_id" == "rhel" || "$os_id" == "centos" ]]; then
+        echo "Configuring Docker repo for RHEL/CentOS $os_ver_id"
+        sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo >/dev/null
+        sudo sed -i "s/\$releasever/$os_ver_id/g" /etc/yum.repos.d/docker-ce.repo
+    elif [[ "$os_id" == "fedora" ]]; then
+        echo "Configuring Docker repo for Fedora $os_ver_id"
+        sudo yum-config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo >/dev/null
+    else
+        echo "Unsupported OS for Docker install: $os_id"
+        exit 1
+    fi
+
+    echo "Installing Docker"
+    sudo yum install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y >/dev/null
+    sudo systemctl enable --now docker.service
+fi
 
 elif [ "$os" == '"sles"' ]; then
 	# SUSE
