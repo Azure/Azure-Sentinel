@@ -120,81 +120,39 @@ def convertToDatetime(date_time,format):
     return datetime_str
 
 def GetDates(logType):
-    end_time_dt_obj = GetEndTime(logType) # Renamed for clarity, this is a datetime object
+    end_time = GetEndTime(logType)
     state = StateManager(connection_string=connection_string)
-    past_time_str_from_state = state.get() # This is a string from the state file, or None
-    
-    # activity_json_str will hold the JSON string representing the dictionary of activity timestamps
-    activity_json_str = "" 
-
-    # Default start time if no valid state or specific activity timestamp is found
-    # Use end_time_dt_obj for this calculation, as it's the relevant end time for the current GetDates call
-    default_initial_timestamp_str = (end_time_dt_obj - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")[:-4] + 'Z'
-
-    if past_time_str_from_state and len(past_time_str_from_state) > 0:
-        if is_json(past_time_str_from_state):
-            try:
-                decoded_past_time = json.loads(past_time_str_from_state)
-                if isinstance(decoded_past_time, dict):
-                    # The state is a valid JSON dictionary, use it.
-                    # Ensure all known activities have an entry, initialize if not.
-                    for activity_key in activities:
-                        if activity_key not in decoded_past_time:
-                            decoded_past_time[activity_key] = default_initial_timestamp_str
-                    activity_json_str = json.dumps(decoded_past_time)
-                else:
-                    # The state was valid JSON, but not a dictionary (e.g., "123" or "\"a string\"").
-                    # This is an invalid state format; reinitialize all activities.
-                    temp_dict = {}
-                    for activity_key_init in activities:
-                        temp_dict[activity_key_init] = default_initial_timestamp_str
-                    activity_json_str = json.dumps(temp_dict)
-            except json.JSONDecodeError as e:
-                # is_json passed, but json.loads failed. This should be rare.
-                logging.error(f"Failed to decode JSON from state (is_json was true): {past_time_str_from_state}. Error: {e}. Re-initializing.")
-                temp_dict = {}
-                for activity_key_init in activities:
-                    temp_dict[activity_key_init] = default_initial_timestamp_str
-                activity_json_str = json.dumps(temp_dict)
+    past_time = state.get()
+    activity_list = {}
+    if past_time is not None and len(past_time) > 0:
+        if is_json(past_time):
+            activity_list = past_time
+        # Check if state file has non-date format. If yes, then set start_time to past_time
         else:
-            # past_time_str_from_state is not JSON, try legacy format conversion (single timestamp for all activities)
-            temp_dict = {}
             try:
-                newtime = datetime.strptime(past_time_str_from_state[:-1] + '.000Z', "%Y-%m-%dT%H:%M:%S.%fZ")
-                newtime_str = newtime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")[:-4] + 'Z'
-                for activity_key_init in activities:
-                    temp_dict[activity_key_init] = newtime_str
-                activity_json_str = json.dumps(temp_dict)
+                newtime = datetime.strptime(past_time[:-1] + '.000Z', "%Y-%m-%dT%H:%M:%S.%fZ")
+                newtime = newtime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                newtime = newtime[:-4] + 'Z'
+                for activity in activities:
+                    activity_list[activity] = newtime
+                activity_list = json.dumps(activity_list)
             except Exception as err:
-                logging.error("Error while converting legacy state. Its neither a json nor a valid date format: {}. Error: {}".format(past_time_str_from_state, err))
-                logging.info("Setting start time to get events for last 5 minutes for all activities.")
-                for activity_key_init in activities:
-                    temp_dict[activity_key_init] = default_initial_timestamp_str
-                activity_json_str = json.dumps(temp_dict)
+                logging.info("Error while converting state. Its neither a json nor a valid date format {}".format(err))
+                logging.info("Setting start time to get events for last 5 minutes.")
+                past_time = (end_time - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                for activity in activities:
+                    activity_list[activity] = past_time[:-4] + 'Z'
+                activity_list = json.dumps(activity_list)
     else:
-        # No past_time state found or it's empty. Initialize all activities.
-        logging.info("No valid last time point in state, initializing all activities to fetch events for last 5 minutes.")
-        temp_dict = {}
-        for activity_key_init in activities:
-            temp_dict[activity_key_init] = default_initial_timestamp_str
-        activity_json_str = json.dumps(temp_dict)
-
-    # Convert the end_time_dt_obj (datetime object) to the required string format for returning
-    final_end_time_str = end_time_dt_obj.strftime("%Y-%m-%dT%H:%M:%S.%fZ")[:-4] + 'Z'
-
-    # activity_json_str now reliably holds a JSON string of a dictionary
-    loaded_activity_dict = json.loads(activity_json_str)
-
-    if isBlank(logType):
-        # Return the entire dictionary of activity timestamps
-        return loaded_activity_dict
-    else:
-        # Return the specific start time for the logType and the calculated end_time string
-        start_time_for_logtype = loaded_activity_dict.get(logType)
-        if start_time_for_logtype is None:
-            # This should ideally not happen if all activities are initialized correctly
-            start_time_for_logtype = default_initial_timestamp_str
-        return start_time_for_logtype, final_end_time_str
+        logging.info("There is no last time point, trying to get events for last 5 minutes.")
+        past_time = (end_time - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        for activity in activities:
+            activity_list[activity] = past_time[:-4] + 'Z'
+        activity_list = json.dumps(activity_list)
+    end_time = end_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    end_time = end_time[:-4] + 'Z'
+    
+    return json.loads(activity_list) if (isBlank(logType)) else (json.loads(activity_list)[logType],end_time)
 
 def check_if_script_runs_too_long(script_start_time):
     now = int(time.time())

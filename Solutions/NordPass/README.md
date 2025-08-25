@@ -59,7 +59,7 @@ You must also be a Contributor with User Access Administrator role or Owner of t
 ## Installation
 You can easily install the NordPass Solution for Microsoft Sentinel in a few minutes. Click the button below to start the deployment wizard:
 
-[![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FNordPass%2FData%2520Connectors%2Fazuredeploy_NordPass_API_FunctionApp.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-Nordpass-azuredeploy)
 
 ## Post-Deployment Configuration
 Once you’ve deployed the solution, follow these steps to finalize the integration:
@@ -71,4 +71,4 @@ Once you’ve deployed the solution, follow these steps to finalize the integrat
 ## Support & Troubleshooting
 If you encounter issues during deployment or need assistance, please use the resources below:
 - **NordPass Support:** [Contact Support](https://support.nordpass.com/hc/en-us/requests/new)
-- **Microsoft Azure Documentation:** [Azure Sentinel Documentation](https://docs.microsoft.com/en-us/azure/sentinel/)
+- **Microsoft Azure Documentation:** [Azure Sentinel Documentation](https://docs.microsoft.com/azure/sentinel/)

@@ -98,11 +98,12 @@ class DataminrPulse:
                     status_code = self.microsoftsentinel.post_data(body, log_type)
                     if status_code >= 200 and status_code <= 299:
                         applogger.debug(
-                            "{}(method={}) products for vulnerability id={}, alert id={} posted successfully.".format(
+                            "{}(method={}) products for vulnerability id={}, alert id={} posted successfully into {} table.".format(
                                 self.logs_starts_with,
                                 __method_name,
                                 vuln_id,
                                 alert_index,
+                                log_type,
                             )
                         )
                     vulnerability.pop("products")
@@ -323,8 +324,8 @@ class DataminrPulse:
                     alerts_table,
                 )
                 applogger.info(
-                    "{}(method={}) Alert data is ingested into Sentinel.".format(
-                        self.logs_starts_with, __method_name
+                    "{}(method={}) Alert data is ingested into Sentinel table {}.".format(
+                        self.logs_starts_with, __method_name, alerts_table
                     )
                 )
             else:
@@ -348,8 +349,8 @@ class DataminrPulse:
                     alerts_table,
                 )
                 applogger.info(
-                    "{}(method={}) Total {} alerts ingested in Sentinel.".format(
-                        self.logs_starts_with, __method_name, count
+                    "{}(method={}) Total {} alerts ingested in Sentinel table {}.".format(
+                        self.logs_starts_with, __method_name, count, alerts_table
                     )
                 )
             return "Data ingetsed successfully to Sentinel log analytics workspace."
