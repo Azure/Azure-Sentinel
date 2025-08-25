@@ -12,7 +12,7 @@ This custom data connector uses a Function App to pull MongoDB Atlas (MDBA) logs
 ## **Pre-requisites**
 1. An Azure Subscription
 2. A Resource Group
-2. An Azure Sentinel/Log Analytics workspace
+2. A Microsoft Sentinel/Log Analytics workspace
 3. Roles required to deploy resources:
     - User Access Administrator
     - Contributor

@@ -61,7 +61,7 @@ class ConfigStore:
 
 
 class AzureSentinel:
-    """Azure Sentinel client used to post data to log analytics."""
+    """Microsoft Sentinel client used to post data to log analytics."""
 
     def __init__(self, config):
         self.config = config
