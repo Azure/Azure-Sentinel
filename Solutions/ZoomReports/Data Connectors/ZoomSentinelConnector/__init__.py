@@ -92,8 +92,8 @@ class Zoom:
         self.client_secret = zoom_client_secret
         self.retry = retry
         self.error_statuses = [429, 500, 502, 503, 504]
-        # self.base_url = "https://api.zoom.us/v2"
-        self.base_url = "https://api-in.zoom.us/v2/"
+        self.base_url = "https://api.zoom.us/v2"
+        # self.base_url = "https://api-in.zoom.us/v2/"
         self.token_url = "https://zoom.us/oauth/token?grant_type=account_credentials&account_id="+zoom_account_id
         self.oauth_token = self.generate_oauth_token()
         self.from_day, self.to_day = self.generate_date()
@@ -209,9 +209,11 @@ class Zoom:
                 logging.info("Error Status: {}".format(error))
                 logging.info("Status Codes for Retry: {}".format(self.error_statuses))
                 logging.info("Retry Count: {}".format(self.retry))
+                logging.info("Response_url:{}".format(self.base_url + report_type_suffix))
                 r = requests.get(url=self.base_url + report_type_suffix,
                              params=query_params,
                              headers=self.headers)
+                logging.info("Response_url:{}".format(self.base_url + report_type_suffix))
                 logging.info("Api Response: {}".format(r)) 
                 logging.info("report_type_suffix: {}".format(report_type_suffix)) 
                 logging.info("Base URl: {}".format(self.base_url)) 
