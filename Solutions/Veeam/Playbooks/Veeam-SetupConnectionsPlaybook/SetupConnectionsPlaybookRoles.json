@@ -1,0 +1,178 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.36.177.2456",
+      "templateHash": "3478763187810736339"
+    }
+  },
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "Veeam-SetupConnectionsPlaybook",
+      "metadata": {
+        "description": "Name of the Logic App that needs role assignments"
+      }
+    },
+    "sentinelWorkspaceName": {
+      "type": "string",
+      "defaultValue": "vz-publish-without-sylog",
+      "metadata": {
+        "description": "Name of the Microsoft Sentinel workspace"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "nosyslogapp",
+      "metadata": {
+        "description": "Name of the Azure Function App"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group name where all resources are located"
+      }
+    }
+  },
+  "variables": {
+    "keyVaultName": "[format('{0}kv', parameters('functionAppName'))]",
+    "relayNamespaceName": "[format('{0}relay', parameters('functionAppName'))]",
+    "roleDefinitions": {
+      "sentinelContributor": "ab8e14d6-4a74-4a29-9ba8-549422addade",
+      "keyVaultAdministrator": "00482a5a-887f-4fb3-b363-3b7fe8e74483",
+      "websiteContributor": "de139f84-1756-47ae-9be6-808fbbe84772",
+      "azureRelayOwner": "2787bf04-f1f5-4bfe-8383-c8a24483ee38"
+    }
+  },
+  "resources": {
+    "logicApp": {
+      "existing": true,
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]"
+    },
+    "sentinelWorkspace": {
+      "existing": true,
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[parameters('sentinelWorkspaceName')]"
+    },
+    "keyVault": {
+      "existing": true,
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('keyVaultName')]"
+    },
+    "functionApp": {
+      "existing": true,
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-01-01",
+      "name": "[parameters('functionAppName')]"
+    },
+    "relayNamespace": {
+      "existing": true,
+      "type": "Microsoft.Relay/namespaces",
+      "apiVersion": "2021-11-01",
+      "name": "[variables('relayNamespaceName')]"
+    },
+    "sentinelContributorRoleAssignment": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('sentinelWorkspaceName'))]",
+      "name": "[guid(resourceId('Microsoft.OperationalInsights/workspaces', parameters('sentinelWorkspaceName')), resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), variables('roleDefinitions').sentinelContributor)]",
+      "properties": {
+        "description": "Assigns Sentinel Contributor role to Logic App managed identity for Veeam integration",
+        "principalId": "[reference('logicApp', '2019-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleDefinitions').sentinelContributor)]"
+      },
+      "dependsOn": [
+        "logicApp"
+      ]
+    },
+    "keyVaultAdministratorRoleAssignment": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('keyVaultName'))]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), variables('roleDefinitions').keyVaultAdministrator)]",
+      "properties": {
+        "description": "Assigns Key Vault Administrator role to Logic App managed identity for secret management",
+        "principalId": "[reference('logicApp', '2019-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleDefinitions').keyVaultAdministrator)]"
+      },
+      "dependsOn": [
+        "logicApp"
+      ]
+    },
+    "websiteContributorRoleAssignment": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Web/sites/{0}', parameters('functionAppName'))]",
+      "name": "[guid(resourceId('Microsoft.Web/sites', parameters('functionAppName')), resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), variables('roleDefinitions').websiteContributor)]",
+      "properties": {
+        "description": "Assigns Website Contributor role to Logic App managed identity for Function App management",
+        "principalId": "[reference('logicApp', '2019-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleDefinitions').websiteContributor)]"
+      },
+      "dependsOn": [
+        "logicApp"
+      ]
+    },
+    "azureRelayOwnerRoleAssignment": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Relay/namespaces/{0}', variables('relayNamespaceName'))]",
+      "name": "[guid(resourceId('Microsoft.Relay/namespaces', variables('relayNamespaceName')), resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), variables('roleDefinitions').azureRelayOwner)]",
+      "properties": {
+        "description": "Assigns Azure Relay Owner role to Logic App managed identity for hybrid connection management",
+        "principalId": "[reference('logicApp', '2019-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleDefinitions').azureRelayOwner)]"
+      },
+      "dependsOn": [
+        "logicApp"
+      ]
+    }
+  },
+  "outputs": {
+    "logicAppPrincipalId": {
+      "type": "string",
+      "metadata": {
+        "description": "The principal ID of the Logic App managed identity"
+      },
+      "value": "[reference('logicApp', '2019-05-01', 'full').identity.principalId]"
+    },
+    "roleAssignmentIds": {
+      "type": "object",
+      "metadata": {
+        "description": "Role assignment IDs for tracking"
+      },
+      "value": {
+        "sentinelContributor": "[guid(resourceId('Microsoft.OperationalInsights/workspaces', parameters('sentinelWorkspaceName')), resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), variables('roleDefinitions').sentinelContributor)]",
+        "keyVaultAdministrator": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), variables('roleDefinitions').keyVaultAdministrator)]",
+        "websiteContributor": "[guid(resourceId('Microsoft.Web/sites', parameters('functionAppName')), resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), variables('roleDefinitions').websiteContributor)]",
+        "azureRelayOwner": "[guid(resourceId('Microsoft.Relay/namespaces', variables('relayNamespaceName')), resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), variables('roleDefinitions').azureRelayOwner)]"
+      }
+    },
+    "resourceIds": {
+      "type": "object",
+      "metadata": {
+        "description": "Resource IDs for reference"
+      },
+      "value": {
+        "logicApp": "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]",
+        "sentinelWorkspace": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('sentinelWorkspaceName'))]",
+        "keyVault": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "functionApp": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+        "relayNamespace": "[resourceId('Microsoft.Relay/namespaces', variables('relayNamespaceName'))]"
+      }
+    }
+  }
+}

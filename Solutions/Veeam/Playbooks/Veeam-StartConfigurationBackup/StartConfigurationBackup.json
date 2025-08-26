@@ -1,0 +1,452 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Veeam-StartConfigurationBackup",
+    "description": "A Sentinel playbook that initiates and monitors Veeam configuration backup sessions via HTTP trigger.",
+    "prerequisites": [
+      "1. Microsoft Sentinel workspace configured",
+      "2. Permission to create Logic Apps and API Connections",
+      "3. Permission to assign roles to the Resource Group",
+      "4. Azure Function App deployed for Veeam integration",
+      "5. Managed Identity permissions configured for the Logic App"
+    ],
+    "entities": [],
+    "tags": [ "Automation", "Veeam", "Configuration", "Backup", "HTTP" ],
+    "lastUpdateTime": "2025-08-25T00:00:00.000Z",
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Custom Template"
+    },
+    "parameterTemplateVersion": "1.0.0",
+    "postDeployment": [
+      "1. Assign Website Contributor role to the Logic App identity on the Function App resource",
+      "2. Configure HTTP trigger endpoint for external integrations",
+      "3. Assign Sentinel Contributor role to the Logic App identity on the Microsoft Sentinel workspace"
+    ],
+    "_generator": {
+      "name": "bicep",
+      "version": "0.36.177.2456",
+      "templateHash": "8701067040678761767"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Veeam-StartConfigurationBackup",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the playbook (Logic App) to be created"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the Azure Function App for Veeam integration"
+      }
+    },
+    "subscriptionId": {
+      "type": "string",
+      "defaultValue": "[subscription().subscriptionId]",
+      "metadata": {
+        "description": "Subscription ID where resources are deployed"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group name where Function App is deployed"
+      }
+    },
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Sentinel workspace name"
+      }
+    },
+    "sentinelConnectionName": {
+      "type": "string",
+      "defaultValue": "azuresentinel-connection",
+      "metadata": {
+        "description": "Name of the Azure Sentinel connection"
+      }
+    }
+  },
+  "variables": {
+    "functionAppId": "[resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.Web/sites', parameters('functionAppName'))]",
+    "sentinelConnectionId": "[resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.Web/connections', parameters('sentinelConnectionName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('sentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('sentinelConnectionName')]",
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', parameters('subscriptionId'), '/providers/Microsoft.Web/locations/',  resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('sentinelConnectionName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Veeam-StartConfigurationBackup",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "VbrHostName": {
+              "defaultValue": "win2022",
+              "type": "String"
+            },
+            "SubscriptionId": {
+              "defaultValue": "[subscription().subscriptionId]",
+              "type": "String"
+            },
+            "ResourceGroupName": {
+              "defaultValue": "[resourceGroup().name]",
+              "type": "String"
+            },
+            "WorkspaceName": {
+              "defaultValue": "",
+              "type": "String"
+            },
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_a_HTTP_request_is_received": {
+              "type": "Request",
+              "kind": "Http"
+            }
+          },
+          "actions": {
+            "StartConfigurationBackup": {
+              "runAfter": {},
+              "type": "Function",
+              "inputs": {
+                "queries": {
+                  "vbrHostName": "@parameters('VbrHostName')"
+                },
+                "function": {
+                  "id": "[concat(variables('functionAppId'), '/functions/StartConfigurationBackupAsync')]"
+                }
+              }
+            },
+            "Parse_sessionId": {
+              "runAfter": {
+                "StartConfigurationBackup": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@outputs('StartConfigurationBackup')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "headers": {
+                      "type": "object",
+                      "properties": {
+                        "Date": {
+                          "type": "string"
+                        },
+                        "Transfer-Encoding": {
+                          "type": "string"
+                        },
+                        "Strict-Transport-Security": {
+                          "type": "string"
+                        },
+                        "x-ms-middleware-request-id": {
+                          "type": "string"
+                        },
+                        "Content-Type": {
+                          "type": "string"
+                        },
+                        "Content-Length": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "sessionType": {
+                          "type": "integer"
+                        },
+                        "state": {
+                          "type": "integer"
+                        },
+                        "platformName": {},
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "jobId": {
+                          "type": "string"
+                        },
+                        "creationTime": {
+                          "type": "string"
+                        },
+                        "endTime": {},
+                        "progressPercent": {
+                          "type": "integer"
+                        },
+                        "result": {
+                          "type": "object",
+                          "properties": {
+                            "result": {
+                              "type": "integer"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "isCanceled": {
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "resourceId": {},
+                        "resourceReference": {},
+                        "parentSessionId": {},
+                        "usn": {
+                          "type": "integer"
+                        },
+                        "platformId": {}
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Compose": {
+              "runAfter": {
+                "Parse_sessionId": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@body('Parse_sessionId')?['body']?['id']"
+            },
+            "Until_state_is_not_stopped": {
+              "actions": {
+                "GetSession": {
+                  "type": "Function",
+                  "inputs": {
+                    "queries": {
+                      "vbrHostName": "@parameters('VbrHostName')",
+                      "sessionId": "@body('Parse_sessionId')?['body']?['id']"
+                    },
+                    "function": {
+                      "id": "[concat(variables('functionAppId'), '/functions/GetSessionAsync')]"
+                    }
+                  }
+                },
+                "Parse_session": {
+                  "runAfter": {
+                    "GetSession": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@outputs('GetSession')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "statusCode": {
+                          "type": "integer"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "properties": {
+                            "Date": {
+                              "type": "string"
+                            },
+                            "Transfer-Encoding": {
+                              "type": "string"
+                            },
+                            "Request-Context": {
+                              "type": "string"
+                            },
+                            "Content-Type": {
+                              "type": "string"
+                            },
+                            "Content-Length": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "body": {
+                          "type": "object",
+                          "properties": {
+                            "sessionType": {
+                              "type": "integer"
+                            },
+                            "state": {
+                              "type": "integer"
+                            },
+                            "platformName": {},
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "jobId": {
+                              "type": "string"
+                            },
+                            "creationTime": {
+                              "type": "string"
+                            },
+                            "endTime": {},
+                            "progressPercent": {
+                              "type": "integer"
+                            },
+                            "result": {
+                              "type": "object",
+                              "properties": {
+                                "result": {
+                                  "type": "integer"
+                                },
+                                "message": {
+                                  "type": "string"
+                                },
+                                "isCanceled": {
+                                  "type": "boolean"
+                                }
+                              }
+                            },
+                            "resourceId": {},
+                            "resourceReference": {},
+                            "parentSessionId": {},
+                            "usn": {
+                              "type": "integer"
+                            },
+                            "platformId": {}
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Delay": {
+                  "runAfter": {
+                    "Parse_session": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Wait",
+                  "inputs": {
+                    "interval": {
+                      "count": 1,
+                      "unit": "Minute"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Compose": [
+                  "Succeeded"
+                ]
+              },
+              "expression": "@equals(body('Parse_session')?['body']?['state'],1)",
+              "limit": {
+                "timeout": "PT30M"
+              },
+              "type": "Until"
+            },
+            "Compose_output": {
+              "runAfter": {
+                "Until_state_is_not_stopped": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@body('Parse_session')?['statusCode']"
+            },
+            "Create_incident": {
+              "runAfter": {
+                "Compose_output": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "put",
+                "body": {
+                  "title": "Configuration Backup finished with result: @{body('Parse_session')?['body']?['result']?['result']}",
+                  "severity": "Informational",
+                  "status": "Active"
+                },
+                "path": "/Incidents/subscriptions/@{encodeURIComponent(parameters('SubscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('ResourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('WorkspaceName'))}"
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "VbrHostName": {
+            "value": "win2022"
+          },
+          "SubscriptionId": {
+            "value": "[parameters('subscriptionId')]"
+          },
+          "ResourceGroupName": {
+            "value": "[parameters('resourceGroupName')]"
+          },
+          "WorkspaceName": {
+            "value": "[parameters('workspaceName')]"
+          },
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "id": "[concat('/subscriptions/', parameters('subscriptionId'), '/providers/Microsoft.Web/locations/',  resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionId": "[variables('sentinelConnectionId')]",
+                "connectionName": "[parameters('sentinelConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
