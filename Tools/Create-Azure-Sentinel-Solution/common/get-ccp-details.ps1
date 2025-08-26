@@ -298,6 +298,15 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                             
                                             break
                                         }
+
+                                        if ($null -eq $dataFlowOutputStreamName) {
+                                            # if standard table
+                                            . "$PSScriptRoot/standardLogStreams.ps1" # load standard data connector poller and dcr mapper
+                                            $dcPollerStreamNameValue = GetKeyValue -key $ccpPollerFile.DCPollerStreamName
+                                            if ($dcPollerStreamNameValue -eq $dataFlowStreamName) {
+                                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                            }
+                                        }
                                     }
                                 }
                                 if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
