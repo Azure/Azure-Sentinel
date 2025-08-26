@@ -92,7 +92,8 @@ class Zoom:
         self.client_secret = zoom_client_secret
         self.retry = retry
         self.error_statuses = [429, 500, 502, 503, 504]
-        self.base_url = "https://api.zoom.us/v2"
+        # self.base_url = "https://api.zoom.us/v2"
+        self.base_url = "https://api-in.zoom.us/v2/"
         self.token_url = "https://zoom.us/oauth/token?grant_type=account_credentials&account_id="+zoom_account_id
         self.oauth_token = self.generate_oauth_token()
         self.from_day, self.to_day = self.generate_date()
