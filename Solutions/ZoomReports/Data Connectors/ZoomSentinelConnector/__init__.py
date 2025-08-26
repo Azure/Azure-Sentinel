@@ -219,7 +219,7 @@ class Zoom:
                 logging.info("Base URl: {}".format(self.base_url)) 
                 logging.info("Params: {}".format(query_params))
                 logging.info("Headers: {}".format(self.headers))
-
+                logging.info("Response: {}".format(r.json()))
                 if (r.status_code in self.error_statuses) or (error==True):
                     error=False
                     continue ## To Do: Need to add delay 
