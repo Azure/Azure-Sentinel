@@ -44,4 +44,4 @@ This custom data connector uses a Function App to pull MongoDB Atlas (MDBA) logs
 ## 2. Run Function App
 The Function App is configured to run every 5 minutes.
 
-After a successful run, you should see data populated in the MDBA custom table.
+After a successful run, you should see data populated in the MDBA custom table: MDBALogTable_CL.
