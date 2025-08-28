@@ -1,5 +1,6 @@
  **Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
 |------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.5      | 29-07-2025                    | Removed Deprecated **Data Connector**. | 
 | 3.0.4      | 26-06-2025                    | Moving **CCF Connector** - *Google Cloud Platform DNS* from Public preview to GA.         |
 | 3.0.3      | 09-05-2025                    | Implemented Standard table Functionality to **CCF Connector** - *Google Cloud Platform DNS*.   |
 | 3.0.2      | 11-02-2025                    | Migrated the **Function app** connector to CCP **Data Connctor** and Updated **Parser**.   |
