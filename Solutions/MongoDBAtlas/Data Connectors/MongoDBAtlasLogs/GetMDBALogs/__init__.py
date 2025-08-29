@@ -345,7 +345,7 @@ class MongoDbConnection:
 
                         # Skip early if "c" field is NETWORK and filtering is required and the "id" field is not in the list of network ids to include
                         if raw_entry.get("c", "").upper() == "NETWORK":
-                            if self.filter_by_network_id is True and raw_entry.get("id", "").upper() not in self.network_ids_to_include:
+                            if self.filter_by_network_id is True and raw_entry.get("id", "") not in self.network_ids_to_include:
                                 skipped_entries += 1
                                 continue
 
