@@ -408,8 +408,13 @@ The application uses the following business rules:
 
    ![Rename in Scheduled job for SentinelIncidents](media/RenameInScheduledJob.png)
 
-   - Rename in business rules "update Changes to Sentinel Incident" and "add Worknotes to Sentinel" update the class name like below:
+   - Rename in business rules: Update the class name like below for business rules "update Changes to Sentinel Incident", "add Worknotes to Sentinel" and "custom mapping". 
 
    ![Rename in Business rules for SentinelIncidents](media/RenameInBusinessRule.png)
 
    **Note:** When there is a new version of the app then it is recommended to take back of all the changes or mapping done and then perform upgrade. Always perform upgrade on the lower instance of ServiceNow like dev/test/uat instance of ServiceNow instead of Prod instance.
+
+#### 18: What steps should be taken to prevent Sentinel Severity `Informational` incidents from being created or updated in ServiceNow?
+**Answer:** The code below will prevent the creation or updating of Sentinel incidents with an `Informational` severity in ServiceNow. Ensure that the logic to exclude these Sentinel incidents is placed after the `getSentinelIncidents` function, as this function returns Sentinel incidents that are pending creation or update.
+
+   ![Ignore Information incidents](media/InformationalIncidents.png)
