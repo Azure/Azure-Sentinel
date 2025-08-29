@@ -7,6 +7,7 @@ import os
 import time
 import gzip
 from io import BytesIO
+from typing import Tuple
 
 import requests
 import azure.functions as func
@@ -142,6 +143,7 @@ class AzureSentinel:
         return last_time_stamp
 
     def put_last_update_time(self, last_update_time):
+        """Updates JobStatus table with last_update_time."""
         data = {
             "lastTimeStamp": last_update_time
         }
@@ -164,6 +166,14 @@ class MongoDbConnection:
         self.mdba_token_url = "https://cloud.mongodb.com/api/oauth/token"
         self.mdba_access_token = None
         self.timeout = timeout  # timeout in seconds
+        filtered_categories_input = config.get("mdba_category_list")
+        allowed_categories = {"ACCESS", "NETWORK", "QUERY"}
+        self.filtered_categories = self._parse_categories(
+            filtered_categories_input, allowed_categories)
+
+        network_list_input = config.get("mdba_network_list")
+        self.network_ids_to_include, self.filter_by_network_id = self.parse_network_ids(
+            network_list_input)
 
     def _encode_credentials(self):
         credentials = f"{self.mdba_client_id}:{self.mdba_client_secret}"
@@ -226,6 +236,65 @@ class MongoDbConnection:
             transformed[new_key] = value
         return transformed
 
+    def _parse_categories(self, input_str: str, allowed_categories: set) -> list:
+        """
+        Parse a comma-separated string into a list of categories.
+        Removes spaces and quotes, validates against allowed_categories.
+
+        :param input_str: Comma-separated string of categories, e.g. "ACCESS, 'NETWORK', QUERY"
+        :param allowed_categories: Set of allowed categories, e.g. {"ACCESS", "NETWORK", "QUERY"}
+        :return: List of validated categories
+        :raises ValueError: If a category is not in allowed_categories or if no valid values are found
+        """
+        result = []
+        items = input_str.split(",")
+
+        for item in items:
+            cleaned = item.strip().strip("'\"")  # remove spaces and quotes
+            if not cleaned:  # skip blanks
+                continue
+            if cleaned not in allowed_categories:
+                raise ValueError(f"Invalid category: '{cleaned}'")
+            result.append(cleaned)
+
+        if not result:
+            raise ValueError("No valid categories provided.")
+
+        return result
+
+    def parse_network_ids(self, input_str: str, max_count: int = 10) -> Tuple[list[int], bool]:
+        """
+        Parse a comma-separated string into a list of positive integers.
+        Removes spaces/quotes and validates count and positivity.
+
+        Special rule:
+        - If the result is an empty list, return ([], True) meaning "do not filter".
+
+        :param input_str: Comma-separated string of numbers, e.g. "1, 2, '3'"
+        :param max_count: Maximum number of allowed entries (default: 10)
+        :return: Tuple (list of ints, bool indicating do-filter if list is empty)
+        :raises ValueError: If invalid, non-numeric, <=0, or too many entries
+        """
+        result = []
+        items = input_str.split(",") if input_str else []
+
+        for item in items:
+            cleaned = item.strip().strip("'\"")
+            if not cleaned:  # skip empty chunks
+                continue
+            if not cleaned.isdigit():
+                raise ValueError(f"Invalid number: '{cleaned}'")
+            num = int(cleaned)
+            if num <= 0:
+                raise ValueError(f"Number must be positive: {num}")
+            result.append(num)
+
+        if len(result) > max_count:
+            raise ValueError(
+                f"Too many numbers provided. Maximum allowed is {max_count}.")
+
+        return result, (len(result) > 0)
+
     def get_cluster_logs(self, start_date, end_date):
         """
         Retrieves logs from MongoDB Atlas API within a time frame.
@@ -244,8 +313,6 @@ class MongoDbConnection:
         }
 
         logging.info("mongodb_url: %s", mongodb_url)
-
-        allowed_categories = {"ACCESS", "NETWORK", "QUERY"}
 
         try:
             with requests.get(mongodb_url, headers=headers, stream=True, timeout=self.timeout) as response:
@@ -272,9 +339,15 @@ class MongoDbConnection:
                         raw_entry = json.loads(line)
 
                         # Skip early if "c" field isn't in the allowed categories
-                        if raw_entry.get("c", "").upper() not in allowed_categories:
+                        if raw_entry.get("c", "").upper() not in self.filtered_categories:
                             skipped_entries += 1
                             continue
+
+                        # Skip early if "c" field is NETWORK and filtering is required and the "id" field is not in the list of network ids to include
+                        if raw_entry.get("c", "").upper() == "NETWORK":
+                            if self.filter_by_network_id is True and raw_entry.get("id", "").upper() not in self.network_ids_to_include:
+                                skipped_entries += 1
+                                continue
 
                         transformed = self._transform_log(raw_entry)
                         json_lines.append(transformed)
@@ -354,7 +427,9 @@ def configuration_set_up():
         mdba_client_id=os.getenv("MDBA_CLIENT_ID"),
         mdba_client_secret=os.getenv("MDBA_CLIENT_SECRET"),
         mdba_group_id=os.getenv("MDBA_GROUP_ID"),
-        mdba_cluster_id=os.getenv("MDBA_CLUSTER_ID")
+        mdba_cluster_id=os.getenv("MDBA_CLUSTER_ID"),
+        mdba_network_list=os.getenv("MDBA_NETWORK_LIST"),
+        mdba_category_list=os.getenv("MDBA_CATEGORY_LIST")
     )
 
     mdba_client_id = config.get("mdba_client_id")
@@ -372,6 +447,8 @@ def configuration_set_up():
     azure_dcr_immutableid = config.get("azure_dcr_immutableid")
     azure_stream_name = config.get("azure_stream_name")
     azure_main_storage = config.get("azure_main_storage")
+    mdba_network_list = config.get("mdba_network_list")
+    mdba_category_list = config.get("mdba_category_list")
 
     logging.debug("config.tenant_id: %s", tenant_id)
     logging.debug("config.azure_web_job_storage: %s", azure_web_job_storage)
@@ -380,6 +457,8 @@ def configuration_set_up():
     logging.debug("config.azure_dcr_immutableid: %s", azure_dcr_immutableid)
     logging.debug("config.azure_stream_name: %s", azure_stream_name)
     logging.debug("config.azure_main_storage: %s", azure_main_storage)
+    logging.debug("config.mdba_network_list: %s", mdba_network_list)
+    logging.debug("config.mdba_category_list: %s", mdba_category_list)
 
     return config
 
