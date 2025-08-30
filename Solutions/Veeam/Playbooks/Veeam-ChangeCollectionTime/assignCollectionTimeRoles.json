@@ -1,0 +1,150 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.36.177.2456",
+      "templateHash": "13670987739909811349"
+    }
+  },
+  "parameters": {
+    "changeCollectionTimeLogicAppName": {
+      "type": "string",
+      "defaultValue": "Veeam-ChangeCollectionTime",
+      "metadata": {
+        "description": "Name of the ChangeCollectionTime Logic App that needs permissions"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group name where Logic Apps are located"
+      }
+    },
+    "subscriptionId": {
+      "type": "string",
+      "defaultValue": "[subscription().subscriptionId]",
+      "metadata": {
+        "description": "Subscription ID"
+      }
+    },
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace (Sentinel workspace)"
+      }
+    },
+    "veeamCollectionPlaybooks": {
+      "type": "array",
+      "defaultValue": [
+        "Veeam-CollectMalwareEvents",
+        "Veeam-CollectVeeamAuthorizationEvents",
+        "Veeam-CollectVeeamBestPracticeAnalysis",
+        "Veeam-CollectVeeamONEAlarms",
+        "Veeam-CollectCovewareFindings"
+      ],
+      "metadata": {
+        "description": "Names of the specific Veeam collection playbooks to assign permissions to"
+      }
+    }
+  },
+  "variables": {
+    "logicAppContributorRoleId": "87a39d53-fc1b-424a-814c-f7e04687dc9e",
+    "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+    "sentinelContributorRoleId": "ab8e14d6-4a74-4a29-9ba8-549422addade"
+  },
+  "resources": [
+    {
+      "copy": {
+        "name": "logicAppContributorRoleAssignments",
+        "count": "[length(parameters('veeamCollectionPlaybooks'))]"
+      },
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Logic/workflows/{0}', parameters('veeamCollectionPlaybooks')[copyIndex()])]",
+      "name": "[guid(resourceId('Microsoft.Logic/workflows', parameters('veeamCollectionPlaybooks')[copyIndex()]), resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), variables('logicAppContributorRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('logicAppContributorRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), '2019-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "description": "[format('Allows the ChangeCollectionTime Logic App to manage the {0} collection playbook scheduling', parameters('veeamCollectionPlaybooks')[copyIndex()])]"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), variables('contributorRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), '2019-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "description": "Allows the ChangeCollectionTime Logic App to make Azure Management API calls for Logic App management"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+      "name": "[guid(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), variables('sentinelContributorRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('sentinelContributorRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), '2019-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "description": "Allows the ChangeCollectionTime Logic App to access Microsoft Sentinel resources and operations"
+      }
+    }
+  ],
+  "outputs": {
+    "changeCollectionTimeLogicAppPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), '2019-05-01', 'full').identity.principalId]"
+    },
+    "roleAssignmentIds": {
+      "type": "array",
+      "copy": {
+        "count": "[length(parameters('veeamCollectionPlaybooks'))]",
+        "input": {
+          "playbookName": "[parameters('veeamCollectionPlaybooks')[copyIndex()]]",
+          "roleAssignmentId": "[extensionResourceId(resourceId('Microsoft.Logic/workflows', parameters('veeamCollectionPlaybooks')[copyIndex()]), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Logic/workflows', parameters('veeamCollectionPlaybooks')[copyIndex()]), resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), variables('logicAppContributorRoleId')))]",
+          "resourceId": "[resourceId('Microsoft.Logic/workflows', parameters('veeamCollectionPlaybooks')[copyIndex()])]"
+        }
+      }
+    },
+    "assignmentSummary": {
+      "type": "object",
+      "value": {
+        "sourceLogicApp": "[parameters('changeCollectionTimeLogicAppName')]",
+        "targetPlaybooks": "[parameters('veeamCollectionPlaybooks')]",
+        "roleAssigned": "Logic App Contributor",
+        "assignmentScope": "Individual Logic App level",
+        "totalAssignments": "[length(parameters('veeamCollectionPlaybooks'))]",
+        "contributorRoleAssigned": true,
+        "contributorScope": "Resource Group level",
+        "sentinelContributorAssigned": true,
+        "sentinelContributorScope": "Log Analytics Workspace level",
+        "workspaceName": "[parameters('workspaceName')]"
+      }
+    },
+    "contributorRoleAssignment": {
+      "type": "object",
+      "value": {
+        "roleAssignmentId": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), variables('contributorRoleId')))]",
+        "roleName": "Contributor",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), '2019-05-01', 'full').identity.principalId]",
+        "scope": "[resourceGroup().id]"
+      }
+    },
+    "sentinelRoleAssignment": {
+      "type": "object",
+      "value": {
+        "roleAssignmentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), variables('sentinelContributorRoleId')))]",
+        "roleName": "Microsoft Sentinel Contributor",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('changeCollectionTimeLogicAppName')), '2019-05-01', 'full').identity.principalId]",
+        "scope": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "workspaceName": "[parameters('workspaceName')]"
+      }
+    }
+  }
+}
