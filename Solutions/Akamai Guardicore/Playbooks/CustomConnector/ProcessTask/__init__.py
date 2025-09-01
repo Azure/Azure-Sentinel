@@ -47,7 +47,7 @@ def main(name: str) -> dict:
                     'sort': 'slot_start_time'
                 }
         if ips:
-            params['any_side'] = f"subnets:{'%'.join([f'{ip}/32' for ip in ips])}"
+            params['any_side_subnet'] = f"{','.join([f'{ip}/32' for ip in ips])}"
         slot_id = f"{current_entity['PartitionKey']}_{current_entity['RowKey']}"
         asyncio.run(
             run_import_loop(

@@ -72,14 +72,14 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info(f'Received incident data: {json.dumps(req_body, indent=2)}')
     relevant_ips = set()
     for entity in req_body.get('Entities', []):
-        if entity.get('Type') == 'ip':
-            relevant_ips.add(entity.get('Address'))
+        if entity.get('kind') == 'Ip':
+            relevant_ips.add(entity.get('properties', {}).get('address'))
     relevant_ips = {ip for ip in relevant_ips if ip is not None}
 
     incident_id = get_incident_id(req_body)
     incident_time = get_incident_time(req_body)
     incident_title = get_incident_title(req_body)
-
+    incident_title = f'{incident_title}, id: {incident_id} ({incident_time})'
     logging.info(f"Relevant IPs extracted: {relevant_ips}")
 
     slot_identifiers = ConnectionSlotMarker().mark_slot_for_fetching(
