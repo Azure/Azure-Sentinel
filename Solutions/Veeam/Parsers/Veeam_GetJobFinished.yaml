@@ -7,9 +7,15 @@ Category: Microsoft Sentinel Parser
 FunctionName: Veeam_GetJobFinished
 FunctionAlias: Veeam_GetJobFinished
 FunctionQuery: |
-    let vbr_events_lookup = _GetWatchlist("vbr_events_lookup"); 
-    let action_results_lookup = _GetWatchlist("action_results_lookup"); 
-    let job_types_lookup = _GetWatchlist("job_types_lookup"); 
+    let vbr_events_lookup = union isfuzzy=true 
+        (datatable(ID:string, Severity:string, Type1:string, ["Event Name"]:string)[]),
+        (_GetWatchlist("vbr_events_lookup")); 
+    let action_results_lookup = union isfuzzy=true 
+        (datatable(JobResult:string, JobResultMessage:string)[]),
+        (_GetWatchlist("action_results_lookup")); 
+    let job_types_lookup = union isfuzzy=true 
+        (datatable(JobType:string, JobTypeDescription:string)[]),
+        (_GetWatchlist("job_types_lookup")); 
     Syslog
     | where SyslogMessage has "instanceId"
     | extend instanceId = extract("instanceId=(\\d+)", 1, SyslogMessage)  
@@ -25,7 +31,7 @@ FunctionQuery: |
         instanceId in ("150", "151", "450", "451"), Status,
         extract("JobResult=\"(\\d+)\"", 1, SyslogMessage)
     )
-    | lookup kind=inner (action_results_lookup)
+    | lookup kind=leftouter (action_results_lookup)
         on $left.JobResultCode == $right.JobResult
     | extend Platform = extract("Platform=\"(\\d+)\"", 1, SyslogMessage)
     | extend Version = extract("Version=\"(\\d+)\"", 1, SyslogMessage)
@@ -38,8 +44,7 @@ FunctionQuery: |
         instanceId == "40290", "290",
         extract("JobType=\"([^\"]*)\"", 1, SyslogMessage)
     )
-    | lookup kind=inner (job_types_lookup)
+    | lookup kind=leftouter (job_types_lookup)
         on $left.JobType == $right.JobType
-    | extend event_module = Type1, original_host = Computer 
     | extend Allowance = Severity != 'disabled'
     | project TimeGenerated, Description, event_module, instanceId, original_host, Platform, Severity, Version, JobSessionID, JobID, JobResult = JobResultCode, JobResultMessage, JobType, JobTypeDescription, Allowance, SyslogMessage

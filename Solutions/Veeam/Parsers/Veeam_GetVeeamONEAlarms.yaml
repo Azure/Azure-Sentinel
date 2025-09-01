@@ -7,12 +7,14 @@ Category: Microsoft Sentinel Parser
 FunctionName: Veeam_GetVeeamONEAlarms
 FunctionAlias: Veeam_GetVeeamONEAlarms
 FunctionQuery: |
-    let watchlist = _GetWatchlist("vbr_events_lookup"); 
+    let watchlist = union isfuzzy=true 
+        (datatable(ID:string, Severity:string, Type1:string, ["Event Name"]:string)[]),
+        (_GetWatchlist("vbr_events_lookup")); 
     Syslog
     | where SyslogMessage has "predefined_alarm_id"
     | extend predefined_alarm_id = extract("predefined_alarm_id=\"(\\d+)\"", 1, SyslogMessage)
     | where predefined_alarm_id in ("395", "364", "369", "391", "365", "370", "314", "331", "376", "377", "403", "316", "342", "381", "315", "332", "344", "378")
-    | lookup kind=inner (watchlist) 
+    | lookup kind=leftouter (watchlist) 
         on $left.predefined_alarm_id == $right.ID
     | extend alarm_details = extract("alarm_details=\"(?<alarm_details>[^\"]*)\"", 1, SyslogMessage)
     | extend alarm_name = extract("alarm_name=\"(?<alarm_name>[^\"]*)\"", 1, SyslogMessage)
