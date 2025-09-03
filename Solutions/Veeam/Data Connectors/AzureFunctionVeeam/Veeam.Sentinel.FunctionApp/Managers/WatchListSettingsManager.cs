@@ -40,9 +40,9 @@ namespace Sentinel.Managers
         {
             return watchlistAlias switch
             {
-                var alias when alias == _vbrWatchlistAlias => "VbrServerName",
-                var alias when alias == _voneWatchlistAlias => "VoneServerName",
-                var alias when alias == _cowareWatchlistAlias => "ServerName",
+                var alias when alias == _vbrWatchlistAlias => "Veeam Server Name",
+                var alias when alias == _voneWatchlistAlias => "Veeam Server Name",
+                var alias when alias == _cowareWatchlistAlias => "Coveware Server Name",
                 _ => throw new ArgumentException($"Unknown watchlist alias: {watchlistAlias}")
             };
         }

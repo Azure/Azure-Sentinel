@@ -146,6 +146,32 @@ resource dceCovewareFindingsMetricsPublisher 'Microsoft.Authorization/roleAssign
   }
 }
 
+resource dcrSession 'Microsoft.Insights/dataCollectionRules@2022-06-01' existing = {
+  name: 'VeeamSessionDCR'
+}
+
+resource dcrSessionMetricsPublisher 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid(subscription().id, functionAppName, dcrSession.id, metricsPublisherRoleImmutableId)
+  scope: dcrSession
+  properties: {
+    principalId: functionApp.identity.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', metricsPublisherRoleImmutableId)
+  }
+}
+
+resource dceSession 'Microsoft.Insights/dataCollectionEndpoints@2022-06-01' existing = {
+  name: 'VeeamSessionDCE'
+}
+
+resource dceSessionMetricsPublisher 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid(subscription().id, functionAppName, dceSession.id, metricsPublisherRoleImmutableId)
+  scope: dceSession
+  properties: {
+    principalId: functionApp.identity.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', metricsPublisherRoleImmutableId)
+  }
+}
+
 var logAnalyticsContributorImmutableId = '92aaf0da-9dab-42b6-94a3-d43ce8d16293'
 
 resource logAnalyticsReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {

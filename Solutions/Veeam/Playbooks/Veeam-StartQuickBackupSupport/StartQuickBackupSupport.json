@@ -3,13 +3,13 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "title": "Veeam-StartQuickBackupSupport",
-    "description": "A Sentinel playbook that performs quick backup support for affected VMs when triggered by Microsoft Sentinel incidents.",
+    "description": "A Microsoft Sentinel playbook with an incident trigger, that performs quick backup support for affected backupObject (specifided by the BackupObjectId incidents custom field) when triggered by Microsoft Sentinel incidents. Indicates results as incident comments.",
     "prerequisites": [
-      "1. Microsoft Sentinel workspace configured",
-      "2. Permission to create Logic Apps and API Connections",
-      "3. Permission to assign roles to the Resource Group",
-      "4. Azure Function App deployed for Veeam integration",
-      "5. Managed Identity permissions configured for the Logic App"
+      "1. Microsoft Sentinel workspace configured.",
+      "2. Permissions to create Logic Apps and API Connections.",
+      "3. Permissions to assign roles to the Resource Group.",
+      "4. Veeam Azure Function App deployed and configured.",
+      "5. Hybrid Connection and Key Vault secrets configured for each VBR Server."
     ],
     "entities": [],
     "tags": [ "Automation", "Veeam", "QuickBackup", "Support", "IncidentResponse" ],
@@ -22,8 +22,7 @@
     },
     "parameterTemplateVersion": "1.0.1",
     "postDeployment": [
-      "1. Assign Sentinel Contributor role to the Logic App identity on the Microsoft Sentinel workspace",
-      "2. Assign Website Contributor role to the Logic App identity on the Function App resource"
+      "1. Assign the Microsoft Sentinel Contributor role to the Logic App's managed identity on the Microsoft Sentinel workspace."
     ],
     "_generator": {
       "name": "bicep",
@@ -72,7 +71,8 @@
         "parameterValueType": "Alternative"
       }
     },
-    {      "type": "Microsoft.Logic/workflows",
+    {
+      "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
       "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
@@ -143,7 +143,8 @@
                   }
                 ]
               }
-            },            "Get_variables_from_custom_fields": {
+            },
+            "Get_variables_from_custom_fields": {
               "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
               "actions": {
                 "Parse_JSON": {
@@ -217,7 +218,8 @@
                   },
                   "type": "Foreach"
                 }
-              },              "runAfter": {
+              },
+              "runAfter": {
                 "Initialize_BackupObjectId": [
                   "Succeeded"
                 ]
@@ -289,28 +291,66 @@
                 }
               }
             },
-            "Indicate_starting_with_comment": {
+            "Check_StartQuickBackup_Result": {
               "runAfter": {
                 "StartQuickBackupJobAsync": [
-                  "Succeeded"
+                  "Succeeded",
+                  "Failed"
                 ]
               },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@outputs('StartQuickBackupJobAsync')?['statusCode']",
+                      200
+                    ]
                   }
-                },
-                "method": "post",                "body": {
-                  "incidentArmId": "@triggerBody()?['object']?['id']",
-                  "message": "<p class=\"editor-paragraph\">Quick backup for @{variables('VbrHostName')} has started.</p>"
-                },
-                "path": "/Incidents/Comment"
+                ]
+              },
+              "actions": {
+                "Indicate_starting_with_comment": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p class=\"editor-paragraph\">Quick backup for @{variables('VbrHostName')} has started.</p>"
+                    },
+                    "path": "/Incidents/Comment"
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Indicate_failure_with_comment": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "<p class=\"editor-paragraph\">Quick backup for @{variables('VbrHostName')} has failed to start.</p>"
+                      },
+                      "path": "/Incidents/Comment"
+                    }
+                  }
+                }
               }
-            },            "Parse_session_ID": {
+            },
+            "Parse_session_ID": {
               "runAfter": {
-                "Indicate_starting_with_comment": [
+                "Check_StartQuickBackup_Result": [
                   "Succeeded"
                 ]
               },
@@ -376,7 +416,8 @@
               "actions": {
                 "GetSession_": {
                   "type": "Function",
-                  "inputs": {                    "queries": {
+                  "inputs": {
+                    "queries": {
                       "vbrHostName": "@variables('VbrHostName')",
                       "sessionId": "@body('Parse_session_ID')?['id']"
                     },
@@ -463,7 +504,8 @@
                     }
                   }
                 }
-              },              "runAfter": {
+              },
+              "runAfter": {
                 "Parse_session_ID": [
                   "Succeeded"
                 ]
@@ -496,7 +538,8 @@
                     "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                   }
                 },
-                "method": "post",                "body": {
+                "method": "post",
+                "body": {
                   "incidentArmId": "@triggerBody()?['object']?['id']",
                   "message": "<p class=\"editor-paragraph\">Quick backup has finished. Details: @{outputs('Result')}.</p>"
                 },

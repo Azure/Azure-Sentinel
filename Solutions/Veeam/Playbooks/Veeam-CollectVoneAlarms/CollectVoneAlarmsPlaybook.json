@@ -3,14 +3,14 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "title": "Veeam-CollectVeeamONEAlarms",
-    "description": "A Sentinel playbook that automatically collects Veeam ONE alarms on a schedule. Retrieves Veeam ONE settings from watchlist and calls the GetVoneAlarms function for each enabled server.",
+    "description": "This Microsoft Sentinel playbook automatically collects Veeam ONE alarms on a schedule. Retrieves Veeam ONE settings from the watchlist and calls the GetVoneAlarms function for each enabled server, ingesting the data into custom tables.",
     "prerequisites": [
-      "1. Microsoft Sentinel workspace configured",
-      "2. Permission to create Logic Apps and API Connections",
-      "3. Permission to assign roles to the Resource Group",
-      "4. Azure Function App deployed for Veeam integration with GetVoneAlarms function",
-      "5. Veeam ONE Settings watchlist configured in Sentinel",
-      "6. Managed Identity permissions configured for the Logic App"
+      "1. Microsoft Sentinel workspace configured.",
+      "2. Permissions to create Logic Apps and API Connections.",
+      "3. Permissions to assign roles to the Resource Group.",
+      "4. Veeam Azure Function App deployed and configured.",
+      "5. Veeam ONE Settings watchlist configured in Microsoft Sentinel.",
+      "6. Hybrid Connection and Key Vault secrets configured for each Veeam ONE Server."
     ],
     "entities": [],
     "tags": [ "Automation", "Veeam", "VeeamONE", "Alarms", "Collection" ],
@@ -23,9 +23,8 @@
     },
     "parameterTemplateVersion": "1.0.0",
     "postDeployment": [
-      "1. Assign Sentinel Contributor role to the Logic App identity on the Microsoft Sentinel workspace",
-      "2. Assign Website Contributor role to the Logic App identity on the Function App resource",
-      "3. Ensure Veeam ONE Settings watchlist is properly configured with isCollectingVoneAlarms flag"
+      "1. Assign the Microsoft Sentinel Contributor role to the Logic App's managed identity on the Microsoft Sentinel workspace.",
+      "2. Ensure the Veeam ONE Settings watchlist is properly configured with the 'Collect Alarms' flag set to true on servers from which you want to collect data."
     ]
   },
   "parameters": {
@@ -34,13 +33,6 @@
       "type": "string",
       "metadata": {
         "description": "Name of the playbook (Logic App) to be created"
-      }
-    },
-    "AzureSentinelConnectionName": {
-      "defaultValue": "azuresentinel-connection",
-      "type": "string",
-      "metadata": {
-        "description": "The name to use for the Microsoft Sentinel Connector in the Logic App (This will exist as an API Connection in your subscription)"
       }
     },
     "functionAppName": {
@@ -55,6 +47,13 @@
       "type": "string",
       "metadata": {
         "description": "Workspace ID (GUID) of the Log Analytics workspace that contains Microsoft Sentinel"
+      }
+    },
+    "AzureSentinelConnectionName": {
+      "defaultValue": "azuresentinel-connection",
+      "type": "string",
+      "metadata": {
+        "description": "The name to use for the Microsoft Sentinel Connector in the Logic App (This will exist as an API Connection in your subscription)"
       }
     },
     "resourceGroupName": {
@@ -142,7 +141,8 @@
               "type": "Recurrence"
             }
           },
-          "actions": {            "Watchlists_-_Get_Veeam_ONE_Settings": {
+          "actions": {
+            "Watchlists_-_Get_Veeam_ONE_Settings": {
               "runAfter": {},
               "type": "ApiConnection",
               "inputs": {
@@ -178,19 +178,19 @@
                               "properties.itemsKeyValue": {
                                 "type": "object",
                                 "properties": {
-                                  "VoneServerName": {
+                                  "Veeam Server Name": {
                                     "type": "string"
                                   },
-                                  "baseUrl": {
+                                  "Base URL": {
                                     "type": "string"
                                   },
-                                  "isCollectingVoneAlarms": {
+                                  "Collect Alarms": {
                                     "type": "string"
                                   },
-                                  "keyVaultPasswordId": {
+                                  "Key Vault Password ID": {
                                     "type": "string"
                                   },
-                                  "keyVaultUsernameId": {
+                                  "Key Vault Username ID": {
                                     "type": "string"
                                   }
                                 }
@@ -203,7 +203,8 @@
                   }
                 }
               }
-            },            "For_each_Veeam_ONE_server": {
+            },
+            "For_each_Veeam_ONE_server": {
               "foreach": "@body('Parse_Veeam_ONE_settings')?['properties']?['watchlistItems']",
               "actions": {
                 "Parse_current_Veeam_ONE_server": {
@@ -216,19 +217,19 @@
                         "properties.itemsKeyValue": {
                           "type": "object",
                           "properties": {
-                            "VoneServerName": {
+                            "Veeam Server Name": {
                               "type": "string"
                             },
-                            "baseUrl": {
+                            "Base URL": {
                               "type": "string"
                             },
-                            "isCollectingVoneAlarms": {
+                            "Collect Alarms": {
                               "type": "string"
                             },
-                            "keyVaultPasswordId": {
+                            "Key Vault Password ID": {
                               "type": "string"
                             },
-                            "keyVaultUsernameId": {
+                            "Key Vault Username ID": {
                               "type": "string"
                             }
                           }
@@ -236,13 +237,14 @@
                       }
                     }
                   }
-                },                "If_alarm_collection_is_enabled": {
+                },
+                "If_alarm_collection_is_enabled": {
                   "actions": {
                     "Collect_Vone_Alarms_into_VoneAlarmsTable_CL": {
                       "type": "Function",
                       "inputs": {
                         "queries": {
-                          "voneHostName": "@body('Parse_current_Veeam_ONE_server')?['properties.itemsKeyValue']?['VoneServerName']"
+                          "voneHostName": "@body('Parse_current_Veeam_ONE_server')?['properties.itemsKeyValue']?['Veeam Server Name']"
                         },
                         "function": {
                           "id": "[concat(variables('functionAppId'), '/functions/GetAllTriggeredAlarmsAsync')]"
@@ -254,11 +256,12 @@
                     "Parse_current_Veeam_ONE_server": [
                       "Succeeded"
                     ]
-                  },                  "else": {
+                  },
+                  "else": {
                     "actions": {
                       "Print_baseUrl": {
                         "type": "Compose",
-                        "inputs": "@body('Parse_current_Veeam_ONE_server')?['properties.itemsKeyValue']?['baseUrl']"
+                        "inputs": "@body('Parse_current_Veeam_ONE_server')?['properties.itemsKeyValue']?['Base URL']"
                       }
                     }
                   },
@@ -266,7 +269,7 @@
                     "and": [
                       {
                         "equals": [
-                          "@body('Parse_current_Veeam_ONE_server')?['properties.itemsKeyValue']?['isCollectingVoneAlarms']",
+                          "@body('Parse_current_Veeam_ONE_server')?['properties.itemsKeyValue']?['Collect Alarms']",
                           "true"
                         ]
                       }

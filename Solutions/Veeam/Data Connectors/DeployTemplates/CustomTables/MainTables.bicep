@@ -57,6 +57,15 @@ module CovewareFindingsTable './CovewareFindingsSchema.bicep' = {
   }
 }
 
+module sessionTable './VeeamSessionSchema.bicep' = {
+  name: 'VeeamSessionTable'
+  params: {
+    workspaceName: workspaceName
+    location: logAnalyticsWorkspace.location
+    retentionInDays: retentionInDays
+  }
+}
+
 
 output malwareDCRImmutableId string = malwareEventsTable.outputs.dcrImmutableId
 output malwareDCEIngestionEndpoint string = malwareEventsTable.outputs.dceIngestionEndpoint
@@ -77,3 +86,7 @@ output triggeredAlarmsTableName string = triggeredAlarmsTable.outputs.tableName
 output CovewareFindingsDCRImmutableId string = CovewareFindingsTable.outputs.dcrImmutableId
 output CovewareFindingsDCEIngestionEndpoint string = CovewareFindingsTable.outputs.dceIngestionEndpoint
 output CovewareFindingsTableName string = CovewareFindingsTable.outputs.tableName
+
+output sessionDCRImmutableId string = sessionTable.outputs.dcrImmutableId
+output sessionDCEIngestionEndpoint string = sessionTable.outputs.dceIngestionEndpoint
+output sessionTableName string = sessionTable.outputs.tableName

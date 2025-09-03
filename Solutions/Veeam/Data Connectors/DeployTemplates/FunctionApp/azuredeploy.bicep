@@ -57,6 +57,10 @@ var dcrTriggeredAlarmStreamName string = 'Custom-${customTables.outputs.triggere
 var dceCovewareFindingsIngestionEndpoint string = customTables.outputs.CovewareFindingsDCEIngestionEndpoint
 var dcrCovewareFindingsImmutableId string = customTables.outputs.CovewareFindingsDCRImmutableId
 var dcrCovewareFindingsStreamName string = 'Custom-${customTables.outputs.CovewareFindingsTableName}'
+
+var dceSessionIngestionEndpoint string = customTables.outputs.sessionDCEIngestionEndpoint
+var dcrSessionImmutableId string = customTables.outputs.sessionDCRImmutableId
+var dcrSessionStreamName string = 'Custom-${customTables.outputs.sessionTableName}'
  
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' existing = {
   name: workspaceName
@@ -230,8 +234,8 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
         {
           name: 'DCR_BEST_PRACTICE_ANALYSIS_STREAM_NAME'
           value: dcrBestPracticeAnalysisStreamName
-        }
-        {
+        }     
+           {
           name: 'DCE_AUTHORIZATION_EVENTS_INGESTION_ENDPOINT'
           value: dceAuthorizationEventsIngestionEndpoint
         }
@@ -268,6 +272,18 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
           value: dcrCovewareFindingsStreamName
         }
         {
+          name: 'DCE_SESSION_DATA_INGESTION_ENDPOINT'
+          value: dceSessionIngestionEndpoint
+        }
+        {
+          name: 'DCR_SESSION_DATA_IMMUTABLE_ID'
+          value: dcrSessionImmutableId
+        }
+        {
+          name: 'DCR_SESSION_DATA_STREAM_NAME'
+          value: dcrSessionStreamName
+        }
+        {
           name: 'KEY_VAULT_NAME'
           value: keyVaultName
         }
@@ -286,12 +302,12 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
         {
           name: 'COVEWARE_WATCHLIST_ALIAS'
           value: covewareFindingsWatchlistAlias
-        }
-        {
+        }     
+           {
           name: 'COVEWARE_AUTH_URL'
           value: covewareAuthUrl
-        }    
-            {
+        }
+        {
           name: 'COVEWARE_BASE_URL'
           value: covewareBaseUrl
         }
@@ -314,10 +330,6 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
         {
           name: 'WORKSPACE_NAME'
           value: workspaceName
-        }
-        {
-          name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: packageUri
         }
       ]
     }
