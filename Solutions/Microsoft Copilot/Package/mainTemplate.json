@@ -1,0 +1,489 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "author": "Microsoft",
+        "comments": "Solution template for Microsoft Copilot"
+    },
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "workspace": {
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        },
+        "resourceGroupName": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "String",
+            "metadata": {
+                "description": "resource group name where Microsoft Sentinel is setup"
+            }
+        },
+        "subscription": {
+            "defaultValue": "[last(split(subscription().id, '/'))]",
+            "type": "String",
+            "metadata": {
+                "description": "subscription id where Microsoft Sentinel is setup"
+            }
+        }
+    },
+    "variables": {
+        "_solutionName": "Microsoft Copilot",
+        "_solutionVersion": "3.0.0",
+        "solutionId": "azuresentinel.microsoftcopilot",
+        "_solutionId": "[variables('solutionId')]",
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+        "dataConnectorVersion": "1.0.0",
+        "dataConnectorVersionConnections": "1.0.0",
+        "_dataConnectorContentId": "MicrosoftCopilot",
+        "dataConnectorTemplateNameConnectorDefinition14": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId')))]",
+        "_dataConnectorContentIdConnections": "MicrosoftCopilotTemplateConnections",
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "_dataConnectorcontentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId'),'-', variables('dataConnectorVersion'))))]",
+        "dataConnectorDataCollectionRulePrefix": "PP-MicrosoftCopilot",
+        "_dataConnectorDataCollectionRulePrefix": "[variables('dataConnectorDataCollectionRulePrefix')]",
+        "destinationName": "clv2ws1",
+        "_destinationName": "[variables('destinationName')]",
+        "_workspaceResourceId": "[variables('workspaceResourceId')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition14'), variables('dataConnectorVersion'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentId')]",
+                "displayName": "Microsoft Copilot",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersion')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId'))]",
+                            "apiVersion": "2022-09-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "Customizable",
+                            "properties": {
+                                "connectorUiConfig": {
+                                    "id": "[variables('_dataConnectorContentId')]",
+                                    "title": "Microsoft Copilot",
+                                    "publisher": "Microsoft",
+                                    "logo": "Copilot.svg",
+                                    "descriptionMarkdown": "The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless ingestion of Copilot-generated activity logs into Sentinel for advanced threat detection, investigation, and response. It collects telemetry from Microsoft Copilot services - such as usage data, prompts and system responses - and ingests into sentinel, allowing security teams to monitor for misuse, detect anomalies, and maintain compliance with organizational policies.",
+                                    "graphQueries": [
+                                        {
+                                            "metricName": "Total data received",
+                                            "legend": "Microsoft Copilot",
+                                            "baseQuery": "LLMActivity"
+                                        }
+                                    ],
+                                    "sampleQueries": [
+                                        {
+                                            "description": "Microsoft Copilot Logs",
+                                            "query": "LLMActivity\n            | sort by TimeGenerated"
+                                        }
+                                    ],
+                                    "dataTypes": [
+                                        {
+                                            "name": "LLMActivity",
+                                            "lastDataReceivedQuery": "LLMActivity\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                                        }
+                                    ],
+                                    "connectivityCriteria": [
+                                        {
+                                            "type": "HasDataConnectors"
+                                        }
+                                    ],
+                                    "availability": {
+                                        "status": 2,
+                                        "isPreview": true
+                                    },
+                                    "permissions": {
+                                        "resourceProvider": [
+                                            {
+                                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                                "providerDisplayName": "Workspace",
+                                                "scope": "Workspace",
+                                                "requiredPermissions": {
+                                                    "write": true,
+                                                    "read": true,
+                                                    "delete": true
+                                                }
+                                            }
+                                        ],
+                                        "customs": [
+                                            {
+                                                "name": "Tenant Permissions",
+                                                "description": "'Security Administrator' or 'Global Administrator' on the workspace's tenant."
+                                            }
+                                        ]
+                                    },
+                                    "instructionSteps": [
+                                        {
+                                            "title": "Connect Microsoft Copilot audit logs to Microsoft Sentinel",
+                                            "description": "This connector uses the Office Management API to get your Microsoft Copilot audit logs. The logs will be stored and processed in your existing Microsoft Sentinel workspace. You can find the data in the **LLMActivity** table.",
+                                            "instructions": [
+                                                {
+                                                    "parameters": {
+                                                        "label": "toggle",
+                                                        "name": "toggle"
+                                                    },
+                                                    "type": "ConnectionToggleButton"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentId')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId'))]",
+                                "contentId": "[variables('_dataConnectorContentId')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersion')]",
+                                "source": {
+                                    "kind": "Solution",
+                                    "name": "Microsoft Copilot",
+                                    "sourceId": "[variables('_solutionId')]"
+                                },
+                                "author": {
+                                    "name": "Microsoft"
+                                },
+                                "support": {
+                                    "name": "Microsoft Corporation",
+                                    "email": "support@microsoft.com",
+                                    "tier": "Microsoft",
+                                    "link": "https://support.microsoft.com"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "apiVersion": "2021-09-01-preview",
+                            "name": "[variables('_dataConnectorDataCollectionRulePrefix')]",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+                                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                            "workspaceResourceId": "[variables('_workspaceResourceId')]",
+                                            "name": "[variables('_destinationName')]"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": [
+                                            "Microsoft-LLMActivity"
+                                        ],
+                                        "destinations": [
+                                            "[variables('_destinationName')]"
+                                        ],
+                                        "transformKql": "source",
+                                        "outputStream": "Microsoft-LLMActivity"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[variables('_dataConnectorcontentProductId')]",
+                "id": "[variables('_dataConnectorcontentProductId')]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('dataConnectorVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "apiVersion": "2023-04-01-preview",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "displayName": "Microsoft Copilot",
+                "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+                "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+                "contentKind": "Solution",
+                "contentProductId": "[variables('_solutioncontentProductId')]",
+                "id": "[variables('_solutioncontentProductId')]",
+                "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Workbooks/Images/Logos/Microsoft_logo.svg\" width=\"75px\" height=\"75px\">",
+                "contentId": "[variables('_solutionId')]",
+                "parentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "Microsoft Copilot",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "Microsoft"
+                },
+                "support": {
+                    "name": "Microsoft Corporation",
+                    "email": "support@microsoft.com",
+                    "tier": "Microsoft",
+                    "link": "https://support.microsoft.com"
+                },
+                "firstPublishDate": "2025-10-10",
+                "providers": [
+                    "Microsoft"
+                ],
+                "categories": {
+                    "domains": [
+                        "Application"
+                    ]
+                }
+            },
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId'))]",
+            "apiVersion": "2022-09-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "location": "[parameters('workspace-location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "[variables('_dataConnectorContentId')]",
+                    "title": "Microsoft Copilot",
+                    "publisher": "Microsoft",
+                    "logo": "Copilot.svg",
+                    "descriptionMarkdown": "The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless ingestion of Copilot-generated activity logs into Sentinel for advanced threat detection, investigation, and response. It collects telemetry from Microsoft Copilot services - such as usage data, prompts and system responses - and ingests into sentinel, allowing security teams to monitor for misuse, detect anomalies, and maintain compliance with organizational policies.",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Microsoft Copilot",
+                            "baseQuery": "LLMActivity"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Microsoft Copilot Logs",
+                            "query": "LLMActivity\n            | sort by TimeGenerated"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "LLMActivity",
+                            "lastDataReceivedQuery": "LLMActivity\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors"
+                        }
+                    ],
+                    "availability": {
+                        "status": 2,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Tenant Permissions",
+                                "description": "'Security Administrator' or 'Global Administrator' on the workspace's tenant."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Microsoft Copilot audit logs to Microsoft Sentinel",
+                            "description": "This connector uses the Office Management API to get your Microsoft Copilot audit logs. The logs will be stored and processed in your existing Microsoft Sentinel workspace. You can find the data in the **LLMActivity** table.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "label": "toggle",
+                                        "name": "toggle"
+                                    },
+                                    "type": "ConnectionToggleButton"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentId')))]",
+            "apiVersion": "2022-01-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentId'))]",
+                "contentId": "[variables('_dataConnectorContentId')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion')]",
+                "source": {
+                "kind": "Solution",
+                "name": "Microsoft Copilot",
+                "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                "name": "Microsoft"
+                },
+                "support": {
+                "name": "Microsoft Corporation",
+                "email": "support@microsoft.com",
+                "tier": "Microsoft",
+                "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                "criteria": [
+                    {
+                    "version": "[variables('dataConnectorVersionConnections')]",
+                    "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                    "kind": "ResourcesDataConnector"
+                    }
+                ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters": {
+                        "connectorDefinitionName": {
+                            "defaultValue": "MicrosoftCopilot",
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection Endpoint",
+                                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                            },
+                            "type": "object"
+                        }
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "kind": "Solution",
+                                    "name": "Microsoft Copilot",
+                                    "sourceId": "[variables('_solutionId')]"
+                                },
+                                "author": {
+                                    "name": "Microsoft"
+                                },
+                                "support": {
+                                    "name": "Microsoft Corporation",
+                                    "email": "support@microsoft.com",
+                                    "tier": "Microsoft",
+                                    "link": "https://support.microsoft.com"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_dataConnectorContentId'))]",
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "PurviewAudit",
+                            "properties": {
+                                "TenantId": "[[subscription().tenantId]",
+                                "SourceType": "CopilotGeneral",
+                                "ConnectorDefinitionName":  "[variables('_dataConnectorContentId')]",
+                                "DataTypes": {
+                                    "Logs": {
+                                        "state": "Enabled"
+                                    }
+                                },
+                                "DcrConfig": {
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                                    "StreamName": "LLMActivity_RESTAPI"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('dataConnectorVersionConnections')]"
+            }
+        }
+    ]
+}
