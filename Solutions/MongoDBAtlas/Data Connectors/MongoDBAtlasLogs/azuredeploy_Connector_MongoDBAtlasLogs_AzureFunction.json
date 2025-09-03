@@ -52,13 +52,39 @@
                 "description": "The URL of the zip file containing the Python function code"
             }
         },
-        "categoryFilterList": {
-            "type": "string",
+        "includeAccessLogs": {
+            "type": "bool",
             "metadata": {
-                "description": "Comma separated list of categories for which the log entries will be uploaded to Microsoft Sentinel. At least one category is required. Valid values are ACCESS, NETWORK, QUERY."
+                "description": "A category for which the log entries will be uploaded to Microsoft Sentinel. At least one category is required from ACCESS, NETWORK, QUERY."
+            }
+        },
+        "accessIdFilterList": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Comma separated list of Access IDs (Max 10) for which the log entries will be uploaded to Microsoft Sentinel. An empty list not filter out any log entries."
+            }
+        },
+        "includeNetworkLogs": {
+            "type": "bool",
+            "metadata": {
+                "description": "A category for which the log entries will be uploaded to Microsoft Sentinel. At least one category is required from ACCESS, NETWORK, QUERY."
             }
         },
         "networkIdFilterList": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Comma separated list of Network IDs (Max 10) for which the log entries will be uploaded to Microsoft Sentinel. An empty list not filter out any log entries."
+            }
+        },
+        "includeQueryLogs": {
+            "type": "bool",
+            "metadata": {
+                "description": "A category for which the log entries will be uploaded to Microsoft Sentinel. At least one category is required from ACCESS, NETWORK, QUERY."
+            }
+        },
+        "queryIdFilterList": {
             "type": "string",
             "defaultValue": "",
             "metadata": {
@@ -71,7 +97,6 @@
         "location": "[resourceGroup().location]",
         "roleIdOwner": "/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
         "roleIdStorageBlobDataOwner": "/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
-        "roleIdMonitoringMetricsPublisher": "/providers/Microsoft.Authorization/roleDefinitions/3913510d-42f4-4e42-8a64-420c390055eb",
         "storageSuffix": "[environment().suffixes.storage]",
         "FunctionAppName": "[format('fa-mdba-{0}', uniqueString(resourceGroup().id))]",
         "KeyVaultName": "[format('kv-mdba-{0}', uniqueString(resourceGroup().id))]",
@@ -82,6 +107,7 @@
     },
     "resources": [
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2022-09-01",
             "name": "provisionWorkspace",
@@ -128,7 +154,7 @@
                     },
                     "variables": {
                         "workspaceName": "[if(equals(parameters('useExistingWorkspace'),'yes'), last(split(parameters('LogAnalyticsWorkspaceResourceId'), '/')), parameters('newWorkspaceName'))]"
-                     },
+                    },
                     "resources": [
                         {
                             "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
@@ -168,12 +194,14 @@
             }
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
             "apiVersion": "2023-01-31",
             "name": "[format('uami-{0}', variables('FunctionAppName'))]",
             "location": "[variables('location')]"
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2023-05-01",
             "name": "[variables('StorageAccountName')]",
@@ -196,6 +224,7 @@
             ]
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.KeyVault/vaults",
             "apiVersion": "2023-07-01",
             "name": "[variables('KeyVaultName')]",
@@ -231,6 +260,7 @@
             ]
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
             "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
@@ -286,6 +316,7 @@
             }
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2022-09-01",
             "name": "createCustomTables",
@@ -581,6 +612,7 @@
             }
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Web/serverfarms",
             "apiVersion": "2024-04-01",
             "name": "[variables('FunctionAppName')]",
@@ -594,6 +626,7 @@
             }
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
             "name": "[format('appInsights-{0}', variables('FunctionAppName'))]",
@@ -609,6 +642,7 @@
             ]
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2023-01-01",
             "name": "[variables('FunctionAppStorageAccountName')]",
@@ -620,6 +654,7 @@
             "properties": {}
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Web/sites",
             "apiVersion": "2024-04-01",
             "name": "[variables('FunctionAppName')]",
@@ -718,13 +753,33 @@
 
                         },
                         {
+                            "name": "MDBA_INCLUDE_ACCESS_LOGS",
+                            "value": "[parameters('includeAccessLogs')]"
+
+                        },
+                        {
+                            "name": "MDBA_ACCESS_LIST",
+                            "value": "[parameters('accessIdFilterList')]"
+
+                        },
+                        {
+                            "name": "MDBA_INCLUDE_NETWORK_LOGS",
+                            "value": "[parameters('includeNetworkLogs')]"
+
+                        },
+                        {
                             "name": "MDBA_NETWORK_LIST",
                             "value": "[parameters('networkIdFilterList')]"
 
                         },
                         {
-                            "name": "MDBA_CATEGORY_LIST",
-                            "value": "[parameters('categoryFilterList')]"
+                            "name": "MDBA_INCLUDE_QUERY_LOGS",
+                            "value": "[parameters('includeQueryLogs')]"
+
+                        },
+                        {
+                            "name": "MDBA_QUERY_LIST",
+                            "value": "[parameters('queryIdFilterList')]"
 
                         }
                     ],
@@ -742,6 +797,7 @@
             }
         },
         {
+            "condition": "[or(parameters('includeAccessLogs'), parameters('includeNetworkLogs'), parameters('includeQueryLogs'))]",
             "type": "Microsoft.Web/sites/extensions",
             "apiVersion": "2021-02-01",
             "name": "[format('{0}/zipdeploy', variables('FunctionAppName'))]",

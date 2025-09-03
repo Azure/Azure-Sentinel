@@ -166,14 +166,29 @@ class MongoDbConnection:
         self.mdba_token_url = "https://cloud.mongodb.com/api/oauth/token"
         self.mdba_access_token = None
         self.timeout = timeout  # timeout in seconds
-        filtered_categories_input = config.get("mdba_category_list")
-        allowed_categories = {"ACCESS", "NETWORK", "QUERY"}
-        self.filtered_categories = self._parse_categories(
-            filtered_categories_input, allowed_categories)
+        self.filtered_categories = []
 
-        network_list_input = config.get("mdba_network_list")
-        self.network_ids_to_include, self.filter_by_network_id = self.parse_network_ids(
-            network_list_input)
+        self.mdba_include_access_logs = config.get("mdba_include_access_logs")
+        if self.mdba_include_access_logs:
+            self.filtered_categories.append("ACCESS")
+            access_list_input = config.get("mbda_access_list")
+            self.access_ids_to_include, self.filter_by_access_id = self.parse_ids_list(
+                access_list_input)
+
+        self.mdba_include_network_logs = config.get(
+            "mdba_include_network_logs")
+        if self.mdba_include_network_logs:
+            self.filtered_categories.append("NETWORK")
+            network_list_input = config.get("mdba_network_list")
+            self.network_ids_to_include, self.filter_by_network_id = self.parse_ids_list(
+                network_list_input)
+
+        self.mdba_include_query_logs = config.get("mdba_include_query_logs")
+        if self.mdba_include_query_logs:
+            self.filtered_categories.append("QUERY")
+            query_list_input = config.get("mbda_query_list")
+            self.query_ids_to_include, self.filter_by_query_id = self.parse_ids_list(
+                query_list_input)
 
     def _encode_credentials(self):
         credentials = f"{self.mdba_client_id}:{self.mdba_client_secret}"
@@ -236,33 +251,7 @@ class MongoDbConnection:
             transformed[new_key] = value
         return transformed
 
-    def _parse_categories(self, input_str: str, allowed_categories: set) -> list:
-        """
-        Parse a comma-separated string into a list of categories.
-        Removes spaces and quotes, validates against allowed_categories.
-
-        :param input_str: Comma-separated string of categories, e.g. "ACCESS, 'NETWORK', QUERY"
-        :param allowed_categories: Set of allowed categories, e.g. {"ACCESS", "NETWORK", "QUERY"}
-        :return: List of validated categories
-        :raises ValueError: If a category is not in allowed_categories or if no valid values are found
-        """
-        result = []
-        items = input_str.split(",")
-
-        for item in items:
-            cleaned = item.strip().strip("'\"")  # remove spaces and quotes
-            if not cleaned:  # skip blanks
-                continue
-            if cleaned not in allowed_categories:
-                raise ValueError(f"Invalid category: '{cleaned}'")
-            result.append(cleaned)
-
-        if not result:
-            raise ValueError("No valid categories provided.")
-
-        return result
-
-    def parse_network_ids(self, input_str: str, max_count: int = 10) -> Tuple[list[int], bool]:
+    def parse_ids_list(self, input_str: str, max_count: int = 10) -> Tuple[list[int], bool]:
         """
         Parse a comma-separated string into a list of positive integers.
         Removes spaces/quotes and validates count and positivity.
@@ -294,6 +283,31 @@ class MongoDbConnection:
                 f"Too many numbers provided. Maximum allowed is {max_count}.")
 
         return result, (len(result) > 0)
+
+    def _should_skip_entry(self, raw_entry: dict) -> bool:
+        """Return True if this entry should be skipped based on category and filtering rules."""
+
+        category = raw_entry.get("c", "").upper()
+        entry_id = raw_entry.get("id", "")
+
+        # Skip if category not allowed
+        if category not in self.filtered_categories:
+            return True
+
+        # Category-specific filtering rules
+        filter_rules = {
+            "ACCESS": (self.filter_by_access_id, self.access_ids_to_include),
+            "NETWORK": (self.filter_by_network_id, self.network_ids_to_include),
+            "QUERY": (self.filter_by_query_id, self.query_ids_to_include),
+        }
+
+        # Apply filtering if category matches a rule
+        if category in filter_rules:
+            filter_enabled, allowed_ids = filter_rules[category]
+            if filter_enabled and entry_id not in allowed_ids:
+                return True
+
+        return False
 
     def get_cluster_logs(self, start_date, end_date):
         """
@@ -338,16 +352,9 @@ class MongoDbConnection:
                     try:
                         raw_entry = json.loads(line)
 
-                        # Skip early if "c" field isn't in the allowed categories
-                        if raw_entry.get("c", "").upper() not in self.filtered_categories:
+                        if self._should_skip_entry(raw_entry):
                             skipped_entries += 1
                             continue
-
-                        # Skip early if "c" field is NETWORK and filtering is required and the "id" field is not in the list of network ids to include
-                        if raw_entry.get("c", "").upper() == "NETWORK":
-                            if self.filter_by_network_id is True and raw_entry.get("id", "") not in self.network_ids_to_include:
-                                skipped_entries += 1
-                                continue
 
                         transformed = self._transform_log(raw_entry)
                         json_lines.append(transformed)
@@ -412,7 +419,8 @@ class MongoDbConnection:
 
 
 def configuration_set_up():
-    # environment variable configuration
+    """environment variable configuration"""
+
     load_dotenv()  # take environment variables
 
     config = ConfigStore(
@@ -428,17 +436,36 @@ def configuration_set_up():
         mdba_client_secret=os.getenv("MDBA_CLIENT_SECRET"),
         mdba_group_id=os.getenv("MDBA_GROUP_ID"),
         mdba_cluster_id=os.getenv("MDBA_CLUSTER_ID"),
+        mdba_include_access_logs=os.getenv("MDBA_INCLUDE_ACCESS_LOGS"),
+        mbda_access_list=os.getenv("MDBA_ACCESS_LIST"),
+        mdba_include_network_logs=os.getenv("MDBA_INCLUDE_NETWORK_LOGS"),
         mdba_network_list=os.getenv("MDBA_NETWORK_LIST"),
-        mdba_category_list=os.getenv("MDBA_CATEGORY_LIST")
+        mdba_include_query_logs=os.getenv("MDBA_INCLUDE_QUERY_LOGS"),
+        mdba_query_list=os.getenv("MDBA_QUERY_LIST"),
     )
 
     mdba_client_id = config.get("mdba_client_id")
     mdba_group_id = config.get("mdba_group_id")
     mdba_cluster_id = config.get("mdba_cluster_id")
+    mdba_include_access_logs = config.get("mdba_include_access_logs")
+    mbda_access_list = config.get("mbda_access_list")
+    mdba_include_network_logs = config.get("mdba_include_network_logs")
+    mdba_network_list = config.get("mdba_network_list")
+    mdba_include_query_logs = config.get("mdba_include_query_logs")
+    mdba_query_list = config.get("mdba_query_list")
 
     logging.debug("config.mdba_client_id: %s", mdba_client_id)
     logging.debug("config.mdba_group_id: %s", mdba_group_id)
     logging.debug("config.mdba_cluster_id: %s", mdba_cluster_id)
+    logging.debug("config.mdba_include_access_logs: %s",
+                  mdba_include_access_logs)
+    logging.debug("config.mbda_access_list: %s", mbda_access_list)
+    logging.debug("config.mdba_include_network_logs: %s",
+                  mdba_include_network_logs)
+    logging.debug("config.mdba_network_list: %s", mdba_network_list)
+    logging.debug("config.mdba_include_query_logs: %s",
+                  mdba_include_query_logs)
+    logging.debug("config.mdba_query_list: %s", mdba_query_list)
 
     tenant_id = config.get("tenant_id")
     azure_web_job_storage = config.get("azure_web_job_storage")
@@ -447,8 +474,6 @@ def configuration_set_up():
     azure_dcr_immutableid = config.get("azure_dcr_immutableid")
     azure_stream_name = config.get("azure_stream_name")
     azure_main_storage = config.get("azure_main_storage")
-    mdba_network_list = config.get("mdba_network_list")
-    mdba_category_list = config.get("mdba_category_list")
 
     logging.debug("config.tenant_id: %s", tenant_id)
     logging.debug("config.azure_web_job_storage: %s", azure_web_job_storage)
@@ -457,14 +482,11 @@ def configuration_set_up():
     logging.debug("config.azure_dcr_immutableid: %s", azure_dcr_immutableid)
     logging.debug("config.azure_stream_name: %s", azure_stream_name)
     logging.debug("config.azure_main_storage: %s", azure_main_storage)
-    logging.debug("config.mdba_network_list: %s", mdba_network_list)
-    logging.debug("config.mdba_category_list: %s", mdba_category_list)
 
     return config
 
 
 def main(mytimer: func.TimerRequest) -> None:
-    # def main() -> None:
     """
     Start the execution.
 
@@ -496,7 +518,3 @@ def main(mytimer: func.TimerRequest) -> None:
     if 'mytimer' in locals():
         if mytimer.past_due:
             logging.info("MongoDB Atlas Connector: The timer is past due.")
-
-
-# if __name__ == "__main__":
-#     main()
