@@ -1,0 +1,51 @@
+id: df2110d7-6dc4-4f7a-be30-d9cba2ad1781
+displayName: Lumen TI Map IP Entity to DeviceLogonEvents
+description: |
+  This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DeviceLogonEvents.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceLogonEvents
+queryFrequency: PT4H
+queryPeriod: P14D
+triggerOperator: GreaterThan
+triggerThreshold: 0
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let IP_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and ValidUntil > now()
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == "ipv4-addr:value"
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+  IP_Indicators
+    | join kind=innerunique (
+        DeviceLogonEvents
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend DLE_ipEntity = RemoteIP
+        | extend DeviceLogonEvents_TimeGenerated = TimeGenerated
+    )
+    on $left.TI_ipEntity == $right.DLE_ipEntity
+    | where DeviceLogonEvents_TimeGenerated < ValidUntil
+    | summarize DeviceLogonEvents_TimeGenerated = arg_max(DeviceLogonEvents_TimeGenerated, *) by Id, DLE_ipEntity
+    | project timestamp = DeviceLogonEvents_TimeGenerated, DeviceName, RemoteIP, LogonType, AccountName, Id, Tags, ValidUntil, Confidence, TI_ipEntity, DLE_ipEntity, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DLE_ipEntity
+version: 1.0.0
+kind: Scheduled

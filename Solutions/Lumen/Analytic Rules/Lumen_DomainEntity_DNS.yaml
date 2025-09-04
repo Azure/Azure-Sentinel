@@ -1,0 +1,50 @@
+id: 29bf5bcd-6795-4c79-a91f-aaef5a618bab
+displayName: Lumen TI Map Domain Entity to DNS Events
+description: |
+  This query maps Lumen domain indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DNS events.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+queryFrequency: PT4H
+queryPeriod: P14D
+triggerOperator: GreaterThan
+triggerThreshold: 0
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h; // Look back 1 hour for DNS events
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  let Domain_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and ValidUntil > now()
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == "domain-name:value" or ObservableValue contains "."
+    | extend TI_domainEntity = ObservableValue;
+  Domain_Indicators
+    | join kind=innerunique (
+        DnsEvents
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend DNS_domainEntity = Name
+        | extend DnsEvents_TimeGenerated = TimeGenerated
+    )
+    on $left.TI_domainEntity == $right.DNS_domainEntity
+    | where DnsEvents_TimeGenerated < ValidUntil
+    | summarize DnsEvents_TimeGenerated = arg_max(DnsEvents_TimeGenerated, *) by Id, DNS_domainEntity
+    | project timestamp = DnsEvents_TimeGenerated, Name, QueryType, Computer, Id, Tags, ValidUntil, Confidence, TI_domainEntity, DNS_domainEntity, Type
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DNS_domainEntity
+version: 1.0.0
+kind: Scheduled

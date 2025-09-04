@@ -1,0 +1,36 @@
+id: 8e61da1c-d014-48b8-93cb-17c4bc5f0666
+name: Lumen Hunt - Domain Indicator in DNS Events
+description: |
+  This hunting query searches for Lumen threat intelligence domain indicators in DNS events.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+tactics:
+  - CommandAndControl
+query: |
+  let ioc_lookBack = 14d;
+  let dt_lookBack = 1d;
+  let Domain_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where Active == true and ExpirationDateTime > now()
+    | where SourceSystem == 'Lumen'
+    | where isnotempty(DomainName)
+    | extend TI_domainEntity = DomainName;
+  Domain_Indicators
+    | join kind=innerunique (
+        DnsEvents
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend DNS_domainEntity = Name
+    ) on $left.TI_domainEntity == $right.DNS_domainEntity
+    | project TimeGenerated, Name, QueryType, Computer, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, TI_domainEntity, DNS_domainEntity, Type
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DNS_domainEntity
+version: 1.0.0

@@ -1,0 +1,37 @@
+id: 4e329d3a-9fc0-4be7-9000-e092e7f68011
+name: Lumen Hunt - IP Indicator in CommonSecurityLog
+description: |
+  This hunting query searches for Lumen threat intelligence IP indicators in CommonSecurityLog events.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - CommandAndControl
+query: |
+  let ioc_lookBack = 14d;
+  let dt_lookBack = 1d;
+  let IP_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where Active == true and ExpirationDateTime > now()
+    | where SourceSystem == 'Lumen'
+    | where isnotempty(NetworkIP) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP) or isnotempty(EmailSourceIpAddress)
+    | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress)
+    | where ipv4_is_private(TI_ipEntity) == false;
+  IP_Indicators
+    | join kind=innerunique (
+        CommonSecurityLog
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend CS_ipEntity = coalesce(SourceIP, DestinationIP)
+    ) on $left.TI_ipEntity == $right.CS_ipEntity
+    | project TimeGenerated, SourceIP, DestinationIP, DeviceVendor, DeviceProduct, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, TI_ipEntity, CS_ipEntity, LogSeverity, DeviceAction, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CS_ipEntity
+version: 1.0.0

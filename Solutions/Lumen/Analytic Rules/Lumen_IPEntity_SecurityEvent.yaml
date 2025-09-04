@@ -1,0 +1,51 @@
+id: 140a2cb5-4b4a-485c-aab3-2415c24d37e6
+displayName: Lumen TI Map IP Entity to SecurityEvent
+description: |
+  This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SecurityEvent.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: PT4H
+queryPeriod: P14D
+triggerOperator: GreaterThan
+triggerThreshold: 0
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let IP_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and ValidUntil > now()
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == "ipv4-addr:value"
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+  IP_Indicators
+    | join kind=innerunique (
+        SecurityEvent
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend SE_ipEntity = IpAddress
+        | extend SecurityEvent_TimeGenerated = TimeGenerated
+    )
+    on $left.TI_ipEntity == $right.SE_ipEntity
+    | where SecurityEvent_TimeGenerated < ValidUntil
+    | summarize SecurityEvent_TimeGenerated = arg_max(SecurityEvent_TimeGenerated, *) by Id, SE_ipEntity
+    | project timestamp = SecurityEvent_TimeGenerated, Computer, IpAddress, EventID, Activity, Id, Tags, ValidUntil, Confidence, TI_ipEntity, SE_ipEntity, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SE_ipEntity
+version: 1.0.0
+kind: Scheduled

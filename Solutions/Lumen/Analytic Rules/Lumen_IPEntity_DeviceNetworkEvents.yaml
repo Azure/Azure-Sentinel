@@ -1,0 +1,51 @@
+id: fa566691-42a2-4136-6a8b-ffa3ea510000
+displayName: Lumen TI Map IP Entity to DeviceEvents
+description: |
+  This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DeviceEvents.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+queryFrequency: PT4H
+queryPeriod: P14D
+triggerOperator: GreaterThan
+triggerThreshold: 0
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let IP_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and ValidUntil > now()
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == "ipv4-addr:value"
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+  IP_Indicators
+    | join kind=innerunique (
+        DeviceEvents
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend DE_ipEntity = RemoteIP
+        | extend DeviceEvents_TimeGenerated = TimeGenerated
+    )
+    on $left.TI_ipEntity == $right.DE_ipEntity
+    | where DeviceEvents_TimeGenerated < ValidUntil
+    | summarize DeviceEvents_TimeGenerated = arg_max(DeviceEvents_TimeGenerated, *) by Id, DE_ipEntity
+    | project timestamp = DeviceEvents_TimeGenerated, DeviceName, RemoteIP, ActionType, ReportId, Id, Tags, ValidUntil, Confidence, TI_ipEntity, DE_ipEntity, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DE_ipEntity
+version: 1.0.0
+kind: Scheduled
