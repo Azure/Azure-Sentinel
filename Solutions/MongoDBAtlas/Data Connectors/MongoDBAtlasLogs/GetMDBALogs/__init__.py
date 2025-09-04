@@ -341,9 +341,9 @@ class MongoDbConnection:
                     ndjson_data = gz.read().decode("utf-8")
 
                 json_lines = []
-                skipped_entries = 0
-                included_entries = 0
-                malformed_entries = 0
+                self.skipped_entries = 0
+                self.included_entries = 0
+                self.malformed_entries = 0
 
                 for line in ndjson_data.splitlines():
                     if not line.strip():
@@ -353,19 +353,16 @@ class MongoDbConnection:
                         raw_entry = json.loads(line)
 
                         if self._should_skip_entry(raw_entry):
-                            skipped_entries += 1
+                            self.skipped_entries += 1
                             continue
 
                         transformed = self._transform_log(raw_entry)
                         json_lines.append(transformed)
-                        included_entries += 1
+                        self.included_entries += 1
 
                     except json.JSONDecodeError:
-                        malformed_entries += 1
+                        self.malformed_entries += 1
                         continue  # skip malformed lines
-
-                logging.info("MongoDB API returned %s matching entries, %s non matching entries, %s malformed entries",
-                             included_entries, skipped_entries, malformed_entries)
 
                 return {
                     "status": response.status_code,
@@ -416,6 +413,16 @@ class MongoDbConnection:
         else:
             logging.error(
                 "MongoDbConnection.check_for_mdba_log_activity error retrieving logs: %s", result)
+
+    def get_monitoring_statistics(self) -> dict:
+        if hasattr(self, 'included_entries') and hasattr(self, 'skipped_entries') and hasattr(self, 'malformed_entries'):
+            return {
+                "included_entries": self.included_entries,
+                "skipped_entries": self.skipped_entries,
+                "malformed_entries": self.malformed_entries
+            }
+        else:
+            return {}
 
 
 def configuration_set_up():
@@ -494,9 +501,9 @@ def main(mytimer: func.TimerRequest) -> None:
         mytimer (func.TimerRequest): This variable will be used to trigger the function.
 
     """
+    utc_timestamp_start = datetime.now()
     logging.info(
-        "MongoDB Atlas Connector: Python timer trigger function ran at %s",
-        datetime.now().isoformat()
+        "MongoDB Atlas Connector: Python timer trigger function ran at %s", utc_timestamp_start
     )
 
     config = configuration_set_up()
@@ -509,12 +516,15 @@ def main(mytimer: func.TimerRequest) -> None:
         print(f"An error occurred: {e}")
         pass
 
-    utc_timestamp_final = datetime.now().isoformat()
+    utc_timestamp_final = datetime.now()
+    time_diff = (utc_timestamp_final -
+                 utc_timestamp_start).total_seconds()
+    time_diff_str = f"{time_diff:.3f}"
+    stats = conn.get_monitoring_statistics()
 
-    logging.info(
-        "MongoDB Atlas Connector: Execution completed at %s.",
-        utc_timestamp_final,
-    )
+    logging.info("MongoDBAtlasLogs connector monitoring. start time utc: %s, end time utc: %s, execution time(seconds): %s, matching entries: %s, non matching entries: %s, malformed entries: %s",
+                 utc_timestamp_start.isoformat(), utc_timestamp_final.isoformat(), time_diff_str, stats.get("included_entries", 0), stats.get("skipped_entries", 0), stats.get("malformed_entries", 0))
+
     if 'mytimer' in locals():
         if mytimer.past_due:
             logging.info("MongoDB Atlas Connector: The timer is past due.")
