@@ -364,7 +364,7 @@ class MongoDbConnection:
                         malformed_entries += 1
                         continue  # skip malformed lines
 
-                logging.info("MongoDB API returned %s matching entries, %s non matching entries, %s malformed enties",
+                logging.info("MongoDB API returned %s matching entries, %s non matching entries, %s malformed entries",
                              included_entries, skipped_entries, malformed_entries)
 
                 return {
