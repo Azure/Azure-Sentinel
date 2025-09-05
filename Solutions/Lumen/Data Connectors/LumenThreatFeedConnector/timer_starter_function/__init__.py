@@ -222,13 +222,13 @@ async def main(mytimer: func.TimerRequest, starter: str) -> None:
         
         total_requests = total_indicators / 100  # 100 indicators per request
         
-        logging.debug(f"[Timer Trigger] 📊 Processing Summary:")
-        logging.debug(f"[Timer Trigger]    Total indicators (after confidence filtering): ~{total_indicators}")
-        logging.debug(f"[Timer Trigger]    Work units: {work_unit_count} (max {max_indicators_per_work_unit} indicators each)")
-        logging.debug(f"[Timer Trigger]    Parallel batches: {batch_count} batches of {batch_size} work units")
-        logging.debug(f"[Timer Trigger]    Total API requests: ~{total_requests:.0f}")
-        logging.debug(f"[Timer Trigger]    Processing: Parallel batches (targeting 95 req/min)")
-        logging.debug(f"[Timer Trigger]    Estimated completion time: {estimated_total_minutes:.1f} minutes")
+        logging.info(f"[Timer Trigger] 📊 Processing Summary:")
+        logging.info(f"[Timer Trigger]    Total indicators (after confidence filtering): ~{total_indicators}")
+        logging.info(f"[Timer Trigger]    Work units: {work_unit_count} (max {max_indicators_per_work_unit} indicators each)")
+        logging.info(f"[Timer Trigger]    Parallel batches: {batch_count} batches of {batch_size} work units")
+        logging.info(f"[Timer Trigger]    Total API requests: ~{total_requests:.0f}")
+        logging.info(f"[Timer Trigger]    Processing: Parallel batches (targeting 95 req/min)")
+        logging.info(f"[Timer Trigger]    Estimated completion time: {estimated_total_minutes:.1f} minutes")
 
         # Step 2: Prepare configuration for the orchestrator
         config = {
