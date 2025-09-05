@@ -1,0 +1,144 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Guardicore-ProcessIncidentEnrichment",
+        "description": "This playbook processes Microsoft Sentinel incidents and imports Guardicore connection data related to the incident entities using Azure Functions.",
+        "mainSteps": [
+            "When a new incident is created:",
+            "1. Extract IP addresses from incident entities",
+            "2. Call Azure Function to process incident data",
+            "3. Import relevant connection data for analysis"
+        ],
+        "prerequisites": [
+            "1. Azure Function App with ProcessIncident function deployed",
+            "2. Appropriate permissions for the playbook to access Azure Functions",
+            "3. Credentials and FQDN to the Guardicore instance"
+        ],
+        "lastUpdateTime": "2025-08-12T00:00:00.000Z",
+        "entities": ["IP"],
+        "tags": ["Enrichment", "Guardicore", "Connection Data"],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Akamai Guardicore"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Guardicore-ProcessIncidentEnrichment",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook (Logic Apps resource) which will be created"
+            }
+        },
+        "FunctionAppName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Azure Function App that contains the ProcessIncident function"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "Guardicore-ProcessIncidentEnrichment",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "sentinel-playbook-ProcessIncident": {
+                            "type": "Function",
+                            "inputs": {
+                                "body": {
+                                    "incidentId": "@{triggerBody()?['object']?['properties']?['providerIncidentId']}",
+                                    "incidentArmId": "@{triggerBody()?['object']?['id']}",
+                                    "incidentProperties": "@{triggerBody()?['object']?['properties']}",
+                                    "Entities": "@{triggerBody()?['object']?['properties']?['relatedEntities']}",
+                                    "incidentTitle": "@{triggerBody()?['object']?['properties']?['title']}"
+                                },
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', parameters('FunctionAppName'), '/functions/ProcessIncident')]"
+                                }
+                            },
+                            "runAfter": {}
+                        }
+                    },
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object",
+                            "defaultValue": {}
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
