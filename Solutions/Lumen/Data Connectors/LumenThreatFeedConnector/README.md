@@ -14,7 +14,6 @@ The connector automatically:
 
 ## Durable Functions Structure
 
-- **starter_function**: HTTP-triggered function to start the orchestration.
 - **timer_starter_function**: Cron based orchestration timer.
 - **orchestrator_function**: Orchestrates the upload by splitting indicators into batches and calling the activity function for each batch.
 - **activity_upload_from_disk**: Handles uploading a single batch of indicators to Sentinel.
@@ -29,8 +28,6 @@ The connector automatically:
 ## Usage
 
 - Upload runs on a cron schedule defined in `timer_starter_function\function.json` (default `0 0 8 * * *`).
-- It is not recommended to run orchestration more than once a day.
-- You can manually trigger the upload by sending an HTTP POST to the `starter_function` endpoint.
 - The orchestration will process all indicators in batches, avoiding timeouts.
 
 ## Support
