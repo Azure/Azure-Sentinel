@@ -53,6 +53,13 @@
                 "description": "Azure App Registration Client Secret"
             }
         },
+        "PACKAGE_URL": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "URL of the site package ZIP to use with WEBSITE_RUN_FROM_PACKAGE"
+            }
+        },
         "AppInsightsWorkspaceResourceID": {
             "type": "string",
             "defaultValue": "Log Analytics Workspace Resource ID for Application Insights",
@@ -80,7 +87,7 @@
         },
         {
             "type": "Microsoft.Storage/storageAccounts",
-            "apiVersion": "2025-01-01",
+            "apiVersion": "2019-06-01",
             "name": "[tolower(variables('FunctionName'))]",
             "location": "[resourceGroup().location]",
             "sku": {
@@ -113,30 +120,23 @@
         },
         {
             "type": "Microsoft.Web/serverfarms",
-            "apiVersion": "2022-03-01",
+            "apiVersion": "2024-04-01",
             "name": "[variables('FunctionName')]",
             "location": "[resourceGroup().location]",
             "sku": {
-                "name": "EP2",
-                "tier": "ElasticPremium",
-                "family": "EP"
+                "name": "Y1",
+                "tier": "Dynamic"
             },
-            "kind": "elastic",
+            "kind": "functionapp",
             "properties": {
-                  "name": "[variables('FunctionName')]",
-                  "targetWorkerCount": 1,
-                  "targetWorkerSizeId": 3,
-                  "reserved": true,
-                    "maximumElasticWorkerCount": 20,
-                  "siteConfig": {
-                  "linuxFxVersion": "Python|3.11"
-                  }
-              }
+                "name": "[variables('FunctionName')]",
+                "computeMode": "Dynamic",
+                "reserved": true
+            }
         },
-        
-        {
+    {
             "type": "Microsoft.Web/sites",
-            "apiVersion": "2024-11-01",
+            "apiVersion": "2024-04-01",
             "name": "[variables('FunctionName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
@@ -152,10 +152,10 @@
                 "name": "[variables('FunctionName')]",
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
                 "httpsOnly": true,
-                "clientAffinityEnabled": true,
-                "alwaysOn": true,
+                "clientAffinityEnabled": false,
                 "reserved": true,
                 "siteConfig": {
+                    "minTlsVersion": "1.2",
                     "linuxFxVersion": "Python|3.11",
                     "appSettings": [
                         {
@@ -168,15 +168,19 @@
                         },
                         {
                             "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-                            "value": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]"
+                            "value": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]"
                         },
                         {
                             "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
-                            "value": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]"
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]"
                         },
                         {
                             "name": "AzureWebJobsStorage",
                             "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "[parameters('PACKAGE_URL')]"
                         },
                         {
                             "name": "WORKSPACE_ID",
