@@ -1,0 +1,40 @@
+id: f8577e4d-8481-437b-a94e-06f615985668
+name: EC2 Startup Shell Script Changed
+description: |
+  'Detects changes to the EC2 startup script. The shell script will be executed as root/SYSTEM every time the specific instances are booted up. ref : https://github.com/RhinoSecurityLabs/pacu/blob/master/pacu/modules/ec2__startup_shell_script/main.py'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059
+query: |
+ AWSCloudTrail
+ | where EventName == "ModifyInstanceAttribute" or EventName == "CreateLaunchTemplate"
+ | where RequestParameters contains "userData"
+ | extend userData_ = tostring(parse_json(RequestParameters).userData)
+ | extend instanceId_ = tostring(parse_json(RequestParameters).instanceId)
+ | project-away  SourceSystem,Category,Type,TenantId,EventVersion,SessionIssuerAccountId
+ | extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, ":") + 1)
+ | extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UpnSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIpAddress
+version: 1.0.0
+kind: Scheduled
