@@ -253,58 +253,6 @@ class LumenSentinelUpdater:
             logging.error(f"Error acquiring token: {str(e)}", exc_info=True)
             raise
 
-    def filter_stix_objects_by_confidence(self, stix_objects: List[Dict[str, Any]], min_confidence: int = 60) -> List[Dict[str, Any]]:
-        """
-        Filter STIX objects based on confidence level.
-        
-        This method filters out STIX objects that have a confidence level below the specified threshold.
-        The confidence property is typically found in indicator objects within the STIX bundle.
-        
-        Args:
-            stix_objects (List[Dict[str, Any]]): List of STIX objects to filter
-            min_confidence (int): Minimum confidence level (default: 60)
-            
-        Returns:
-            List[Dict[str, Any]]: Filtered list of STIX objects meeting confidence criteria
-            
-        Note:
-            STIX objects without confidence values are kept to avoid losing valid data.
-            Confidence values are expected to be integers between 0-100.
-        """
-        if not stix_objects:
-            return []
-            
-        filtered_objects = []
-        filtered_count = 0
-        
-        for stix_obj in stix_objects:
-            # Check if this is an indicator object with confidence
-            if stix_obj.get('type') == 'indicator':
-                confidence = stix_obj.get('confidence')
-                if confidence is not None:
-                    try:
-                        confidence_value = int(confidence)
-                        if confidence_value >= min_confidence:
-                            filtered_objects.append(stix_obj)
-                        else:
-                            filtered_count += 1
-                            logging.debug(f"Filtered out indicator with confidence {confidence_value} (below threshold {min_confidence})")
-                    except (ValueError, TypeError):
-                        # Keep objects with invalid confidence values to avoid data loss
-                        filtered_objects.append(stix_obj)
-                        logging.warning(f"Invalid confidence value '{confidence}' in STIX object, keeping object")
-                else:
-                    # Keep objects without confidence values
-                    filtered_objects.append(stix_obj)
-            else:
-                # Keep non-indicator objects (e.g., malware, attack-pattern, etc.)
-                filtered_objects.append(stix_obj)
-        
-        if filtered_count > 0:
-            logging.info(f"Filtered out {filtered_count} STIX objects below confidence threshold {min_confidence}")
-        
-        return filtered_objects
-
     def upload_stix_objects_to_sentinel(self, token: str, stix_objects: List[Dict[str, Any]]) -> requests.Response:
         """
         Upload STIX objects to Microsoft Sentinel using the STIX Objects API.

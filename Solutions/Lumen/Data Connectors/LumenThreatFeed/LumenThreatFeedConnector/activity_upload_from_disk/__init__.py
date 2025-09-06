@@ -9,8 +9,9 @@ def main(params: dict) -> dict:
     """
     Durable Functions activity to process a work unit of threat data from disk and upload to Microsoft Sentinel.
     
-    This function reads a subset of STIX objects from a temp file on disk, processes them in chunks,
-    and uploads each chunk to Sentinel API with proper formatting.
+    This function reads a subset of STIX objects from a temp file on disk, applies confidence filtering
+    to exclude low-quality indicators (confidence < 60), processes them in chunks, and uploads each 
+    chunk to Sentinel API with proper formatting.
     
     Args:
         params (dict): Activity input parameters containing:
@@ -25,7 +26,7 @@ def main(params: dict) -> dict:
     Returns:
         dict: Processing result containing:
             - success (bool): Whether processing was successful
-            - indicators_uploaded (int): Number of indicators successfully uploaded
+            - indicators_uploaded (int): Number of indicators successfully uploaded (after filtering)
             - requests_made (int): Number of API requests made to Sentinel
             - work_unit_id (str): The work unit identifier
             - error (str, optional): Error message if processing failed
@@ -75,6 +76,7 @@ def main(params: dict) -> dict:
         requests_made = 0
         current_index = 0
         chunk_objects = []
+        filtered_count = 0  # Track filtered indicators for logging
         
         logging.debug(f"Reading {indicator_type} data from disk using streaming parser (offset: {start_offset}, max: {max_indicators})...")
         
@@ -90,7 +92,25 @@ def main(params: dict) -> dict:
                 if indicators_uploaded >= max_indicators:
                     break
                 
-                chunk_objects.append(stix_object)
+                # Apply confidence filtering (indicators with confidence < 60 are excluded)
+                should_include = True
+                if stix_object.get('type') == 'indicator':
+                    confidence = stix_object.get('confidence')
+                    if confidence is not None:
+                        try:
+                            confidence_value = int(confidence)
+                            if confidence_value < 60:  # Filter out low confidence indicators (default threshold)
+                                should_include = False
+                                filtered_count += 1
+                                logging.debug(f"Filtered out indicator with confidence {confidence_value} (below threshold 60)")
+                        except (ValueError, TypeError):
+                            # Keep objects with invalid confidence values to avoid data loss
+                            logging.warning(f"Invalid confidence value '{confidence}' in STIX object, keeping object")
+                
+                # Only add to chunk if it passes confidence filter
+                if should_include:
+                    chunk_objects.append(stix_object)
+                
                 current_index += 1
                 
                 # When we have a full chunk, upload it immediately
@@ -142,6 +162,8 @@ def main(params: dict) -> dict:
                     }
         
         logging.info(f"Work unit {work_unit_id} completed processing {indicator_type}: {indicators_uploaded} indicators in {requests_made} requests")
+        if filtered_count > 0:
+            logging.info(f"Work unit {work_unit_id}: Filtered out {filtered_count} indicators below confidence threshold 60")
         
         return {
             "success": True,

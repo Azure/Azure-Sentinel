@@ -93,42 +93,18 @@ def download_threat_data_to_shared_disk(updater, indicator_types, max_indicators
             response.close()
             
             # Quick count of indicators in this file (for logging only)
-            # Apply the same confidence filtering as in main.py for accurate counts
             with open(temp_file_path, 'rb') as f:
                 indicator_count = 0
-                filtered_count = 0
-                min_confidence = 60  # Same threshold as in main.py
                 
                 try:
                     for stix_obj in ijson.items(f, 'stixobjects.item'):
-                        total_count = indicator_count + filtered_count + 1
-                        
-                        # Apply confidence filtering like in main.py
-                        if stix_obj.get('type') == 'indicator':
-                            confidence = stix_obj.get('confidence')
-                            if confidence is not None:
-                                try:
-                                    confidence_value = int(confidence)
-                                    if confidence_value >= min_confidence:
-                                        indicator_count += 1
-                                    else:
-                                        filtered_count += 1
-                                except (ValueError, TypeError):
-                                    # Keep objects with invalid confidence values
-                                    indicator_count += 1
-                            else:
-                                # Keep objects without confidence values
-                                indicator_count += 1
-                        else:
-                            # Keep non-indicator objects (e.g., malware, attack-pattern, etc.)
-                            indicator_count += 1
+                        indicator_count += 1
                         
                         if max_indicators and total_indicators_downloaded + indicator_count >= max_indicators:
                             break
                 except:
                     # If counting fails, just log what we downloaded
                     indicator_count = 0
-                    filtered_count = 0
             
             temp_file_paths.append({
                 'file_path': temp_file_path,
@@ -139,10 +115,7 @@ def download_threat_data_to_shared_disk(updater, indicator_types, max_indicators
             
             total_indicators_downloaded += indicator_count
             
-            if filtered_count > 0:
-                logging.info(f"Downloaded {indicator_type}: {downloaded_bytes} bytes, ~{indicator_count + filtered_count} total indicators, ~{indicator_count} after confidence filtering (filtered out {filtered_count}) to {temp_file_path}")
-            else:
-                logging.debug(f"Downloaded {indicator_type}: {downloaded_bytes} bytes, ~{indicator_count} indicators to {temp_file_path}")
+            logging.debug(f"Downloaded {indicator_type}: {downloaded_bytes} bytes, ~{indicator_count} indicators to {temp_file_path}")
             
         except Exception as e:
             logging.error(f"Failed to download {indicator_type}: {str(e)}")
@@ -150,7 +123,7 @@ def download_threat_data_to_shared_disk(updater, indicator_types, max_indicators
                 os.unlink(temp_file_path)
             continue
     
-    logging.info(f"Download complete. Total files: {len(temp_file_paths)}, Total indicators (after confidence filtering): ~{total_indicators_downloaded}")
+    logging.info(f"Download complete. Total files: {len(temp_file_paths)}, Total indicators downloaded: ~{total_indicators_downloaded}")
     return temp_file_paths, total_indicators_downloaded
 
 async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
@@ -260,7 +233,7 @@ async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
         elapsed_time = time.time() - start_time
         elapsed_minutes = elapsed_time / 60
         logging.info(f"🎯 Operation Started Successfully:")
-        logging.info(f"   Total indicators queued for upload (after confidence filtering): ~{total_indicators}")
+        logging.info(f"   Total indicators queued for upload: ~{total_indicators}")
         logging.info(f"   Elapsed time for initialization: {elapsed_time:.2f} seconds ({elapsed_minutes:.2f} minutes)")
         logging.info(f"   Orchestration ID: {instance_id}")
         logging.info(f"   Status: Threat intelligence upload orchestration initiated")
