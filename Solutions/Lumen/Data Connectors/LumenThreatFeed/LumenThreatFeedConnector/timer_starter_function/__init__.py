@@ -64,6 +64,10 @@ def download_threat_data_to_shared_disk(updater, indicator_types, max_indicators
     temp_file_paths = []
     total_indicators_downloaded = 0
     
+    enable_counting = os.environ.get("ENABLE_INDICATOR_COUNT", "0").lower() in ("1","true","yes")
+    # Fixed confidence threshold
+    min_confidence = 60
+
     for indicator_type, presigned_url in presigned_urls.items():
         # Check if we've already reached the limit
         if max_indicators and total_indicators_downloaded >= max_indicators:
@@ -93,43 +97,35 @@ def download_threat_data_to_shared_disk(updater, indicator_types, max_indicators
             temp_file.close()
             response.close()
             
-            # Quick count of indicators in this file (for logging only)
-            # Apply the same confidence filtering as in main.py for accurate counts
-            with open(temp_file_path, 'rb') as f:
-                indicator_count = 0
-                filtered_count = 0
-                min_confidence = 60  # Same threshold as in main.py
-                
+            indicator_count = 0
+            filtered_count = 0
+            if enable_counting:
                 try:
-                    for stix_obj in ijson.items(f, 'stixobjects.item'):
-                        total_count = indicator_count + filtered_count + 1
-                        
-                        # Apply confidence filtering like in main.py
-                        if stix_obj.get('type') == 'indicator':
-                            confidence = stix_obj.get('confidence')
-                            if confidence is not None:
-                                try:
-                                    confidence_value = int(confidence)
-                                    if confidence_value >= min_confidence:
+                    with open(temp_file_path, 'rb') as f:
+                        for stix_obj in ijson.items(f, 'stixobjects.item'):
+                            if stix_obj.get('type') == 'indicator':
+                                confidence = stix_obj.get('confidence')
+                                if confidence is not None:
+                                    try:
+                                        confidence_value = int(confidence)
+                                        if confidence_value >= min_confidence:
+                                            indicator_count += 1
+                                        else:
+                                            filtered_count += 1
+                                    except (ValueError, TypeError):
                                         indicator_count += 1
-                                    else:
-                                        filtered_count += 1
-                                except (ValueError, TypeError):
-                                    # Keep objects with invalid confidence values
+                                else:
                                     indicator_count += 1
                             else:
-                                # Keep objects without confidence values
                                 indicator_count += 1
-                        else:
-                            # Keep non-indicator objects (e.g., malware, attack-pattern, etc.)
-                            indicator_count += 1
-                        
-                        if max_indicators and total_indicators_downloaded + indicator_count >= max_indicators:
-                            break
-                except:
-                    # If counting fails, just log what we downloaded
+                            if max_indicators and total_indicators_downloaded + indicator_count >= max_indicators:
+                                break
+                except Exception as ex:
+                    logging.warning(f"[Timer Trigger] Counting failed for {indicator_type}: {ex}")
                     indicator_count = 0
                     filtered_count = 0
+            else:
+                indicator_count = -1
             
             temp_file_paths.append({
                 'file_path': temp_file_path,
@@ -138,12 +134,16 @@ def download_threat_data_to_shared_disk(updater, indicator_types, max_indicators
                 'estimated_indicators': indicator_count
             })
             
-            total_indicators_downloaded += indicator_count
+            if indicator_count > 0:
+                total_indicators_downloaded += indicator_count
             
-            if filtered_count > 0:
-                logging.info(f"[Timer Trigger] Downloaded {indicator_type}: {downloaded_bytes} bytes, ~{indicator_count + filtered_count} total indicators, ~{indicator_count} after confidence filtering (filtered out {filtered_count}) to {temp_file_path}")
+            if enable_counting:
+                if filtered_count > 0:
+                    logging.info(f"[Timer Trigger] Downloaded {indicator_type}: {downloaded_bytes} bytes, ~{indicator_count + filtered_count} total indicators, ~{indicator_count} after confidence filtering (filtered out {filtered_count}) to {temp_file_path}")
+                else:
+                    logging.debug(f"[Timer Trigger] Downloaded {indicator_type}: {downloaded_bytes} bytes, ~{indicator_count} indicators to {temp_file_path}")
             else:
-                logging.debug(f"[Timer Trigger] Downloaded {indicator_type}: {downloaded_bytes} bytes, ~{indicator_count} indicators to {temp_file_path}")
+                logging.info(f"[Timer Trigger] Downloaded {indicator_type}: {downloaded_bytes} bytes (indicator count skipped – set ENABLE_INDICATOR_COUNT=1 to enable)")
             
         except Exception as e:
             logging.error(f"[Timer Trigger] Failed to download {indicator_type}: {str(e)}")
@@ -151,7 +151,10 @@ def download_threat_data_to_shared_disk(updater, indicator_types, max_indicators
                 os.unlink(temp_file_path)
             continue
     
-    logging.info(f"[Timer Trigger] Download complete. Total files: {len(temp_file_paths)}, Total indicators (after confidence filtering): ~{total_indicators_downloaded}")
+    if enable_counting:
+        logging.info(f"[Timer Trigger] Download complete. Total files: {len(temp_file_paths)}, Total indicators (after confidence filtering): ~{total_indicators_downloaded}")
+    else:
+        logging.info(f"[Timer Trigger] Download complete. Total files: {len(temp_file_paths)} (counts skipped – set ENABLE_INDICATOR_COUNT=1 to enable)")
     return temp_file_paths, total_indicators_downloaded
 
 async def main(mytimer: func.TimerRequest, starter: str) -> None:
