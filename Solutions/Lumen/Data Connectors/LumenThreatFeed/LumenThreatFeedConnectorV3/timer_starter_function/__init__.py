@@ -1,7 +1,7 @@
 import logging, os, uuid, azure.functions as func, azure.durable_functions as df
 from datetime import datetime
-from ..main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
-from ..starter_function import _get_blob_client, _stream_and_filter_to_blob, CONFIDENCE_THRESHOLD, BLOB_CONTAINER
+from main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
+from starter_function import _get_blob_client, _stream_and_filter_to_blob, CONFIDENCE_THRESHOLD, BLOB_CONTAINER
 
 
 def main(mytimer: func.TimerRequest, starter: str):

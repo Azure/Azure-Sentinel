@@ -2,7 +2,7 @@ import logging, os, uuid, json, azure.functions as func, azure.durable_functions
 from datetime import datetime
 from azure.storage.blob import BlobServiceClient
 import requests, ijson
-from ..main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
+from main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
 
 CONFIDENCE_THRESHOLD = int(os.environ.get('LUMEN_CONFIDENCE_THRESHOLD', '60'))
 BLOB_CONTAINER = os.environ.get('LUMEN_BLOB_CONTAINER', 'lumenti')

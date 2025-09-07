@@ -1,6 +1,6 @@
 import logging, os
 from azure.storage.blob import BlobServiceClient
-from ..main import LumenSetup, MSALSetup, LumenSentinelUpdater
+from main import LumenSetup, MSALSetup, LumenSentinelUpdater
 
 
 def _get_blob_client(config):
