@@ -30,7 +30,7 @@ def main(mytimer: func.TimerRequest, starter: str):
             'BLOB_CONTAINER': BLOB_CONTAINER
         }
         input_data = {'blob_sources': sources, 'config': config, 'indicators_per_request': 100}
-        instance_id = client.start_new('orchestrator_function_v3', None, input_data)
-        logging.info(f"Timer started orchestration V3 {instance_id}")
+        instance_id = client.start_new('orchestrator_function', None, input_data)
+        logging.info(f"Timer started orchestration {instance_id}")
     except Exception as e:
         logging.error(f"Timer starter V3 error: {e}")

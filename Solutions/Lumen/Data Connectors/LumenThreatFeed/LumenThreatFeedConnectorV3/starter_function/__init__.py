@@ -106,8 +106,8 @@ async def main(req: func.HttpRequest, starter: str):
             'indicators_per_request': 100
         }
 
-        instance_id = await client.start_new('orchestrator_function_v3', None, input_data)
-        logging.info(f"Started orchestration V3 {instance_id} run {run_id} indicators={total_post_filter}")
+        instance_id = await client.start_new('orchestrator_function', None, input_data)
+        logging.info(f"Started orchestration {instance_id} run {run_id} indicators={total_post_filter}")
         return client.create_check_status_response(req, instance_id)
     except Exception as e:
         logging.error(f"Starter V3 error: {e}")
