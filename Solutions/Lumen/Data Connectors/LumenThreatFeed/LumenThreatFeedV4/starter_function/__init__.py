@@ -5,9 +5,13 @@ import os
 import json
 import time
 import uuid
+import sys
 from datetime import datetime, timezone
 from azure.storage.blob import BlobServiceClient
-from ..main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
+
+# Add parent directory to path for importing main module
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
 
 # Suppress verbose Azure SDK logging
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.WARNING)

@@ -1,8 +1,12 @@
 import logging
 import json
 import os
+import sys
 from azure.storage.blob import BlobServiceClient
-from ..main import LumenSentinelUpdater, LumenSetup, MSALSetup
+
+# Add parent directory to path for importing main module
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from main import LumenSentinelUpdater, LumenSetup, MSALSetup
 
 def _get_blob_container():
     """Get blob container client, creating container if needed."""
