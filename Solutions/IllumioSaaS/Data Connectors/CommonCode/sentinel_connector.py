@@ -1,10 +1,13 @@
 import aiohttp
 import asyncio
 from collections import deque
-from azure.identity import DefaultAzureCredential
+from azure.identity import ClientSecretCredential
 from azure.monitor.ingestion.aio import LogsIngestionClient
 from azure.core.exceptions import HttpResponseError
 import logging
+
+from ..SharedCode.consts import AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID
+
 
 class AzureSentinelConnectorAsync:
     def __init__(self, session: aiohttp.ClientSession, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=4000):
@@ -17,7 +20,11 @@ class AzureSentinelConnectorAsync:
         self.failed_sent_events_number = 0
         self.lock = asyncio.Lock()
         self.session = session
-        self.credential = DefaultAzureCredential()
+        self.credential = ClientSecretCredential(
+            client_id=AZURE_CLIENT_ID,
+            client_secret=AZURE_CLIENT_SECRET,
+            tenant_id=AZURE_TENANT_ID,
+        )
         self.AZURE_CLIENT_ID = azure_client_id
         self.AZURE_CLIENT_SECRET = azure_client_secret
         self.AZURE_TENANT_ID = azure_tenant
