@@ -14,21 +14,22 @@ tactics:
   - CommandAndControl
 query: |
   let ioc_lookBack = 14d;
-  let dt_lookBack = 1d;
-  let IP_Indicators = ThreatIntelIndicators
-    | where TimeGenerated >= ago(ioc_lookBack)
-    | where Active == true and ExpirationDateTime > now()
-    | where SourceSystem == 'Lumen'
-    | where isnotempty(NetworkIP) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP) or isnotempty(EmailSourceIpAddress)
-    | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress)
-    | where ipv4_is_private(TI_ipEntity) == false;
-  IP_Indicators
-    | join kind=innerunique (
-        CommonSecurityLog
-        | where TimeGenerated >= ago(dt_lookBack)
-        | extend CS_ipEntity = coalesce(SourceIP, DestinationIP)
-    ) on $left.TI_ipEntity == $right.CS_ipEntity
-    | project TimeGenerated, SourceIP, DestinationIP, DeviceVendor, DeviceProduct, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, TI_ipEntity, CS_ipEntity, LogSeverity, DeviceAction, Type
+    let dt_lookBack = 1d;
+    let IP_Indicators = ThreatIntelIndicators
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | where IsActive = true and ValidUntil > now()
+      | where SourceSystem == 'Lumen'
+      | where isnotempty(ObservableValue)
+      | where ipv4_is_private(ObservableValue) == false;
+    IP_Indicators
+      | join kind=innerunique (
+          CommonSecurityLog
+          | where TimeGenerated >= ago(dt_lookBack)
+          | extend CS_ipEntity = coalesce(SourceIP, DestinationIP)
+      ) on $left.ObservableValue == $right.CS_ipEntity
+      | project TimeGenerated, SourceIP, DestinationIP, DeviceVendor, DeviceProduct, Id, Tags, ValidUntil, Confidence, ObservableValue, CS_ipEntity, LogSeverity, DeviceAction, Type
+  | extend IP_0_Address = SourceIP
+  | extend IP_1_Address = DestinationIP
 entityMappings:
   - entityType: IP
     fieldMappings:

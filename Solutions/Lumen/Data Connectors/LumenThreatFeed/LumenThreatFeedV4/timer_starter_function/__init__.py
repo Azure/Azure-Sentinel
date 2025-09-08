@@ -32,7 +32,7 @@ def _get_blob_container():
     # Create container if it doesn't exist
     try:
         container_client.create_container()
-        logging.info(f"Created blob container: {BLOB_CONTAINER}")
+        logging.debug(f"Created blob container: {BLOB_CONTAINER}")
     except Exception as e:
         if "ContainerAlreadyExists" in str(e):
             logging.debug(f"Blob container {BLOB_CONTAINER} already exists")
@@ -44,13 +44,13 @@ def _get_blob_container():
 def _cleanup_blob_container(container_client):
     """Clean up stale files in blob storage container."""
     try:
-        logging.info("🧹 Starting blob storage housekeeping...")
+        logging.debug("🧹 Starting blob storage housekeeping...")
         
         # List all blobs in the container
         blob_list = list(container_client.list_blobs())
         
         if not blob_list:
-            logging.info("✓ Blob container is already clean (no files found)")
+            logging.debug("✓ Blob container is already clean (no files found)")
             return
         
         deleted_count = 0
@@ -74,7 +74,7 @@ def _cleanup_blob_container(container_client):
         # Convert bytes to MB for reporting
         total_size_mb = total_size / (1024 * 1024)
         
-        logging.info(f"✓ Housekeeping complete: deleted {deleted_count:,} files "
+        logging.debug(f"✓ Housekeeping complete: deleted {deleted_count:,} files "
                     f"({total_size_mb:.2f} MB freed)")
         
     except Exception as e:
@@ -95,7 +95,7 @@ async def main(mytimer: func.TimerRequest, starter: str) -> None:
         logging.info("Starting scheduled Lumen threat feed update...")
         
         # Housekeeping: Clean up any stale files from previous runs
-        logging.info("🧹 Performing housekeeping...")
+        logging.debug("🧹 Performing housekeeping...")
         try:
             container_client = _get_blob_container()
             _cleanup_blob_container(container_client)

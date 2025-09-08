@@ -30,7 +30,7 @@ def _get_blob_container():
 
 
 def main(work_unit):
-    """Activity uploads indicators from the given blob to Sentinel without loading the whole blob into memory.
+    """Activity uploads indicators from the given blob to Sentinel
 
     Reads the JSONL blob via a temp file and processes only the requested window of lines.
     """

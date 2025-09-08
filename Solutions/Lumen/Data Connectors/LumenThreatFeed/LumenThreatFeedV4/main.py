@@ -299,9 +299,9 @@ class LumenSentinelUpdater:
         }
 
         filter_rate = (filtered_count / total_downloaded * 100) if total_downloaded > 0 else 0
-        logging.info(f"   • Confidence ≥{self.confidence_threshold}: {filtered_count:,} objects ({filter_rate:.1f}%)")
-        logging.info(f"   • Processing time: {processing_time:.1f}s")
-        logging.info(f"   • Blob created: {blob_name}")
+        logging.debug(f"   • Confidence ≥{self.confidence_threshold}: {filtered_count:,} objects ({filter_rate:.1f}%)")
+        logging.debug(f"   • Processing time: {processing_time:.1f}s")
+        logging.debug(f"   • Blob created: {blob_name}")
         logging.info(f"📊 SUMMARY: {filtered_count:,} of {total_downloaded:,} {indicator_type} indicators passed filtering")
 
         return result
@@ -360,7 +360,7 @@ class LumenSentinelUpdater:
                     
                     if response.status_code == 200:
                         uploaded_count += len(chunk)
-                        logging.info(f"✓ Chunk {chunk_num} uploaded successfully {batch_info} - {len(chunk)} indicators")
+                        logging.debug(f"✓ Chunk {chunk_num} uploaded successfully {batch_info} - {len(chunk)} indicators")
                         break
                     elif response.status_code == 429:
                         # Rate limiting

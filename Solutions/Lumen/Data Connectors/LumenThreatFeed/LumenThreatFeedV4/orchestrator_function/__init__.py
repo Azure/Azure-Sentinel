@@ -64,7 +64,7 @@ def orchestrator_function(context):
             total_throttle_events += batch_throttle
 
             total_uploaded_so_far = sum(r.get('uploaded_count', 0) for r in results if r)
-            logging.info(f"Progress: Blob batch {batch_num}/{total_batches} - {total_uploaded_so_far:,} uploaded")
+            logging.debug(f"Progress: Blob batch {batch_num}/{total_batches} - {total_uploaded_so_far:,} uploaded")
 
             if batch_throttle > 0:
                 # deterministic delay
@@ -93,7 +93,7 @@ def orchestrator_function(context):
         logging.info(f"Total throttle events: {total_throttle_events}")
         logging.info(f"Blob sources processed: {len(blob_sources)}")
         
-        # Return result dictionary like the working orchestrator
+        # Return result dictionary 
         return {
             'success': True,
             'run_id': run_id,
@@ -106,12 +106,12 @@ def orchestrator_function(context):
         
     except Exception as e:
         logging.error(f"Orchestrator error: {type(e).__name__}: {e}", exc_info=True)
-        # Return error result like the working orchestrator
+        # Return error result 
         return {
             'success': False,
             'error': str(e),
             'run_id': run_id if 'run_id' in locals() else 'unknown'
         }
 
-# Create the orchestrator function binding like the working version
+# Create the orchestrator function binding 
 main = df.Orchestrator.create(orchestrator_function)
