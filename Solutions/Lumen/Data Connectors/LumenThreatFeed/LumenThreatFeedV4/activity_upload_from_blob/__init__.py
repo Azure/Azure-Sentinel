@@ -52,18 +52,18 @@ def main(work_unit):
     error_total = 0
     throttle_total = 0
 
-    # Determine line-number window to process
+    # Determine item window to process (counted by objects, not raw lines)
     if start_batch is not None and num_batches is not None:
         first_index = start_batch * indicators_per_request
-        last_index_exclusive = (start_batch + num_batches) * indicators_per_request
+        items_to_process = num_batches * indicators_per_request
         window_desc = f"batches {start_batch + 1}-{start_batch + num_batches}"
     elif process_all:
         first_index = 0
-        last_index_exclusive = None  # until EOF
+        items_to_process = None  # until EOF
         window_desc = "all"
     else:
         first_index = batch_index * indicators_per_request
-        last_index_exclusive = first_index + indicators_per_request
+        items_to_process = indicators_per_request
         window_desc = f"batch {batch_index + 1}"
 
     try:
@@ -83,10 +83,11 @@ def main(work_unit):
             downloader = blob_client.download_blob()
             downloader.readinto(tmp)
 
-        # Now iterate the file line by line and process only selected window
+        # Now iterate the file line by line and process only the selected window of objects
         buffer = []
         CHUNK = indicators_per_request  # logical chunk to send to API
-        current_index = 0
+        skipped = 0
+        processed_in_window = 0
 
         def flush_buffer(batch_info_suffix: str):
             nonlocal uploaded_total, error_total, throttle_total, buffer
@@ -100,28 +101,34 @@ def main(work_unit):
 
         try:
             with open(tmp_path, 'r', encoding='utf-8') as f:
+                # Skip objects before the window
+                while skipped < first_index:
+                    line = f.readline()
+                    if line == '':
+                        break  # EOF
+                    if not line.strip():
+                        continue
+                    skipped += 1
+
+                # Process exactly items_to_process (or until EOF) for this window
                 for line in f:
-                    if not line:
-                        continue
-                    # Process only if within window
-                    if current_index < first_index:
-                        current_index += 1
-                        continue
-                    if last_index_exclusive is not None and current_index >= last_index_exclusive:
+                    if items_to_process is not None and processed_in_window >= items_to_process:
                         break
+                    if not line.strip():
+                        continue
                     try:
                         obj = json.loads(line)
                     except Exception:
-                        # skip malformed line but count as error of one item
+                        # count malformed object as processed and record error
                         error_total += 1
-                        current_index += 1
+                        processed_in_window += 1
                         continue
                     buffer.append(obj)
+                    processed_in_window += 1
                     if len(buffer) >= CHUNK:
                         flush_buffer(f"({indicator_type} {window_desc})")
-                    current_index += 1
 
-                # Flush remaining
+                # Flush any remainder for this window (can be < 100)
                 flush_buffer(f"({indicator_type} {window_desc})")
         finally:
             try:

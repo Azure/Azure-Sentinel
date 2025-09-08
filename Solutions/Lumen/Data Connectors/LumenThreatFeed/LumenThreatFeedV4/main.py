@@ -96,14 +96,14 @@ class LumenSentinelUpdater:
         """Log current configuration for debugging."""
         enabled_types = [k for k, v in INDICATOR_TYPES.items() if v]
         
-        logging.info("=== LUMEN CONNECTOR V4 CONFIGURATION ===")
-        logging.info(f"Enabled indicator types: {enabled_types}")
-        logging.info(f"Confidence threshold: {self.confidence_threshold}")
-        logging.info(f"Max indicators per type: {MAX_INDICATORS_PER_TYPE if MAX_INDICATORS_PER_TYPE > 0 else 'No limit'}")
-        logging.info(f"Max total indicators: {MAX_TOTAL_INDICATORS if MAX_TOTAL_INDICATORS > 0 else 'No limit'}")
-        logging.info(f"Lumen API base URL: {self.lumen_setup.base_url}")
-        logging.info(f"Workspace ID: {self.msal_setup.workspace_id}")
-        logging.info("========================================")
+        logging.debug("=== LUMEN CONNECTOR V4 CONFIGURATION ===")
+        logging.debug(f"Enabled indicator types: {enabled_types}")
+        logging.debug(f"Confidence threshold: {self.confidence_threshold}")
+        logging.debug(f"Max indicators per type: {MAX_INDICATORS_PER_TYPE if MAX_INDICATORS_PER_TYPE > 0 else 'No limit'}")
+        logging.debug(f"Max total indicators: {MAX_TOTAL_INDICATORS if MAX_TOTAL_INDICATORS > 0 else 'No limit'}")
+        logging.debug(f"Lumen API base URL: {self.lumen_setup.base_url}")
+        logging.debug(f"Workspace ID: {self.msal_setup.workspace_id}")
+        logging.debug("========================================")
 
     def _get_access_token(self) -> str:
         """Get or refresh Microsoft access token for Sentinel API."""
@@ -113,7 +113,7 @@ class LumenSentinelUpdater:
         if self.access_token and self.token_expiry and now < self.token_expiry:
             return self.access_token
         
-        logging.info("Obtaining new access token...")
+        logging.debug("Obtaining new access token...")
         
         try:
             app = ConfidentialClientApplication(
@@ -128,7 +128,7 @@ class LumenSentinelUpdater:
                 self.access_token = result["access_token"]
                 # Set expiry to 50 minutes from now (tokens typically last 60 minutes)
                 self.token_expiry = now + timedelta(minutes=50)
-                logging.info("✓ Access token obtained successfully")
+                logging.debug("✓ Access token obtained successfully")
                 return self.access_token
             else:
                 error_msg = result.get("error_description", result.get("error", "Unknown error"))
@@ -154,7 +154,7 @@ class LumenSentinelUpdater:
             
             for attempt in range(self.lumen_setup.max_retries):
                 try:
-                    logging.info(f"Getting presigned URL for {indicator_type} (attempt {attempt + 1})")
+                    logging.debug(f"Getting presigned URL for {indicator_type} (attempt {attempt + 1})")
                     
                     response = self.session.get(url, headers=headers, timeout=30)
                     response.raise_for_status()
@@ -164,7 +164,7 @@ class LumenSentinelUpdater:
                     
                     if presigned_url:
                         presigned_urls[indicator_type] = presigned_url
-                        logging.info(f"✓ Got presigned URL for {indicator_type}")
+                        logging.debug(f"✓ Got presigned URL for {indicator_type}")
                         break
                     else:
                         raise ValueError(f"No 'url' field in response for {indicator_type}")
@@ -179,25 +179,20 @@ class LumenSentinelUpdater:
         return presigned_urls
 
     def stream_and_filter_to_blob(self, container_client, indicator_type: str, presigned_url: str, run_id: str) -> Dict[str, Any]:
-        """Stream threat data from Lumen and filter to blob storage without loading everything into memory.
-
-        Strategy:
-        - HTTP GET with stream=True
-        - Parse incrementally with ijson (supports large JSON objects)
-        - Write filtered objects to a temp file as JSONL
-        - Upload the temp file to blob at the end
+        """
+        Stream threat data from Lumen and filter to blob storage
         """
         start_time = time.time()
         blob_name = f"{run_id}-{indicator_type}-{uuid.uuid4().hex[:8]}.jsonl"
 
-        logging.info(f"Streaming {indicator_type} data to blob: {blob_name}")
+        logging.debug(f"Streaming {indicator_type} data to blob: {blob_name}")
 
         blob_client = container_client.get_blob_client(blob_name)
 
         total_downloaded = 0
         filtered_count = 0
 
-        # Use a temp file on disk to avoid large in-memory buffers
+        # Use a temp file
         with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8', delete=False) as tmp:
             tmp_path = tmp.name
             try:
@@ -241,7 +236,6 @@ class LumenSentinelUpdater:
                 # If nothing parsed, try top-level array [ ... ]
                 if not parsed_any:
                     try:
-                        # We need a fresh stream; fall back to loading manageable text for diagnostics
                         text_sample = response.text[:512]
                         logging.debug(f"Response prefix (512 chars): {text_sample}")
                         # Try full JSON if it's an array or object
