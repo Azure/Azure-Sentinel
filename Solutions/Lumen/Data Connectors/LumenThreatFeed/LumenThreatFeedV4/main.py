@@ -5,7 +5,7 @@ import requests
 import time
 import uuid
 import ijson
-from io import BytesIO
+import tempfile
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from msal import ConfidentialClientApplication
@@ -179,105 +179,138 @@ class LumenSentinelUpdater:
         return presigned_urls
 
     def stream_and_filter_to_blob(self, container_client, indicator_type: str, presigned_url: str, run_id: str) -> Dict[str, Any]:
-        """Stream threat data from Lumen and filter to blob storage."""
+        """Stream threat data from Lumen and filter to blob storage without loading everything into memory.
+
+        Strategy:
+        - HTTP GET with stream=True
+        - Parse incrementally with ijson (supports large JSON objects)
+        - Write filtered objects to a temp file as JSONL
+        - Upload the temp file to blob at the end
+        """
         start_time = time.time()
         blob_name = f"{run_id}-{indicator_type}-{uuid.uuid4().hex[:8]}.jsonl"
-        
+
         logging.info(f"Streaming {indicator_type} data to blob: {blob_name}")
-        
-        # Create blob for writing
+
         blob_client = container_client.get_blob_client(blob_name)
-        
-        # Stream and filter data
-        filtered_objects = []
+
         total_downloaded = 0
         filtered_count = 0
-        
-        try:
-            # Download data (simplified approach like V3)
-            response = self.session.get(presigned_url, timeout=300)
-            response.raise_for_status()
-            
-            data = response.json()
-            logging.info(f"Downloaded {indicator_type} data: {len(str(data))} characters")
-            
-            # Extract STIX objects from the Lumen response
-            if isinstance(data, dict) and 'stixobjects' in data:
-                objects_list = data['stixobjects']
-                logging.info(f"📊 FILTERING STATS for {indicator_type.upper()}:")
-                logging.info(f"   • Total downloaded: {len(objects_list):,} objects")
-            else:
-                logging.error(f"Unexpected data structure for {indicator_type}: {type(data)}")
-                return {
-                    'indicator_type': indicator_type,
-                    'blob_name': blob_name,
-                    'total_downloaded': 0,
-                    'filtered_count': 0,
-                    'processing_time': time.time() - start_time,
-                    'error': 'Unexpected data structure'
-                }
-            
-            for obj in objects_list:
-                total_downloaded += 1
-                
-                # Apply confidence filtering
-                confidence = obj.get('confidence', 0)
-                if confidence >= self.confidence_threshold:
-                    filtered_objects.append(json.dumps(obj) + '\n')
-                    filtered_count += 1
-                    
-                    # Check per-type limit
-                    if MAX_INDICATORS_PER_TYPE > 0 and filtered_count >= MAX_INDICATORS_PER_TYPE:
-                        logging.info(f"Reached per-type limit for {indicator_type}: {MAX_INDICATORS_PER_TYPE}")
-                        break
-                    
-                    # Upload in chunks to avoid memory issues
-                    if len(filtered_objects) >= 1000:
-                        chunk_data = ''.join(filtered_objects)
-                        if filtered_count == len(filtered_objects):  # First chunk
-                            blob_client.upload_blob(chunk_data, overwrite=True)
-                        else:  # Append to existing blob
-                            existing_data = blob_client.download_blob().readall().decode('utf-8')
-                            blob_client.upload_blob(existing_data + chunk_data, overwrite=True)
-                        filtered_objects = []
-            
-            # Upload remaining objects
-            if filtered_objects:
-                chunk_data = ''.join(filtered_objects)
-                if filtered_count == len(filtered_objects):  # Only chunk
-                    blob_client.upload_blob(chunk_data, overwrite=True)
-                else:  # Append to existing blob
-                    existing_data = blob_client.download_blob().readall().decode('utf-8')
-                    blob_client.upload_blob(existing_data + chunk_data, overwrite=True)
-            
-            processing_time = time.time() - start_time
-            
-            result = {
-                'indicator_type': indicator_type,
-                'blob_name': blob_name,
-                'total_downloaded': total_downloaded,
-                'filtered_count': filtered_count,
-                'confidence_threshold': self.confidence_threshold,
-                'processing_time': processing_time
-            }
-            
-            # Enhanced filtering summary
-            filter_rate = (filtered_count / total_downloaded * 100) if total_downloaded > 0 else 0
-            logging.info(f"   • Confidence ≥{self.confidence_threshold}: {filtered_count:,} objects ({filter_rate:.1f}%)")
-            logging.info(f"   • Processing time: {processing_time:.1f}s")
-            logging.info(f"   • Blob created: {blob_name}")
-            logging.info(f"📊 SUMMARY: {filtered_count:,} of {total_downloaded:,} {indicator_type} indicators passed filtering")
-            
-            return result
-            
-        except Exception as e:
-            logging.error(f"Error streaming {indicator_type} to blob: {e}")
-            # Try to cleanup partial blob
+
+        # Use a temp file on disk to avoid large in-memory buffers
+        with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8', delete=False) as tmp:
+            tmp_path = tmp.name
             try:
-                blob_client.delete_blob()
-            except:
+                # Stream response
+                response = self.session.get(presigned_url, stream=True, timeout=(10, 300))
+                logging.debug(
+                    "Presigned GET status=%s, content-type=%s, length=%s",
+                    response.status_code,
+                    response.headers.get('Content-Type'),
+                    response.headers.get('Content-Length')
+                )
+                response.raise_for_status()
+
+                # Ensure raw stream is decoded if compressed
+                response.raw.decode_content = True
+
+                parsed_any = False
+
+                def handle_obj(obj: Dict[str, Any]):
+                    nonlocal total_downloaded, filtered_count
+                    total_downloaded += 1
+                    confidence = obj.get('confidence', 0)
+                    if confidence >= self.confidence_threshold:
+                        tmp.write(json.dumps(obj))
+                        tmp.write('\n')
+                        filtered_count += 1
+                        # Per-type limit (for testing)
+                        if MAX_INDICATORS_PER_TYPE > 0 and filtered_count >= MAX_INDICATORS_PER_TYPE:
+                            return True  # signal to stop
+                    return False
+
+                # Try parsing as { "stixobjects": [ ... ] }
+                try:
+                    for obj in ijson.items(response.raw, 'stixobjects.item'):
+                        parsed_any = True
+                        if handle_obj(obj):
+                            break
+                except Exception as e_json_path:
+                    logging.debug(f"ijson 'stixobjects.item' parse attempt failed: {e_json_path}")
+
+                # If nothing parsed, try top-level array [ ... ]
+                if not parsed_any:
+                    try:
+                        # We need a fresh stream; fall back to loading manageable text for diagnostics
+                        text_sample = response.text[:512]
+                        logging.debug(f"Response prefix (512 chars): {text_sample}")
+                        # Try full JSON if it's an array or object
+                        try:
+                            data = json.loads(response.text)
+                        except json.JSONDecodeError as jde:
+                            logging.error(f"JSON decode error for {indicator_type}: {jde}")
+                            raise
+
+                        if isinstance(data, dict) and 'stixobjects' in data:
+                            for obj in data['stixobjects']:
+                                if handle_obj(obj):
+                                    break
+                            parsed_any = True
+                        elif isinstance(data, list):
+                            for obj in data:
+                                if handle_obj(obj):
+                                    break
+                            parsed_any = True
+                        else:
+                            raise ValueError(f"Unexpected response shape: {type(data)}")
+                    except Exception as e_fallback:
+                        logging.error(
+                            f"Failed to parse {indicator_type} data. Status={response.status_code}, "
+                            f"CT={response.headers.get('Content-Type')}, Error={e_fallback}"
+                        )
+                        raise
+
+                # Upload if we wrote anything
+                tmp.flush()
+                os.fsync(tmp.fileno())
+
+            except Exception as e:
+                logging.error(f"Error streaming {indicator_type} to blob: {e}")
+                raise
+            finally:
+                tmp.close()
+
+        try:
+            # If nothing filtered, don't upload an empty blob
+            if filtered_count > 0:
+                with open(tmp_path, 'rb') as f:
+                    blob_client.upload_blob(f, overwrite=True)
+            else:
+                logging.info(f"No {indicator_type} objects passed the confidence filter (≥{self.confidence_threshold}).")
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
                 pass
-            raise
+
+        processing_time = time.time() - start_time
+
+        result = {
+            'indicator_type': indicator_type,
+            'blob_name': blob_name,
+            'total_downloaded': total_downloaded,
+            'filtered_count': filtered_count,
+            'confidence_threshold': self.confidence_threshold,
+            'processing_time': processing_time
+        }
+
+        filter_rate = (filtered_count / total_downloaded * 100) if total_downloaded > 0 else 0
+        logging.info(f"   • Confidence ≥{self.confidence_threshold}: {filtered_count:,} objects ({filter_rate:.1f}%)")
+        logging.info(f"   • Processing time: {processing_time:.1f}s")
+        logging.info(f"   • Blob created: {blob_name}")
+        logging.info(f"📊 SUMMARY: {filtered_count:,} of {total_downloaded:,} {indicator_type} indicators passed filtering")
+
+        return result
 
     def upload_indicators_to_sentinel(self, stix_objects: List[Dict], batch_info: str = "") -> Dict[str, int]:
         """Upload STIX indicators to Microsoft Sentinel with enhanced error handling."""

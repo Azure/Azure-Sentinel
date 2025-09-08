@@ -188,7 +188,7 @@ async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
                 blob_sources.append(result)
                 logging.info(f"✓ Streamed {indicator_type}: {result['filtered_count']:,} objects")
             except Exception as e:
-                logging.error(f"✗ Failed to stream {indicator_type}: {e}")
+                logging.error(f"✗ Failed to stream {indicator_type}: {e}", exc_info=True)
         
         if not blob_sources:
             return func.HttpResponse(
