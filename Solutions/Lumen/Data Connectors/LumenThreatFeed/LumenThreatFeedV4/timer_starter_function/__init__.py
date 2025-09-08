@@ -169,7 +169,8 @@ async def main(mytimer: func.TimerRequest, starter: str) -> None:
             'blob_sources': blob_sources,
             'config': config,
             'indicators_per_request': 100,  # Keep at 100 (Sentinel API limit)
-            'max_concurrent_activities': 10  # Increased concurrency for performance
+            'max_concurrent_activities': int(os.environ.get('LUMEN_MAX_CONCURRENT_ACTIVITIES', '2')),
+            'group_size': int(os.environ.get('LUMEN_GROUP_SIZE', '5'))  # 5 x 100 = 500 per activity by default
         }
         
         instance_id = await client.start_new("orchestrator_function", None, orchestration_input)

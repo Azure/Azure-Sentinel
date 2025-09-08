@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import timedelta
 import azure.functions as func
 import azure.durable_functions as df
@@ -15,11 +16,18 @@ def orchestrator_function(context):
         config = input_data.get('config', {})
         run_id = input_data.get('run_id', 'unknown')
         indicators_per_request = input_data.get('indicators_per_request', 100)
-        max_concurrent = input_data.get('max_concurrent_activities', 5)
+        # Concurrency: default low; can be overridden by input or env
+        max_concurrent = input_data.get(
+            'max_concurrent_activities',
+            int(os.environ.get('LUMEN_MAX_CONCURRENT_ACTIVITIES', '2'))
+        )
         
         # Deterministic batching: create grouped activities per blob.
         # Each activity will process `group_size` batches of size `indicators_per_request`.
-        group_size = 50  # 50 x 100 = 5,000 indicators per activity by default
+        group_size = input_data.get(
+            'group_size',
+            int(os.environ.get('LUMEN_GROUP_SIZE', '10'))
+        )  # 10 x 100 = 1,000 per activity
         activity_inputs = []
         for source in blob_sources:
             filtered_count = int(source.get('filtered_count', 0))
