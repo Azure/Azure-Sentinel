@@ -95,8 +95,8 @@ def main(work_unit):
             error_total += result.get('error_count', 0)
             throttle_total += result.get('throttle_events', 0)
 
-    logging.debug(f"✓ Work unit {work_unit_id} completed: uploaded={uploaded_total}, errors={error_total}, throttles={throttle_total}")
-    return {'uploaded_count': uploaded_total, 'error_count': error_total, 'throttle_events': throttle_total}
+        logging.debug(f"✓ Work unit {work_unit_id} completed: uploaded={uploaded_total}, errors={error_total}, throttles={throttle_total}")
+        return {'uploaded_count': uploaded_total, 'error_count': error_total, 'throttle_events': throttle_total}
         
     except Exception as e:
         logging.error(f"Activity error for {work_unit_id}: {e}", exc_info=True)
