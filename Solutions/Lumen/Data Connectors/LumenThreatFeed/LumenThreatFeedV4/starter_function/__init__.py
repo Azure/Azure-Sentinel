@@ -94,6 +94,33 @@ async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
     try:
         start_time = time.time()
         logging.info("=== LUMEN THREAT FEED STARTED ===")
+        logging.info(f"Function triggered at: {datetime.now(timezone.utc)}")
+        
+        # Test basic imports first
+        try:
+            logging.info("Testing imports...")
+            from main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
+            logging.info("✓ All imports successful")
+        except Exception as import_error:
+            logging.error(f"Import error: {import_error}")
+            return func.HttpResponse(
+                json.dumps({"error": f"Import failed: {str(import_error)}"}),
+                status_code=500,
+                mimetype="application/json"
+            )
+        
+        # Test durable client creation
+        try:
+            logging.info("Creating durable orchestration client...")
+            client = df.DurableOrchestrationClient(starter)
+            logging.info("✓ Durable client created successfully")
+        except Exception as client_error:
+            logging.error(f"Durable client error: {client_error}")
+            return func.HttpResponse(
+                json.dumps({"error": f"Durable client failed: {str(client_error)}"}),
+                status_code=500,
+                mimetype="application/json"
+            )
         
         # Housekeeping: Clean up any stale files from previous runs
         logging.info("🧹 Performing housekeeping...")
@@ -103,7 +130,6 @@ async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
         except Exception as e:
             logging.warning(f"Housekeeping failed: {e}")
         
-        client = df.DurableOrchestrationClient(starter)
         run_id = _generate_run_id()
         logging.info(f"Generated run ID: {run_id}")
         
