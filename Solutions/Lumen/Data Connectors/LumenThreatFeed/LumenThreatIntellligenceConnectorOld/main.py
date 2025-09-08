@@ -28,7 +28,7 @@ REQUIRED_ENVIRONMENT_VARIABLES = [
 ]
 
 # Indicator types to process (both IPv4 and domain indicators)
-INDICATOR_TYPES = ["ipv4"]
+INDICATOR_TYPES = ["ipv4", "domain"]
 
 # Configuration containers for cleaner parameter passing
 LumenSetup = namedtuple("LumenSetup", ["api_key", "base_url", "tries"])
@@ -240,7 +240,7 @@ class LumenSentinelUpdater:
             if 'access_token' in result:
                 bearer_token = result['access_token']
                 token_expiry_seconds = result['expires_in']
-                logging.debug("Successfully acquired Microsoft Entra access token")
+                logging.info("Successfully acquired Microsoft Entra access token")
                 return bearer_token, token_expiry_seconds
             else:
                 # Log and raise authentication errors
@@ -301,7 +301,7 @@ class LumenSentinelUpdater:
             
             # Handle successful response (200 OK)
             if response.status_code == 200:
-                logging.debug(f"Successfully uploaded {len(stix_objects)} STIX objects to Sentinel")
+                logging.info(f"Successfully uploaded {len(stix_objects)} STIX objects to Sentinel")
             else:
                 # Log and raise errors for non-200 status codes
                 logging.error(f"Upload failed with status {response.status_code}: {response.text}")
@@ -379,7 +379,7 @@ class LumenSentinelUpdater:
                     response = self.upload_stix_objects_to_sentinel(self.bearer_token, batch)
                     if response.status_code == 200:
                         total_processed += len(batch)
-                        logging.debug(f"Successfully uploaded batch {batch_number}")
+                        logging.info(f"Successfully uploaded batch {batch_number}")
                     else:
                         logging.error(f"Failed to upload batch {batch_number}: {response.status_code}")
                 except Exception as e:
