@@ -17,21 +17,27 @@ def orchestrator_function(context):
         indicators_per_request = input_data.get('indicators_per_request', 100)
         max_concurrent = input_data.get('max_concurrent_activities', 5)
         
-        # New approach: schedule one activity per blob source; the activity uploads in chunks of 100 internally.
-        total_work_units = len(blob_sources)
+        # Deterministic batching: create grouped activities per blob.
+        # Each activity will process `group_size` batches of size `indicators_per_request`.
+        group_size = 50  # 50 x 100 = 5,000 indicators per activity by default
+        activity_inputs = []
+        for source in blob_sources:
+            filtered_count = int(source.get('filtered_count', 0))
+            num_batches = (filtered_count + indicators_per_request - 1) // indicators_per_request
+            for start_batch in range(0, num_batches, group_size):
+                count_for_unit = min(group_size, num_batches - start_batch)
+                activity_inputs.append({
+                    'blob_name': source['blob_name'],
+                    'indicator_type': source['indicator_type'],
+                    'indicators_per_request': indicators_per_request,
+                    'config': config,
+                    'run_id': run_id,
+                    'start_batch': start_batch,
+                    'num_batches': count_for_unit,
+                    'work_unit_id': f"{run_id}-{source['indicator_type']}-{start_batch:05d}+{count_for_unit}"
+                })
 
-        activity_inputs = [
-            {
-                'blob_name': source['blob_name'],
-                'indicator_type': source['indicator_type'],
-                'indicators_per_request': indicators_per_request,
-                'config': config,
-                'run_id': run_id,
-                'process_all': True,
-                'work_unit_id': f"{run_id}-{source['indicator_type']}"
-            }
-            for source in blob_sources
-        ]
+        total_work_units = len(activity_inputs)
 
         # Execute with limited parallelism
         results = []
