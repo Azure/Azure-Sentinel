@@ -1,245 +1,181 @@
-"""
-Lumen Threat Intelligence Connector - Timer Starter Function
-
-This function serves as a timer-triggered entry point to initiate the durable orchestration
-for uploading threat intelligence data from Lumen to Microsoft Sentinel.
-
-Schedule: 0 0 8 * * * (configurable in function.json)
-
-"""
-
 import logging
 import azure.functions as func
 import azure.durable_functions as df
 import os
-import json
-import traceback
-import tempfile
-import glob
 import time
-from ..main import LumenSetup, MSALSetup, LumenSentinelUpdater
-import ijson
-import requests
-root_logger = logging.getLogger()
-root_logger.handlers[0].setFormatter(logging.Formatter("%(name)s: %(message)s"))
+import uuid
+import sys
+from datetime import datetime, timezone
+from azure.storage.blob import BlobServiceClient
 
-def cleanup_existing_temp_files():
-    """
-    Clean up any existing temporary files from previous runs.
-       
-    Returns:
-        int: Number of files cleaned up
-    """
-    temp_dir = tempfile.gettempdir()
-    pattern = os.path.join(temp_dir, 'lumen-threat-*.json')
+# Add parent directory to path for importing main module
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
+
+# Suppress verbose Azure SDK logging
+logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.WARNING)
+logging.getLogger('azure.storage').setLevel(logging.WARNING)
+
+# Configuration constants
+CONFIDENCE_THRESHOLD = int(os.environ.get('LUMEN_CONFIDENCE_THRESHOLD', '60'))
+BLOB_CONTAINER = os.environ.get('LUMEN_BLOB_CONTAINER', 'lumenthreatfeed')
+
+def _get_blob_container():
+    """Get blob container client, creating container if needed."""
+    conn = os.environ.get('LUMEN_BLOB_CONNECTION_STRING')
+    if not conn:
+        raise ValueError('LUMEN_BLOB_CONNECTION_STRING environment variable not set')
     
+    service_client = BlobServiceClient.from_connection_string(conn)
+    container_client = service_client.get_container_client(BLOB_CONTAINER)
+    
+    # Create container if it doesn't exist
     try:
-        existing_files = glob.glob(pattern)
-        cleaned_count = 0
-        
-        for file_path in existing_files:
-            try:
-                os.unlink(file_path)
-                cleaned_count += 1
-                logging.debug(f"[Timer Trigger] Cleaned up existing temp file: {os.path.basename(file_path)}")
-            except Exception as e:
-                logging.warning(f"[Timer Trigger] Failed to remove temp file {file_path}: {e}")
-        
-        if cleaned_count > 0:
-            logging.debug(f"[Timer Trigger] Startup cleanup completed: {cleaned_count} old temp files removed")
+        container_client.create_container()
+        logging.debug(f"Created blob container: {BLOB_CONTAINER}")
+    except Exception as e:
+        if "ContainerAlreadyExists" in str(e):
+            logging.debug(f"Blob container {BLOB_CONTAINER} already exists")
         else:
-            logging.debug("[Timer Trigger] Startup cleanup: No old temp files found")
-            
-        return cleaned_count
+            logging.warning(f"Error creating container {BLOB_CONTAINER}: {e}")
+    
+    return container_client
+
+def _cleanup_blob_container(container_client):
+    """Clean up stale files in blob storage container."""
+    try:
+        logging.debug("🧹 Starting blob storage housekeeping...")
+        
+        # List all blobs in the container
+        blob_list = list(container_client.list_blobs())
+        
+        if not blob_list:
+            logging.debug("✓ Blob container is already clean (no files found)")
+            return
+        
+        deleted_count = 0
+        total_size = 0
+        
+        # Delete all blobs
+        for blob in blob_list:
+            try:
+                # Get blob size for reporting
+                blob_size = blob.size if hasattr(blob, 'size') else 0
+                total_size += blob_size
+                
+                # Delete the blob
+                container_client.delete_blob(blob.name)
+                deleted_count += 1
+                logging.debug(f"Deleted blob: {blob.name} ({blob_size:,} bytes)")
+                
+            except Exception as e:
+                logging.warning(f"Failed to delete blob {blob.name}: {e}")
+        
+        # Convert bytes to MB for reporting
+        total_size_mb = total_size / (1024 * 1024)
+        
+        logging.debug(f"✓ Housekeeping complete: deleted {deleted_count:,} files "
+                    f"({total_size_mb:.2f} MB freed)")
         
     except Exception as e:
-        logging.error(f"[Timer Trigger] Error during startup cleanup: {e}")
-        return 0
+        logging.error(f"✗ Blob housekeeping failed: {e}")
+        # Don't fail the entire process if housekeeping fails
+        pass
 
-def download_threat_data_to_shared_disk(updater, indicator_types, max_indicators=None):
-    """
-    Returns list of temp file paths for the orchestrator to coordinate.
-    """
-    presigned_urls = updater.get_lumen_presigned_urls(indicator_types)
-    temp_file_paths = []
-    total_indicators_downloaded = 0
-    
-    for indicator_type, presigned_url in presigned_urls.items():
-        # Check if we've already reached the limit
-        if max_indicators and total_indicators_downloaded >= max_indicators:
-            logging.debug(f"[Timer Trigger] SKIPPING {indicator_type} indicators - already reached limit of {max_indicators}")
-            break
-            
-        logging.info(f"[Timer Trigger] Downloading {indicator_type} data to shared disk...")
-        
-        try:
-            # Create temporary file for this indicator type
-            temp_file = tempfile.NamedTemporaryFile(mode='w+b', delete=False, 
-                                                  suffix=f'-{indicator_type}.json',
-                                                  prefix='lumen-threat-')
-            temp_file_path = temp_file.name
-            
-            # Stream download to disk
-            response = requests.get(presigned_url, stream=True)
-            response.raise_for_status()
-            
-            # Write response to disk in chunks
-            downloaded_bytes = 0
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    temp_file.write(chunk)
-                    downloaded_bytes += len(chunk)
-            
-            temp_file.close()
-            response.close()
-            
-            # Quick count of indicators in this file (for logging only)
-            with open(temp_file_path, 'rb') as f:
-                indicator_count = 0
-                
-                try:
-                    for stix_obj in ijson.items(f, 'stixobjects.item'):
-                        indicator_count += 1
-                        
-                        if max_indicators and total_indicators_downloaded + indicator_count >= max_indicators:
-                            break
-                except:
-                    # If counting fails, just log what we downloaded
-                    indicator_count = 0
-            
-            temp_file_paths.append({
-                'file_path': temp_file_path,
-                'indicator_type': indicator_type,
-                'downloaded_bytes': downloaded_bytes,
-                'estimated_indicators': indicator_count
-            })
-            
-            total_indicators_downloaded += indicator_count
-            
-            logging.debug(f"[Timer Trigger] Downloaded {indicator_type}: {downloaded_bytes} bytes, ~{indicator_count} indicators to {temp_file_path}")
-            
-        except Exception as e:
-            logging.error(f"[Timer Trigger] Failed to download {indicator_type}: {str(e)}")
-            if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            continue
-    
-    logging.info(f"[Timer Trigger] Download complete. Total files: {len(temp_file_paths)}, Total indicators downloaded: ~{total_indicators_downloaded}")
-    return temp_file_paths, total_indicators_downloaded
+def _generate_run_id() -> str:
+    """Generate unique run ID for tracking."""
+    timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+    unique_id = uuid.uuid4().hex[:6]
+    return f"{timestamp}-{unique_id}"
 
 async def main(mytimer: func.TimerRequest, starter: str) -> None:
-    """
-    Timer starter function to begin the durable orchestration for Lumen threat intelligence upload (Parallel Batch Processing).
-    
-    This function runs on a timer schedule and uses the same parallel batch processing
-    architecture as the HTTP starter function for optimal performance.
-    
-    Architecture:
-    - Downloads threat data to temporary disk files
-    - Processes 3 work units simultaneously in parallel batches
-    - Targets 95 requests/minute for optimal API utilization
-    - Each batch completes in ~18.9 seconds
-    """
+    """Timer trigger for scheduled threat intelligence updates."""
     try:
-        start_time = time.time()
-        logging.info("[Timer Trigger] Starting Lumen Threat Intelligence upload orchestration...")
+        logging.info("=== TIMER TRIGGER FIRED ===")
+        logging.info("Starting scheduled Lumen threat feed update...")
         
-        # Step 0: Clean up any existing temp files from previous runs
-        cleanup_existing_temp_files()
+        # Housekeeping: Clean up any stale files from previous runs
+        logging.debug("🧹 Performing housekeeping...")
+        try:
+            container_client = _get_blob_container()
+            _cleanup_blob_container(container_client)
+        except Exception as e:
+            logging.warning(f"Housekeeping failed: {e}")
         
         client = df.DurableOrchestrationClient(starter)
-
-        # Configure Lumen API client settings
-        lumen_setup = LumenSetup(
-            api_key=os.environ.get("LUMEN_API_KEY"),
-            base_url=os.environ.get("LUMEN_BASE_URL"),
-            tries=3
-        )
-        msal_setup = MSALSetup(
-            tenant_id=os.environ.get("TENANT_ID"),
-            client_id=os.environ.get("CLIENT_ID"),
-            client_secret=os.environ.get("CLIENT_SECRET"),
-            workspace_id=os.environ.get("WORKSPACE_ID")
-        )
-        updater = LumenSentinelUpdater(lumen_setup, msal_setup)
-
-        # Step 1: Download all threat data to shared disk
-        from ..main import INDICATOR_TYPES
-        max_indicators = None  # Limited for timer-based processing
-        logging.debug("[Timer Trigger] Downloading threat data to shared disk for orchestrator processing...")
+        run_id = _generate_run_id()
+        logging.info(f"Generated run ID: {run_id}")
         
-        temp_file_paths, total_indicators = download_threat_data_to_shared_disk(
-            updater, 
-            INDICATOR_TYPES, 
-            max_indicators
-        )
-        logging.debug(f"[Timer Trigger] Download complete. Files: {len(temp_file_paths)}, Total indicators downloaded: ~{total_indicators}")
-
-        # Calculate estimated completion time based on parallel batch processing
-        # Process 3 work units simultaneously, targeting 95 req/min
-        max_indicators_per_work_unit = 1000  # Indicators per work unit
-        work_unit_count = sum(
-            (file_info['estimated_indicators'] + max_indicators_per_work_unit - 1) // max_indicators_per_work_unit
-            for file_info in temp_file_paths
-        )
-        
-        # Each work unit makes ~10 API requests (1000 indicators / 100 per request)
-        # Parallel batches: 3 work units = ~30 requests per batch
-        # Target rate: 95 requests/minute = 1.583 req/sec
-        # Each batch target time: ~18.9 seconds (30 requests / 1.583 req/sec)
-        batch_size = 3
-        batch_count = (work_unit_count + batch_size - 1) // batch_size  # Round up division
-        batch_interval_seconds = 18.9  # Target 18.9 seconds per batch (95 req/min)
-        estimated_total_seconds = batch_count * batch_interval_seconds
-        estimated_total_minutes = estimated_total_seconds / 60
-        
-        total_requests = total_indicators / 100  # 100 indicators per request
-        
-        logging.debug(f"[Timer Trigger] 📊 Processing Summary:")
-        logging.debug(f"[Timer Trigger]    Total indicators downloaded: ~{total_indicators}")
-        logging.debug(f"[Timer Trigger]    Work units: {work_unit_count} (max {max_indicators_per_work_unit} indicators each)")
-        logging.debug(f"[Timer Trigger]    Parallel batches: {batch_count} batches of {batch_size} work units")
-        logging.debug(f"[Timer Trigger]    Total API requests: ~{total_requests:.0f}")
-        logging.debug(f"[Timer Trigger]    Processing: Parallel batches (targeting 95 req/min)")
-        logging.debug(f"[Timer Trigger]    Estimated completion time: {estimated_total_minutes:.1f} minutes")
-
-        # Step 2: Prepare configuration for the orchestrator
+        # Get environment configuration
         config = {
-            'LUMEN_API_KEY': os.environ.get("LUMEN_API_KEY"),
-            'LUMEN_BASE_URL': os.environ.get("LUMEN_BASE_URL"),
-            'CLIENT_ID': os.environ.get("CLIENT_ID"),
-            'CLIENT_SECRET': os.environ.get("CLIENT_SECRET"),
-            'TENANT_ID': os.environ.get("TENANT_ID"),
-            'WORKSPACE_ID': os.environ.get("WORKSPACE_ID")
+            'LUMEN_API_KEY': os.environ.get('LUMEN_API_KEY'),
+            'LUMEN_BASE_URL': os.environ.get('LUMEN_BASE_URL'), 
+            'TENANT_ID': os.environ.get('TENANT_ID'),
+            'CLIENT_ID': os.environ.get('CLIENT_ID'),
+            'CLIENT_SECRET': os.environ.get('CLIENT_SECRET'),
+            'WORKSPACE_ID': os.environ.get('WORKSPACE_ID')
         }
-
-        # Step 3: Prepare input data for the orchestrator (list of temp file paths)
-        indicators_per_request = 100  # Sentinel API limit
         
-        input_data = {
-            'temp_file_paths': temp_file_paths,  # List of temp files with threat data
+        # Validate required config
+        missing_vars = [k for k, v in config.items() if not v]
+        if missing_vars:
+            logging.error(f"Missing environment variables: {missing_vars}")
+            return
+        
+        # Initialize components
+        lumen_setup = LumenSetup(config['LUMEN_API_KEY'], config['LUMEN_BASE_URL'])
+        updater = LumenSentinelUpdater(
+            lumen_setup,
+            MSALSetup(config['TENANT_ID'], config['CLIENT_ID'], 
+                     config['CLIENT_SECRET'], config['WORKSPACE_ID'])
+        )
+        
+        updater.log_config()
+        
+        # Get blob container
+        container_client = _get_blob_container()
+        
+        # Phase 1: Stream data to blob storage
+        logging.info("=== PHASE 1: STREAMING TO BLOB STORAGE ===")
+        
+        # Get presigned URLs
+        presigned_urls = updater.get_lumen_presigned_urls(INDICATOR_TYPES)
+        
+        if not presigned_urls:
+            logging.error("No presigned URLs obtained")
+            return
+        
+        # Stream data to blobs
+        blob_sources = []
+        for indicator_type, presigned_url in presigned_urls.items():
+            try:
+                result = updater.stream_and_filter_to_blob(
+                    container_client, indicator_type, presigned_url, run_id
+                )
+                blob_sources.append(result)
+                logging.info(f"✓ Streamed {indicator_type}: {result['filtered_count']:,} objects")
+            except Exception as e:
+                logging.error(f"✗ Failed to stream {indicator_type}: {e}")
+        
+        if not blob_sources:
+            logging.error("No data was successfully streamed to blobs")
+            return
+        
+        # Phase 2: Start orchestration for upload
+        logging.info("=== PHASE 2: STARTING ORCHESTRATION ===")
+        
+        orchestration_input = {
+            'run_id': run_id,
+            'blob_sources': blob_sources,
             'config': config,
-            'indicators_per_request': indicators_per_request
+            'indicators_per_request': 100,  # Keep at 100 (Sentinel API limit)
+            'max_concurrent_activities': int(os.environ.get('LUMEN_MAX_CONCURRENT_ACTIVITIES', '2')),
+            'group_size': int(os.environ.get('LUMEN_GROUP_SIZE', '5'))  # 5 x 100 = 500 per activity by default
         }
-
-        # Step 4: Start the durable orchestration with temp file paths
-        logging.info("[Timer Trigger] Starting durable orchestration with downloaded threat data files...")
-        instance_id = await client.start_new('orchestrator_function', None, input_data)
-        logging.info(f"[Timer Trigger] Started orchestration with ID = '{instance_id}'.")
-
-        # Calculate elapsed time and log completion summary
-        elapsed_time = time.time() - start_time
-        elapsed_minutes = elapsed_time / 60
-        logging.debug(f"[Timer Trigger] 🎯 Operation Started Successfully:")
-        logging.debug(f"[Timer Trigger]    Total indicators queued for upload: ~{total_indicators}")
-        logging.debug(f"[Timer Trigger]    Elapsed time for initialization: {elapsed_time:.2f} seconds ({elapsed_minutes:.2f} minutes)")
-        logging.debug(f"[Timer Trigger]    Orchestration ID: {instance_id}")
-        logging.debug(f"[Timer Trigger]    Status: Threat intelligence upload orchestration initiated")
-
-        # Memory cleanup: Clear data structures
-        del temp_file_paths
-        del input_data
-
+        
+        instance_id = await client.start_new("orchestrator_function", None, orchestration_input)
+        
+        logging.info(f"✓ Timer triggered orchestration started: {instance_id}")
+        
     except Exception as e:
-        logging.error(f"[Timer Trigger] Starter function error: {e}")
-        logging.error(traceback.format_exc())
+        logging.error(f"Timer trigger error: {e}", exc_info=True)

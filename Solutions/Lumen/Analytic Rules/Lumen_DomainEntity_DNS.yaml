@@ -1,7 +1,8 @@
 id: 29bf5bcd-6795-4c79-a91f-aaef5a618bab
-displayName: Lumen TI Map Domain Entity to DNS Events
+name: Lumen TI domain in DnsEvents
+displayName: Lumen TI domain in DnsEvents
 description: |
-  This query maps Lumen domain indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DNS events.
+  This query searches for matches between Lumen threat intelligence domain indicators and DnsEvents.
 severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelIndicators
@@ -12,7 +13,7 @@ requiredDataConnectors:
       - DnsEvents
 queryFrequency: PT4H
 queryPeriod: P14D
-triggerOperator: GreaterThan
+triggerOperator: gt
 triggerThreshold: 0
 suppressionDuration: PT5H
 suppressionEnabled: false
@@ -21,26 +22,26 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-  let dt_lookBack = 1h; // Look back 1 hour for DNS events
-  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  let dt_lookBack = 1d; // Data lookback for DnsEvents
+  let ioc_lookBack = 14d; // TI lookback
+  // Latest, active, non-expired Lumen domain indicators
   let Domain_Indicators = ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
     | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
     | where SourceSystem == 'Lumen'
-    | where ObservableKey == "domain-name:value" or ObservableValue contains "."
-    | extend TI_domainEntity = ObservableValue;
+    | where ObservableKey == 'domain-name:value' or ObservableValue contains '.'
+    | extend TI_domainEntity = tostring(ObservableValue);
   Domain_Indicators
-    | join kind=innerunique (
-        DnsEvents
-        | where TimeGenerated >= ago(dt_lookBack)
-        | extend DNS_domainEntity = Name
-        | extend DnsEvents_TimeGenerated = TimeGenerated
-    )
-    on $left.TI_domainEntity == $right.DNS_domainEntity
-    | where DnsEvents_TimeGenerated < ValidUntil
-    | summarize DnsEvents_TimeGenerated = arg_max(DnsEvents_TimeGenerated, *) by Id, DNS_domainEntity
-    | project timestamp = DnsEvents_TimeGenerated, Name, QueryType, Computer, Id, Tags, ValidUntil, Confidence, TI_domainEntity, DNS_domainEntity, Type
+  | join kind=innerunique (
+      DnsEvents
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend DNS_domainEntity = Name
+      | extend DnsEvents_TimeGenerated = TimeGenerated
+    ) on $left.TI_domainEntity == $right.DNS_domainEntity
+  | where DnsEvents_TimeGenerated < ValidUntil
+  | summarize arg_max(DnsEvents_TimeGenerated, *), StartTime = min(DnsEvents_TimeGenerated), EndTime = max(DnsEvents_TimeGenerated) by Id, DNS_domainEntity
+  | project timestamp = EndTime, StartTime, EndTime, Name, QueryType, Computer, Id, Tags, ValidUntil, Confidence, TI_domainEntity, DNS_domainEntity, Type
 entityMappings:
   - entityType: DNS
     fieldMappings:

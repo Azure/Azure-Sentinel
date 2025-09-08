@@ -1,474 +1,396 @@
-import datetime
 import json
 import logging
 import os
-import sys
-import time
-import re
-from collections import namedtuple
-from typing import List, Dict, Any
-
-import azure.functions as func
-import msal
 import requests
-from requests.adapters import HTTPAdapter
-from requests_ratelimiter import LimiterSession
-from urllib3.util import Retry
+import time
+import uuid
+import ijson
+import tempfile
+from typing import Dict, List, Optional, Any
+from datetime import datetime, timedelta
+from msal import ConfidentialClientApplication
+from azure.storage.blob import BlobServiceClient
 
+# Configuration for indicator types and environment-based filtering
+INDICATOR_TYPES = {
+    'ipv4': os.environ.get('LUMEN_ENABLE_IPV4', 'true').lower() == 'true',
+    'domain': os.environ.get('LUMEN_ENABLE_DOMAIN', 'true').lower() == 'true'
+}
 
-# Required environment variables for the Lumen-Sentinel integration
-# These must be configured in the Azure Function App settings
-REQUIRED_ENVIRONMENT_VARIABLES = [
-    "LUMEN_API_KEY",        # API key for Lumen threat intelligence service
-    "LUMEN_BASE_URL",       # Base URL for Lumen API endpoints 
-    "CLIENT_ID",            # Azure AD application (client) ID
-    "CLIENT_SECRET",        # Azure AD application client secret
-    "TENANT_ID",            # Azure AD tenant ID
-    "WORKSPACE_ID",         # Microsoft Sentinel workspace ID
-]
+# Filter to only enabled types
+INDICATOR_TYPES = {k: v for k, v in INDICATOR_TYPES.items() if v}
 
-# Indicator types to process (both IPv4 and domain indicators)
-INDICATOR_TYPES = ["ipv4", "domain"]
+# Testing limits (0 = no limit)
+MAX_INDICATORS_PER_TYPE = int(os.environ.get('LUMEN_MAX_INDICATORS_PER_TYPE', '0'))
+MAX_TOTAL_INDICATORS = int(os.environ.get('LUMEN_MAX_TOTAL_INDICATORS', '0'))
 
-# Configuration containers for cleaner parameter passing
-LumenSetup = namedtuple("LumenSetup", ["api_key", "base_url", "tries"])
-MSALSetup = namedtuple("MSALSetup", ["tenant_id", "client_id", "client_secret", "workspace_id"])
+class LumenSetup:
+    """Configuration for Lumen API access."""
+    
+    def __init__(self, api_key: str, base_url: str, max_retries: int = 3):
+        self.api_key = api_key
+        self.base_url = base_url.rstrip('/')
+        self.max_retries = max_retries
+        
+        # Debug logging to verify environment variables
+        logging.debug(f"LUMEN_API_KEY loaded: {'***' + self.api_key[-4:] if self.api_key and len(self.api_key) > 4 else 'NOT SET'}")
+        logging.debug(f"LUMEN_BASE_URL loaded: {self.base_url}")
+        
+        if not self.api_key:
+            raise ValueError("LUMEN_API_KEY environment variable is required")
+        if not self.base_url:
+            raise ValueError("LUMEN_BASE_URL environment variable is required")
+
+class MSALSetup:
+    """Configuration for Microsoft Authentication Library."""
+    
+    def __init__(self, tenant_id: str, client_id: str, client_secret: str, workspace_id: str):
+        self.tenant_id = tenant_id
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.workspace_id = workspace_id
+        self.authority = f"https://login.microsoftonline.com/{tenant_id}"
+        self.scope = ["https://management.azure.com/.default"]
+        
+        # Validate required parameters
+        required_vars = {
+            'TENANT_ID': tenant_id,
+            'CLIENT_ID': client_id,
+            'CLIENT_SECRET': client_secret,
+            'WORKSPACE_ID': workspace_id
+        }
+        
+        for var_name, value in required_vars.items():
+            if not value:
+                raise ValueError(f"{var_name} environment variable is required")
 
 class LumenSentinelUpdater:
-    """
-    Lumen Threat Feed to Microsoft Sentinel STIX Objects uploader.
+    """Enhanced Lumen threat intelligence connector with blob storage support."""
     
-    This class handles the complete pipeline for ingesting threat intelligence data
-    from Lumen's API and uploading it to Microsoft Sentinel using the STIX Objects API.
-    
-    Key Features:
-    - Rate-limited HTTP requests to respect API quotas
-    - Automatic retry logic for transient failures  
-    - MSAL-based authentication for Microsoft APIs
-    - Batch processing to handle large datasets
-    - Comprehensive error handling and logging
-    
-    API Limits & Rate Limiting:
-    - Sentinel STIX API: 100 requests/minute, 100 objects per request
-    - Implements conservative rate limiting (95 requests/minute) for safety
-    - Uses exponential backoff retry strategy for 429/5xx errors
-    
-    Authentication:
-    - Uses MSAL (Microsoft Authentication Library) for token acquisition
-    - Supports both silent token refresh and new token acquisition
-    - Handles token expiry and renewal automatically
-    """
-
     def __init__(self, lumen_setup: LumenSetup, msal_setup: MSALSetup):
-        """
-        Initialize the Lumen-Sentinel updater with configuration and HTTP session.
+        self.lumen_setup = lumen_setup
+        self.msal_setup = msal_setup
+        self.access_token = None
+        self.token_expiry = None
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'LumenSentinelConnector/4.0',
+            'Accept': 'application/json'
+        })
         
-        Args:
-            lumen_setup (LumenSetup): Lumen API configuration (key, URL, retry count)
-            msal_setup (MSALSetup): Microsoft authentication configuration
-        """
-        super(LumenSentinelUpdater, self).__init__()
-
-        # Store Lumen API configuration
-        self.lumen_api_key = lumen_setup.api_key
-        self.lumen_base_url = lumen_setup.base_url
-        self.lumen_tries = lumen_setup.tries
+        # Configure confidence threshold
+        self.confidence_threshold = int(os.environ.get('LUMEN_CONFIDENCE_THRESHOLD', '60'))
         
-        # Store Microsoft authentication configuration
-        self.msal_tenant_id = msal_setup.tenant_id
-        self.msal_client_id = msal_setup.client_id
-        self.msal_client_secret = msal_setup.client_secret
-        self.msal_workspace_id = msal_setup.workspace_id
-
-        # Setup rate-limited HTTP session with retry strategy
-        # Configured for Sentinel STIX Objects API limits: 100 requests/minute, 100 objects/request
-        self.limiter_session = LimiterSession(
-            per_minute=95,  # Conservative limit to avoid 429 errors
-            limit_statuses=[429, 503],  # Status codes that trigger rate limiting
-        )
-        
-        # Configure retry strategy for transient failures
-        retry_strategy = Retry(
-            total=3,                                          # Maximum number of retries
-            status_forcelist=[429, 500, 502, 503, 504],      # HTTP status codes to retry
-            allowed_methods=["HEAD", "GET", "OPTIONS", "POST"], # HTTP methods to retry
-            backoff_factor=1                                  # Exponential backoff multiplier
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.limiter_session.mount("http://", adapter)
-        self.limiter_session.mount("https://", adapter)
-
-        # Authentication state - managed by acquire_token() method
-        self.bearer_token = None
-        self.token_expiry_seconds = None
-
-    def get_lumen_presigned_urls(self, indicator_types: List[str]) -> Dict[str, str]:
-        """
-        Retrieve presigned URLs from Lumen's API for downloading threat intelligence data.
-        
-        This method makes GET requests to Lumen's presigned URL endpoints for each indicator type,
-        which returns temporary URLs that can be used to download the latest threat intelligence data files.
-        
-        Args:
-            indicator_types (List[str]): List of indicator types to fetch (e.g., ['ipv4', 'domain'])
-        
-        Returns:
-            Dict[str, str]: Dictionary mapping indicator types to their presigned URLs
-            
-        Raises:
-            requests.exceptions.RequestException: If any API request fails
-            ValueError: If any response doesn't contain a valid URL
-            
-        """
-        headers = {
-            'Authorization': self.lumen_api_key,  # Changed from 'x-api-key' to 'Authorization'
-            'Content-Type': 'application/json'
+        # Statistics tracking
+        self.stats = {
+            'run_id': None,
+            'start_time': None,
+            'indicators_processed': 0,
+            'indicators_uploaded': 0,
+            'errors': 0,
+            'rate_limit_events': 0,
+            'processing_time': 0
         }
-        
-        presigned_urls = {}
-        
-        for indicator_type in indicator_types:
-            # Construct URL for each indicator type
-            url = f"{self.lumen_base_url}/{indicator_type}"
-            
-            try:
-                logging.info(f"Getting presigned URL for {indicator_type} indicators...")
-                
-                # Make GET request to get the presigned URL 
-                response = self.limiter_session.get(url, headers=headers, timeout=30)
-                response.raise_for_status()
-                
-                # Parse response and extract the presigned URL
-                data = response.json()
-                presigned_url = data.get('url')
-                
-                if not presigned_url:
-                    raise ValueError(f"No 'url' field found in Lumen API response for {indicator_type}")
-                    
-                presigned_urls[indicator_type] = presigned_url
-                logging.info(f"Successfully obtained presigned URL for {indicator_type} indicators")
-                
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Error getting presigned URL for {indicator_type} from Lumen API: {str(e)}", exc_info=True)
-                raise
-        
-        return presigned_urls
 
-    def get_lumen_threat_data(self, presigned_url: str) -> Dict[str, Any]:
-        """
-        Download threat intelligence data from Lumen using a presigned URL.
+    def log_config(self):
+        """Log current configuration for debugging."""
+        enabled_types = [k for k, v in INDICATOR_TYPES.items() if v]
         
-        This method downloads the actual threat intelligence data file from the presigned URL
-        obtained from get_lumen_presigned_url().
-        
-        Args:
-            presigned_url (str): The presigned URL from Lumen API
-            
-        Returns:
-            Dict[str, Any]: The threat intelligence data in STIX format, typically containing
-                           a 'stixobjects' key with a list of threat intelligence indicators
-            
-        Raises:
-            requests.exceptions.RequestException: If the download request fails
-            json.JSONDecodeError: If the downloaded content is not valid JSON
-            
-        Note:
-            Uses a 5-minute timeout to accommodate large file downloads.
-            The response content is logged (first 500 chars) for debugging if parsing fails.
-        """
-        try:
-            # Download threat intelligence data with extended timeout for large files
-            response = self.limiter_session.get(presigned_url, timeout=300)  # 5 min timeout
-            response.raise_for_status()
-            
-            try:
-                # Parse JSON response and log success metrics
-                data = response.json()
-                data_size = len(str(data))
-                logging.info(f"Successfully downloaded threat data from Lumen. Data size: {data_size} characters")
-                return data
-            except json.JSONDecodeError as e:
-                # Log parsing errors with response content for debugging
-                logging.error(f"Error parsing JSON response from presigned URL: {str(e)}")
-                logging.error(f"Response content (first 500 chars): {response.content[:500]}")
-                raise
-                
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Error downloading threat data from presigned URL: {str(e)}", exc_info=True)
-            if 'response' in locals():
-                logging.error(f"HTTP status: {response.status_code}")
-                logging.error(f"Response content (first 500 chars): {response.content[:500]}")
-            raise
+        logging.debug("=== LUMEN CONNECTOR V4 CONFIGURATION ===")
+        logging.debug(f"Enabled indicator types: {enabled_types}")
+        logging.debug(f"Confidence threshold: {self.confidence_threshold}")
+        logging.debug(f"Max indicators per type: {MAX_INDICATORS_PER_TYPE if MAX_INDICATORS_PER_TYPE > 0 else 'No limit'}")
+        logging.debug(f"Max total indicators: {MAX_TOTAL_INDICATORS if MAX_TOTAL_INDICATORS > 0 else 'No limit'}")
+        logging.debug(f"Lumen API base URL: {self.lumen_setup.base_url}")
+        logging.debug(f"Workspace ID: {self.msal_setup.workspace_id}")
+        logging.debug("========================================")
 
-    def acquire_token(self):
-        """
-        Acquire Microsoft Entra access token using MSAL for authenticating with Sentinel API.
+    def _get_access_token(self) -> str:
+        """Get or refresh Microsoft access token for Sentinel API."""
+        now = datetime.utcnow()
         
-        This method handles both silent token refresh (if a cached token exists) and new
-        token acquisition using client credentials flow. The token is required for all
-        Microsoft Sentinel API calls.
+        # Check if we have a valid token
+        if self.access_token and self.token_expiry and now < self.token_expiry:
+            return self.access_token
         
-        Returns:
-            tuple: A tuple containing (bearer_token: str, token_expiry_seconds: int)
-            
-        Raises:
-            ValueError: If token acquisition fails or returns an error
-            Exception: For other authentication-related errors
-            
-        Note:
-            Uses the client credentials flow suitable for daemon/service applications.
-            Tokens are typically valid for 60-90 minutes.
-        """
+        logging.debug("Obtaining new access token...")
+        
         try:
-            # Configure OAuth scope for Azure Management API
-            scope = ["https://management.azure.com/.default"]
-            
-            # Create MSAL confidential client application
-            context = msal.ConfidentialClientApplication(
-                self.msal_client_id, 
-                authority=f"https://login.microsoftonline.com/{self.msal_tenant_id}",
-                client_credential=self.msal_client_secret
+            app = ConfidentialClientApplication(
+                client_id=self.msal_setup.client_id,
+                client_credential=self.msal_setup.client_secret,
+                authority=self.msal_setup.authority
             )
             
-            # Attempt silent token acquisition first (uses cache)
-            result = context.acquire_token_silent(scopes=scope, account=None)
-            if not result:
-                # Fall back to new token acquisition if silent fails
-                result = context.acquire_token_for_client(scopes=scope)
-
-            # Process the authentication result
-            if 'access_token' in result:
-                bearer_token = result['access_token']
-                token_expiry_seconds = result['expires_in']
-                logging.debug("Successfully acquired Microsoft Entra access token")
-                return bearer_token, token_expiry_seconds
+            result = app.acquire_token_for_client(scopes=self.msal_setup.scope)
+            
+            if "access_token" in result:
+                self.access_token = result["access_token"]
+                # Set expiry to 50 minutes from now (tokens typically last 60 minutes)
+                self.token_expiry = now + timedelta(minutes=50)
+                logging.debug("✓ Access token obtained successfully")
+                return self.access_token
             else:
-                # Log and raise authentication errors
-                error_code = result.get("error")
-                error_message = result.get("error_description")
-                logging.error(f"Error acquiring token: {error_code} - {error_message}")
-                raise ValueError(error_message)
-
+                error_msg = result.get("error_description", result.get("error", "Unknown error"))
+                raise Exception(f"Failed to obtain access token: {error_msg}")
+                
         except Exception as e:
-            logging.error(f"Error acquiring token: {str(e)}", exc_info=True)
+            logging.error(f"Token acquisition error: {e}")
             raise
 
-    def upload_stix_objects_to_sentinel(self, token: str, stix_objects: List[Dict[str, Any]]) -> requests.Response:
-        """
-        Upload STIX objects to Microsoft Sentinel using the STIX Objects API.
-        
-        This method uploads a batch of STIX threat intelligence objects to Microsoft Sentinel.
-        The API has specific limits: maximum 100 objects per request, 100 requests per minute.
-        
-        Args:
-            token (str): The Bearer authentication token for Microsoft APIs
-            stix_objects (List[Dict[str, Any]]): List of STIX objects to upload (max 100)
-            
-        Returns:
-            requests.Response: The HTTP response from the Sentinel API
-            
-        Raises:
-            requests.exceptions.RequestException: If the HTTP request fails
-            ValueError: If the API returns an error status code
-            
-        """
-        # Sentinel STIX Objects API endpoint (preview version)
-        url = f"https://api.ti.sentinel.azure.com/workspaces/{self.msal_workspace_id}/threat-intelligence-stix-objects:upload"
-        
-        # Configure request headers with authentication and content type
+    def get_lumen_presigned_urls(self, indicator_types: Dict[str, bool]) -> Dict[str, str]:
+        """Get presigned URLs from Lumen API for enabled indicator types."""
         headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {token}'
+            'Authorization': self.lumen_setup.api_key,
+            'Content-Type': 'application/json'
         }
+        presigned_urls = {}
         
-        # API version parameter (required for Sentinel APIs)
-        params = {
-            'api-version': '2024-02-01-preview'
-        }        # Request payload in the format expected by Sentinel STIX Objects API        
-        payload = {
-            'sourcesystem': 'Lumen',              # Source system identifier
-            'stixobjects': stix_objects           # Array of STIX objects to upload
-        }
-        
-        try:
-            # Make POST request to upload STIX objects
-            response = self.limiter_session.post(
-                url, 
-                headers=headers,
-                params=params,
-                json=payload,
-                timeout=30            )
-            
-            # Handle successful response (200 OK)
-            if response.status_code == 200:
-                logging.debug(f"Successfully uploaded {len(stix_objects)} STIX objects to Sentinel")
-            else:
-                # Log and raise errors for non-200 status codes
-                logging.error(f"Upload failed with status {response.status_code}: {response.text}")
-                raise ValueError(f"Failed to upload STIX objects: {response.status_code}")
+        for indicator_type, enabled in indicator_types.items():
+            if not enabled:
+                continue
                 
-            return response
+            url = f"{self.lumen_setup.base_url}/{indicator_type}"
             
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Error uploading STIX objects to Sentinel: {str(e)}", exc_info=True)
-            raise
-
-    def process_lumen_data(self, indicator_types: List[str]) -> int:
-        """
-        Main processing function to orchestrate the complete Lumen-to-Sentinel pipeline.
-        
-        This method coordinates the entire process:
-        1. Obtains presigned URLs from Lumen API for each indicator type
-        2. Downloads threat intelligence data for each type
-        3. Validates and cleans STIX objects
-        4. Acquires authentication token for Sentinel
-        5. Uploads data in batches respecting API limits
-        
-        Args:
-            indicator_types (List[str]): List of indicator types to process (e.g., ['ipv4', 'domain'])
-        
-        Returns:
-            int: Total number of STIX objects successfully processed and uploaded
-            
-        Raises:
-            Exception: For any step that fails in the pipeline
-            
-        Note:
-            Implements batch processing (100 objects per batch) and rate limiting
-            (95 requests/minute) to stay within Sentinel API quotas.
-        """
-        total_processed = 0
-        all_stix_objects = []
-        
-        try:
-            # Step 1: Get presigned URLs from Lumen API for each indicator type
-            logging.info(f"Getting presigned URLs for indicator types: {', '.join(indicator_types)}")
-            presigned_urls = self.get_lumen_presigned_urls(indicator_types)
-            
-            # Step 2: Download threat data from each presigned URL
-            for indicator_type, presigned_url in presigned_urls.items():
-                logging.info(f"Downloading threat intelligence data for {indicator_type}...")
-                threat_data = self.get_lumen_threat_data(presigned_url)
-                
-                # Step 3: Extract and validate STIX objects from the response
-                stix_objects = threat_data.get('stixobjects', [])
-                if not stix_objects:
-                    logging.warning(f"No STIX objects found in Lumen threat data for {indicator_type}")
-                    continue
-                    
-                logging.info(f"Found {len(stix_objects)} STIX objects for {indicator_type}")
-                all_stix_objects.extend(stix_objects)
-
-            if not all_stix_objects:
-                logging.warning("No STIX objects found in any Lumen threat data")
-                return 0
-                
-            logging.info(f"Total STIX objects collected: {len(all_stix_objects)}")
-
-            # Step 3.5: Filter STIX objects by confidence level (remove those below confidence 60)
-            logging.info("Filtering STIX objects by confidence level")
-            filtered_stix_objects = self.filter_stix_objects_by_confidence(all_stix_objects, min_confidence=60)
-
-            if not filtered_stix_objects:
-                logging.warning("No STIX objects remaining after confidence filtering")
-                return 0
-                
-            logging.info(f"STIX objects after confidence filtering: {len(filtered_stix_objects)}")
-
-            # Step 4: Acquire authentication token for Sentinel API
-            if not self.bearer_token:
-                self.bearer_token, self.token_expiry_seconds = self.acquire_token()
-
-            # Step 5: Upload STIX objects in batches (API limit: 100 objects per request)
-            batch_size = 100
-            for i in range(0, len(filtered_stix_objects), batch_size):
-                batch = filtered_stix_objects[i:i + batch_size]
-                batch_number = i // batch_size + 1
-                logging.info(f"Uploading batch {batch_number} ({len(batch)} objects)...")
+            for attempt in range(self.lumen_setup.max_retries):
                 try:
-                    response = self.upload_stix_objects_to_sentinel(self.bearer_token, batch)
-                    if response.status_code == 200:
-                        total_processed += len(batch)
-                        logging.debug(f"Successfully uploaded batch {batch_number}")
+                    logging.debug(f"Getting presigned URL for {indicator_type} (attempt {attempt + 1})")
+                    
+                    response = self.session.get(url, headers=headers, timeout=30)
+                    response.raise_for_status()
+                    
+                    data = response.json()
+                    presigned_url = data.get('url')
+                    
+                    if presigned_url:
+                        presigned_urls[indicator_type] = presigned_url
+                        logging.debug(f"✓ Got presigned URL for {indicator_type}")
+                        break
                     else:
-                        logging.error(f"Failed to upload batch {batch_number}: {response.status_code}")
-                except Exception as e:
-                    logging.error(f"Error uploading batch {batch_number}: {str(e)}")
-                    continue
-                time.sleep(0.7)
-            logging.info(f"Processing complete. Total STIX objects processed: {total_processed}")
-            return total_processed
-        except Exception as e:
-            logging.error(f"Error in process_lumen_data: {str(e)}", exc_info=True)
-            raise
+                        raise ValueError(f"No 'url' field in response for {indicator_type}")
+                        
+                except requests.exceptions.RequestException as e:
+                    if attempt == self.lumen_setup.max_retries - 1:
+                        logging.error(f"✗ Failed to get presigned URL for {indicator_type}: {e}")
+                    else:
+                        logging.warning(f"Retry {attempt + 1} for {indicator_type}: {e}")
+                        time.sleep(2 ** attempt)
+                        
+        return presigned_urls
 
+    def stream_and_filter_to_blob(self, container_client, indicator_type: str, presigned_url: str, run_id: str) -> Dict[str, Any]:
+        """
+        Stream threat data from Lumen and filter to blob storage
+        """
+        start_time = time.time()
+        blob_name = f"{run_id}-{indicator_type}-{uuid.uuid4().hex[:8]}.jsonl"
 
-def main(mytimer: func.TimerRequest) -> None:
-    """
-    Azure Function main entry point for the Lumen Threat Feed Connector.
-    
-    This function is triggered by a timer and orchestrates the complete process of
-    downloading threat intelligence data from Lumen and uploading it to Microsoft Sentinel.
-    
-    Args:
-        mytimer (func.TimerRequest): Azure Functions timer trigger object
+        logging.debug(f"Streaming {indicator_type} data to blob: {blob_name}")
+
+        blob_client = container_client.get_blob_client(blob_name)
+
+        total_downloaded = 0
+        filtered_count = 0
+
+        # Use a temp file
+        with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8', delete=False) as tmp:
+            tmp_path = tmp.name
+            try:
+                # Stream response
+                response = self.session.get(presigned_url, stream=True, timeout=(10, 300))
+                logging.debug(
+                    "Presigned GET status=%s, content-type=%s, length=%s",
+                    response.status_code,
+                    response.headers.get('Content-Type'),
+                    response.headers.get('Content-Length')
+                )
+                response.raise_for_status()
+
+                # Ensure raw stream is decoded if compressed
+                response.raw.decode_content = True
+
+                parsed_any = False
+
+                def handle_obj(obj: Dict[str, Any]):
+                    nonlocal total_downloaded, filtered_count
+                    total_downloaded += 1
+                    confidence = obj.get('confidence', 0)
+                    if confidence >= self.confidence_threshold:
+                        tmp.write(json.dumps(obj))
+                        tmp.write('\n')
+                        filtered_count += 1
+                        # Per-type limit (for testing)
+                        if MAX_INDICATORS_PER_TYPE > 0 and filtered_count >= MAX_INDICATORS_PER_TYPE:
+                            return True  # signal to stop
+                    return False
+
+                # Try parsing as { "stixobjects": [ ... ] }
+                try:
+                    for obj in ijson.items(response.raw, 'stixobjects.item'):
+                        parsed_any = True
+                        if handle_obj(obj):
+                            break
+                except Exception as e_json_path:
+                    logging.debug(f"ijson 'stixobjects.item' parse attempt failed: {e_json_path}")
+
+                # If nothing parsed, try top-level array [ ... ]
+                if not parsed_any:
+                    try:
+                        text_sample = response.text[:512]
+                        logging.debug(f"Response prefix (512 chars): {text_sample}")
+                        # Try full JSON if it's an array or object
+                        try:
+                            data = json.loads(response.text)
+                        except json.JSONDecodeError as jde:
+                            logging.error(f"JSON decode error for {indicator_type}: {jde}")
+                            raise
+
+                        if isinstance(data, dict) and 'stixobjects' in data:
+                            for obj in data['stixobjects']:
+                                if handle_obj(obj):
+                                    break
+                            parsed_any = True
+                        elif isinstance(data, list):
+                            for obj in data:
+                                if handle_obj(obj):
+                                    break
+                            parsed_any = True
+                        else:
+                            raise ValueError(f"Unexpected response shape: {type(data)}")
+                    except Exception as e_fallback:
+                        logging.error(
+                            f"Failed to parse {indicator_type} data. Status={response.status_code}, "
+                            f"CT={response.headers.get('Content-Type')}, Error={e_fallback}"
+                        )
+                        raise
+
+                # Upload if we wrote anything
+                tmp.flush()
+                os.fsync(tmp.fileno())
+
+            except Exception as e:
+                logging.error(f"Error streaming {indicator_type} to blob: {e}")
+                raise
+            finally:
+                tmp.close()
+
+        try:
+            # If nothing filtered, don't upload an empty blob
+            if filtered_count > 0:
+                with open(tmp_path, 'rb') as f:
+                    blob_client.upload_blob(f, overwrite=True)
+            else:
+                logging.info(f"No {indicator_type} objects passed the confidence filter (≥{self.confidence_threshold}).")
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+        processing_time = time.time() - start_time
+
+        result = {
+            'indicator_type': indicator_type,
+            'blob_name': blob_name,
+            'total_downloaded': total_downloaded,
+            'filtered_count': filtered_count,
+            'confidence_threshold': self.confidence_threshold,
+            'processing_time': processing_time
+        }
+
+        filter_rate = (filtered_count / total_downloaded * 100) if total_downloaded > 0 else 0
+        logging.debug(f"   • Confidence ≥{self.confidence_threshold}: {filtered_count:,} objects ({filter_rate:.1f}%)")
+        logging.debug(f"   • Processing time: {processing_time:.1f}s")
+        logging.debug(f"   • Blob created: {blob_name}")
+        logging.info(f"📊 SUMMARY: {filtered_count:,} of {total_downloaded:,} {indicator_type} indicators passed filtering")
+
+        return result
+
+    def upload_indicators_to_sentinel(self, stix_objects: List[Dict], batch_info: str = "") -> Dict[str, int]:
+        """Upload STIX indicators to Microsoft Sentinel with enhanced error handling."""
+        if not stix_objects:
+            return {'uploaded_count': 0, 'error_count': 0, 'throttle_events': 0}
         
-    Environment Variables Required:
-        - LUMEN_API_KEY: API key for Lumen threat intelligence service
-        - LUMEN_BASE_URL: Base URL for Lumen API endpoints
-        - CLIENT_ID: Azure AD application (client) ID
-        - CLIENT_SECRET: Azure AD application client secret  
-        - TENANT_ID: Azure AD tenant ID
-        - WORKSPACE_ID: Microsoft Sentinel workspace ID
+        access_token = self._get_access_token()
         
-    Note:
-        Function will exit with status code 1 if required environment variables
-        are missing or if the process fails.
-    """
-    # Log execution timestamp
-    utc_timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
-
-    if mytimer.past_due:
-        logging.info('The timer is past due!')
-
-    logging.info(f'Lumen Threat Feed Connector executed at: {utc_timestamp}')
-
-    # Validate all required environment variables are present
-    missing_vars = []
-    for var in REQUIRED_ENVIRONMENT_VARIABLES:
-        if not os.environ.get(var):
-            missing_vars.append(var)
-    
-    if missing_vars:
-        logging.error(f"Missing required environment variables: {missing_vars}")
-        sys.exit(1)
-
-    try:
-        # Use hardcoded indicator types (both IPv4 and domain)
-        logging.info(f"Processing indicator types: {', '.join(INDICATOR_TYPES)}")
+        # Prepare upload URL and headers
+        upload_url = f"https://api.ti.sentinel.azure.com/workspaces/{self.msal_setup.workspace_id}/threat-intelligence-stix-objects:upload"
         
-        # Initialize Lumen API configuration
-        lumen_setup = LumenSetup(
-            api_key=os.environ.get("LUMEN_API_KEY"),
-            base_url=os.environ.get("LUMEN_BASE_URL"),
-            tries=3
-        )
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+            'User-Agent': 'LumenSentinelConnector/4.0'
+        }
         
-        # Initialize Microsoft authentication configuration
-        msal_setup = MSALSetup(
-            tenant_id=os.environ.get("TENANT_ID"),
-            client_id=os.environ.get("CLIENT_ID"),
-            client_secret=os.environ.get("CLIENT_SECRET"),
-            workspace_id=os.environ.get("WORKSPACE_ID")
-        )
-
-        # Initialize and run the threat intelligence updater
-        updater = LumenSentinelUpdater(lumen_setup, msal_setup)
-        processed_count = updater.process_lumen_data(INDICATOR_TYPES)
+        params = {'api-version': '2024-02-01-preview'}
         
-        logging.info(f"Lumen Threat Feed Connector completed successfully. "
-                    f"Processed {processed_count} STIX objects.")
-
-    except Exception as e:
-        logging.error(f"Lumen Threat Feed Connector failed: {str(e)}", exc_info=True)
-        sys.exit(1)
+        # Process in chunks of 100 (Sentinel API limit)
+        chunk_size = 100
+        uploaded_count = 0
+        error_count = 0
+        throttle_events = 0
+        
+        for i in range(0, len(stix_objects), chunk_size):
+            chunk = stix_objects[i:i + chunk_size]
+            chunk_num = (i // chunk_size) + 1
+            total_chunks = (len(stix_objects) + chunk_size - 1) // chunk_size
+            
+            payload = {
+                'sourcesystem': 'Lumen',
+                'stixobjects': chunk
+            }
+            
+            max_retries = 3
+            retry_delay = 0.5
+            
+            for attempt in range(max_retries):
+                try:
+                    logging.debug(f"Uploading chunk {chunk_num}/{total_chunks} {batch_info} "
+                                f"({len(chunk)} indicators, attempt {attempt + 1})")
+                    
+                    response = self.session.post(upload_url, json=payload, headers=headers, params=params, timeout=60)
+                    
+                    # Log the response details (debug level to reduce noise)
+                    logging.debug(f"Sentinel API Response - Status: {response.status_code}")
+                    logging.debug(f"Sentinel API Response - Headers: {dict(response.headers)}")
+                    if response.status_code != 200:
+                        logging.warning(f"Sentinel API Error {response.status_code}: {response.text[:200]}...")
+                    else:
+                        logging.debug(f"Sentinel API Response - Body: {response.text[:500]}...")
+                    
+                    if response.status_code == 200:
+                        uploaded_count += len(chunk)
+                        logging.debug(f"✓ Chunk {chunk_num} uploaded successfully {batch_info} - {len(chunk)} indicators")
+                        break
+                    elif response.status_code == 429:
+                        # Rate limiting
+                        throttle_events += 1
+                        retry_after = int(response.headers.get('Retry-After', 60))
+                        logging.warning(f"Rate limited on chunk {chunk_num} {batch_info}, "
+                                      f"waiting {retry_after}s")
+                        time.sleep(retry_after)
+                        continue
+                    else:
+                        error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+                        if attempt == max_retries - 1:
+                            logging.error(f"✗ Chunk {chunk_num} failed {batch_info}: {error_msg}")
+                            error_count += len(chunk)
+                        else:
+                            logging.warning(f"Retry chunk {chunk_num} {batch_info}: {error_msg}")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2
+                            
+                except requests.exceptions.RequestException as e:
+                    if attempt == max_retries - 1:
+                        logging.error(f"✗ Chunk {chunk_num} network error {batch_info}: {e}")
+                        error_count += len(chunk)
+                    else:
+                        logging.warning(f"Retry chunk {chunk_num} {batch_info}: {e}")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+        
+        return {
+            'uploaded_count': uploaded_count,
+            'error_count': error_count,
+            'throttle_events': throttle_events
+        }

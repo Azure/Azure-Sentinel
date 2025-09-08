@@ -8,7 +8,7 @@ This Azure Functions data connector uploads threat intelligence indicators gener
 
 The connector automatically:
 - Downloads latest list of STIX-formatted ipv4 and domain threat intelligence indicators from Lumen Reputation API on a daily schedule.
-- Stores threat intel data to blog storage for processing.
+- Stores threat intel data to blob storage for processing.
 - Chunks are uploaded from blob storage to the Microsoft Sentinel `ThreatIntelIndicators` table via the [STIX Object Upload API](https://learn.microsoft.com/en-us/azure/sentinel/stix-objects-api).
 - Temp files in blob storage are cleaned up after upload is complete.
 
@@ -21,8 +21,6 @@ The connector automatically:
 ## Usage
 
 - Upload runs on a cron schedule (default `0 0 8 * * *`).
-- It is not recommended to run orchestration more than once a day.
-- You can manually trigger the upload by sending an HTTP POST to the `starter_function` endpoint.
 - The orchestration will process all indicators in batches, avoiding timeouts.
 
 ## Support
