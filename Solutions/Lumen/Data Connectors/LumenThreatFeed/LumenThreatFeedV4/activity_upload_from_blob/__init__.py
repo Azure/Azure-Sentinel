@@ -2,6 +2,8 @@ import logging
 import json
 import os
 import sys
+import tempfile
+from typing import Optional
 from azure.storage.blob import BlobServiceClient
 
 # Add parent directory to path for importing main module
@@ -28,17 +30,17 @@ def _get_blob_container():
 
 
 def main(work_unit):
-    """Activity uploads indicators from the given blob to Sentinel.
+    """Activity uploads indicators from the given blob to Sentinel without loading the whole blob into memory.
 
-    Supports batched processing via start_batch/num_batches to keep activity runtime bounded.
+    Reads the JSONL blob via a temp file and processes only the requested window of lines.
     """
     # Extract parameters
     blob_name = work_unit['blob_name']
     indicator_type = work_unit['indicator_type']
     batch_index = work_unit.get('batch_index', 0)
-    indicators_per_request = work_unit.get('indicators_per_request', 100)
-    start_batch = work_unit.get('start_batch')
-    num_batches = work_unit.get('num_batches')
+    indicators_per_request = int(work_unit.get('indicators_per_request', 100))
+    start_batch: Optional[int] = work_unit.get('start_batch')
+    num_batches: Optional[int] = work_unit.get('num_batches')
     config = work_unit['config']
     run_id = work_unit['run_id']
     work_unit_id = work_unit['work_unit_id']
@@ -49,7 +51,20 @@ def main(work_unit):
     uploaded_total = 0
     error_total = 0
     throttle_total = 0
-    batch_objects = None  # for error reporting
+
+    # Determine line-number window to process
+    if start_batch is not None and num_batches is not None:
+        first_index = start_batch * indicators_per_request
+        last_index_exclusive = (start_batch + num_batches) * indicators_per_request
+        window_desc = f"batches {start_batch + 1}-{start_batch + num_batches}"
+    elif process_all:
+        first_index = 0
+        last_index_exclusive = None  # until EOF
+        window_desc = "all"
+    else:
+        first_index = batch_index * indicators_per_request
+        last_index_exclusive = first_index + indicators_per_request
+        window_desc = f"batch {batch_index + 1}"
 
     try:
         # Initialize updater
@@ -58,51 +73,61 @@ def main(work_unit):
             MSALSetup(config['TENANT_ID'], config['CLIENT_ID'], config['CLIENT_SECRET'], config['WORKSPACE_ID'])
         )
 
-        # Get blob and read content
+        # Prepare blob download
         container_client = _get_blob_container()
         blob_client = container_client.get_blob_client(blob_name)
-        blob_data = blob_client.download_blob().readall().decode('utf-8')
 
-        # Parse JSONL into objects
-        all_objects = []
-        for line in blob_data.strip().split('\n'):
-            if line:
-                all_objects.append(json.loads(line))
+        # Stream download to a temp file to avoid memory spikes
+        with tempfile.NamedTemporaryFile(mode='wb', delete=False) as tmp:
+            tmp_path = tmp.name
+            downloader = blob_client.download_blob()
+            downloader.readinto(tmp)
 
-        if start_batch is not None and num_batches is not None:
-            # Process a bounded window of batches
-            for b in range(start_batch, start_batch + num_batches):
-                start_idx = b * indicators_per_request
-                end_idx = min(start_idx + indicators_per_request, len(all_objects))
-                chunk = all_objects[start_idx:end_idx]
-                if not chunk:
-                    break
-                result = updater.upload_indicators_to_sentinel(chunk, f"({indicator_type} batch {b + 1})")
-                uploaded_total += result.get('uploaded_count', 0)
-                error_total += result.get('error_count', 0)
-                throttle_total += result.get('throttle_events', 0)
-        elif process_all:
-            # Back-compat: process the entire blob in chunks
-            for i in range(0, len(all_objects), indicators_per_request):
-                chunk = all_objects[i:i + indicators_per_request]
-                if not chunk:
-                    break
-                result = updater.upload_indicators_to_sentinel(chunk, f"({indicator_type} batch {i // indicators_per_request + 1})")
-                uploaded_total += result.get('uploaded_count', 0)
-                error_total += result.get('error_count', 0)
-                throttle_total += result.get('throttle_events', 0)
-        else:
-            # Single batch slice
-            start_idx = batch_index * indicators_per_request
-            end_idx = min(start_idx + indicators_per_request, len(all_objects))
-            batch_objects = all_objects[start_idx:end_idx]
-            if not batch_objects:
-                logging.debug(f"No objects in batch {batch_index} for {work_unit_id}")
-                return {'uploaded_count': 0, 'error_count': 0, 'throttle_events': 0}
-            result = updater.upload_indicators_to_sentinel(batch_objects, f"({indicator_type} batch {batch_index + 1})")
+        # Now iterate the file line by line and process only selected window
+        buffer = []
+        CHUNK = indicators_per_request  # logical chunk to send to API
+        current_index = 0
+
+        def flush_buffer(batch_info_suffix: str):
+            nonlocal uploaded_total, error_total, throttle_total, buffer
+            if not buffer:
+                return
+            result = updater.upload_indicators_to_sentinel(buffer, batch_info_suffix)
             uploaded_total += result.get('uploaded_count', 0)
             error_total += result.get('error_count', 0)
             throttle_total += result.get('throttle_events', 0)
+            buffer = []
+
+        try:
+            with open(tmp_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if not line:
+                        continue
+                    # Process only if within window
+                    if current_index < first_index:
+                        current_index += 1
+                        continue
+                    if last_index_exclusive is not None and current_index >= last_index_exclusive:
+                        break
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        # skip malformed line but count as error of one item
+                        error_total += 1
+                        current_index += 1
+                        continue
+                    buffer.append(obj)
+                    if len(buffer) >= CHUNK:
+                        flush_buffer(f"({indicator_type} {window_desc})")
+                    current_index += 1
+
+                # Flush remaining
+                flush_buffer(f"({indicator_type} {window_desc})")
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
         logging.debug(
             f"✓ Work unit {work_unit_id} completed: uploaded={uploaded_total}, errors={error_total}, throttles={throttle_total}"
@@ -113,7 +138,7 @@ def main(work_unit):
         logging.error(f"Activity error for {work_unit_id}: {e}", exc_info=True)
         return {
             'uploaded_count': 0,
-            'error_count': len(batch_objects) if batch_objects else 0,
-            'throttle_events': 0,
+            'error_count': error_total,
+            'throttle_events': throttle_total,
             'error': str(e)
         }
