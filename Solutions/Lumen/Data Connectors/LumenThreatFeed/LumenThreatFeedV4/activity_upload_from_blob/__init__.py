@@ -26,15 +26,21 @@ def _get_blob_container():
     return container_client
 
 def main(work_unit):
-    """Activity function to upload indicators from blob storage to Sentinel."""
+    """Activity uploads indicators from the given blob to Sentinel.
+
+    Modes:
+    - process_all=True: upload the entire blob in chunks of indicators_per_request.
+    - process_all=False (default): upload a single slice based on batch_index.
+    """
     try:
         blob_name = work_unit['blob_name']
         indicator_type = work_unit['indicator_type']
-        batch_index = work_unit['batch_index']
-        indicators_per_request = work_unit['indicators_per_request']
+        batch_index = work_unit.get('batch_index', 0)
+        indicators_per_request = work_unit.get('indicators_per_request', 100)
         config = work_unit['config']
         run_id = work_unit['run_id']
         work_unit_id = work_unit['work_unit_id']
+        process_all = work_unit.get('process_all', False)
         
         logging.debug(f"Processing work unit: {work_unit_id}")
         
@@ -58,25 +64,39 @@ def main(work_unit):
             if line:
                 all_objects.append(json.loads(line))
         
-        # Calculate slice for this batch
-        start_idx = batch_index * indicators_per_request
-        end_idx = min(start_idx + indicators_per_request, len(all_objects))
-        batch_objects = all_objects[start_idx:end_idx]
-        
-        if not batch_objects:
-            logging.debug(f"No objects in batch {batch_index} for {work_unit_id}")
-            return {'uploaded_count': 0, 'error_count': 0, 'throttle_events': 0}
-        
-        logging.debug(f"Uploading {len(batch_objects)} objects from {work_unit_id}")
-        
-        # Upload to Sentinel
-        result = updater.upload_indicators_to_sentinel(
-            batch_objects, 
-            f"({indicator_type} batch {batch_index + 1})"
-        )
-        
-        logging.debug(f"✓ Work unit {work_unit_id} completed: {result}")
-        return result
+        uploaded_total = 0
+        error_total = 0
+        throttle_total = 0
+
+        if process_all:
+            # Upload entire list in chunks of indicators_per_request
+            for i in range(0, len(all_objects), indicators_per_request):
+                chunk = all_objects[i:i + indicators_per_request]
+                if not chunk:
+                    break
+                result = updater.upload_indicators_to_sentinel(
+                    chunk, f"({indicator_type} batch {i//indicators_per_request + 1})"
+                )
+                uploaded_total += result.get('uploaded_count', 0)
+                error_total += result.get('error_count', 0)
+                throttle_total += result.get('throttle_events', 0)
+        else:
+            # Single-slice mode
+            start_idx = batch_index * indicators_per_request
+            end_idx = min(start_idx + indicators_per_request, len(all_objects))
+            batch_objects = all_objects[start_idx:end_idx]
+            if not batch_objects:
+                logging.debug(f"No objects in batch {batch_index} for {work_unit_id}")
+                return {'uploaded_count': 0, 'error_count': 0, 'throttle_events': 0}
+            result = updater.upload_indicators_to_sentinel(
+                batch_objects, f"({indicator_type} batch {batch_index + 1})"
+            )
+            uploaded_total += result.get('uploaded_count', 0)
+            error_total += result.get('error_count', 0)
+            throttle_total += result.get('throttle_events', 0)
+
+    logging.debug(f"✓ Work unit {work_unit_id} completed: uploaded={uploaded_total}, errors={error_total}, throttles={throttle_total}")
+    return {'uploaded_count': uploaded_total, 'error_count': error_total, 'throttle_events': throttle_total}
         
     except Exception as e:
         logging.error(f"Activity error for {work_unit_id}: {e}", exc_info=True)

@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 import azure.functions as func
 import azure.durable_functions as df
 
@@ -16,61 +17,44 @@ def orchestrator_function(context):
         indicators_per_request = input_data.get('indicators_per_request', 100)
         max_concurrent = input_data.get('max_concurrent_activities', 5)
         
-        # Calculate work units with better distribution
-        work_units = []
-        total_estimated_objects = 0
-        
-        for source in blob_sources:
-            filtered_count = source['filtered_count']
-            total_estimated_objects += filtered_count
-            
-            # Calculate number of batches needed
-            num_batches = (filtered_count + indicators_per_request - 1) // indicators_per_request
-            
-            for batch_idx in range(num_batches):
-                work_units.append({
-                    'blob_name': source['blob_name'],
-                    'indicator_type': source['indicator_type'],
-                    'batch_index': batch_idx,
-                    'indicators_per_request': indicators_per_request,
-                    'config': config,
-                    'run_id': run_id,
-                    'work_unit_id': f"{run_id}-{source['indicator_type']}-{batch_idx:03d}"
-                })
-        
-        total_work_units = len(work_units)
-        
-        # Process work units in controlled batches
+        # New approach: schedule one activity per blob source; the activity uploads in chunks of 100 internally.
+        total_work_units = len(blob_sources)
+
+        activity_inputs = [
+            {
+                'blob_name': source['blob_name'],
+                'indicator_type': source['indicator_type'],
+                'indicators_per_request': indicators_per_request,
+                'config': config,
+                'run_id': run_id,
+                'process_all': True,
+                'work_unit_id': f"{run_id}-{source['indicator_type']}"
+            }
+            for source in blob_sources
+        ]
+
+        # Execute with limited parallelism
         results = []
         total_throttle_events = 0
         batch_size = max_concurrent
-        
-        for i in range(0, len(work_units), batch_size):
-            batch = work_units[i:i + batch_size]
+        for i in range(0, len(activity_inputs), batch_size):
+            batch = activity_inputs[i:i + batch_size]
             batch_num = (i // batch_size) + 1
-            total_batches = (len(work_units) + batch_size - 1) // batch_size
-            
-            # Execute batch in parallel
-            batch_tasks = [
-                context.call_activity('activity_upload_from_blob', unit) 
-                for unit in batch
-            ]
+            total_batches = (len(activity_inputs) + batch_size - 1) // batch_size
+
+            batch_tasks = [context.call_activity('activity_upload_from_blob', inp) for inp in batch]
             batch_results = yield context.task_all(batch_tasks)
             results.extend(batch_results)
-            
-            # Aggregate throttle events
+
             batch_throttle = sum(r.get('throttle_events', 0) for r in batch_results if r)
             total_throttle_events += batch_throttle
-            
-            # Log progress every 10 batches or if throttling
-            if batch_num % 10 == 0 or batch_throttle > 0 or batch_num == total_batches:
-                batch_uploaded = sum(r.get('uploaded_count', 0) for r in batch_results if r)
-                total_uploaded_so_far = sum(r.get('uploaded_count', 0) for r in results if r)
-                logging.info(f"Progress: Batch {batch_num}/{total_batches} - {total_uploaded_so_far:,} uploaded")
-                
+
+            total_uploaded_so_far = sum(r.get('uploaded_count', 0) for r in results if r)
+            logging.info(f"Progress: Blob batch {batch_num}/{total_batches} - {total_uploaded_so_far:,} uploaded")
+
             if batch_throttle > 0:
-                # Add delay between batches if throttling occurred
-                yield context.create_timer(context.current_utc_datetime.replace(second=context.current_utc_datetime.second + 30))
+                # deterministic delay
+                yield context.create_timer(context.current_utc_datetime + timedelta(seconds=30))
         
         # Cleanup: Remove processed blobs
         cleanup_tasks = [
