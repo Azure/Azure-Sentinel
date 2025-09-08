@@ -1,31 +1,20 @@
+import logging
 import azure.functions as func
 import azure.durable_functions as df
-import json
-import logging
 import os
 import time
 import uuid
-import asyncio
 from datetime import datetime, timezone
 from azure.storage.blob import BlobServiceClient
-from main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
+from ..main import LumenSetup, MSALSetup, LumenSentinelUpdater, INDICATOR_TYPES
 
 # Suppress verbose Azure SDK logging
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.WARNING)
 logging.getLogger('azure.storage').setLevel(logging.WARNING)
 
-# Import the durable functions blueprint
-from durable_blueprints import bp
-
 # Configuration constants
 CONFIDENCE_THRESHOLD = int(os.environ.get('LUMEN_CONFIDENCE_THRESHOLD', '60'))
 BLOB_CONTAINER = os.environ.get('LUMEN_BLOB_CONTAINER', 'lumenthreatfeed')
-
-# Create the main function app
-app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
-
-# Register the durable functions blueprint
-app.register_functions(bp)
 
 def _get_blob_container():
     """Get blob container client, creating container if needed."""
@@ -95,116 +84,7 @@ def _generate_run_id() -> str:
     unique_id = uuid.uuid4().hex[:6]
     return f"{timestamp}-{unique_id}"
 
-@app.route(route="starter", auth_level=func.AuthLevel.FUNCTION, methods=["POST"])
-@app.durable_client_input(client_name="client")
-async def http_starter(req: func.HttpRequest, client) -> func.HttpResponse:
-    """HTTP starter function with durable orchestration."""
-    try:
-        logging.info("=== LUMEN THREAT FEED STARTED ===")
-        
-        # Housekeeping: Clean up any stale files from previous runs
-        logging.info("🧹 Performing housekeeping...")
-        try:
-            container_client = _get_blob_container()
-            _cleanup_blob_container(container_client)
-        except Exception as e:
-            logging.warning(f"Housekeeping failed: {e}")
-        
-        run_id = _generate_run_id()
-        logging.info(f"Generated run ID: {run_id}")
-        
-        # Get environment configuration
-        config = {
-            'LUMEN_API_KEY': os.environ.get('LUMEN_API_KEY'),
-            'LUMEN_BASE_URL': os.environ.get('LUMEN_BASE_URL'), 
-            'TENANT_ID': os.environ.get('TENANT_ID'),
-            'CLIENT_ID': os.environ.get('CLIENT_ID'),
-            'CLIENT_SECRET': os.environ.get('CLIENT_SECRET'),
-            'WORKSPACE_ID': os.environ.get('WORKSPACE_ID')
-        }
-        
-        # Validate required config
-        missing_vars = [k for k, v in config.items() if not v]
-        if missing_vars:
-            return func.HttpResponse(
-                json.dumps({"error": f"Missing environment variables: {missing_vars}"}),
-                status_code=400,
-                mimetype="application/json"
-            )
-        
-        # Initialize components
-        lumen_setup = LumenSetup(config['LUMEN_API_KEY'], config['LUMEN_BASE_URL'])
-        updater = LumenSentinelUpdater(
-            lumen_setup,
-            MSALSetup(config['TENANT_ID'], config['CLIENT_ID'], 
-                     config['CLIENT_SECRET'], config['WORKSPACE_ID'])
-        )
-        
-        updater.log_config()
-        
-        # Get blob container
-        container_client = _get_blob_container()
-        
-        # Phase 1: Stream data to blob storage
-        logging.info("=== PHASE 1: STREAMING TO BLOB STORAGE ===")
-        
-        # Get presigned URLs
-        presigned_urls = updater.get_lumen_presigned_urls(INDICATOR_TYPES)
-        
-        if not presigned_urls:
-            return func.HttpResponse(
-                json.dumps({"error": "No presigned URLs obtained"}),
-                status_code=500,
-                mimetype="application/json"
-            )
-        
-        # Stream data to blobs
-        blob_sources = []
-        for indicator_type, presigned_url in presigned_urls.items():
-            try:
-                result = updater.stream_and_filter_to_blob(
-                    container_client, indicator_type, presigned_url, run_id
-                )
-                blob_sources.append(result)
-                logging.info(f"✓ Streamed {indicator_type}: {result['filtered_count']:,} objects")
-            except Exception as e:
-                logging.error(f"✗ Failed to stream {indicator_type}: {e}")
-        
-        if not blob_sources:
-            return func.HttpResponse(
-                json.dumps({"error": "No data was successfully streamed to blobs"}),
-                status_code=500,
-                mimetype="application/json"
-            )
-        
-        # Phase 2: Start orchestration for upload
-        logging.info("=== PHASE 2: STARTING ORCHESTRATION ===")
-        
-        orchestration_input = {
-            'run_id': run_id,
-            'blob_sources': blob_sources,
-            'config': config,
-            'indicators_per_request': 100,  # Keep at 100 (Sentinel API limit)
-            'max_concurrent_activities': 5  # Increased concurrency for performance
-        }
-        
-        instance_id = await client.start_new("orchestrator_function", None, orchestration_input)
-        
-        logging.info(f"✓ Orchestration started: {instance_id}")
-        return client.create_check_status_response(req, instance_id)
-        
-    except Exception as e:
-        logging.error(f"HTTP starter error: {e}", exc_info=True)
-        return func.HttpResponse(
-            json.dumps({"error": str(e)}),
-            status_code=500,
-            mimetype="application/json"
-        )
-
-# Timer trigger for scheduled runs
-@app.schedule(schedule="0 0 8 * * *", arg_name="mytimer", run_on_startup=False, use_monitor=False)
-@app.durable_client_input(client_name="client")
-async def timer_trigger(mytimer: func.TimerRequest, client) -> None:
+async def main(mytimer: func.TimerRequest, starter: str) -> None:
     """Timer trigger for scheduled threat intelligence updates."""
     try:
         logging.info("=== TIMER TRIGGER FIRED ===")
@@ -218,6 +98,7 @@ async def timer_trigger(mytimer: func.TimerRequest, client) -> None:
         except Exception as e:
             logging.warning(f"Housekeeping failed: {e}")
         
+        client = df.DurableOrchestrationClient(starter)
         run_id = _generate_run_id()
         logging.info(f"Generated run ID: {run_id}")
         
