@@ -19,7 +19,7 @@ This custom data connector uses a Function App to pull MongoDB Atlas (MDBA) logs
     - Application Administrator
     - Directory Readers
     - Directory Writers
-    - Priviledged Role Administrator
+    - Privileged Role Administrator
 4. A MongoDB Atlas account:
     - Cluster Id
     - Group Id
