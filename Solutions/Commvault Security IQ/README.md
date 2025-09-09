@@ -1,31 +1,45 @@
-Commvault - Sentinel Integration
-================================
+Commvault Cloud - Microsoft Sentinel Integration
+===============================================
 
-Integrate Commvault with Sentinel for automated alert/data ingestion and incident creation via Analytic Rules.
+This SOAR integration connects Commvault Cloud with Microsoft Sentinel to enable automated incident creation and response through Analytic Rules and Playbooks.
 
-Prerequisites
--------------
+## Overview
+This solution provides:
+- **Data Ingestion**: Automated collection of Commvault security alerts and anomalies
+- **Incident Creation**: Automatic creation of Sentinel incidents based on Commvault security events
+- **Incident Response**: Playbooks for automated remediation actions (disable users, disable data aging, etc.)
 
-*   Commvault/Metallic admin access.
-*   Azure RG/Subscription admin access.
-*   Azure Cloud Shell access.
-*   Microsoft Sentinel instance (in Azure RG).
-*   Azure Log Analytic Workspace (in Azure RG).
+## Prerequisites
+Before beginning the installation, ensure you have:
 
-Required Assets
----------------
+### Commvault Requirements
+- **Administrative Access**: Admin or Tenant Admin privileges in Commvault Cloud/Metallic
+- **API Access**: Ability to generate access tokens for API integration
 
-*   **KeyVault:** Stores credentials as secrets.
-    *   **Secrets:**
-        *   access-token : Commvault/Metallic access token.
-        *   environment-endpoint-url : Commvault/Metallic endpoint URL (e.g., https://`hostname`/commandcenter/api or http://`hostname`:`port`/SearchSvc/CVWebService.svc).
+### Azure Requirements
+- **Subscription Access**: Contributor or Owner permissions on the Azure subscription
+- **Resource Group Access**: Ability to create and manage resources in the target resource group
+- **Microsoft Sentinel**: An active Sentinel workspace deployed in your Azure environment
+- **Log Analytics Workspace**: A Log Analytics workspace associated with your Sentinel instance
+- **Azure Cloud Shell**: Access to Azure Cloud Shell with PowerShell support
+
+## Required Azure Resources
+The following Azure resources will be created or configured during this installation:
+
+### Key Vault
+- **Purpose**: Securely stores Commvault credentials and API endpoints
+- **Required Secrets**:
+  - `access-token`: Your Commvault Cloud access token
+  - `environment-endpoint-url`: Your Commvault Cloud API endpoint URL (Commvault/Metallic endpoint URL : https://`hostname`/commandcenter/api )
+  - `refresh-token`: Your Commvault Cloud refresh token
+  - `token-expiry-timestamp`: Auto-managed (by data connector) token expiration tracking
 
 Installation
 ------------
 
 **1\. Create Access Token in Commvault:**
 
-*   Follow the instructions in [Creating an Access Token](https://documentation.commvault.com/2024e/essential/creating_access_token.html).
+*   Follow the instructions in [Creating an Access Token / Refresh Token](https://documentation.commvault.com/2024e/essential/creating_access_token.html).
 *   Ensure the user creating the token has **Admin** or **Tenant Admin** privileges.
 
 **2\. Create KeyVault:**
@@ -36,6 +50,7 @@ Installation
 
 *   Azure Portal -> KeyVault -> Secrets -> Generate/Import -> Manual:
     *   Name: access-token, Value: (Your Commvault/Metallic access token), Enabled: Yes -> Create.
+    *   Name: refresh-token, Value: (Your Commvault/Metallic refresh token), Enabled: Yes -> Create.
     *   Name: environment-endpoint-url, Value: (Your Commvault/Metallic endpoint's URL), Enabled: Yes -> Create.
 
 **4\. Install Commvault Cloud Solution:**
@@ -49,7 +64,15 @@ Installation
 
 **6\. Upload and Run Setup Script:**
 
-> **Note:** You must have sufficient permissions to view and purge secrets in the Azure Key Vault before running the setup script. Without these permissions, the script will fail to update or remove existing secrets as required.
+**Why run the Setup Script?**
+
+The setup script automates the creation of Azure resources needed for automated incident response. It will:
+
+*   Create an Automation Account (named Commvault-Automation-Account) and deploys runbooks for remediation actions (disable user, disable data aging, etc.)
+*   Generate refresh tokens in your Key Vault (if they don't already exist)
+*   Validate that all required secrets are properly configured
+
+> **Note:** You must have sufficient permissions to view and edit secrets in the Azure Key Vault before running the setup script. Without these permissions, the script will fail to update existing secrets as required.
 
 *   Open **Azure Cloud Shell** in PowerShell mode:
     1. Navigate to the **Azure Portal**.
@@ -62,7 +85,6 @@ Installation
 **7\. Create Analytic Rules:**
 
 *   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> "Commvault Cloud Alert" -> Create Rule -> Next -> Save.
-*   Repeat for other Analytic Rules.
 
 **8\. Create Playbooks:**
 
