@@ -80,14 +80,17 @@ class AzureSentinel:
         self.job_state_table_store = JobStateTableStore(
             connection_string, self.table_name)
 
-    def _upload_in_chunks(self, client, logs, max_bytes=1 * 1024 * 1024):
+    def _upload_in_chunks(self, client, logs, max_bytes=1 * 1024 * 1024) -> dict:
         """
         Splits a JSON array into smaller JSON arrays each ≤ max_bytes in size.
 
         :param logs: list of JSON-serializable log entries
         :param max_bytes: maximum size per chunk in bytes (default 1MB)
+        :return 
         """
         current_chunk = []
+        upload_chunk_count = 0
+        upload_fail_count = 0
 
         for item in logs:
             # Test adding the item to the current chunk
@@ -105,8 +108,10 @@ class AzureSentinel:
                             "Calling client.upload rule_id=%s, stream_name=%s", self.azure_dcr_immutableid, self.azure_stream_name)
                         client.upload(rule_id=self.azure_dcr_immutableid,
                                       stream_name=self.azure_stream_name, logs=current_chunk)
+                        upload_chunk_count += 1
                     except HttpResponseError as e:
                         logging.error("Upload failed: %s", e)
+                        upload_fail_count += 1
 
                 current_chunk = [item]
 
@@ -116,8 +121,14 @@ class AzureSentinel:
                 "Calling client.upload rule_id=%s, stream_name=%s", self.azure_dcr_immutableid, self.azure_stream_name)
             client.upload(rule_id=self.azure_dcr_immutableid,
                           stream_name=self.azure_stream_name, logs=current_chunk)
+            upload_chunk_count += 1
 
-    def upload_data_to_log_analytics_table(self, json_log):
+        return {
+            "upload_chunk_count": upload_chunk_count,
+            "upload_fail_count": upload_fail_count
+        }
+
+    def upload_data_to_log_analytics_table(self, json_log) -> dict:
         """Authenticates with Azure before calling the LogIngestionAPI to upload logs."""
 
         credential = ManagedIdentityCredential(client_id=self.azure_client_id)
@@ -125,7 +136,7 @@ class AzureSentinel:
         client = LogsIngestionClient(
             endpoint=self.azure_dce_endpoint, credential=credential, logging_enable=True)
 
-        self._upload_in_chunks(client, json_log, self.upload_chunk_size)
+        return self._upload_in_chunks(client, json_log, self.upload_chunk_size)
 
     def get_last_update_time(self):
         """upserts a row with last_time_stamp in JobStatus table"""
@@ -167,6 +178,11 @@ class MongoDbConnection:
         self.mdba_access_token = None
         self.timeout = timeout  # timeout in seconds
         self.filtered_categories = []
+        self.skipped_entries = 0
+        self.included_entries = 0
+        self.malformed_entries = 0
+        self.total_size_downloaded = 0
+        self.azure_sentinel_stats = {}
 
         self.mdba_include_access_logs = config.get("mdba_include_access_logs")
         if self.mdba_include_access_logs:
@@ -309,9 +325,12 @@ class MongoDbConnection:
 
         return False
 
-    def get_cluster_logs(self, start_date, end_date):
+    def get_cluster_logs(self, start_date, end_date) -> dict:
         """
         Retrieves logs from MongoDB Atlas API within a time frame.
+        :param start_date: time in seconds since epoch of earliest log message to retrieve.
+        :param end_date: time in seconds since epoch of latest log message to retrieve.
+        :return JSON object of response status and either json_lines containing all matched log entries or error
         """
 
         mdba_access_token = self.get_access_token()
@@ -329,45 +348,44 @@ class MongoDbConnection:
         logging.info("mongodb_url: %s", mongodb_url)
 
         try:
+            json_lines = []
+
             with requests.get(mongodb_url, headers=headers, stream=True, timeout=self.timeout) as response:
                 response.raise_for_status()
+                logging.info("retrieved response from MongoDB")
 
-                buffer = BytesIO()
-                for chunk in response.iter_content(chunk_size=1024 * 1024):  # 1MB
-                    buffer.write(chunk)
-                buffer.seek(0)
+                # wrap response.raw (a file-like object) with gzip for streaming decompression
+                with gzip.GzipFile(fileobj=response.raw) as gz:
+                    for raw_line in gz:
+                        self.total_size_downloaded += len(raw_line)
+                        # every ~10 MB
+                        if self.total_size_downloaded % (10 * 1024 * 1024) < len(raw_line):
+                            logging.info(
+                                "downloaded so far: %s bytes", self.total_size_downloaded)
 
-                with gzip.GzipFile(fileobj=buffer) as gz:
-                    ndjson_data = gz.read().decode("utf-8")
-
-                json_lines = []
-                self.skipped_entries = 0
-                self.included_entries = 0
-                self.malformed_entries = 0
-
-                for line in ndjson_data.splitlines():
-                    if not line.strip():
-                        continue
-
-                    try:
-                        raw_entry = json.loads(line)
-
-                        if self._should_skip_entry(raw_entry):
-                            self.skipped_entries += 1
+                        line = raw_line.decode("utf-8").strip()
+                        if not line:
                             continue
 
-                        transformed = self._transform_log(raw_entry)
-                        json_lines.append(transformed)
-                        self.included_entries += 1
+                        try:
+                            raw_entry = json.loads(line)
 
-                    except json.JSONDecodeError:
-                        self.malformed_entries += 1
-                        continue  # skip malformed lines
+                            if self._should_skip_entry(raw_entry):
+                                self.skipped_entries += 1
+                                continue
 
-                return {
-                    "status": response.status_code,
-                    "logs": json_lines
-                }
+                            transformed = self._transform_log(raw_entry)
+                            json_lines.append(transformed)
+                            self.included_entries += 1
+
+                        except json.JSONDecodeError:
+                            self.malformed_entries += 1
+                            continue
+
+            return {
+                "status": response.status_code,
+                "logs": json_lines
+            }
 
         except requests.Timeout:
             logging.error("get_cluster_logs timeout")
@@ -376,7 +394,7 @@ class MongoDbConnection:
             logging.error("get_cluster_logs http error: %s", str(e))
             return {"status": response.status_code, "error": str(e)}
         except Exception as e:
-            logging.error("get_cluster_logs  exeption %s", e)
+            logging.error("get_cluster_logs  exception %s", e, exc_info=True)
             return {"status": "error", "error": str(e)}
 
     def check_for_mdba_log_activity(self):
@@ -405,7 +423,8 @@ class MongoDbConnection:
             if len(logs) > 0:
                 logging.info(
                     "Calling azure_sentinel.upload_data_to_log_analytics_table with %s rows", len(logs))
-                azure_sentinel.upload_data_to_log_analytics_table(logs)
+                self.azure_sentinel_stats = azure_sentinel.upload_data_to_log_analytics_table(
+                    logs)
             else:
                 logging.warning("MongoDbConnection. No logs retrieved.")
 
@@ -415,14 +434,15 @@ class MongoDbConnection:
                 "MongoDbConnection.check_for_mdba_log_activity error retrieving logs: %s", result)
 
     def get_monitoring_statistics(self) -> dict:
-        if hasattr(self, 'included_entries') and hasattr(self, 'skipped_entries') and hasattr(self, 'malformed_entries'):
-            return {
-                "included_entries": self.included_entries,
-                "skipped_entries": self.skipped_entries,
-                "malformed_entries": self.malformed_entries
-            }
-        else:
-            return {}
+        """Health monitoring statistics"""
+
+        return {
+            "included_entries": self.included_entries,
+            "skipped_entries": self.skipped_entries,
+            "malformed_entries": self.malformed_entries,
+            "total_size_downloaded": self.total_size_downloaded,
+            "azure_sentinel_stats": self.azure_sentinel_stats
+        }
 
 
 def configuration_set_up():
@@ -521,9 +541,17 @@ def main(mytimer: func.TimerRequest) -> None:
                  utc_timestamp_start).total_seconds()
     time_diff_str = f"{time_diff:.3f}"
     stats = conn.get_monitoring_statistics()
+    included_entries = stats.get("included_entries", 0)
+    skipped_entries = stats.get("skipped_entries", 0)
+    malformed_entries = stats.get("malformed_entries", 0)
+    total_entries = included_entries + skipped_entries + malformed_entries
+    total_size_downloaded = stats.get("total_size_downloaded", 0)
+    azure_sentinel_stats = stats.get("azure_sentinel_stats")
+    upload_chunk_count = azure_sentinel_stats.get("upload_chunk_count", 0)
+    upload_fail_count = azure_sentinel_stats.get("upload_fail_count", 0)
 
-    logging.info("MongoDBAtlasLogs connector monitoring. start time utc: %s, end time utc: %s, execution time(seconds): %s, matching entries: %s, non matching entries: %s, malformed entries: %s",
-                 utc_timestamp_start.isoformat(), utc_timestamp_final.isoformat(), time_diff_str, stats.get("included_entries", 0), stats.get("skipped_entries", 0), stats.get("malformed_entries", 0))
+    logging.info("MongoDBAtlasLogs connector monitoring. start time utc: %s, end time utc: %s, execution time(seconds): %s, total_entries: %s, matching entries: %s, non matching entries: %s, malformed entries: %s, total_size_downloaded: %s, upload_chunk_count: %s, upload_fail_count: %s",
+                 utc_timestamp_start.isoformat(), utc_timestamp_final.isoformat(), time_diff_str, total_entries, included_entries, skipped_entries, malformed_entries, total_size_downloaded, upload_chunk_count, upload_fail_count)
 
     if 'mytimer' in locals():
         if mytimer.past_due:
