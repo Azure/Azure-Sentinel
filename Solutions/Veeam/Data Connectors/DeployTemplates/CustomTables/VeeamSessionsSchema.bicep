@@ -1,9 +1,9 @@
-// filepath: d:\Forks\Azure-Sentinel-NK\Solutions\Veeam\Data Connectors\CustomTables\VeeamSessionSchema.bicep
+// filepath: d:\Forks\Azure-Sentinel-NK\Solutions\Veeam\Data Connectors\CustomTables\VeeamSessionssSchema.bicep
 param workspaceName string
 param location string
 param retentionInDays int = 30
 
-var baseName = 'VeeamSession'
+var baseName = 'VeeamSessions'
 
 // Derived names
 var tableName = '${baseName}_CL'
@@ -41,7 +41,7 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06
   name: workspaceName
 }
 
-resource VeeamSessionTable_CL 'Microsoft.OperationalInsights/workspaces/tables@2025-02-01' = {
+resource VeeamSessionsTable_CL 'Microsoft.OperationalInsights/workspaces/tables@2025-02-01' = {
   parent: logAnalyticsWorkspace
   name: tableName
   properties: {
@@ -70,7 +70,7 @@ module sessionDCE './dceTemplate.bicep' = {
 resource dataCollectionRule 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
   name: dcrName
   location: location
-  dependsOn: [VeeamSessionTable_CL]
+  dependsOn: [VeeamSessionsTable_CL]
   properties: {
     dataCollectionEndpointId: sessionDCE.outputs.dceResourceId
     streamDeclarations: {
