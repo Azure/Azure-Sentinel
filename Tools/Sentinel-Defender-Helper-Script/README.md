@@ -37,7 +37,7 @@ The findings are printed to the [shell](https://github.com/mariocuomo/Sentinel-T
 
 ## Reference
 The script is developed by [Mario Cuomo](https://www.linkedin.com/in/mariocuomo/), Cloud Solution Architect at Microsoft. <br>
-All the different versions of the script are available here (https://github.com/mariocuomo/Sentinel-Transition-To-Defender-Helper-Script/tree/main)
+All the different versions of the script are available [here](https://github.com/mariocuomo/Sentinel-Transition-To-Defender-Helper-Script/tree/main)
 
 
 
