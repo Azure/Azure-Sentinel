@@ -22,20 +22,23 @@ query: |
   let admins = BoxEvents
   | where TimeGenerated between (ago(lbperiod_start) .. ago(lbperiod_end))
   | where EventType =~ 'ADMIN_LOGIN'
-  | summarize makeset(SourceLogin);
+  | summarize make_set(SourceLogin);
   BoxEvents
   | where EventType =~ 'ADMIN_LOGIN'
   | where SourceLogin !in (admins)
-  | extend AccountCustomEntity = SourceLogin
-  | extend IPCustomEntity = SrcIpAddr
+  | extend UpnDomain = tostring(split(SourceLogin, "@")[1])
+  | summarize EventCount = count(), DistinctLogins = dcount(SourceLogin) by UpnDomain
+  | project UpnDomain, EventCount, DistinctLogins
+  | order by EventCount desc
+
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: SourceLogin
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: SrcIpAddr
+version: 1.0.1
 kind: Scheduled
