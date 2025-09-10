@@ -33,9 +33,7 @@ query: |
   let defense_evasion_events = PowerPlatformAdminActivity
       | where TimeGenerated >= ago(query_lookback)
       | where EventOriginalType == "TenantIsolationOperation"
-      | mv-expand PropertyCollection
-      | where PropertyCollection.Name == "powerplatform.analytics.resource.tenant.isolation_policy.enabled"
-      | where PropertyCollection.Value == "False"
+      | where Properties["powerplatform.analytics.resource.tenant.isolation_policy.enabled"] == "False"
       | summarize
           TenantIsolationRemovalTimestamp = max(TimeGenerated)
           by SecurityDisablingUser = ActorName
@@ -43,12 +41,12 @@ query: |
           PowerPlatformAdminActivity
           | where TimeGenerated >= ago(query_lookback)
           | where EventOriginalType == "EnvironmentPropertyChange"
-          | where PropertyCollection has "Property: SecurityGroupId, Old Value: , New Value: "
-          | mv-expand PropertyCollection
+          | where Properties has "Property: SecurityGroupId, Old Value: , New Value: "
           | extend
               GroupRemovalTimestamp = TimeGenerated,
-              InstanceUrl = tostring(iif(PropertyCollection.Name == "powerplatform.analytics.resource.environment.url", PropertyCollection.Value, "")),
-              EnvironmentId = tostring(iif(PropertyCollection.Name == "powerplatform.analytics.resource.environment.name", PropertyCollection.Value, ""))
+              InstanceUrl = tostring(Properties["powerplatform.analytics.resource.environment.url"]),
+              EnvironmentId = tostring(Properties["powerplatform.analytics.resource.environment.name"])
+          | extend EnvironmentId = tolower(replace_string(EnvironmentId, "/providers/Microsoft.BusinessAppPlatform/environments/Default-", ""))
           | summarize InstanceUrl = max(InstanceUrl), EnvironmentId = max(EnvironmentId) by GroupRemovalTimestamp, SecurityDisablingUser = ActorName)
           on SecurityDisablingUser
       | summarize
@@ -127,4 +125,4 @@ alertDetailsOverride:
     Exfiltration alerts associated with guest users were then detected from user {{{GuestUser}}'
 customDetails:
   Environment: EnvironmentId
-version: 3.2.0
+version: 3.2.3
