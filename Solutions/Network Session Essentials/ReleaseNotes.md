@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                    |
 |-------------|--------------------------------|-----------------------------------------------------------------------|
+| 3.0.6       | 4-07-2025                     | Summary rules added and updated requiredDataConnectors.			       |
 | 3.0.6       | 15-04-2025                     | Updated **Analytic Rule** NetworkPortSweepFromExternalNetwork.			       |
 | 3.0.5       | 12-12-2024                     | Added IllumioSaaS solution in a domain solution list			       |
 | 3.0.4       | 03-06-2024                     | Added missing AMA **Data Connector** reference in **Analytical rule** and **Hunting Query**.             |
