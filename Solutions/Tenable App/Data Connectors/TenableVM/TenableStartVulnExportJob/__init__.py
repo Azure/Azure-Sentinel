@@ -47,7 +47,7 @@ def main(timestamp: int) -> object:
             job_id = tio.exports.vulns(
                 last_found=timestamp,
                 num_assets=50,
-                severity=SEVERITIES,
+                severity=SEVERITIES[SEVERITIES.index(severity.lower()):],
                 use_iterator=False,
                 state=["FIXED", "OPEN", "REOPENED"],
             )

@@ -1,0 +1,106 @@
+id: 72d3fb86-d1eb-44d6-9352-170c6bb45bb7
+name: CYFIRMA - Compromised Employees Detection Rule
+description: |
+  "Identifies and alerts on internal employee accounts that have been compromised, based on CYFIRMA's threat intelligence.
+  This rule captures the latest exposure of user credentials, IP addresses, hostnames, operating systems, and pass hashes observed in the threat feed.
+  It supports rapid detection and investigation of phishing, stealer malware, and insider compromise scenarios."
+version: 1.0.0
+kind: Scheduled
+severity: High
+requiredDataConnectors:
+  - connectorId: CyfirmaCompromisedAccountsDataConnector
+    dataTypes:
+      - CyfirmaCompromisedAccounts_CL
+queryFrequency: 5m
+queryPeriod: 5m
+suppressionDuration: 6h
+suppressionEnabled: true
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1003
+  - T1552
+  - T1078
+  - T1098
+query: |
+  // Compromised Employees - Latest per UID
+  let timeFrame = 5m;
+  CyfirmaCompromisedAccounts_CL
+  | where TimeGenerated between (ago(timeFrame) .. now())
+      and Category has "Compromised Employees"
+  | extend 
+      ProviderName = 'CYFIRMA',
+      ProductName = 'DeCYFIR/DeTCT'
+  | summarize arg_max(TimeGenerated, 
+      url,
+      ip,
+      email,
+      user_name,
+      computer_name,
+      operating_system,
+      breach_date,
+      first_seen,
+      last_seen,
+      impact,
+      recommendations,
+      description,
+      source,
+      pass_hash,
+      ProductName,
+      ProviderName
+  ) by uid
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: user_name
+      - identifier: UPNSuffix
+        columnName: email
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: computer_name
+      - identifier: OSVersion
+        columnName: operating_system
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ip
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: url
+customDetails:
+  UID: uid
+  TimeGenerated: TimeGenerated
+  BreachDate: breach_date
+  FirstSeen: first_seen
+  LastSeen: last_seen
+  Impact: impact
+  Recommendations: recommendations
+  Source: source
+  Description: description
+  PassHash: pass_hash
+alertDetailsOverride:
+  alertDisplayNameFormat: "Employee Compromised - {{user_name}} - {{email}}"
+  alertDescriptionFormat: "{{description}}"
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
