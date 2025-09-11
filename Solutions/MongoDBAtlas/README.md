@@ -31,17 +31,18 @@ This custom data connector uses a Function App to pull MongoDB Atlas (MDBA) logs
 1. Click the **Deploy to Azure** button above.
 2. Once in the Azure Portal, select the **Subscription** and **Resource Group** to deploy the resources into.
 3. Click 'Yes' for 'Use existing Log Analytics Workspace?'
-4. Select and from the list of **Log Analytics Workspaces**.
-5. Enter fields for the MongoDB Atlas instance from which you are collecting logs
+4. Select a workspace from the list of **Log Analytics Workspaces**.
+5. In the MongoDB connection tab, enter fields for the MongoDB Atlas instance from which you are collecting logs
     - Cluster Id
     - Group Id
     - Client Id
     - Client Secret
-6. Scheduling - this uses the CRON syntax to specify the rate at which the logs are collected.
+6. Review the MongoDB filters tab and ensure that at least one of: **Include Access Logs**, **Include Network Logs** or **Include Query Logs** are checked.
+6. Scheduling - this uses the [CRON syntax](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=python-v2%2Cisolated-process%2Cnodejs-v4&pivots=programming-language-csharp#ncrontab-expressions) to specify the rate at which the logs are collected. The MongoDB Atlas Administration API will publish new logs every 5 minutes.
 7. Click **Review and Create**.
 8. Click **Create**.
 
 ## 2. Run Function App
-The Function App is configured to run every 5 minutes.
+The Function App is configured to run every 5 minutes by default.
 
 After a successful run, you should see data populated in the MDBA custom table: MDBALogTable_CL.
