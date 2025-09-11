@@ -1,0 +1,573 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Veeam-PerformConfigurationBackupOnIncident",
+    "description": "A Microsoft Sentinel playbook that automatically runs configuration backup session when triggered by an incident. The playbook gets Veeam Backup & Replication settings from incident custom fields, runs the configuration backup session, and collects the session result.",
+    "prerequisites": [
+      "1. Microsoft Sentinel workspace configured.",
+      "2. Permissions to create Logic Apps and API Connections.",
+      "3. Permissions to assign roles to the Resource Group.",
+      "4. Veeam Azure Function App deployed and configured.",
+      "5. Hybrid Connection and Key Vault secrets configured for each VBR Server."
+    ],
+    "entities": [],
+    "tags": [ "Automation", "Veeam", "Configuration", "Backup", "Incident" ],
+    "lastUpdateTime": "2025-08-25T00:00:00.000Z",
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Custom Template"
+    },
+    "parameterTemplateVersion": "1.0.0",
+    "postDeployment": [
+      "1. Assign the Microsoft Sentinel Contributor role to the Logic App's managed identity on the Microsoft Sentinel workspace."
+    ],
+    "_generator": {
+      "name": "bicep",
+      "version": "0.36.177.2456",
+      "templateHash": "8701067040678761767"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Veeam-PerformConfigurationBackupOnIncident",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the playbook (Logic App) to be created"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the Azure Function App for Veeam integration"
+      }
+    },
+    "subscriptionId": {
+      "type": "string",
+      "defaultValue": "[subscription().subscriptionId]",
+      "metadata": {
+        "description": "Subscription ID where resources are deployed"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group name where Function App is deployed"
+      }
+    },
+    "AzureSentinelConnectionName": {
+      "type": "string",
+      "defaultValue": "azuresentinel-connection",
+      "metadata": {
+        "description": "The name to use for the Microsoft Sentinel Connector in the Logic App"
+      }
+    }
+  },
+  "variables": {
+    "functionAppId": "[resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.Web/sites', parameters('functionAppName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', parameters('subscriptionId'), '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        },
+        "parameterValueType": "Alternative"
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Veeam-StartConfigurationBackup-Incident",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_VbrHostName": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "VbrHostName",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Initialize_SessionId": {
+              "runAfter": {
+                "Initialize_VbrHostName": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "SessionId",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Parse_custom_fields": {
+              "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+              "actions": {
+                "Parse_JSON": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('Parse_custom_fields')?['properties']?['additionalData']?['Custom Details']",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "VbrHostName": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Get_VbrHostName": {
+                  "foreach": "@outputs('Parse_JSON')?['body']?['VbrHostName']",
+                  "actions": {
+                    "Set_variable_VbrHostName": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VbrHostName",
+                        "value": "@items('Get_VbrHostName')"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Parse_JSON": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach"
+                }
+              },
+              "runAfter": {
+                "Initialize_SessionId": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Check_if_VbrHostName_found": {
+              "actions": {
+                "StartConfigurationBackupAsync": {
+                  "type": "Function",
+                  "inputs": {
+                    "queries": {
+                      "vbrHostName": "@variables('VbrHostName')"
+                    },
+                    "function": {
+                      "id": "[concat(variables('functionAppId'), '/functions/StartConfigurationBackupAsync')]"
+                    }
+                  }
+                },
+                "Parse_sessionId": {
+                  "runAfter": {
+                    "StartConfigurationBackupAsync": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@outputs('StartConfigurationBackupAsync')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "statusCode": {
+                          "type": "integer"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "properties": {
+                            "Date": {
+                              "type": "string"
+                            },
+                            "Transfer-Encoding": {
+                              "type": "string"
+                            },
+                            "Strict-Transport-Security": {
+                              "type": "string"
+                            },
+                            "x-ms-middleware-request-id": {
+                              "type": "string"
+                            },
+                            "Content-Type": {
+                              "type": "string"
+                            },
+                            "Content-Length": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "body": {
+                          "type": "object",
+                          "properties": {
+                            "sessionType": {
+                              "type": "integer"
+                            },
+                            "state": {
+                              "type": "integer"
+                            },
+                            "platformName": {},
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "jobId": {
+                              "type": "string"
+                            },
+                            "creationTime": {
+                              "type": "string"
+                            },
+                            "endTime": {},
+                            "progressPercent": {
+                              "type": "integer"
+                            },
+                            "result": {
+                              "type": "object",
+                              "properties": {
+                                "result": {
+                                  "type": "integer"
+                                },
+                                "message": {
+                                  "type": "string"
+                                },
+                                "isCanceled": {
+                                  "type": "boolean"
+                                }
+                              }
+                            },
+                            "resourceId": {},
+                            "resourceReference": {},
+                            "parentSessionId": {},
+                            "usn": {
+                              "type": "integer"
+                            },
+                            "platformId": {}
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Set_SessionId": {
+                  "runAfter": {
+                    "Parse_sessionId": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "SessionId",
+                    "value": "@body('Parse_sessionId')?['body']?['id']"
+                  }
+                },
+                "Add_backup_started_comment": {
+                  "runAfter": {
+                    "Set_SessionId": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p>Configuration backup started on <strong>@{variables('VbrHostName')}</strong> with session ID: <strong>@{variables('SessionId')}</strong></p>"
+                    },
+                    "path": "/Incidents/Comment"
+                  }
+                },
+                "Until_state_is_not_stopped": {
+                  "actions": {
+                    "GetSession": {
+                      "type": "Function",
+                      "inputs": {
+                        "queries": {
+                          "vbrHostName": "@variables('VbrHostName')",
+                          "sessionId": "@variables('SessionId')"
+                        },
+                        "function": {
+                          "id": "[concat(variables('functionAppId'), '/functions/GetSessionAsync')]"
+                        }
+                      }
+                    },
+                    "Parse_session": {
+                      "runAfter": {
+                        "GetSession": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@outputs('GetSession')",
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "statusCode": {
+                              "type": "integer"
+                            },
+                            "headers": {
+                              "type": "object",
+                              "properties": {
+                                "Date": {
+                                  "type": "string"
+                                },
+                                "Transfer-Encoding": {
+                                  "type": "string"
+                                },
+                                "Request-Context": {
+                                  "type": "string"
+                                },
+                                "Content-Type": {
+                                  "type": "string"
+                                },
+                                "Content-Length": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "body": {
+                              "type": "object",
+                              "properties": {
+                                "sessionType": {
+                                  "type": "integer"
+                                },
+                                "state": {
+                                  "type": "integer"
+                                },
+                                "platformName": {},
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "jobId": {
+                                  "type": "string"
+                                },
+                                "creationTime": {
+                                  "type": "string"
+                                },
+                                "endTime": {},
+                                "progressPercent": {
+                                  "type": "integer"
+                                },
+                                "result": {
+                                  "type": "object",
+                                  "properties": {
+                                    "result": {
+                                      "type": "integer"
+                                    },
+                                    "message": {
+                                      "type": "string"
+                                    },
+                                    "isCanceled": {
+                                      "type": "boolean"
+                                    }
+                                  }
+                                },
+                                "resourceId": {},
+                                "resourceReference": {},
+                                "parentSessionId": {},
+                                "usn": {
+                                  "type": "integer"
+                                },
+                                "platformId": {}
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Delay": {
+                      "runAfter": {
+                        "Parse_session": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Wait",
+                      "inputs": {
+                        "interval": {
+                          "count": 1,
+                          "unit": "Minute"
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Add_backup_started_comment": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": "@equals(body('Parse_session')?['body']?['state'],1)",
+                  "limit": {
+                    "timeout": "PT30M"
+                  },
+                  "type": "Until"
+                },
+                "IngestSessionDataBySessionIdAsync": {
+                  "runAfter": {
+                    "Until_state_is_not_stopped": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Function",
+                  "inputs": {
+                    "queries": {
+                      "vbrHostName": "@variables('VbrHostName')",
+                      "sessionId": "@variables('SessionId')"
+                    },
+                    "function": {
+                      "id": "[concat(variables('functionAppId'), '/functions/IngestSessionDataBySessionIdAsync')]"
+                    }
+                  }
+                },
+                "Add_backup_completed_comment": {
+                  "runAfter": {
+                    "IngestSessionDataBySessionIdAsync": [
+                      "Succeeded",
+                      "Failed",
+                      "Skipped",
+                      "TimedOut"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p>Configuration backup completed on <strong>@{variables('VbrHostName')}</strong>. Final result: <strong>@{body('Parse_session')?['body']?['result']?['result']}</strong></p><p>Session data has been ingested into the workspace.</p>"
+                    },
+                    "path": "/Incidents/Comment"
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_custom_fields": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Add_no_hostname_comment": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "<p><strong>Warning:</strong> No VbrHostName found in incident custom fields. Configuration backup cannot be started.</p><p>Please ensure the incident contains a 'VbrHostName' custom field with the target Veeam server hostname.</p>"
+                      },
+                      "path": "/Incidents/Comment"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@variables('VbrHostName')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "type": "If"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionName": "[parameters('AzureSentinelConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]",
+                "id": "[concat('/subscriptions/', parameters('subscriptionId'), '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
