@@ -6,8 +6,7 @@ import json
 import os
 import time
 import gzip
-from io import BytesIO
-from typing import Tuple
+from enum import Enum
 
 import requests
 import azure.functions as func
@@ -164,6 +163,14 @@ class AzureSentinel:
                      last_update_time)
 
 
+class FilterType(str, Enum):
+    """Permissable filter options for log messages"""
+    NONE = 'none'
+    ALL = 'all'
+    EXCLUDE = 'exclude'
+    INCLUDE = 'include'
+
+
 class MongoDbConnection:
     """Connection object for MongoDB Atlas API"""
 
@@ -184,27 +191,29 @@ class MongoDbConnection:
         self.total_size_downloaded = 0
         self.azure_sentinel_stats = {}
 
-        self.mdba_include_access_logs = config.get("mdba_include_access_logs")
-        if self.mdba_include_access_logs:
+        self.mdba_access_logs_filter_type = config.get(
+            "mdba_access_logs_filter_type")
+        if self.mdba_access_logs_filter_type not in (None, FilterType.NONE):
             self.filtered_categories.append("ACCESS")
             access_list_input = config.get("mbda_access_list")
-            self.access_ids_to_include, self.filter_by_access_id = self.parse_ids_list(
-                access_list_input)
+            self.access_ids_to_filter = self.parse_ids_list(
+                access_list_input, self.mdba_access_logs_filter_type)
 
-        self.mdba_include_network_logs = config.get(
-            "mdba_include_network_logs")
-        if self.mdba_include_network_logs:
+        self.mdba_network_logs_filter_type = config.get(
+            "mdba_network_logs_filter_type")
+        if self.mdba_network_logs_filter_type not in (None, FilterType.NONE):
             self.filtered_categories.append("NETWORK")
             network_list_input = config.get("mdba_network_list")
-            self.network_ids_to_include, self.filter_by_network_id = self.parse_ids_list(
-                network_list_input)
+            self.network_ids_to_filter = self.parse_ids_list(
+                network_list_input, self.mdba_network_logs_filter_type)
 
-        self.mdba_include_query_logs = config.get("mdba_include_query_logs")
-        if self.mdba_include_query_logs:
+        self.mdba_query_logs_filter_type = config.get(
+            "mdba_query_logs_filter_type")
+        if self.mdba_query_logs_filter_type not in (None, FilterType.NONE):
             self.filtered_categories.append("QUERY")
             query_list_input = config.get("mbda_query_list")
-            self.query_ids_to_include, self.filter_by_query_id = self.parse_ids_list(
-                query_list_input)
+            self.query_ids_to_filter = self.parse_ids_list(
+                query_list_input, self.mdba_query_logs_filter_type)
 
     def _encode_credentials(self):
         credentials = f"{self.mdba_client_id}:{self.mdba_client_secret}"
@@ -267,7 +276,7 @@ class MongoDbConnection:
             transformed[new_key] = value
         return transformed
 
-    def parse_ids_list(self, input_str: str, max_count: int = 10) -> Tuple[list[int], bool]:
+    def parse_ids_list(self, input_str: str, filter_type: str, max_count: int = 10) -> list[int]:
         """
         Parse a comma-separated string into a list of positive integers.
         Removes spaces/quotes and validates count and positivity.
@@ -277,7 +286,7 @@ class MongoDbConnection:
 
         :param input_str: Comma-separated string of numbers, e.g. "1, 2, '3'"
         :param max_count: Maximum number of allowed entries (default: 10)
-        :return: Tuple (list of ints, bool indicating do-filter if list is empty)
+        :return: list of ints
         :raises ValueError: If invalid, non-numeric, <=0, or too many entries
         """
         result = []
@@ -298,7 +307,12 @@ class MongoDbConnection:
             raise ValueError(
                 f"Too many numbers provided. Maximum allowed is {max_count}.")
 
-        return result, (len(result) > 0)
+        if len(result) == 0 and filter_type in (FilterType.INCLUDE, FilterType.EXCLUDE):
+            raise ValueError(
+                "Filtering requires at least one number."
+            )
+
+        return result
 
     def _should_skip_entry(self, raw_entry: dict) -> bool:
         """Return True if this entry should be skipped based on category and filtering rules."""
@@ -312,15 +326,17 @@ class MongoDbConnection:
 
         # Category-specific filtering rules
         filter_rules = {
-            "ACCESS": (self.filter_by_access_id, self.access_ids_to_include),
-            "NETWORK": (self.filter_by_network_id, self.network_ids_to_include),
-            "QUERY": (self.filter_by_query_id, self.query_ids_to_include),
+            "ACCESS": (self.mdba_access_logs_filter_type, self.access_ids_to_filter),
+            "NETWORK": (self.mdba_network_logs_filter_type, self.network_ids_to_filter),
+            "QUERY": (self.mdba_query_logs_filter_type, self.query_ids_to_filter),
         }
 
         # Apply filtering if category matches a rule
         if category in filter_rules:
-            filter_enabled, allowed_ids = filter_rules[category]
-            if filter_enabled and entry_id not in allowed_ids:
+            filter_type, filter_ids = filter_rules[category]
+            if filter_type == FilterType.INCLUDE and entry_id not in filter_ids:
+                return True
+            if filter_type == FilterType.EXCLUDE and entry_id in filter_ids:
                 return True
 
         return False
@@ -463,35 +479,36 @@ def configuration_set_up():
         mdba_client_secret=os.getenv("MDBA_CLIENT_SECRET"),
         mdba_group_id=os.getenv("MDBA_GROUP_ID"),
         mdba_cluster_id=os.getenv("MDBA_CLUSTER_ID"),
-        mdba_include_access_logs=os.getenv("MDBA_INCLUDE_ACCESS_LOGS"),
+        mdba_access_logs_filter_type=os.getenv("MDBA_ACCESS_LOGS_FILTER_TYPE"),
         mbda_access_list=os.getenv("MDBA_ACCESS_LIST"),
-        mdba_include_network_logs=os.getenv("MDBA_INCLUDE_NETWORK_LOGS"),
+        mdba_network_logs_filter_type=os.getenv(
+            "MDBA_NETWORK_LOGS_FILTER_TYPE"),
         mdba_network_list=os.getenv("MDBA_NETWORK_LIST"),
-        mdba_include_query_logs=os.getenv("MDBA_INCLUDE_QUERY_LOGS"),
+        mdba_query_logs_filter_type=os.getenv("MDBA_QUERY_LOGS_FILTER_TYPE"),
         mdba_query_list=os.getenv("MDBA_QUERY_LIST"),
     )
 
     mdba_client_id = config.get("mdba_client_id")
     mdba_group_id = config.get("mdba_group_id")
     mdba_cluster_id = config.get("mdba_cluster_id")
-    mdba_include_access_logs = config.get("mdba_include_access_logs")
+    mdba_access_logs_filter_type = config.get("mdba_access_logs_filter_type")
     mbda_access_list = config.get("mbda_access_list")
-    mdba_include_network_logs = config.get("mdba_include_network_logs")
+    mdba_network_logs_filter_type = config.get("mdba_network_logs_filter_type")
     mdba_network_list = config.get("mdba_network_list")
-    mdba_include_query_logs = config.get("mdba_include_query_logs")
+    mdba_query_logs_filter_type = config.get("mdba_query_logs_filter_type")
     mdba_query_list = config.get("mdba_query_list")
 
     logging.debug("config.mdba_client_id: %s", mdba_client_id)
     logging.debug("config.mdba_group_id: %s", mdba_group_id)
     logging.debug("config.mdba_cluster_id: %s", mdba_cluster_id)
-    logging.debug("config.mdba_include_access_logs: %s",
-                  mdba_include_access_logs)
+    logging.debug("config.mdba_access_logs_filter_type: %s",
+                  mdba_access_logs_filter_type)
     logging.debug("config.mbda_access_list: %s", mbda_access_list)
-    logging.debug("config.mdba_include_network_logs: %s",
-                  mdba_include_network_logs)
+    logging.debug("config.mdba_network_logs_filter_type: %s",
+                  mdba_network_logs_filter_type)
     logging.debug("config.mdba_network_list: %s", mdba_network_list)
-    logging.debug("config.mdba_include_query_logs: %s",
-                  mdba_include_query_logs)
+    logging.debug("config.mdba_query_logs_filter_type: %s",
+                  mdba_query_logs_filter_type)
     logging.debug("config.mdba_query_list: %s", mdba_query_list)
 
     tenant_id = config.get("tenant_id")
