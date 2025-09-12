@@ -7,6 +7,7 @@ import os
 import time
 import gzip
 from enum import Enum
+from threading import Thread
 
 import requests
 import azure.functions as func
@@ -78,6 +79,10 @@ class AzureSentinel:
         self.table_name = "JobState"
         self.job_state_table_store = JobStateTableStore(
             connection_string, self.table_name)
+        # A list of jobs to upload logs to Microsoft Sentinel. Allows multithreading.
+        self.jobs = []
+        self.upload_chunk_count = 0
+        self.upload_fail_count = 0
 
     def _upload_in_chunks(self, client, logs, max_bytes=1 * 1024 * 1024) -> dict:
         """
@@ -85,11 +90,9 @@ class AzureSentinel:
 
         :param logs: list of JSON-serializable log entries
         :param max_bytes: maximum size per chunk in bytes (default 1MB)
-        :return 
+        :return
         """
         current_chunk = []
-        upload_chunk_count = 0
-        upload_fail_count = 0
 
         for item in logs:
             # Test adding the item to the current chunk
@@ -102,30 +105,43 @@ class AzureSentinel:
             else:
                 # Save current chunk and start a new one
                 if current_chunk:
-                    try:
-                        logging.debug(
-                            "Calling client.upload rule_id=%s, stream_name=%s", self.azure_dcr_immutableid, self.azure_stream_name)
-                        client.upload(rule_id=self.azure_dcr_immutableid,
-                                      stream_name=self.azure_stream_name, logs=current_chunk)
-                        upload_chunk_count += 1
-                    except HttpResponseError as e:
-                        logging.error("Upload failed: %s", e)
-                        upload_fail_count += 1
+                    self._add_to_upload_list(client, current_chunk)
 
                 current_chunk = [item]
 
         # Add the last chunk if it has data
         if current_chunk:
-            logging.debug(
-                "Calling client.upload rule_id=%s, stream_name=%s", self.azure_dcr_immutableid, self.azure_stream_name)
-            client.upload(rule_id=self.azure_dcr_immutableid,
-                          stream_name=self.azure_stream_name, logs=current_chunk)
-            upload_chunk_count += 1
+            self._add_to_upload_list(client, current_chunk)
+
+        self._upload_list()
 
         return {
-            "upload_chunk_count": upload_chunk_count,
-            "upload_fail_count": upload_fail_count
+            "upload_chunk_count": self.upload_chunk_count,
+            "upload_fail_count": self.upload_fail_count
         }
+
+    def _add_to_upload_list(self, client, chunk):
+        self.jobs.append(Thread(target=self._post_data, kwargs={"client": client, "rule_id": self.azure_dcr_immutableid,
+                                                                "stream_name": self.azure_stream_name, "logs": chunk}))
+
+    def _upload_list(self):
+        for job in self.jobs:
+            job.start()
+
+        for job in self.jobs:
+            job.join()
+        self.jobs = []
+
+    def _post_data(self, client, rule_id, stream_name, logs):
+        try:
+            logging.debug(
+                "Calling client.upload rule_id=%s, stream_name=%s", rule_id, stream_name)
+            client.upload(rule_id=rule_id,
+                          stream_name=stream_name, logs=logs)
+            self.upload_chunk_count += 1
+        except HttpResponseError as e:
+            logging.error("Upload failed: %s", e)
+            self.upload_fail_count += 1
 
     def upload_data_to_log_analytics_table(self, json_log) -> dict:
         """Authenticates with Azure before calling the LogIngestionAPI to upload logs."""
