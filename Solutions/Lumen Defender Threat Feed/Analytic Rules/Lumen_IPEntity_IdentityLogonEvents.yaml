@@ -17,12 +17,12 @@ requiredDataConnectors:
       - AADServicePrincipalSignInLogs
       - AADManagedIdentitySignInLogs
       - ADFSSignInLogs
-queryFrequency: PT4H
-queryPeriod: P14D
+queryFrequency: 4h
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
-suppressionDuration: PT5H
-suppressionEnabled: false
+suppressionDuration: 5h
+suppressionEnabled: true
 tactics:
   - CommandAndControl
 relevantTechniques:
@@ -47,8 +47,8 @@ query: |
           | extend
               ILE_ipEntity = IPAddress,
               AccountDisplayName = coalesce(UserDisplayName, UserPrincipalName),
-              Application = coalesce(AppDisplayName, ResourceDisplayName),
-              LogonType = ClientAppUsed,
+              Application = coalesce(column_ifexists('AppDisplayName',''), column_ifexists('ResourceDisplayName','')),
+              LogonType = column_ifexists('ClientAppUsed',''),
               IdentityLogonEvents_TimeGenerated = TimeGenerated
           | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type
       ),
@@ -58,7 +58,7 @@ query: |
           | extend
               ILE_ipEntity = IPAddress,
               AccountDisplayName = coalesce(ServicePrincipalName, tostring(ServicePrincipalId)),
-              Application = coalesce(AppDisplayName, ResourceDisplayName),
+              Application = coalesce(column_ifexists('AppDisplayName',''), column_ifexists('ResourceDisplayName','')),
               LogonType = "ServicePrincipal",
               IdentityLogonEvents_TimeGenerated = TimeGenerated
           | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type
@@ -68,8 +68,8 @@ query: |
           | where TimeGenerated >= ago(dt_lookBack)
           | extend
               ILE_ipEntity = IPAddress,
-              AccountDisplayName = coalesce(ManagedIdentityName, tostring(ManagedIdentityId)),
-              Application = coalesce(AppDisplayName, ResourceDisplayName),
+              AccountDisplayName = coalesce(ServicePrincipalName, tostring(ServicePrincipalId)),
+              Application = ResourceDisplayName,
               LogonType = "ManagedIdentity",
               IdentityLogonEvents_TimeGenerated = TimeGenerated
           | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type
@@ -80,8 +80,8 @@ query: |
           | extend
               ILE_ipEntity = IPAddress,
               AccountDisplayName = coalesce(UserDisplayName, UserPrincipalName),
-              Application = coalesce(AppDisplayName, ResourceDisplayName, RelyingParty),
-              LogonType = coalesce(ClientAppUsed, AuthenticationRequirement),
+              Application = coalesce(AppDisplayName, ResourceDisplayName),
+              LogonType = coalesce(Requirement, AuthenticationRequirement),
               IdentityLogonEvents_TimeGenerated = TimeGenerated
           | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type
       );
