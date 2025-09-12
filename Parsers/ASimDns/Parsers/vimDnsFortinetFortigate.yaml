@@ -246,11 +246,7 @@ ParserQuery: |
             // Additional fields
             sessionid:int
         ) with (pair_delimiter=";", kv_delimiter="=")
-      | where (array_length(domain_has_any) == 0 or FTNTFGTqname has_any (domain_has_any)) and
-          (responsecodename == '*' or FTNTFGTrcode == DnsResponseCodeNameLookup) and
-          (response_has_ipv4 == '*' or has_ipv4(FTNTFGTipaddr, response_has_ipv4)) and
-          (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(FTNTFGTipaddr, response_has_any_prefix))
-      | project-rename 
+      | extend 
           EventOriginalResultDetails  = coalesce(FTNTFGTrcode, rcode),
           EventOriginalUid            = coalesce(FTNTFGTlogid, logid),
           DvcZone                     = coalesce(FTNTFGTsrcintfrole, srcintfrole),
@@ -267,6 +263,10 @@ ParserQuery: |
           ThreatIpAddr                = coalesce(FTNTFGTbotnetip, botnetip),
           _User                       = coalesce(FTNTFGTuser, user),
           _UnauthUser                 = coalesce(FTNTFGTunauthuser, unauthuser)
+      | where (array_length(domain_has_any) == 0 or DnsQuery has_any (domain_has_any)) and
+          (responsecodename == '*' or EventOriginalResultDetails == DnsResponseCodeNameLookup) and
+          (response_has_ipv4 == '*' or has_ipv4(DnsResponseName, response_has_ipv4)) and
+          (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(DnsResponseName, response_has_any_prefix))
       | extend 
           DnsQueryTypeName = case(
               DnsQueryTypeName == "Unknown","",
@@ -297,7 +297,9 @@ ParserQuery: |
           User            = SrcUsername,
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
           SrcUserType     = _ASIM_GetUserType(SrcUsername, "")
-      | project-away FTNTFGTuser, FTNTFGTunauthuser, AdditionalExtensions, Computer, NetworkProtocolNumber
+      | project-away FTNTFGT*, logid, subtype, srccountry, dstcountry, srcintfrole, rcode,
+        qname, qtype, xid, qtypeval, qclass, catdesc, ipaddr, unauthuser, user, botnetip, sessionid, 
+        _User, _UnauthUser, AdditionalExtensions, Computer, NetworkProtocolNumber
   };
   Parser(
       starttime               = starttime,
