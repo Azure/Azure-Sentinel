@@ -3,7 +3,7 @@
 import datetime
 import inspect
 from azure.monitor.query import LogsQueryClient, LogsQueryStatus
-from azure.identity import DefaultAzureCredential, AzureAuthorityHosts
+from azure.identity import ClientSecretCredential, AzureAuthorityHosts
 from ..shared_code import consts
 from ..shared_code.logger import applogger
 from ..shared_code.dataminrpulse_exception import DataminrPulseException
@@ -30,21 +30,28 @@ def get_logs_data(time_generated):
     """
     __method_name = inspect.currentframe().f_code.co_name
     if ".us" in consts.LOG_ANALYTICS_URL:
-        credential = DefaultAzureCredential(
+        credential = ClientSecretCredential(
+            client_id=consts.AZURE_CLIENT_ID,
+            client_secret=consts.AZURE_CLIENT_SECRET,
+            tenant_id=consts.AZURE_TENANT_ID,
             authority=AzureAuthorityHosts.AZURE_GOVERNMENT
         )
         endpoint = "https://api.loganalytics.us/v1"
     else:
-        credential = DefaultAzureCredential()
+        credential = ClientSecretCredential(
+            client_id=consts.AZURE_CLIENT_ID,
+            client_secret=consts.AZURE_CLIENT_SECRET,
+            tenant_id=consts.AZURE_TENANT_ID,
+        )
         endpoint = "https://api.loganalytics.io/v1"
 
     client = LogsQueryClient(credential, endpoint=endpoint)
     query = """{}_CL
-    | extend Source=extract("via (.+)",1,headline_s)
+    | extend Source=extract("via (.+)",1,headline)
     | extend Source=substring(Source,0,strlen(Source)-1)
     | where Source  in~ ('Greynoise', 'Shodan', 'VirusTotal', 'alienvault open threat exchange', 'URLScan', 'CSIRT')
     | sort by  TimeGenerated asc
-    | project TimeGenerated, index_s, _embedded_labels_s, alertType_id_s, headline_s, Source""".format(
+    | project TimeGenerated, index, embedded_labels, alertType_id, headline, Source""".format(
         consts.ALERTS_TABLE_NAME
     )
     if time_generated is None or time_generated == "":
