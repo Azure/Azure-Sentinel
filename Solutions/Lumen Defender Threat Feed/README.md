@@ -19,8 +19,6 @@ Lumen Defender Threat Feed for Microsoft Sentinel offers powerful intelligence c
 - The Lumen Defender Threat Feed connector (Azure Durable Functions) pulls indicators from Lumen’s Threat Feed API and writes them to the Sentinel Threat Intelligence store via the STIX Objects Upload API.
 - Microsoft Sentinel analytic rules correlate Lumen indicators with your logs and create alerts/incidents for matches.
 
-Image placeholder: A two-part graphic works well—(1) Lumen → Function App → STIX Upload → ThreatIntelIndicators; (2) Analytics rules matching and incident creation.
-
 ### Threat Research Workbook (Visibility)
 
 - The Lumen workbook surfaces ingestion trends, active indicators by type, risk distribution, tags, sightings across curated tables, and correlated alerts/incidents.
