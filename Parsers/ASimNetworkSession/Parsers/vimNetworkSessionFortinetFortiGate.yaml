@@ -86,10 +86,15 @@ ParserQuery: |
       | where DeviceAction != "dns" and Activity !has "dns" 
       | where (array_length(hostname_has_any)==0)
       | where  (isnull(dstportnumber) or DestinationPort==dstportnumber)
+      | parse-kv AdditionalExtensions as (
+              FTNTFGTutmaction:string,
+              utmaction:string
+          ) with (pair_delimiter=';', kv_delimiter='=')
+      | extend _UtmAction = coalesce(FTNTFGTutmaction, utmaction)
       | extend temp_ResultMatch = case (
           eventresult=="*", true,
-          (eventresult == "Success") and (DeviceAction in ("accept", "close") or Activity has_any ("accept", "close")), true,
-          (eventresult == "Failure") and (DeviceAction !in ("accept", "close") and not(Activity has_any ("accept", "close"))), true,
+          (eventresult == "Success") and (_UtmAction == "allow" or DeviceAction in ("accept", "close") or Activity has_any ("accept", "close")), true,
+          (eventresult == "Failure") and (_UtmAction != "allow" and DeviceAction !in ("accept", "close") and not(Activity has_any ("accept", "close"))), true,
           false
       )
       | where temp_ResultMatch
@@ -107,7 +112,7 @@ ParserQuery: |
       | extend DeviceAction = coalesce(DeviceAction, temp_DeviceAction)  
       | lookup EventLookup on DeviceAction 
       | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
-      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, ASimMatchingIpAddr, DvcAction
+      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, ASimMatchingIpAddr, DvcAction, _UtmAction
       | project-rename DstBytes = ReceivedBytes
         , DstInterfaceName = DeviceOutboundInterface
         , DstIpAddr = DestinationIP
@@ -138,6 +143,7 @@ ParserQuery: |
               FTNTFGTduration:int,
               FTNTFGTsentpkt:long,
               FTNTFGTrcvdpkt:long,
+              FTNTFGTutmaction:string,
               // Simple format for FortiAnalyzer logs
               start:datetime,
               srcintfrole:string,
@@ -149,7 +155,8 @@ ParserQuery: |
               crscore:string,
               duration:int,
               sentpkt:long,
-              rcvdpkt:long
+              rcvdpkt:long,
+              utmaction:string
           ) with (pair_delimiter=';', kv_delimiter='=')
       | extend
           EventStartTime          = coalesce(FTNTFGTstart, start),
@@ -163,6 +170,15 @@ ParserQuery: |
           ThreatOriginalRiskLevel = coalesce(FTNTFGTcrscore, crscore),
           SrcPackets              = coalesce(FTNTFGTsentpkt, sentpkt),
           DstPackets              = coalesce(FTNTFGTrcvdpkt, rcvdpkt)
+      | extend 
+          EventResult = case(
+              _UtmAction == "allow", "Success",
+              EventResult
+          ),
+          EventResultDetails = case(
+              _UtmAction == "allow" and EventResult == "Success", "",
+              EventResultDetails
+          )
       | extend EventCount = int(1)
         , EventSchema = "NetworkSession"
         , EventSchemaVersion = "0.2.3"
@@ -185,7 +201,7 @@ ParserQuery: |
             Duration = NetworkDuration,
             Rule = tostring(NetworkRuleNumber)
       | project-away FTNTFGT*, start, srcintfrole, dstintfrole, externalID, policyid,
-            dstcountry, srccountry, crscore, duration, sentpkt, rcvdpkt,
-            Protocol, AdditionalExtensions, NetworkProtocolNumber
+            dstcountry, srccountry, crscore, duration, sentpkt, rcvdpkt, utmaction,
+            Protocol, AdditionalExtensions, NetworkProtocolNumber, _UtmAction
     };
     Parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)
