@@ -73,6 +73,7 @@ The following environment variables can be optionally configured to customize th
 
 **Configuration Notes:**
 - These variables are optional - the Function App will work with default values if not specified
+- **By default, only security-relevant events are collected**: The data connector filters for Commvault events related to anomalies and malware/ransomware threats as documented in the [Threat Indicators Dashboard](https://documentation.commvault.com/2024e/commcell-console/threat_indicators_dashboard.html) . Use `ShowAllEvents` to disable filtering of events. It is recommended to have data retention policy, when allowing all events , so the log analytics workspace is not bloated with events.
 - Event level filters control which Commvault events are collected based on severity
 - `NumberOfDaysToBackfill` determines how far back to collect events on the first run only
 - `AZURE_CLIENT_ID` is only needed if using a specific Managed Identity instead of the default

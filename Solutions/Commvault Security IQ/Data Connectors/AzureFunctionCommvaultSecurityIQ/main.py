@@ -9,8 +9,8 @@ import azure.functions as func
 import json
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceNotFoundError
-from azure.identity import DefaultAzureCredential
-from azure.keyvault.secrets import SecretClient, ManagedIdentityCredential 
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.keyvault.secrets import SecretClient
 import os
 
 requests.packages.urllib3.disable_warnings()
@@ -146,14 +146,28 @@ def post_data(body, chunk_count):
 
 
 def gen_chunks(data):
-    """This method is used to get the chunks and post the data to log analytics work space"""        
+    """This method is used to get the chunks and post the data to log analytics work space"""
+    # Event codes to filter for (matching the analytic rule)
+    target_event_codes = ["7:211", "7:212", "7:293", "7:269", "14:337", "14:338", "69:59", "7:333", "69:60", "35:5575"]
+    
     for chunk in gen_chunks_to_object(data, chunksize=10000):
         obj_array = []
         for row in chunk:
             if row != None and row != '':
-                obj_array.append(row)
-        body = json.dumps(obj_array)
-        post_data(body, len(obj_array))
+                # Check if event code matches our target codes
+                event_code = row.get("Event_Code_s") or row.get("eventCodeString_s")
+                if event_code and event_code in target_event_codes:
+                    logging.info(f"Processing target event with code: {event_code}")
+                    obj_array.append(row)
+                elif not event_code:
+                    # Include events without event codes (might be other important data)
+                    obj_array.append(row)
+                else:
+                    logging.debug(f"Skipping event with code: {event_code} (not in target list)")
+        
+        if obj_array:  # Only send if we have events to process
+            body = json.dumps(obj_array)
+            post_data(body, len(obj_array))
 
 
 def gen_chunks_to_object(data, chunksize=100):
@@ -338,7 +352,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 fromtime = updatedfromtime
 
         # Call events API
-        if showAllEvents :
+        if not showAllEvents :
             ustring = f"/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=true&showAnomalous=true"
         else:
             ustring = f"/events?level=10&showInfo=true&showMinor=true&showMajor=true&showCritical=true&showAnomalous=true"
