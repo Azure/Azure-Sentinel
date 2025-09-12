@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                  |
 |-------------|--------------------------------|---------------------------------------------------------------------|
+| 3.0.9       | 02-09-2025                     |Connector UI fix|
 | 3.0.8       | 03-12-2024                     |Removal of Function App data connector|
 | 3.0.7       | 24-07-2024                     |Updated BAS malware rule after changes in source message format|
 | 3.0.6       | 23-07-2024                     |Resolves ContentTemplateNotFound error for CCP|

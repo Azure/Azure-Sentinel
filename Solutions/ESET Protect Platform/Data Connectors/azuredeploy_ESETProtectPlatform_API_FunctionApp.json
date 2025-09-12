@@ -17,9 +17,17 @@
         "tableName": {
             "type": "string",
             "metadata": {
-                "description": "The name of the custom Log Analytics table to be created."
+                "description": "The name of the custom Log Analytics table to be created. This table stores detections data."
             },
             "defaultValue": "IntegrationTable_CL",
+            "minLength": 3
+        },
+        "tableNameIncidents": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the custom Log Analytics table to be created. This table stores incidents data."
+            },
+            "defaultValue": "IntegrationTableIncidents_CL",
             "minLength": 3
         },
         "dataCollectionEndpointName": {
@@ -143,7 +151,9 @@
     },
 	"variables": {
         "tableNameCL": "[if(endsWith(parameters('tableName'), '_CL'), parameters('tableName'), concat(parameters('tableName'), '_CL'))]",
+        "tableNameIncidentsCL": "[if(endsWith(parameters('tableNameIncidents'), '_CL'), parameters('tableNameIncidents'), concat(parameters('tableNameIncidents'), '_CL'))]",
 		"customTableName": "[concat('Custom-', variables('tableNameCL'))]",
+		"customTableNameIncidents": "[concat('Custom-', variables('tableNameIncidentsCL'))]",
 		"applicationName": "[concat(parameters('applicationName'), uniquestring(resourceGroup().id))]",
         "dataCollectionEndpointId":"[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
 		"dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]",
@@ -161,7 +171,8 @@
             "name": "[parameters('dataCollectionEndpointName')]",
             "location": "[variables('location')]",
             "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameCL'))]"
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameCL'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameIncidentsCL'))]"
             ],
             "apiVersion": "2021-04-01",
             "properties": {
@@ -300,12 +311,86 @@
             }
         },
         {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('workspaceName'), '/', variables('tableNameIncidentsCL'))]",
+            "location": "[variables('location')]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('tableNameIncidentsCL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "uuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "displayName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "severity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "assigneeUuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "triageDuration",
+                            "type": "string"
+                        },
+                        {
+                            "name": "status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "detectionUuids",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "createTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "updateTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "deviceUuids",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "resolveReason",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metrics",
+                            "type": "dynamic"
+                        }
+                    ]
+                }
+            }
+        },
+        {
             "type": "Microsoft.Insights/dataCollectionRules",
             "apiVersion": "2023-03-11",
             "name": "[parameters('dataCollectionRuleName')]",
             "location": "[variables('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameCL'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameIncidentsCL'))]",
                 "[variables('dataCollectionEndpointId')]"
             ],
             "properties": {
@@ -430,6 +515,70 @@
                                 "type": "dynamic"
                             }
                         ]
+                    },
+                    "[variables('customTableNameIncidents')]": {
+                    "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "uuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "displayName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "severity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "assigneeUuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "triageDuration",
+                                "type": "string"
+                            },
+                            {
+                                "name": "status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "detectionUuids",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "createTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "updateTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "deviceUuids",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "resolveReason",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metrics",
+                                "type": "dynamic"
+                            }
+                        ]
                     }
                 },
                 "dataSources": {},
@@ -451,6 +600,16 @@
                         ],
                         "transformKql": "source",
                         "outputStream": "[variables('customTableName')]"
+                    },
+                    {
+                        "streams": [
+                            "[variables('customTableNameIncidents')]"
+                        ],
+                        "destinations": [
+                            "[parameters('workspaceName')]"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "[variables('customTableNameIncidents')]"
                     }
                 ]
             }
@@ -523,6 +682,10 @@
                         {
                             "name": "STREAM_NAME",
                             "value": "[variables('customTableName')]"
+                        },
+                        {
+                            "name": "STREAM_NAME_INCIDENTS",
+                            "value": "[variables('customTableNameIncidents')]"
                         },
                         {
                             "name": "AZURE_CLIENT_ID",

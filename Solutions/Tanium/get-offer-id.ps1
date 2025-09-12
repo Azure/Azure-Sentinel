@@ -5,10 +5,12 @@ param(
 $repositoryBasePath = $SolutionDataFolderPath.Substring(0, $indexOfSolutions)
 $commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
 $catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
+# cspell:disable-next-line
 $getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1"
 
 . $commonFunctionsFilePath # load common functions
 . $catalogAPIFilePath # load catalog api functions
+# cspell:disable-next-line
 . $getccpDetailsFilePath # load ccp functions
 
 
