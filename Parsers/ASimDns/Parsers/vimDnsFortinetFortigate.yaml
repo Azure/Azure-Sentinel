@@ -1,7 +1,7 @@
 Parser:
   Title: DNS activity ASIM parser for Fortinet FortiGate
-  Version: '0.1.1'
-  LastUpdated: Mar 14 2024
+  Version: '0.1.2'
+  LastUpdated: Sep 12, 2025
 Product:
   Name: Fortinet FortiGate
 Normalization:
@@ -208,26 +208,63 @@ ParserQuery: |
           (eventtype=='*' or eventtype in ("Query", "lookup")) // -- support both legacy and standard value 
       | project TimeGenerated, EventOriginalSubType = DeviceEventClassID, AdditionalExtensions, EventUid = _ItemId, EventOriginalSeverity = LogSeverity, EventProductVersion = DeviceVersion ,Computer, Type, SrcIpAddr = SourceIP, SrcPortNumber = SourcePort, DstIpAddr = DestinationIP, DstPortNumber = DestinationPort, EventMessage = Message, NetworkProtocolNumber = Protocol, DvcId = DeviceExternalID, DnsSessionId = ExtID
       | lookup DeviceEventClassIDLookup on EventOriginalSubType
-      | parse-kv  AdditionalExtensions as (FTNTFGTlogid:string, FTNTFGTsubtype:string, FTNTFGTsrccountry:string, FTNTFGTdstcountry:string,FTNTFGTsrcintfrole:string, FTNTFGTrcode:string, FTNTFGTqname:string, FTNTFGTqtype:string, FTNTFGTxid:string, FTNTFGTqtypeval:int, FTNTFGTqclass:string, FTNTFGTcatdesc:string, FTNTFGTipaddr:string, FTNTFGTunauthuser:string, FTNTFGTuser:string, FTNTFGTbotnetip:string) with (pair_delimiter=";", kv_delimiter="=")
+      | parse-kv  AdditionalExtensions as (
+            // FTNTFGT format for FortiGate
+            FTNTFGTlogid:string, 
+            FTNTFGTsubtype:string, 
+            FTNTFGTsrccountry:string, 
+            FTNTFGTdstcountry:string,
+            FTNTFGTsrcintfrole:string, 
+            FTNTFGTrcode:string, 
+            FTNTFGTqname:string, 
+            FTNTFGTqtype:string, 
+            FTNTFGTxid:string, 
+            FTNTFGTqtypeval:int, 
+            FTNTFGTqclass:string, 
+            FTNTFGTcatdesc:string, 
+            FTNTFGTipaddr:string, 
+            FTNTFGTunauthuser:string, 
+            FTNTFGTuser:string, 
+            FTNTFGTbotnetip:string,
+            // Simple format for FortiAnalyzer
+            logid:string, 
+            subtype:string, 
+            srccountry:string, 
+            dstcountry:string,
+            srcintfrole:string, 
+            rcode:string, 
+            qname:string, 
+            qtype:string, 
+            xid:string, 
+            qtypeval:int, 
+            qclass:string, 
+            catdesc:string, 
+            ipaddr:string, 
+            unauthuser:string, 
+            user:string, 
+            botnetip:string,
+            // Additional fields
+            sessionid:int
+        ) with (pair_delimiter=";", kv_delimiter="=")
       | where (array_length(domain_has_any) == 0 or FTNTFGTqname has_any (domain_has_any)) and
           (responsecodename == '*' or FTNTFGTrcode == DnsResponseCodeNameLookup) and
           (response_has_ipv4 == '*' or has_ipv4(FTNTFGTipaddr, response_has_ipv4)) and
           (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(FTNTFGTipaddr, response_has_any_prefix))
       | project-rename 
-          EventOriginalResultDetails  = FTNTFGTrcode,
-          EventOriginalUid            = FTNTFGTlogid,
-          DvcZone                     = FTNTFGTsrcintfrole,
-          EventOriginalType           = FTNTFGTsubtype,
-          SrcGeoCountry               = FTNTFGTsrccountry,
-          DstGeoCountry               = FTNTFGTdstcountry,
-          DnsQuery                    = FTNTFGTqname,
-          DnsQueryTypeName            = FTNTFGTqtype,
-          TransactionIdHex            = FTNTFGTxid,
-          DnsQueryClass               = FTNTFGTqtypeval,
-          DnsQueryClassName           = FTNTFGTqclass,
-          UrlCategory                 = FTNTFGTcatdesc,
-          DnsResponseName             = FTNTFGTipaddr,
-          ThreatIpAddr                = FTNTFGTbotnetip
+          EventOriginalResultDetails  = coalesce(FTNTFGTrcode, rcode),
+          EventOriginalUid            = coalesce(FTNTFGTlogid, logid),
+          DvcZone                     = coalesce(FTNTFGTsrcintfrole, srcintfrole),
+          EventOriginalType           = coalesce(FTNTFGTsubtype, subtype),
+          SrcGeoCountry               = coalesce(FTNTFGTsrccountry, srccountry),
+          DstGeoCountry               = coalesce(FTNTFGTdstcountry, dstcountry),
+          DnsQuery                    = coalesce(FTNTFGTqname, qname),
+          DnsQueryTypeName            = coalesce(FTNTFGTqtype, qtype),
+          TransactionIdHex            = coalesce(FTNTFGTxid, xid),
+          DnsQueryClass               = coalesce(FTNTFGTqtypeval, qtypeval),
+          DnsQueryClassName           = coalesce(FTNTFGTqclass, qclass),
+          UrlCategory                 = coalesce(FTNTFGTcatdesc, catdesc),
+          DnsResponseName             = coalesce(FTNTFGTipaddr, ipaddr),
+          ThreatIpAddr                = coalesce(FTNTFGTbotnetip, botnetip)
       | extend 
           DnsQueryTypeName = case(
               DnsQueryTypeName == "Unknown","",
