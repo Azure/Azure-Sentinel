@@ -57,8 +57,8 @@ module CovewareFindingsTable './CovewareFindingsSchema.bicep' = {
   }
 }
 
-module sessionTable './VeeamSessionSchema.bicep' = {
-  name: 'VeeamSessionTable'
+module sessionTable './VeeamSessionsSchema.bicep' = {
+  name: 'VeeamSessionsTable'
   params: {
     workspaceName: workspaceName
     location: logAnalyticsWorkspace.location

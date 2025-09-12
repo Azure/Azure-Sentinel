@@ -331,6 +331,10 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
           name: 'WORKSPACE_NAME'
           value: workspaceName
         }
+        {
+          name:'WEBSITE_RUN_FROM_PACKAGE'
+          value: packageUri
+        }
       ]
     }
   }
@@ -382,16 +386,4 @@ resource functionDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'
       }
     ]
   }
-}
-
-
-resource zipDeploy 'Microsoft.Web/sites/extensions@2021-02-01' = {
-  name: '${functionApp.name}/ZipDeploy'
-  properties: {
-    packageUri: packageUri
-    appOffline: true
-  }
-  dependsOn: [
-    authSettings
-  ]
 }
