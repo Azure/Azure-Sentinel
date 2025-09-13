@@ -1,0 +1,54 @@
+id: 0e96c419-68eb-4235-947e-7e86e136cda0
+name: Lumen TI IPAddress in OfficeActivity
+displayName: Lumen TI IPAddress in OfficeActivity
+description: |
+  This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in OfficeActivity.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: LumenThreatFeedConnector
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 4h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 5h
+suppressionEnabled: true
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1d;  // Data lookback for OfficeActivity
+  let ioc_lookBack = 14d; // TI lookback
+  let IP_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith 'fe80' and TI_ipEntity !startswith '::' and TI_ipEntity !startswith '127.';
+  IP_Indicators
+  | join kind=innerunique (
+      OfficeActivity
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend OA_ipEntity = ClientIP
+      | extend OfficeActivity_TimeGenerated = TimeGenerated
+    ) on $left.TI_ipEntity == $right.OA_ipEntity
+  | where OfficeActivity_TimeGenerated < ValidUntil
+  | summarize arg_max(OfficeActivity_TimeGenerated, *), StartTime = min(OfficeActivity_TimeGenerated), EndTime = max(OfficeActivity_TimeGenerated) by Id, OA_ipEntity
+  | project timestamp = EndTime, StartTime, EndTime, UserId, ClientIP, Operation, Id, Tags, ValidUntil, Confidence, TI_ipEntity, OA_ipEntity, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: OA_ipEntity
+version: 1.0.0
+kind: Scheduled

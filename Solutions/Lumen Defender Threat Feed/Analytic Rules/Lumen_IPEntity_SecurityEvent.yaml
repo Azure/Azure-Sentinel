@@ -1,0 +1,57 @@
+id: 140a2cb5-4b4a-485c-aab3-2415c24d37e6
+name: Lumen TI IPAddress in SecurityEvents
+displayName: Lumen TI IPAddress in SecurityEvents
+description: |
+  This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SecurityEvents.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: LumenThreatFeedConnector
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 4h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 5h
+suppressionEnabled: true
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1d;  // Data lookback for SecurityEvent
+  let ioc_lookBack = 14d; // TI lookback
+  let IP_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith 'fe80' and TI_ipEntity !startswith '::' and TI_ipEntity !startswith '127.';
+  IP_Indicators
+  | join kind=innerunique (
+      SecurityEvent
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend SE_ipEntity = IpAddress
+      | extend SecurityEvent_TimeGenerated = TimeGenerated
+    ) on $left.TI_ipEntity == $right.SE_ipEntity
+  | where SecurityEvent_TimeGenerated < ValidUntil
+  | summarize arg_max(SecurityEvent_TimeGenerated, *), StartTime = min(SecurityEvent_TimeGenerated), EndTime = max(SecurityEvent_TimeGenerated) by Id, SE_ipEntity
+  | project timestamp = EndTime, StartTime, EndTime, Computer, IpAddress, EventID, Activity, Id, Tags, ValidUntil, Confidence, TI_ipEntity, SE_ipEntity, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SE_ipEntity
+version: 1.0.0
+kind: Scheduled
