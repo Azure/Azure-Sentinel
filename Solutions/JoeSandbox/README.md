@@ -1,6 +1,6 @@
 # JoeSandbox Threat Intelligence Feed and Enrichment Integration - Microsoft Sentinel
 
-**Latest Version:** **1.0.0** - **Release Date:** **12/09/2025**
+**Latest Version:** **1.0.0** - **Release Date:** **15/09/2025**
 
 ## Overview
 
@@ -12,7 +12,7 @@
   1. Azure functions with Flex Consumption plan.
      Reference: https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan
      
-	 **Note:** Flex Consumption plans are not available in all regions, please check if the region your are deploying the function is supported, if not we suggest you to deploy the function app with premium plan.
+	 **Note:** Flex Consumption plans are not available in all regions, please check if the region you are deploying the function is supported, if not we suggest you to deploy the function app with premium plan.
 	 Reference: https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-how-to?tabs=azure-cli%2Cvs-code-publish&pivots=programming-language-python#view-currently-supported-regions
   3. Azure functions Premium plan.
 	 Reference: https://learn.microsoft.com/en-us/azure/azure-functions/functions-premium-plan

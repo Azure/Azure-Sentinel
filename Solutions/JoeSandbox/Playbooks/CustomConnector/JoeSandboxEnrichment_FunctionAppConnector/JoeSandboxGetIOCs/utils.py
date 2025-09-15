@@ -5,6 +5,7 @@ utils functions
 # pylint: disable=logging-fstring-interpolation
 import logging
 from ipaddress import ip_address, IPv4Address, IPv6Address
+from typing import Optional
 from uuid import uuid5, NAMESPACE_DNS
 from datetime import datetime, timedelta, timezone
 from json import loads
@@ -100,7 +101,7 @@ def add_file_indicators(files: list, analysis_data: dict) -> list:
     return indicators
 
 
-def check_ip(ip: str) -> str | None:
+def check_ip(ip: str) -> Optional[str]:
     """
     Determines the type of IP address using the ipaddress module.
 
