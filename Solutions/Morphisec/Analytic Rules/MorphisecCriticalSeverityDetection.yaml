@@ -1,0 +1,58 @@
+id: 8a2d4f3e-5b7c-4d8e-9f1a-2b3c4d5e6f7g
+name: Morphisec Critical Severity Detection
+description: |
+  'Creates an incident when a Morphisec threat detection is triggered with Critical Severity. This rule helps SOC analysts identify and respond to the most severe threats detected by Morphisec.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MorphisecCCF
+    dataTypes:
+      - Morphisec
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: []
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails: null
+query: |
+  let timeframe = 10m;
+  Morphisec
+  | where TimeGenerated > ago(timeframe)
+  | where AttackSeverity == "CRITICAL"
+  | summarize 
+      StartTimeUtc = min(TimeGenerated),
+      EndTimeUtc = max(TimeGenerated),
+      AlertCount = count(),
+      ThreatNames = make_set(AttackName),
+      ThreatCategories = make_set(AttackCategory),
+      ProcessNames = make_set(ProcessName),
+      CommandLines = make_set(CommandLine)
+    by DeviceName
+  | extend 
+      timestamp = StartTimeUtc,
+      HostCustomEntity = DeviceName,
+      ProcessCustomEntity = ProcessName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessName
+alertDetailsOverride:
+  alertDisplayNameFormat: "Morphisec Critical Threat Detected: {{ThreatName}} on {{DeviceName}}"
+  alertDescriptionFormat: "Morphisec detected a critical severity threat on device {{DeviceName}}. Threat: {{ThreatName}} in process {{ProcessName}}. Total alerts: {{AlertCount}}"
+version: 4.0.0
+kind: Scheduled
