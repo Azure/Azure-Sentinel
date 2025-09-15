@@ -1,0 +1,674 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "JoeSandbox File Analyis", 
+        "description": "Submits a attachment or set of attachment associated with an office 365 email to JoeSandbox for Analyis.",
+        "prerequisites": "JoeSandbox API Key.",       
+        "prerequisitesDeployTemplateFile": "../JoeSecurity/FunctionApp/azuredeploy.json",
+        "postDeploymentSteps": ["None"],      
+        "lastUpdateTime": "2025-09-11T00:00:00.000Z", 
+        "entities": [""], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Stefan Buhlmann"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "JoeSandbox_Outlook_Attachment_Analysis",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+		"WorkspaceName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Log Analytics Workspace name"
+            }
+        },
+		"WorkspaceID": {
+			"defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Log Analytics Workspace ID"
+            }
+        },
+        "FunctionAppName": {
+            "defaultValue": "joesandboxenrich",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the FunctionApp"
+            }
+        }
+    },
+    "variables": {
+		"functionappName": "[concat(toLower(parameters('FunctionAppName')), take(uniqueString(resourceGroup().id), 3))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+		"Office365V1": "[concat('office365-', parameters('PlaybookName'))]",
+		"subscription": "[last(split(subscription().id, '/'))]",
+        "resourceGroupName": "[resourceGroup().name]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('Office365V1')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('Office365V1')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('Office365V1'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "Indicator_Expiration_In_Days": {
+                            "defaultValue": "30",
+                            "type": "String"
+                        },
+                        "Notify_Via_Email": {
+                            "defaultValue": false,
+                            "type": "Bool"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_new_email_arrives_(V3)": {
+                            "splitOn": "@triggerBody()?['value']",
+                            "type": "ApiConnectionNotification",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "fetch": {
+                                    "pathTemplate": {
+                                        "template": "/v3/Mail/OnNewEmail"
+                                    },
+                                    "method": "get",
+                                    "queries": {
+                                        "importance": "Any",
+                                        "fetchOnlyWithAttachment": true,
+                                        "includeAttachments": true,
+                                        "folderPath": "Inbox"
+                                    }
+                                },
+                                "subscribe": {
+                                    "body": {
+                                        "NotificationUrl": "@listCallbackUrl()"
+                                    },
+                                    "pathTemplate": {
+                                        "template": "/GraphMailSubscriptionPoke/$subscriptions"
+                                    },
+                                    "method": "post",
+                                    "queries": {
+                                        "importance": "Any",
+                                        "fetchOnlyWithAttachment": true,
+                                        "folderPath": "Inbox"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Submission_Status": {
+                            "runAfter": {
+                                "Submission_Object": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "submission_status",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Submission_Report": {
+                            "runAfter": {
+                                "Submission_Status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "submission_report",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Email_Body": {
+                            "runAfter": {
+                                "Submission_Report": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "email_body",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "File_Name": {
+                            "runAfter": {
+                                "Email_Body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "file_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Submission_Object": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "submissin_obj",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_Every_Attachment": {
+                            "foreach": "@triggerBody()?['attachments']",
+                            "actions": {
+                                "Append_to_Submission_Object_to_Variable": {
+                                    "runAfter": {
+                                        "GetJoeSanboxFiles": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "submissin_obj",
+                                        "value": {
+                                            "submission": "@body('GetJoeSanboxFiles')",
+                                            "filename": "@variables('file_name')"
+                                        }
+                                    }
+                                },
+                                "GetJoeSanboxFiles": {
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "file": "@item()?['contentBytes']",
+                                            "name": "@item()?['name']",
+                                            "tags": [
+                                                "outlook_attachment_logic_app_submission"
+                                            ]
+                                        },
+                                        "function": {
+											"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/JoeSandboxSubmitFile')]"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "File_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "For_Every_Submission_Object": {
+                            "foreach": "@variables('submissin_obj')",
+                            "actions": {
+                                "Set_Submission_Status_to_False": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "submission_status",
+                                        "value": false
+                                    }
+                                },
+                                "Wait_untill_submission_is_completed": {
+                                    "actions": {
+                                        "Check_If_Submission_is_finished": {
+                                            "actions": {
+                                                "Check_if_analysis_detection_is_malicious_or_suspicious": {
+                                                    "actions": {
+                                                        "Set_submission_report": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "submission_report",
+                                                                "value": [
+                                                                    {
+                                                                        "Submission ID": "@body('GetJoeSanboxSubmissions')['submission_id']",
+                                                                        "Submission Status": "@body('GetJoeSanboxSubmissions')['status']",
+                                                                        "Web ID": "@body('GetJoeSanbdoxAnalysis')['webid']",
+                                                                        "Classifications": "@body('GetJoeSanbdoxAnalysis')['classification']",
+                                                                        "Threat Names": "@body('GetJoeSanbdoxAnalysis')['threatname']",
+                                                                        "Analysis URL": "@concat('https://jbxcloud.joesecurity.org/analysis/', body('GetJoeSanbdoxAnalysis')['webid'])",
+                                                                        "Detection": "@body('GetJoeSanbdoxAnalysis')['detection']",
+                                                                        "Score": "@body('GetJoeSanbdoxAnalysis')['score']"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        },
+                                                        "Create_HTML_table": {
+                                                            "runAfter": {
+                                                                "Set_submission_report": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Table",
+                                                            "inputs": {
+                                                                "from": "@variables('submission_report')",
+                                                                "format": "HTML"
+                                                            }
+                                                        },
+                                                        "Create_incident": {
+                                                            "runAfter": {
+                                                                "Create_HTML_table": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "body": {
+                                                                    "title": "JoeSandbox Email Attachment Scan Submission Details for file - @{body('GetJoeSanbdoxAnalysis')['filename']}",
+                                                                    "severity": "Medium",
+                                                                    "status": "New",
+                                                                    "description": "JoeSandbox Email Attachment Scan . From:@{triggerBody()?['from']}. To: @{triggerBody()?['toRecipients']}"
+                                                                },
+                                                                "path": "/Incidents/subscriptions/@{encodeURIComponent('7356a8d4-94f5-4210-a777-f4d6329e1c71')}/resourceGroups/@{encodeURIComponent('Joe-Security')}/workspaces/@{encodeURIComponent('JoeSecurity')}"
+                                                            }
+                                                        },
+                                                        "Add_comment_to_incident_(V3)": {
+                                                            "runAfter": {
+                                                                "Create_incident": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": {
+                                                                    "incidentArmId": "@body('Create_incident')?['id']",
+                                                                    "message": "<p class=\"editor-paragraph\">JoeSandbox Submission for File - @{items('For_Every_Submission_Object')['filename']}<br>@{body('Create_HTML_table')}</p>"
+                                                                },
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "Check_if_JoeSandbox_has_any_indicators_for_the_analysis": {
+                                                            "actions": {
+                                                                "Threat_Intelligence_-_Upload_Indicators_of_Compromise_(V2)_(Preview)": {
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "body": {
+                                                                            "sourcesystem": "JoeSandboxThreatIntelligence",
+                                                                            "indicators": "@body('GetJoeSanboxIOCs')['custom_response']"
+                                                                        },
+                                                                        "path": "/V2/ThreatIntelligence/4f06a513-315c-41be-8dc2-3dd4da0ba830/UploadIndicators/"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "GetJoeSanboxIOCs": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {}
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "greater": [
+                                                                            "@length(body('GetJoeSanboxIOCs')['custom_response'])",
+                                                                            0
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Set_Submission_Status_to_True": {
+                                                            "runAfter": {
+                                                                "Check_Notify_Via_Email": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "submission_status",
+                                                                "value": true
+                                                            }
+                                                        },
+                                                        "GetJoeSanboxIOCs": {
+                                                            "runAfter": {
+                                                                "Add_comment_to_incident_(V3)": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Function",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "web_id": "@body('GetJoeSanbdoxAnalysis')['webid']"
+                                                                },
+                                                                "function": {
+																	"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/JoeSandboxGetIOCs')]"
+                                                                }
+                                                            }
+                                                        },
+                                                        "Check_Notify_Via_Email": {
+                                                            "actions": {
+                                                                "Set_email_body": {
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "email_body",
+                                                                        "value": "<p class=\"editor-paragraph\">\n<table style=\"width: 100%; border-collapse: collapse; background-color: #f0f0f0;\">\n<thead>\n<tr>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission Status</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Web ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Classifications</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Threat Names</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Analysis URL</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Detection</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Score</th>\n</tr>\n</thead>\n<tbody>\n<tr style=\"background-color: #ffffff; border-bottom: 1px solid #ddd;\">\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanboxSubmissions')['submission_id']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanboxSubmissions')['status']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['webid']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['classification']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['threatname']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{concat('https://jbxcloud.joesecurity.org/analysis/', body('GetJoeSanbdoxAnalysis')['webid'])}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['detection']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['score']}</td>\n</tr>\n</tbody>\n</table>\n</p>\n"
+                                                                    }
+                                                                },
+                                                                "Send_an_email_(V2)": {
+                                                                    "runAfter": {
+                                                                        "Set_email_body": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "body": {
+                                                                            "To": "kmamidipalli@loginsoft.com",
+                                                                            "Subject": "JoeSandbox Email Attachment Scan for file - @{body('GetJoeSanboxSubmissions')['name']}",
+                                                                            "Body": "<p class=\"editor-paragraph\">@{variables('email_body')}</p>",
+                                                                            "Importance": "Normal"
+                                                                        },
+                                                                        "path": "/v2/Mail"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Check_if_JoeSandbox_has_any_indicators_for_the_analysis": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {}
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@parameters('Notify_Via_Email')",
+                                                                            true
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "GetJoeSanbdoxAnalysis": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_email_body_for_clean_analysis": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "email_body",
+                                                                    "value": "<p class=\"editor-paragraph\">\n<table style=\"width: 100%; border-collapse: collapse; background-color: #f0f0f0;\">\n<thead>\n<tr>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission Status</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Web ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Classifications</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Threat Names</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Analysis URL</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Detection</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Score</th>\n</tr>\n</thead>\n<tbody>\n<tr style=\"background-color: #ffffff; border-bottom: 1px solid #ddd;\">\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanboxSubmissions')['submission_id']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanboxSubmissions')['status']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['webid']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['classification']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['threatname']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{concat('https://jbxcloud.joesecurity.org/analysis/', body('GetJoeSanbdoxAnalysis')['webid'])}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['detection']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetJoeSanbdoxAnalysis')['score']}</td>\n</tr>\n</tbody>\n</table>\n</p>\n"
+                                                                }
+                                                            },
+                                                            "Send_an_email_(V2)_for_clean_analysis": {
+                                                                "runAfter": {
+                                                                    "Set_email_body_for_clean_analysis": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "body": {
+                                                                        "To": "kmamidipalli@loginsoft.com",
+                                                                        "Subject": "JoeSandbox Email Attachment Scan for file - @{body('GetJoeSanboxSubmissions')['name']}",
+                                                                        "Body": "<p class=\"editor-paragraph\">@{variables('email_body')}</p>",
+                                                                        "Importance": "Normal"
+                                                                    },
+                                                                    "path": "/v2/Mail"
+                                                                }
+                                                            },
+                                                            "Set_Submission_Status_to_True_After_Clean_Analysis": {
+                                                                "runAfter": {
+                                                                    "Send_an_email_(V2)_for_clean_analysis": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "submission_status",
+                                                                    "value": true
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@body('GetJoeSanbdoxAnalysis')['detection']",
+                                                                        "clean"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "GetJoeSanbdoxAnalysis": {
+                                                    "type": "Function",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "analysis_id": "@body('GetJoeSanboxSubmissions')['most_relevant_analysis']['webid']"
+                                                        },
+                                                        "function": {
+															"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/JoeSandboxGetAnalysisInfo')]"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "GetJoeSanboxSubmissions": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Delay_by_2_minutes": {
+                                                        "type": "Wait",
+                                                        "inputs": {
+                                                            "interval": {
+                                                                "count": 2,
+                                                                "unit": "Minute"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Set_submission_status_to_false_again": {
+                                                        "runAfter": {
+                                                            "Delay_by_2_minutes": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "submission_status",
+                                                            "value": false
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@body('GetJoeSanboxSubmissions')['status']",
+                                                            "finished"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "GetJoeSanboxSubmissions": {
+                                            "type": "Function",
+                                            "inputs": {
+                                                "body": {
+                                                    "submission_id": "@items('For_Every_Submission_Object')['submission']['submission_id']"
+                                                },
+                                                "function": {
+													"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/JoeSandboxGetSubmissionInfo')]"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_Submission_Status_to_False": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": "@equals(variables('submission_status'),true)",
+                                    "limit": {
+                                        "count": 60,
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "For_Every_Attachment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "office365": {
+                             	"connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365V1'))]",
+                              	"connectionName": "[variables('Office365V1')]",
+                              	 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
