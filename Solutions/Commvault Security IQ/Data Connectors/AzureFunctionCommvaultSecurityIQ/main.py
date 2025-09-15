@@ -154,16 +154,16 @@ def gen_chunks(data):
         obj_array = []
         for row in chunk:
             if row != None and row != '':
-                # Check if event code matches our target codes
-                event_code = row.get("Event_Code_s") or row.get("eventCodeString_s")
-                if event_code and event_code in target_event_codes:
-                    logging.info(f"Processing target event with code: {event_code}")
-                    obj_array.append(row)
-                elif not event_code:
-                    # Include events without event codes (might be other important data)
+                if showAllEvents == "true":
+                    logging.info(f"ShowAllEvents=true: Including all events")
                     obj_array.append(row)
                 else:
-                    logging.debug(f"Skipping event with code: {event_code} (not in target list)")
+                    event_code = row.get("eventCodeString") or row.get("eventCode")
+                    if event_code and event_code in target_event_codes:
+                        logging.info(f"Processing target event with code: {event_code}")
+                        obj_array.append(row)
+                    else:
+                        logging.debug(f"Skipping event with code: {event_code} (not in target list)")
         
         if obj_array:  # Only send if we have events to process
             body = json.dumps(obj_array)
@@ -352,12 +352,11 @@ def main(mytimer: func.TimerRequest) -> None:
                 fromtime = updatedfromtime
 
         # Call events API
-        if not showAllEvents :
+        if showAllEvents == "false":
             ustring = f"/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=true&showAnomalous=true"
         else:
-            ustring = f"/events?level=10&showInfo=true&showMinor=true&showMajor=true&showCritical=true&showAnomalous=true"
+            ustring = f"/events?level=10&showInfo=true&showMinor=true&showMajor=true&showCritical=true&showAnomalous=false"
         f_url = url + ustring
-        logging.debug(f"Constructed events URL: {f_url}")
 
         max_fetch = 1000
         headers["pagingInfo"] = f"0,{max_fetch}"
@@ -365,7 +364,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
         logging.info(f"Starts at: [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}]")
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
-        logging.debug(f"Event endpoint: {event_endpoint}")
+        logging.info(f"Event endpoint: {event_endpoint}")
 
         response = requests.get(event_endpoint, headers=headers, verify=False)
         logging.info(f"Response Status Code: {response.status_code}")
