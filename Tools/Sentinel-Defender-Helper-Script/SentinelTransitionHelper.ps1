@@ -1,0 +1,658 @@
+# =============================================
+# Defender Adoption Helper Script
+#
+# This PowerShell script assists with the adoption of Microsoft Defender and Sentinel by:
+# - Checking retention settings for key Defender tables in Log Analytics
+# - Analyzing analytics rules and Fusion engine status
+# - Reviewing automation rules for best practices
+#
+# The script authenticates using an Entra App Registration and queries the Azure Management API.
+#
+# Author: [Mario Cuomo]
+# Date: [05th September, 2025]
+# =============================================
+
+# Optional parameter for FileName
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$FileName = $null,
+    [Parameter(Mandatory = $true)]
+    [string]$EnvironmentsFile = $null
+)
+
+# Function to set Writer style
+function Set-WriterStyle {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Writer,
+        [int]$Color = 0,
+        [bool]$Bold = $false,
+        [bool]$Italic = $false
+    )
+    $Writer.Font.Color = $Color
+    $Writer.Font.Bold = $Bold
+    $Writer.Font.Italic = $Italic
+}
+
+# Function to write an header2
+function Write-Heading2 {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Writer,
+        [Parameter(Mandatory = $true)]
+        [string]$HeadingText
+    )
+    $Writer.Style = 'Heading 2'
+    $Writer.Font.Italic = $true
+    $Writer.TypeText("$HeadingText ")
+    $Writer.Font.Italic = $false
+    $Writer.TypeText("environment")
+    $Writer.TypeParagraph()
+    $Writer.Style = 'Normal'
+}
+
+# Function to write an header2
+function Write-Heading3 {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Writer,
+        [Parameter(Mandatory = $true)]
+        [string]$HeadingText
+    )
+    $Writer.Style = 'Heading 3'
+    $Writer.TypeText($HeadingText)
+    $Writer.TypeParagraph()
+    $Writer.Style = 'Normal'
+}
+
+# Function to write statistics
+function Write-Statistics {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Writer,
+        [Parameter(Mandatory = $true)]
+        $passedControlsTemp,
+        [Parameter(Mandatory = $true)]
+        $totalControlsTemp,
+        [Parameter(Mandatory = $true)]
+        $scorePercent,
+        [Parameter(Mandatory = $true)]
+        [string]$scoreText
+    )
+    Set-WriterStyle -Writer $Writer -Color 0 -Bold $true
+    $Writer.TypeText("$scoreText $passedControlsTemp/$totalControlsTemp ($scorePercent%)")
+    Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+    $Writer.TypeParagraph()
+}
+
+# Function to print a header in the shell
+function Print-HeaderInShell {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Message
+    )
+    Write-Host ""
+    Write-Host "***********************"
+    Write-Host "$Message"
+    Write-Host "***********************"
+}
+
+
+# Function to save the Word report as PDF and clean up resources
+function Save-ReportToPDF {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FileName,
+        [Parameter(Mandatory = $true)]
+        $Document,
+        [Parameter(Mandatory = $true)]
+        $WordApplication
+    )
+
+    $scriptPath = $MyInvocation.MyCommand.Path
+    if (-not $scriptPath) {
+        $scriptDir = Get-Location
+    }
+    else {
+        $scriptDir = Split-Path $scriptPath
+    }
+
+    $finalName = $FileName
+    if (-not $finalName.ToLower().EndsWith('.pdf')) {
+        $finalName = "$finalName.pdf"
+    }
+    $savePath = Join-Path $scriptDir $finalName
+
+    try {
+        $wdFormatPDF = 17
+        $Document.SaveAs2([string]$savePath, [ref]$wdFormatPDF)
+        Write-Host "Report generated on " (Get-Date -Format "yyyy-MM-dd")
+    }
+    finally {
+        $WordApplication.Quit()
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Document) | Out-Null
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($WordApplication) | Out-Null
+        exit
+    }
+}
+
+Write-Host "DEFENDER ADOPTION HELPER" -ForegroundColor Green
+Write-Host "This script assists with Defender and Sentinel adoption by checking table retention, analytics rules, and automation rules of your environments."  -ForegroundColor Green
+Write-Host ""
+
+# Define your Entra App Registration and Sentinel details
+$tenantId = "<your-tenant-id>"
+$clientId = "<your-client-id>"
+$clientSecret = "<your-client-secret>"
+
+# Read environments from JSON file
+if ($EnvironmentsFile) {
+    $environments = Get-Content $EnvironmentsFile | ConvertFrom-Json
+    write-Host "$($environments.Count) environments found in the $EnvironmentsFile file" -ForegroundColor Green
+    write-Host "Environments loaded from file:" -ForegroundColor Green
+    $environments | ForEach-Object {
+        write-Host "   - $($_.workspaceName) in subscription $($_.subscriptionId) and resource group $($_.resourceGroupName)"  -ForegroundColor Green
+    }
+}
+else {
+    $environments = @(
+        @{
+            subscriptionId    = $subscriptionId
+            resourceGroupName = $resourceGroupName
+            workspaceName     = $workspaceName
+        }
+    )
+}
+$resource = "https://management.azure.com/"
+$authUrl = "https://login.microsoftonline.com/$tenantId/oauth2/token"
+
+if ($PSBoundParameters.ContainsKey('FileName')) {
+    $WordApplication = New-Object -ComObject Word.Application
+    $WordApplication.Visible = $false
+    $Document = $WordApplication.Documents.Add()
+    $Writer = $WordApplication.Selection
+
+    # Insert Table of Contents at the beginning
+    $null = $Writer.HomeKey(6) # Move to start of document (wdStory)
+    $Writer.Style = 'Normal'
+    $Writer.Font.Bold = $true
+    $Writer.TypeText('TABLE OF CONTENTS')
+    $Writer.Font.Bold = $false
+    $Writer.TypeParagraph()
+    $null = $Document.Fields.Add($Writer.Range, -1, 'TOC \o "1-3" \h \z \u', $false)
+    $Writer.TypeParagraph()
+
+    # Insert a page break after the TOC
+    $Writer.InsertBreak(2) # 2 = wdPageBreak
+
+
+    $Writer.Style = 'Heading 1'
+    $Writer.TypeText("Defender Adoption Helper Overview")
+    $Writer.TypeParagraph()
+    $Writer.Style = 'Normal'
+    $Writer.TypeText("This report describes the current situation to adopt Sentinel in Defender in terms of Table Retention, Analytics Rules and Automations Rules.")
+    $Writer.TypeParagraph()
+    $Writer.TypeText("Sentinel environments in scope: ")
+    $Writer.TypeParagraph()
+    $Writer.Range.ListFormat.ApplyBulletDefault()
+    foreach ($env in $environments) {
+        $Writer.TypeText("Workspace name: $($env.workspaceName)")
+        $Writer.TypeText([char]11) # manual line break (Shift+Enter)
+        $Writer.TypeText("Resource group name: $($env.resourceGroupName)")
+        $Writer.TypeText([char]11) # manual line break (Shift+Enter)
+        $Writer.TypeText("Subscription id: $($env.subscriptionId)")
+        $Writer.TypeParagraph() # new bullet for next environment
+    }
+    $Writer.Range.ListFormat.RemoveNumbers()
+    $Writer.Font.Bold = $false
+    $Writer.TypeParagraph()
+    $Writer.TypeText("Report Generated on date: ")
+    $Writer.Font.Bold = $true
+    $date = Get-Date -Format "yyyy-MM-dd"
+    $Writer.TypeText($date)
+    $Writer.Font.Bold = $false
+    $Writer.InsertBreak(7) 
+}
+
+Write-Host ""
+Write-Host ""
+
+foreach ($env in $environments) {
+    $subscriptionId = $env.subscriptionId
+    $resourceGroupName = $env.resourceGroupName
+    $workspaceName = $env.workspaceName
+    write-Host "Starting the analysis for $workspaceName (RG: $resourceGroupName) in subscription $subscriptionId" -ForegroundColor Cyan
+    if ($PSBoundParameters.ContainsKey('FileName')) {
+        Write-Heading2 -Writer $Writer -HeadingText "$workspaceName"
+        $Writer.Style = 'Normal'
+        $Writer.TypeText("This section provides details about the following Sentinel environment:")
+        $Writer.TypeParagraph()
+        # Write bullet point list with workspace info
+        $Writer.Range.ListFormat.ApplyBulletDefault()
+        $Writer.TypeText("Workspace name: ")
+        Set-WriterStyle -Writer $Writer -Bold $true
+        $Writer.TypeText($workspaceName)
+        Set-WriterStyle -Writer $Writer -Bold $false
+        $Writer.TypeParagraph()
+        $Writer.TypeText("Resource Group name: ")
+        Set-WriterStyle -Writer $Writer -Bold $true
+        $Writer.TypeText($resourceGroupName)
+        Set-WriterStyle -Writer $Writer -Bold $false
+        $Writer.TypeParagraph()
+        $Writer.TypeText("Subscription ID: ")
+        Set-WriterStyle -Writer $Writer -Bold $true
+        $Writer.TypeText($subscriptionId)
+        Set-WriterStyle -Writer $Writer -Bold $false
+        $Writer.TypeParagraph()
+        $Writer.Range.ListFormat.RemoveNumbers()
+        $Writer.InsertBreak(7)
+    }
+
+    
+    $totalControls = 0
+    $totalPassedControls = 0
+    $totalControlsTemp = 0
+    $passedControlsTemp = 0
+
+    # Prepare the body for the token request
+    $body = @{
+        grant_type    = "client_credentials"
+        client_id     = $clientId
+        client_secret = $clientSecret
+        resource      = $resource
+    }
+
+    # Request the token
+    $tokenResponse = Invoke-RestMethod -Method Post -Uri $authUrl -Body $body
+    $accessToken = $tokenResponse.access_token
+
+
+    if ($PSBoundParameters.ContainsKey('FileName')) {
+        Write-Heading3 -Writer $Writer -HeadingText "Defender data analysis"
+    }
+
+    $defenderTables = @(
+        "DeviceInfo",
+        "DeviceNetworkInfo",
+        "DeviceProcessEvents",
+        "DeviceNetworkEvents",
+        "DeviceFileEvents",
+        "DeviceRegistryEvents",
+        "DeviceLogonEvents",
+        "DeviceImageLoadEvents",
+        "DeviceEvents",
+        "DeviceFileCertificateInfo",
+        "EmailEvents",
+        "EmailUrlInfo",
+        "EmailAttachmentInfo",
+        "EmailPostDeliveryEvents",
+        "UrlClickEvents",
+        "CloudAppEvents",
+        "IdentityLogonEvents",
+        "IdentityQueryEvents",
+        "IdentityDirectoryEvents",
+        "AlertInfo",
+        "AlertEvidence"
+    )
+
+    Print-HeaderInShell -Message "DEFENDER DATA ANALYSIS"
+    $apiVersion = "2025-02-01"
+    foreach ($table in $defenderTables) {
+        $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/tables/${table}?api-version=$apiVersion"
+        $response = Invoke-RestMethod -Uri $uri -Method Get -Headers @{
+            Authorization = "Bearer $accessToken"
+            ContentType   = "application/json"
+        }
+        $retentionPeriod = $($response.properties.totalRetentionInDays)
+        $totalControls++
+        $totalControlsTemp++
+
+        if ($response.properties.totalRetentionInDays -lt 31) {
+            Write-Host "[WARNING]" -ForegroundColor DarkYellow -NoNewline; Write-Host " The table $table has a retention of $retentionPeriod days - no need to ingest this data in Sentinel" 
+            if ($PSBoundParameters.ContainsKey('FileName')) {
+                Set-WriterStyle -Writer $Writer -Color 255 -Bold $true
+                $Writer.TypeText("[WARNING] ")
+                Set-WriterStyle -Writer $Writer -Color 0 -Bold $false
+                $Writer.TypeText("The table ")
+                Set-WriterStyle -Writer $Writer -Italic $true -Bold $true
+                $Writer.TypeText($table)
+                Set-WriterStyle -Writer $Writer -Italic $false -Bold $false
+                $Writer.Font.Bold = $false
+                $Writer.TypeText(" has a retention of $retentionPeriod days - no need to ingest this data in Sentinel")
+                $Writer.TypeParagraph()
+            }
+        }
+        else {
+            Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The table $table has a retention of $retentionPeriod days - need to be stored in Sentinel for more retention" 
+            $passedControlsTemp++
+            $totalPassedControls++
+            if ($PSBoundParameters.ContainsKey('FileName')) {
+                Set-WriterStyle -Writer $Writer -Color 5287936 -Bold $true
+                $Writer.TypeText("[OK] ")
+                Set-WriterStyle -Writer $Writer -Color 0 -Bold $false
+                $Writer.TypeText(" The table ")
+                Set-WriterStyle -Writer $Writer -Italic $true -Bold $true
+                $Writer.TypeText($table)
+                Set-WriterStyle -Writer $Writer -Italic $false -Bold $false
+                $Writer.TypeText(" has a retention of $retentionPeriod days - need to be stored in Sentinel for more retention")
+                $Writer.TypeParagraph()
+            }
+        }
+    }
+    # Show score for this section
+    $scorePercent = [math]::Round(($passedControlsTemp / $totalControlsTemp) * 100, 2)
+    Write-Host "Defender Data Analysis Score: $passedControlsTemp/$totalControlsTemp ($scorePercent%)" -ForegroundColor Cyan
+    if ($PSBoundParameters.ContainsKey('FileName')) {
+        Write-Statistics -Writer $Writer -passedControlsTemp $passedControlsTemp -totalControlsTemp $totalControlsTemp -scorePercent $scorePercent -scoreText "Defender Data Analysis Score:"
+    }
+    Write-Host ""
+
+
+
+    Print-HeaderInShell -Message "ANALYTICS ANALYSIS"
+    $passedControlsTemp = 0
+    $totalControlsTemp = 0
+
+    if ($PSBoundParameters.ContainsKey('FileName')) {
+        Write-Heading3 -Writer $Writer -HeadingText "Analytics Analysis"
+    }
+
+    ## FUSION ENGINE
+    $apiVersion = "2025-06-01"
+    $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/providers/Microsoft.SecurityInsights/alertRules/BuiltInFusion?api-version=$apiVersion"
+    $response = Invoke-RestMethod -Uri $uri -Method Get -Headers @{
+        Authorization = "Bearer $accessToken"
+        ContentType   = "application/json"
+    }
+    $totalControls++
+    $totalControlsTemp++
+
+    if ($response -eq $null) {
+        Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The Fusion engine is not enabled"
+        $passedControlsTemp++
+        $totalPassedControls++
+        if ($PSBoundParameters.ContainsKey('FileName')) {
+            Set-WriterStyle -Writer $Writer -Color 5287936 -Bold $true
+            $Writer.TypeText("[OK] ")
+            Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+            $Writer.TypeText("The Fusion engine is not enabled")
+            $Writer.TypeParagraph()
+        }
+    }
+    if ($response.properties.enabled) {
+        Write-Host "[WARNING]" -ForegroundColor DarkYellow -NoNewline; Write-Host " Fusion rules will be automatically disabled after Microsoft Sentinel is onboarded in Defender"
+        if ($PSBoundParameters.ContainsKey('FileName')) {
+            Set-WriterStyle -Writer $Writer -Color 255 -Bold $true
+            $Writer.TypeText("[WARNING] ")
+            Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+            $Writer.TypeText("Fusion rules will be automatically disabled after Microsoft Sentinel is onboarded in Defender")
+            $Writer.TypeParagraph()
+        }
+    }
+    else {
+        Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The Fusion engine is not enabled"
+        if ($PSBoundParameters.ContainsKey('FileName')) {
+            $passedControlsTemp++
+            $totalPassedControls++
+            Set-WriterStyle -Writer $Writer -Color 5287936 -Bold $true
+            $Writer.TypeText("[OK] ")
+            Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+            $Writer.TypeText("The Fusion engine is not enabled")
+            $Writer.TypeParagraph()
+        }
+    }
+
+
+    ## ALERT VISIBILITY
+    $apiVersion = "2025-06-01"
+    $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/providers/Microsoft.SecurityInsights/alertRules?api-version=$apiVersion"
+    $response = Invoke-RestMethod -Uri $uri -Method Get -Headers @{
+        Authorization = "Bearer $accessToken"
+        ContentType   = "application/json"
+    }
+    foreach ($rule in $response.value) {
+        if ($rule.properties.displayName -eq "Advanced Multistage Attack Detection") {
+            continue
+        }
+        $totalControls++
+        $totalControlsTemp++
+    
+        $ruleName = $($rule.properties.displayName)
+    
+        if (!$rule.properties.incidentConfiguration.createIncident) {
+            Write-Host "[WARNING]" -ForegroundColor DarkYellow -NoNewline; Write-Host " The rule $ruleName doesn't generate incidents. The alerts aren't visible in the Defender portal. They appear in SecurityAlerts table in Advanced Hunting"
+            if ($PSBoundParameters.ContainsKey('FileName')) {
+                Set-WriterStyle -Writer $Writer -Color 255 -Bold $true
+                $Writer.TypeText("[WARNING] ")
+                Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+                $Writer.TypeText("The rule ")
+                Set-WriterStyle -Writer $Writer -Italic $true -Bold $true
+                $Writer.TypeText($ruleName)
+                Set-WriterStyle -Writer $Writer -Italic $false -Bold $false
+                $Writer.TypeText(" doesn't generate incidents. The alerts aren't visible in the Defender portal. They appear in SecurityAlerts table in Advanced Hunting")
+                $Writer.TypeParagraph()
+            }
+        }
+        else {
+            Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The rule $ruleName is configured correctly"
+            $passedControlsTemp++
+            $totalPassedControls++
+            if ($PSBoundParameters.ContainsKey('FileName')) {
+                Set-WriterStyle -Writer $Writer -Color 5287936 -Bold $true
+                $Writer.TypeText("[OK] ")
+                Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+                $Writer.TypeText("The rule ")
+                Set-WriterStyle -Writer $Writer -Italic $true -Bold $true
+                $Writer.TypeText($ruleName)
+                Set-WriterStyle -Writer $Writer -Italic $false -Bold $false
+                $Writer.TypeText(" is configured correctly")
+                $Writer.TypeParagraph()
+            }
+        }
+    }
+    # Show score for this section
+    $scorePercent = [math]::Round(($passedControlsTemp / $totalControlsTemp) * 100, 2)
+    Write-Host "Analytics Analysis Score: $passedControlsTemp/$totalControlsTemp ($scorePercent%)" -ForegroundColor Cyan
+    if ($PSBoundParameters.ContainsKey('FileName')) {
+        Write-Statistics -Writer $Writer -passedControlsTemp $passedControlsTemp -totalControlsTemp $totalControlsTemp -scorePercent $scorePercent -scoreText "Analytics Analysis Score:"
+    }
+    Write-Host ""
+
+
+
+
+    Print-HeaderInShell -Message "AUTOMATION RULES ANALYSIS"
+    $passedControlsTemp = 0
+    $totalControlsTemp = 0
+    if ($PSBoundParameters.ContainsKey('FileName')) {
+        $Writer.InsertBreak(7) 
+        Write-Heading3 -Writer $Writer -HeadingText "Automation Rules Analysis"
+    }
+
+    $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/providers/Microsoft.SecurityInsights/automationRules?api-version=$apiVersion"
+
+    $response = Invoke-RestMethod -Uri $uri -Method Get -Headers @{
+        Authorization = "Bearer $accessToken"
+        ContentType   = "application/json"
+    }
+
+    # Iterate through automation rules
+    foreach ($rule in $response.value) {
+        $totalControls++
+        $totalControlsTemp++
+        $ruleName = $rule.properties
+        $triggeringLogic = $rule.properties.triggeringLogic
+        $isEnabled = $triggeringLogic.isEnabled
+        $triggersOn = $triggeringLogic.triggersOn
+        $conditions = $triggeringLogic.conditions
+
+        $incidentTitle = $false
+        $incidentProvider = $false
+
+        if ($isEnabled -and $triggersOn -eq "Incidents" -and $conditions) {
+            foreach ($condition in $conditions) {
+                if (
+                    $condition.conditionType -eq "Property" -and
+                    $condition.conditionProperties.propertyName -eq "IncidentTitle"
+                ) { $incidentTitle = $true }
+                if (
+                    $condition.conditionType -eq "Property" -and
+                    $condition.conditionProperties.propertyName -eq "IncidentProviderName"
+                ) { $incidentProvider = $true }
+            
+                if ($incidentTitle -and $incidentProvider) {
+                    break
+                }
+            }
+        }
+    
+        $ruleName = $($rule.properties.displayName)
+        if ($incidentTitle) {
+            Write-Host "[WARNING]" -ForegroundColor DarkYellow -NoNewline; Write-Host " Change the trigger condition in the automation rule $ruleName from `"Incident Title`" to `"Analytics Rule Name`""
+            if ($PSBoundParameters.ContainsKey('FileName')) {
+                Set-WriterStyle -Writer $Writer -Color 255 -Bold $true
+                $Writer.TypeText("[WARNING] ")
+                Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+                $Writer.TypeText("Change the trigger condition in the automation rule ")
+                Set-WriterStyle -Writer $Writer -Italic $true -Bold $true
+                $Writer.TypeText($ruleName)
+                Set-WriterStyle -Writer $Writer -Bold $false -Italic $false
+                $Writer.TypeText(" from ")
+                Set-WriterStyle -Writer $Writer -Bold $false -Italic $true
+                $Writer.TypeText("Incident Title")
+                Set-WriterStyle -Writer $Writer -Bold $false -Italic $false
+                $Writer.TypeText(" to ")
+                Set-WriterStyle -Writer $Writer -Bold $false -Italic $true
+                $Writer.TypeText("Analytics Rule Name")
+                Set-WriterStyle -Writer $Writer -Italic $false
+                $Writer.TypeParagraph()
+            }
+        }
+        if ($incidentProvider) {
+            Write-Host "[WARNING]" -ForegroundColor DarkYellow -NoNewline; Write-Host " Change the trigger condition in the automation rule $ruleName from `"Incident Provider`" to `"Alert Product Name`""
+            if ($PSBoundParameters.ContainsKey('FileName')) {
+                Set-WriterStyle -Writer $Writer -Color 255 -Bold $true
+                $Writer.TypeText("[WARNING] ")
+                Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+                $Writer.TypeText("Change the trigger condition in the automation rule ")
+                Set-WriterStyle -Writer $Writer -Italic $true -Bold $true
+                $Writer.TypeText($ruleName)
+                Set-WriterStyle -Writer $Writer -Italic $false -Bold $false
+                $Writer.TypeText(" to ")
+                Set-WriterStyle -Writer $Writer -Italic $true
+                $Writer.TypeText("Alert Product Name")
+                Set-WriterStyle -Writer $Writer -Italic $false
+                $Writer.TypeParagraph()
+            }
+        }
+        if (!$incidentProvider -and !$incidentTitle) {
+            Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The automation rule $ruleName is configured correctly"
+            $passedControlsTemp++
+            $totalPassedControls++
+            if ($PSBoundParameters.ContainsKey('FileName')) {
+                Set-WriterStyle -Writer $Writer -Color 5287936 -Bold $true
+                $Writer.TypeText("[OK] ")
+                Set-WriterStyle -Writer $Writer -Bold $false -Color 0
+                $Writer.TypeText("The automation rule ")
+                Set-WriterStyle -Writer $Writer -Italic $true -Bold $true
+                $Writer.TypeText($ruleName)
+                Set-WriterStyle -Writer $Writer -Italic $false
+                $Writer.Font.Bold = $false
+                $Writer.TypeText(" is configured correctly")
+                $Writer.TypeParagraph()
+            }
+        }
+    }
+    # Show score for this section
+    $scorePercent = [math]::Round(($passedControlsTemp / $totalControlsTemp) * 100, 2)
+    Write-Host "Automation Rule Analysis Score: $passedControlsTemp/$totalControlsTemp ($scorePercent%)" -ForegroundColor Cyan
+    if ($PSBoundParameters.ContainsKey('FileName')) {
+        Write-Statistics -Writer $Writer -passedControlsTemp $passedControlsTemp -totalControlsTemp $totalControlsTemp -scorePercent $scorePercent -scoreText "Automation Rule Analysis Score:"
+    }
+    Write-Host ""
+
+
+    Print-HeaderInShell -Message "FINAL SCORE"
+    Write-Host "Total number of Controls : $totalControls"
+    Write-Host "Total number of Passed Controls : $totalPassedControls"
+    Write-Host "Total number of Not Passed Controls : $($totalControls - $totalPassedControls)"
+    $scorePercent = [math]::Round(($totalPassedControls / $totalControls) * 100, 2)
+    Write-Host "Final Score: $totalPassedControls/$totalControls ($scorePercent%)" -ForegroundColor Cyan
+
+    if ($PSBoundParameters.ContainsKey('FileName')) {
+        $Writer.InsertBreak(7) 
+        Write-Heading3 -Writer $Writer -HeadingText "Final Score"
+
+        Set-WriterStyle -Writer $Writer -Bold $true
+        $Writer.TypeText("Total number of Controls : ")
+        Set-WriterStyle -Writer $Writer -Bold $false
+        $Writer.TypeText("$totalControls")
+        $Writer.TypeParagraph()
+        Set-WriterStyle -Writer $Writer -Bold $true
+        $Writer.TypeText("Total number of Passed Controls : ")
+        Set-WriterStyle -Writer $Writer -Bold $false
+        $Writer.TypeText("$totalPassedControls")
+        $Writer.TypeParagraph()
+        Set-WriterStyle -Writer $Writer -Bold $true
+        $Writer.TypeText("Total number of Not Passed Controls : ")
+        Set-WriterStyle -Writer $Writer -Bold $false
+        $Writer.TypeText("$($totalControls - $totalPassedControls)")
+        $Writer.TypeParagraph()
+        Set-WriterStyle -Writer $Writer -Bold $true
+        $Writer.TypeText("Final Score: ")
+        Set-WriterStyle -Writer $Writer -Bold $false
+        $Writer.TypeText("$totalPassedControls/$totalControls ($scorePercent%)")
+        $Writer.TypeParagraph()
+
+        $excel = New-Object -ComObject Excel.Application
+        $excel.Visible = $false
+        $workbook = $excel.Workbooks.Add()
+        $sheet = $workbook.Sheets.Item(1)
+
+        $sheet.Cells.Item(1, 1).Value2 = "Controls"
+        $sheet.Cells.Item(1, 2).Value2 = "Values"
+        $sheet.Cells.Item(2, 1).Value2 = "Passed Controls"
+        $sheet.Cells.Item(2, 2).Value2 = $totalPassedControls
+        $sheet.Cells.Item(3, 1).Value2 = "Not Passed Controls"
+        $sheet.Cells.Item(3, 2).Value2 = $totalControls - $totalPassedControls
+
+        $chart = $sheet.Shapes.AddChart2(251, 5, $sheet.Cells.Item(5, 1).Left, $sheet.Cells.Item(5, 1).Top, 400, 300).Chart
+        $chart.SetSourceData($sheet.Range("A1:B3"))
+        $chart.ChartTitle.Text = "Final Score Distribution"
+        $chart.ApplyDataLabels()
+        foreach ($point in $chart.SeriesCollection(1).Points()) {
+            $point.DataLabel.Font.Color = 0x000000
+            $point.DataLabel.Font.Size = 14
+
+        }
+        $chart.ChartArea.Format.Line.Visible = 0 
+        $chart.SeriesCollection(1).Points(1).Format.Fill.ForeColor.RGB = 0x57BF67  # Dark Green
+        $chart.SeriesCollection(1).Points(2).Format.Fill.ForeColor.RGB = 0x000000FF  # Red
+
+        $chart.ChartArea.Copy()
+
+        # Paste chart into Word
+        $Writer.TypeParagraph()
+        Start-Sleep -Milliseconds 500
+
+        $Writer.Paste()
+
+    }
+
+    
+    Write-Host ""
+    Write-Host ""
+    Write-Host ""
+    $Writer.InsertBreak(7) 
+}
+
+
+
+##SAVE FILE
+if ($PSBoundParameters.ContainsKey('FileName')) {
+        Write-Host "***********************"
+        Write-Host "SAVING THE REPORT"
+        Write-Host "***********************"
+        $Document.TablesOfContents.Item(1).Update()
+        Save-ReportToPDF -FileName $FileName -Document $Document -WordApplication $WordApplication
+}
