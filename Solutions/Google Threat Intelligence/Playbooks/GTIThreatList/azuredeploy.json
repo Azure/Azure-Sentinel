@@ -1,0 +1,184 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Google Threat Intelligence - Threat List",
+        "description": "This playbook will ingest Google Threat Intelligence into Threat Intelligence Sentinel.",
+        "prerequisites": [
+            "You will need to register to Google Threat Intelligence for an API key"
+        ],
+        "postDeployment": [
+            "After deployment, attach this playbook to an **automation rule** so it runs when the incident is created."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2024-12-19T00:00:00Z",
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Google"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "GTI Threat List - Google Threat Intelligence report",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GTI-ThreatList",
+            "type": "string"
+        },
+        "ConnectorName": {
+            "defaultValue": "GoogleThreatIntelligence-CustomConnector",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "GoogleThreatIntelligenceConnectionName": "GoogleThreatIntelligence-CustomConnector",
+        "AzureSentinelConnectionName": "GoogleThreatIntelligence-MicrosoftSentinelConnection"
+    },
+    "functions": [],
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateVersion": "2.8"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('GoogleThreatIntelligenceConnectionName'))]"
+            ],
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "interval": 60,
+                                "frequency": "Minute",
+                                "timeZone": "Romance Standard Time",
+                                "startTime": "2024-12-17T09:40:00Z"
+                            },
+                            "conditions": []
+                        }
+                    },
+                    "actions": {
+                        "get_threat_list": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['googlethreatintelligence']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/threat_lists/@{encodeURIComponent('ransomware')}/@{encodeURIComponent(convertTimeZone(utcNow(), 'UTC', 'Mid-Atlantic Standard Time','yyyyMMddHH'))}",
+                                "queries": {
+                                    "format": "stix-sentinel-api"
+                                }
+                            },
+                            "runAfter": {}
+                        },
+                        "For_each": {
+                            "type": "Foreach",
+                            "foreach": "@chunk(body('get_threat_list')?['indicators'],100)",
+                            "actions": {
+                                "Threat_Intelligence_-_Upload_Indicators_of_Compromise_(V2)_(Preview)": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "sourcesystem": "Google Threat Intelligence",
+                                            "indicators": "@items('For_each')"
+                                        },
+                                        "path": "/V2/ThreatIntelligence/@{encodeURIComponent('')}/UploadIndicators/"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "get_threat_list": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object",
+                            "defaultValue": {}
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "googlethreatintelligence": {
+                                "id": "[concat(resourceGroup().id,'/providers/Microsoft.Web/customApis/',parameters('ConnectorName'))]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('GoogleThreatIntelligenceConnectionName'))]",
+                                "connectionName": "[variables('GoogleThreatIntelligenceConnectionName')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('GoogleThreatIntelligenceConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('GoogleThreatIntelligenceConnectionName')]",
+                "api": {
+                    "id": "[concat(resourceGroup().id,'/providers/Microsoft.Web/customApis/',parameters('ConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

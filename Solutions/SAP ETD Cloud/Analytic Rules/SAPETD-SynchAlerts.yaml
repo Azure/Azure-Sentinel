@@ -1,0 +1,59 @@
+id: 7a830484-e349-4527-85f6-7850c468c238
+kind: Scheduled
+name: SAP ETD - Synch alerts
+description: Synch alerts coming in from SAP Enterprise Threat Detection into Microsoft Sentinel (one way)
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPETDAlerts
+    dataTypes:
+      - SAPETDAlerts_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: []
+query: |
+  let minThreshold= 1;
+  let minScore= 50;
+  let lookBack= 7d;
+  let regex_sid = @"^([A-Z0-9]{3})/";
+  let regex_client = @'\/(.{3})$';
+  SAPETDAlerts_CL
+  | mv-expand NormalizedTriggeringEvents
+  | summarize arg_max(TimeGenerated, *) by AlertId
+  | where Threshold >= minThreshold and Score >= minScore
+  | extend
+    SystemId= extract(regex_sid, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),
+    ClienId= extract(regex_client, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),
+    Host= NormalizedTriggeringEvents.NetworkHostnameInitiator,
+    Instance= NormalizedTriggeringEvents.NetworkHostnameActor,
+    User= NormalizedTriggeringEvents.UserAccountActing,
+    IP= NormalizedTriggeringEvents.NetworkIPAddressInitiator;
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SystemId
+      - identifier: AppId
+        columnName: ClienId
+      - identifier: InstanceName
+        columnName: Instance
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IP
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP ETD - {{PatternName}} '
+  alertDescriptionFormat: 'Alert synched from SAP Enterprise Threat Detection, cloud edition into Microsoft Sentinel (one way). {{PatternDescription}}'
+customDetails:
+  SAP_User: User
+  ETD_AlertNumber: AlertId
+version: 1.0.2

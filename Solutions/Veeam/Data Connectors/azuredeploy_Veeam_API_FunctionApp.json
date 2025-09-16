@@ -1,0 +1,2282 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "1574627916617316507"
+    }
+  },
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Sentinel workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "veeamapp"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "[format('{0}st', parameters('functionAppName'))]"
+    },
+    "relayNamespaceName": {
+      "type": "string",
+      "defaultValue": "[format('{0}relay', parameters('functionAppName'))]"
+    },
+    "packageUri": {
+      "type": "string",
+      "defaultValue": "https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam/Data%20Connectors/VeeamConn.zip?raw=true"
+    },
+    "appServicePlanSku": {
+      "type": "string",
+      "defaultValue": "B1",
+      "allowedValues": [
+        "B1",
+        "S3",
+        "P2v3"
+      ],
+      "metadata": {
+        "description": "App Service Plan SKU for the Function App"
+      }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "defaultValue": "[format('{0}kv', parameters('functionAppName'))]"
+    },
+    "vbrWatchlistAlias": {
+      "type": "string",
+      "defaultValue": "vbr_settings"
+    },
+    "voneWatchlistAlias": {
+      "type": "string",
+      "defaultValue": "vone_settings"
+    },
+    "covewareFindingsWatchlistAlias": {
+      "type": "string",
+      "defaultValue": "coveware_settings"
+    },
+    "covewareBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://api.coveware.com/recon/v1"
+    },
+    "covewareAuthUrl": {
+      "type": "string",
+      "defaultValue": "https://cognito-idp.us-east-1.amazonaws.com/"
+    },
+    "covewareEarliestEventTime": {
+      "type": "string",
+      "defaultValue": "[substring(dateTimeAdd(utcNow(), '-P90D'), 0, 10)]"
+    },
+    "covewareMaxRiskLevel": {
+      "type": "string",
+      "defaultValue": "high"
+    },
+    "diagnosticSettingName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-diag', parameters('functionAppName'))]",
+      "metadata": {
+        "description": "Name for the diagnostic setting on the Function App"
+      }
+    }
+  },
+  "variables": {
+    "skuMappings": {
+      "B1": {
+        "name": "B1",
+        "tier": "Basic",
+        "capacity": 1
+      },
+      "S3": {
+        "name": "S3",
+        "tier": "Standard",
+        "capacity": 1
+      },
+      "P1v2": {
+        "name": "P1v2",
+        "tier": "PremiumV2",
+        "capacity": 1
+      },
+      "P2v3": {
+        "name": "P2v3",
+        "tier": "PremiumV3",
+        "capacity": 1
+      }
+    },
+    "keyVaultAdminRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '00482a5a-887f-4fb3-b363-3b7fe8e74483')]"
+  },
+  "resources": {
+    "logAnalyticsWorkspace": {
+      "existing": true,
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2021-06-01",
+      "name": "[parameters('workspaceName')]"
+    },
+    "storageAccount": {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-06-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2"
+    },
+    "applicationInsights": {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[format('{0}-ai', parameters('functionAppName'))]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "IngestionMode": "LogAnalytics",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      }
+    },
+    "appServicePlan": {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2021-03-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[parameters('location')]",
+      "sku": "[variables('skuMappings')[parameters('appServicePlanSku')]]"
+    },
+    "keyVault": {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2024-11-01",
+      "name": "[parameters('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "enableRbacAuthorization": true,
+        "enableSoftDelete": true
+      }
+    },
+    "keyVaultAdminRoleAssignment": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.KeyVault/vaults/{0}', parameters('keyVaultName'))]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId('Microsoft.Web/sites', parameters('functionAppName')), variables('keyVaultAdminRoleId'))]",
+      "properties": {
+        "description": "Assigns Key Vault Administrator role to Function App managed identity for secret management",
+        "principalId": "[reference('functionApp', '2021-03-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[variables('keyVaultAdminRoleId')]"
+      },
+      "dependsOn": [
+        "functionApp",
+        "keyVault"
+      ]
+    },
+    "covewareServerClientIdSecret": {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2024-11-01",
+      "name": "[format('{0}/{1}', parameters('keyVaultName'), 'CovewareServerClientId')]",
+      "properties": {
+        "value": "UNDEFINED"
+      },
+      "dependsOn": [
+        "keyVault"
+      ]
+    },
+    "covewareServerPasswordIdSecret": {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2024-11-01",
+      "name": "[format('{0}/{1}', parameters('keyVaultName'), 'CovewareServerPasswordId')]",
+      "properties": {
+        "value": "UNDEFINED"
+      },
+      "dependsOn": [
+        "keyVault"
+      ]
+    },
+    "covewareServerUsernameIdSecret": {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2024-11-01",
+      "name": "[format('{0}/{1}', parameters('keyVaultName'), 'CovewareServerUsernameId')]",
+      "properties": {
+        "value": "UNDEFINED"
+      },
+      "dependsOn": [
+        "keyVault"
+      ]
+    },
+    "functionApp": {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-03-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('functionAppName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "cors": {
+            "allowedOrigins": [
+              "*"
+            ],
+            "supportCredentials": false
+          },
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', parameters('storageAccountName'), listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2021-04-01').keys[0].value, environment().suffixes.storage)]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "dotnet-isolated"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference('applicationInsights').InstrumentationKey]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference('applicationInsights').ConnectionString]"
+            },
+            {
+              "name": "ApplicationInsightsAgent_EXTENSION_VERSION",
+              "value": "~3"
+            },
+            {
+              "name": "DCE_MALWARE_EVENTS_INGESTION_ENDPOINT",
+              "value": "[reference('customTables').outputs.malwareDCEIngestionEndpoint.value]"
+            },
+            {
+              "name": "DCR_MALWARE_EVENTS_IMMUTABLE_ID",
+              "value": "[reference('customTables').outputs.malwareDCRImmutableId.value]"
+            },
+            {
+              "name": "DCR_MALWARE_EVENTS_STREAM_NAME",
+              "value": "[format('Custom-{0}', reference('customTables').outputs.malwareTableName.value)]"
+            },
+            {
+              "name": "DCE_BEST_PRACTICE_ANALYSIS_INGESTION_ENDPOINT",
+              "value": "[reference('customTables').outputs.bestPracticesDCEIngestionEndpoint.value]"
+            },
+            {
+              "name": "DCR_BEST_PRACTICE_ANALYSIS_IMMUTABLE_ID",
+              "value": "[reference('customTables').outputs.bestPracticesDCRImmutableId.value]"
+            },
+            {
+              "name": "DCR_BEST_PRACTICE_ANALYSIS_STREAM_NAME",
+              "value": "[format('Custom-{0}', reference('customTables').outputs.bestPracticesTableName.value)]"
+            },
+            {
+              "name": "DCE_AUTHORIZATION_EVENTS_INGESTION_ENDPOINT",
+              "value": "[reference('customTables').outputs.authorizationDCEIngestionEndpoint.value]"
+            },
+            {
+              "name": "DCR_AUTHORIZATION_EVENTS_IMMUTABLE_ID",
+              "value": "[reference('customTables').outputs.authorizationDCRImmutableId.value]"
+            },
+            {
+              "name": "DCR_AUTHORIZATION_EVENTS_STREAM_NAME",
+              "value": "[format('Custom-{0}', reference('customTables').outputs.authorizationTableName.value)]"
+            },
+            {
+              "name": "DCE_TRIGGERED_ALARM_INGESTION_ENDPOINT",
+              "value": "[reference('customTables').outputs.triggeredAlarmsDCEIngestionEndpoint.value]"
+            },
+            {
+              "name": "DCR_TRIGGERED_ALARM_IMMUTABLE_ID",
+              "value": "[reference('customTables').outputs.triggeredAlarmsDCRImmutableId.value]"
+            },
+            {
+              "name": "DCR_TRIGGERED_ALARM_STREAM_NAME",
+              "value": "[format('Custom-{0}', reference('customTables').outputs.triggeredAlarmsTableName.value)]"
+            },
+            {
+              "name": "DCE_COVEWARE_FINDINGS_INGESTION_ENDPOINT",
+              "value": "[reference('customTables').outputs.CovewareFindingsDCEIngestionEndpoint.value]"
+            },
+            {
+              "name": "DCR_COVEWARE_FINDINGS_IMMUTABLE_ID",
+              "value": "[reference('customTables').outputs.CovewareFindingsDCRImmutableId.value]"
+            },
+            {
+              "name": "DCR_COVEWARE_FINDINGS_STREAM_NAME",
+              "value": "[format('Custom-{0}', reference('customTables').outputs.CovewareFindingsTableName.value)]"
+            },
+            {
+              "name": "DCE_SESSION_DATA_INGESTION_ENDPOINT",
+              "value": "[reference('customTables').outputs.sessionDCEIngestionEndpoint.value]"
+            },
+            {
+              "name": "DCR_SESSION_DATA_IMMUTABLE_ID",
+              "value": "[reference('customTables').outputs.sessionDCRImmutableId.value]"
+            },
+            {
+              "name": "DCR_SESSION_DATA_STREAM_NAME",
+              "value": "[format('Custom-{0}', reference('customTables').outputs.sessionTableName.value)]"
+            },
+            {
+              "name": "KEY_VAULT_NAME",
+              "value": "[parameters('keyVaultName')]"
+            },
+            {
+              "name": "WORKSPACE_ID",
+              "value": "[reference('logAnalyticsWorkspace').customerId]"
+            },
+            {
+              "name": "VBR_WATCHLIST_ALIAS",
+              "value": "[parameters('vbrWatchlistAlias')]"
+            },
+            {
+              "name": "VONE_WATCHLIST_ALIAS",
+              "value": "[parameters('voneWatchlistAlias')]"
+            },
+            {
+              "name": "COVEWARE_WATCHLIST_ALIAS",
+              "value": "[parameters('covewareFindingsWatchlistAlias')]"
+            },
+            {
+              "name": "COVEWARE_AUTH_URL",
+              "value": "[parameters('covewareAuthUrl')]"
+            },
+            {
+              "name": "COVEWARE_BASE_URL",
+              "value": "[parameters('covewareBaseUrl')]"
+            },
+            {
+              "name": "COVEWARE_EARLIEST_EVENT_TIME",
+              "value": "[parameters('covewareEarliestEventTime')]"
+            },
+            {
+              "name": "COVEWARE_MAX_RISK_LEVEL",
+              "value": "[parameters('covewareMaxRiskLevel')]"
+            },
+            {
+              "name": "SUBSCRIPTION_ID",
+              "value": "[subscription().subscriptionId]"
+            },
+            {
+              "name": "RESOURCE_GROUP_NAME",
+              "value": "[resourceGroup().name]"
+            },
+            {
+              "name": "WORKSPACE_NAME",
+              "value": "[parameters('workspaceName')]"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "[parameters('packageUri')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "applicationInsights",
+        "appServicePlan",
+        "customTables",
+        "logAnalyticsWorkspace",
+        "storageAccount"
+      ]
+    },
+    "authSettings": {
+      "type": "Microsoft.Web/sites/config",
+      "apiVersion": "2021-02-01",
+      "name": "[format('{0}/{1}', parameters('functionAppName'), 'authsettingsV2')]",
+      "properties": {
+        "globalValidation": {
+          "unauthenticatedClientAction": "AllowAnonymous"
+        }
+      },
+      "dependsOn": [
+        "functionApp"
+      ]
+    },
+    "relayNamespace": {
+      "type": "Microsoft.Relay/namespaces",
+      "apiVersion": "2024-01-01",
+      "name": "[parameters('relayNamespaceName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard",
+        "tier": "Standard"
+      }
+    },
+    "functionDiag": {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "scope": "[format('Microsoft.Web/sites/{0}', parameters('functionAppName'))]",
+      "name": "[parameters('diagnosticSettingName')]",
+      "properties": {
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "logs": [
+          {
+            "category": "FunctionAppLogs",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": false,
+              "days": 0
+            }
+          }
+        ],
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": false,
+              "days": 0
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "functionApp"
+      ]
+    },
+    "customTables": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "deployMainTables",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "workspaceName": {
+            "value": "[parameters('workspaceName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "5237057207092003013"
+            }
+          },
+          "parameters": {
+            "workspaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "The name of the Log Analytics workspace where the custom tables will be created"
+              }
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 30,
+              "minValue": 4,
+              "maxValue": 730,
+              "metadata": {
+                "description": "The number of days to retain the data in the tables"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "VeeamMalwareEventsTable",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "workspaceName": {
+                    "value": "[parameters('workspaceName')]"
+                  },
+                  "location": {
+                    "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2021-06-01', 'full').location]"
+                  },
+                  "retentionInDays": {
+                    "value": "[parameters('retentionInDays')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.37.4.10188",
+                      "templateHash": "14607922832121553834"
+                    }
+                  },
+                  "parameters": {
+                    "workspaceName": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "retentionInDays": {
+                      "type": "int",
+                      "defaultValue": 30
+                    }
+                  },
+                  "variables": {
+                    "baseName": "VeeamMalwareEvents",
+                    "tableName": "[format('{0}_CL', variables('baseName'))]",
+                    "dcrName": "[format('{0}DCR', variables('baseName'))]",
+                    "dceName": "[format('{0}DCE', variables('baseName'))]",
+                    "streamKey": "[format('Custom-{0}', variables('tableName'))]",
+                    "schemaColumns": [
+                      {
+                        "name": "VbrHostName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MalwareState",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Source",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DetectionTimeUtc",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "MachineDisplayName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MachineUuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MachineBackupObjectId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Details",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CreatedBy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Engine",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2025-02-01",
+                      "name": "[format('{0}/{1}', parameters('workspaceName'), variables('tableName'))]",
+                      "properties": {
+                        "totalRetentionInDays": "[parameters('retentionInDays')]",
+                        "plan": "Analytics",
+                        "schema": {
+                          "name": "[variables('tableName')]",
+                          "columns": "[flatten(createArray(createArray(createObject('name', 'TimeGenerated', 'type', 'datetime'), createObject('name', 'MalwareEventType', 'type', 'string')), variables('schemaColumns')))]"
+                        },
+                        "retentionInDays": "[parameters('retentionInDays')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2023-03-11",
+                      "name": "[variables('dcrName')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "dataCollectionEndpointId": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceResourceId.value]",
+                        "streamDeclarations": {
+                          "[format('{0}', variables('streamKey'))]": {
+                            "columns": "[flatten(createArray(createArray(createObject('name', 'Type', 'type', 'string')), variables('schemaColumns')))]"
+                          }
+                        },
+                        "dataSources": {},
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+                              "name": "logAnalyticsDestination"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": [
+                              "[variables('streamKey')]"
+                            ],
+                            "destinations": [
+                              "logAnalyticsDestination"
+                            ],
+                            "transformKql": "source | extend TimeGenerated = now() | extend MalwareEventType = Type | project-away Type",
+                            "outputStream": "[variables('streamKey')]"
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Resources/deployments', variables('dceName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2022-09-01",
+                      "name": "[variables('dceName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
+                          "dceName": {
+                            "value": "[variables('dceName')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.37.4.10188",
+                              "templateHash": "1382576923846382606"
+                            }
+                          },
+                          "parameters": {
+                            "location": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "The Azure region where resources will be deployed"
+                              }
+                            },
+                            "dceName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Name of the Data Collection Endpoint to be created"
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Insights/dataCollectionEndpoints",
+                              "apiVersion": "2023-03-11",
+                              "name": "[parameters('dceName')]",
+                              "location": "[parameters('location')]",
+                              "tags": {
+                                "displayName": "[parameters('dceName')]",
+                                "purpose": "Sentinel Custom Data Collection"
+                              },
+                              "properties": {
+                                "configurationAccess": {},
+                                "logsIngestion": {},
+                                "metricsIngestion": {},
+                                "networkAcls": {
+                                  "publicNetworkAccess": "Enabled"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "dceIngestionEndpoint": {
+                              "type": "string",
+                              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2023-03-11').logsIngestion.endpoint]"
+                            },
+                            "dceResourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "dcrImmutableId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2023-03-11').immutableId]"
+                    },
+                    "dceIngestionEndpoint": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+                    },
+                    "tableName": {
+                      "type": "string",
+                      "value": "[variables('tableName')]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "VeeamSecurityComplianceAnalysisTable",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "workspaceName": {
+                    "value": "[parameters('workspaceName')]"
+                  },
+                  "location": {
+                    "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2021-06-01', 'full').location]"
+                  },
+                  "retentionInDays": {
+                    "value": "[parameters('retentionInDays')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.37.4.10188",
+                      "templateHash": "7635772819293468808"
+                    }
+                  },
+                  "parameters": {
+                    "workspaceName": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "retentionInDays": {
+                      "type": "int",
+                      "defaultValue": 30
+                    }
+                  },
+                  "variables": {
+                    "baseName": "VeeamSecurityComplianceAnalyzer",
+                    "tableName": "[format('{0}_CL', variables('baseName'))]",
+                    "dcrName": "[format('{0}DCR', variables('baseName'))]",
+                    "dceName": "[format('{0}DCE', variables('baseName'))]",
+                    "streamKey": "[format('Custom-{0}', variables('tableName'))]",
+                    "schemaColumns": [
+                      {
+                        "name": "VbrHostName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BestPractice",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Note",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2025-02-01",
+                      "name": "[format('{0}/{1}', parameters('workspaceName'), variables('tableName'))]",
+                      "properties": {
+                        "totalRetentionInDays": "[parameters('retentionInDays')]",
+                        "plan": "Analytics",
+                        "schema": {
+                          "name": "[variables('tableName')]",
+                          "columns": "[flatten(createArray(createArray(createObject('name', 'TimeGenerated', 'type', 'datetime')), variables('schemaColumns')))]"
+                        },
+                        "retentionInDays": "[parameters('retentionInDays')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2023-03-11",
+                      "name": "[variables('dcrName')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "dataCollectionEndpointId": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceResourceId.value]",
+                        "streamDeclarations": {
+                          "[format('{0}', variables('streamKey'))]": {
+                            "columns": "[variables('schemaColumns')]"
+                          }
+                        },
+                        "dataSources": {},
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+                              "name": "logAnalyticsDestination"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": [
+                              "[variables('streamKey')]"
+                            ],
+                            "destinations": [
+                              "logAnalyticsDestination"
+                            ],
+                            "transformKql": "source | extend TimeGenerated = now()",
+                            "outputStream": "[variables('streamKey')]"
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Resources/deployments', variables('dceName'))]",
+                        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2022-09-01",
+                      "name": "[variables('dceName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
+                          "dceName": {
+                            "value": "[variables('dceName')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.37.4.10188",
+                              "templateHash": "1382576923846382606"
+                            }
+                          },
+                          "parameters": {
+                            "location": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "The Azure region where resources will be deployed"
+                              }
+                            },
+                            "dceName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Name of the Data Collection Endpoint to be created"
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Insights/dataCollectionEndpoints",
+                              "apiVersion": "2023-03-11",
+                              "name": "[parameters('dceName')]",
+                              "location": "[parameters('location')]",
+                              "tags": {
+                                "displayName": "[parameters('dceName')]",
+                                "purpose": "Sentinel Custom Data Collection"
+                              },
+                              "properties": {
+                                "configurationAccess": {},
+                                "logsIngestion": {},
+                                "metricsIngestion": {},
+                                "networkAcls": {
+                                  "publicNetworkAccess": "Enabled"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "dceIngestionEndpoint": {
+                              "type": "string",
+                              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2023-03-11').logsIngestion.endpoint]"
+                            },
+                            "dceResourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "dcrImmutableId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2023-03-11').immutableId]"
+                    },
+                    "dceIngestionEndpoint": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+                    },
+                    "tableName": {
+                      "type": "string",
+                      "value": "[variables('tableName')]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "VeeamAuthorizationEventsTable",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "workspaceName": {
+                    "value": "[parameters('workspaceName')]"
+                  },
+                  "location": {
+                    "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2021-06-01', 'full').location]"
+                  },
+                  "retentionInDays": {
+                    "value": "[parameters('retentionInDays')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.37.4.10188",
+                      "templateHash": "17618557402701546613"
+                    }
+                  },
+                  "parameters": {
+                    "workspaceName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "The name of the Log Analytics workspace where the custom table will be created"
+                      }
+                    },
+                    "location": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "The Azure region where resources will be deployed"
+                      }
+                    },
+                    "retentionInDays": {
+                      "type": "int",
+                      "defaultValue": 30,
+                      "minValue": 4,
+                      "maxValue": 730,
+                      "metadata": {
+                        "description": "The number of days to retain the data in the table"
+                      }
+                    }
+                  },
+                  "variables": {
+                    "baseName": "VeeamAuthorizationEvents",
+                    "tableName": "[format('{0}_CL', variables('baseName'))]",
+                    "dceName": "[format('{0}DCE', variables('baseName'))]",
+                    "dcrName": "[format('{0}DCR', variables('baseName'))]",
+                    "streamKey": "[format('Custom-{0}', variables('tableName'))]",
+                    "authorizationSchema": [
+                      {
+                        "name": "CreatedBy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CreationTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "Description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ExpirationTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "Id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProcessedBy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProcessedTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "State",
+                        "type": "string"
+                      },
+                      {
+                        "name": "VbrHostName",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "logAnalyticsWorkspace": {
+                      "existing": true,
+                      "type": "Microsoft.OperationalInsights/workspaces",
+                      "apiVersion": "2021-06-01",
+                      "name": "[parameters('workspaceName')]"
+                    },
+                    "authorizationTable": {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/{1}', parameters('workspaceName'), variables('tableName'))]",
+                      "properties": {
+                        "totalRetentionInDays": "[parameters('retentionInDays')]",
+                        "retentionInDays": "[parameters('retentionInDays')]",
+                        "plan": "Analytics",
+                        "schema": {
+                          "name": "[variables('tableName')]",
+                          "columns": "[flatten(createArray(createArray(createObject('name', 'TimeGenerated', 'type', 'datetime')), variables('authorizationSchema')))]"
+                        }
+                      }
+                    },
+                    "authorizationDCR": {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2023-03-11",
+                      "name": "[variables('dcrName')]",
+                      "location": "[parameters('location')]",
+                      "tags": {
+                        "displayName": "[variables('dcrName')]",
+                        "purpose": "Sentinel Custom Table",
+                        "module": "VeeamAuthorizationEvents"
+                      },
+                      "properties": {
+                        "dataCollectionEndpointId": "[reference('authorizationDCE').outputs.dceResourceId.value]",
+                        "streamDeclarations": {
+                          "[format('{0}', variables('streamKey'))]": {
+                            "columns": "[variables('authorizationSchema')]"
+                          }
+                        },
+                        "dataSources": {},
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+                              "name": "logAnalyticsDestination"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": [
+                              "[variables('streamKey')]"
+                            ],
+                            "destinations": [
+                              "logAnalyticsDestination"
+                            ],
+                            "transformKql": "source | extend TimeGenerated = now()",
+                            "outputStream": "[variables('streamKey')]"
+                          }
+                        ],
+                        "description": "Data Collection Rule for Veeam Authorization Events"
+                      },
+                      "dependsOn": [
+                        "authorizationDCE"
+                      ]
+                    },
+                    "authorizationDCE": {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2022-09-01",
+                      "name": "[variables('dceName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
+                          "dceName": {
+                            "value": "[variables('dceName')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.37.4.10188",
+                              "templateHash": "1382576923846382606"
+                            }
+                          },
+                          "parameters": {
+                            "location": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "The Azure region where resources will be deployed"
+                              }
+                            },
+                            "dceName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Name of the Data Collection Endpoint to be created"
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Insights/dataCollectionEndpoints",
+                              "apiVersion": "2023-03-11",
+                              "name": "[parameters('dceName')]",
+                              "location": "[parameters('location')]",
+                              "tags": {
+                                "displayName": "[parameters('dceName')]",
+                                "purpose": "Sentinel Custom Data Collection"
+                              },
+                              "properties": {
+                                "configurationAccess": {},
+                                "logsIngestion": {},
+                                "metricsIngestion": {},
+                                "networkAcls": {
+                                  "publicNetworkAccess": "Enabled"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "dceIngestionEndpoint": {
+                              "type": "string",
+                              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2023-03-11').logsIngestion.endpoint]"
+                            },
+                            "dceResourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "dcrImmutableId": {
+                      "type": "string",
+                      "value": "[reference('authorizationDCR').immutableId]"
+                    },
+                    "dceIngestionEndpoint": {
+                      "type": "string",
+                      "value": "[reference('authorizationDCE').outputs.dceIngestionEndpoint.value]"
+                    },
+                    "tableName": {
+                      "type": "string",
+                      "value": "[variables('tableName')]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "VeeamOneTriggeredAlarmsTable",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "workspaceName": {
+                    "value": "[parameters('workspaceName')]"
+                  },
+                  "location": {
+                    "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2021-06-01', 'full').location]"
+                  },
+                  "retentionInDays": {
+                    "value": "[parameters('retentionInDays')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.37.4.10188",
+                      "templateHash": "3978423082872947744"
+                    }
+                  },
+                  "parameters": {
+                    "workspaceName": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "retentionInDays": {
+                      "type": "int",
+                      "defaultValue": 30
+                    }
+                  },
+                  "variables": {
+                    "baseName": "VeeamOneTriggeredAlarms",
+                    "tableName": "[format('{0}_CL', variables('baseName'))]",
+                    "dcrName": "[format('{0}DCR', variables('baseName'))]",
+                    "dceName": "[format('{0}DCE', variables('baseName'))]",
+                    "streamKey": "[format('Custom-{0}', variables('tableName'))]",
+                    "schemaColumns": [
+                      {
+                        "name": "VoneHostName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TriggeredAlarmId",
+                        "type": "int"
+                      },
+                      {
+                        "name": "Name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AlarmTemplateId",
+                        "type": "int"
+                      },
+                      {
+                        "name": "PredefinedAlarmId",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TriggeredTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "Status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Comment",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RepeatCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ObjectId",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ObjectName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ObjectType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ChildAlarmsCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "RemediationDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RemediationMode",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2025-02-01",
+                      "name": "[format('{0}/{1}', parameters('workspaceName'), variables('tableName'))]",
+                      "properties": {
+                        "totalRetentionInDays": "[parameters('retentionInDays')]",
+                        "plan": "Analytics",
+                        "schema": {
+                          "name": "[variables('tableName')]",
+                          "columns": "[flatten(createArray(createArray(createObject('name', 'TimeGenerated', 'type', 'datetime')), variables('schemaColumns')))]"
+                        },
+                        "retentionInDays": "[parameters('retentionInDays')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2023-03-11",
+                      "name": "[variables('dcrName')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "dataCollectionEndpointId": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceResourceId.value]",
+                        "streamDeclarations": {
+                          "[format('{0}', variables('streamKey'))]": {
+                            "columns": "[variables('schemaColumns')]"
+                          }
+                        },
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+                              "name": "logAnalyticsDestination"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": [
+                              "[variables('streamKey')]"
+                            ],
+                            "destinations": [
+                              "logAnalyticsDestination"
+                            ],
+                            "transformKql": "source | extend TimeGenerated = now()",
+                            "outputStream": "[variables('streamKey')]"
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Resources/deployments', variables('dceName'))]",
+                        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2022-09-01",
+                      "name": "[variables('dceName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
+                          "dceName": {
+                            "value": "[variables('dceName')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.37.4.10188",
+                              "templateHash": "1382576923846382606"
+                            }
+                          },
+                          "parameters": {
+                            "location": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "The Azure region where resources will be deployed"
+                              }
+                            },
+                            "dceName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Name of the Data Collection Endpoint to be created"
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Insights/dataCollectionEndpoints",
+                              "apiVersion": "2023-03-11",
+                              "name": "[parameters('dceName')]",
+                              "location": "[parameters('location')]",
+                              "tags": {
+                                "displayName": "[parameters('dceName')]",
+                                "purpose": "Sentinel Custom Data Collection"
+                              },
+                              "properties": {
+                                "configurationAccess": {},
+                                "logsIngestion": {},
+                                "metricsIngestion": {},
+                                "networkAcls": {
+                                  "publicNetworkAccess": "Enabled"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "dceIngestionEndpoint": {
+                              "type": "string",
+                              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2023-03-11').logsIngestion.endpoint]"
+                            },
+                            "dceResourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "dcrImmutableId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2023-03-11').immutableId]"
+                    },
+                    "dceIngestionEndpoint": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+                    },
+                    "tableName": {
+                      "type": "string",
+                      "value": "[variables('tableName')]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "CovewareFindingsTable",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "workspaceName": {
+                    "value": "[parameters('workspaceName')]"
+                  },
+                  "location": {
+                    "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2021-06-01', 'full').location]"
+                  },
+                  "retentionInDays": {
+                    "value": "[parameters('retentionInDays')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.37.4.10188",
+                      "templateHash": "7454834660631890747"
+                    }
+                  },
+                  "parameters": {
+                    "workspaceName": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "retentionInDays": {
+                      "type": "int",
+                      "defaultValue": 30
+                    }
+                  },
+                  "variables": {
+                    "baseName": "VeeamCovewareFindings",
+                    "tableName": "[format('{0}_CL', variables('baseName'))]",
+                    "dcrName": "[format('{0}DCR', variables('baseName'))]",
+                    "dceName": "[format('{0}DCE', variables('baseName'))]",
+                    "streamKey": "[format('Custom-{0}', variables('tableName'))]",
+                    "schemaColumns": [
+                      {
+                        "name": "CovewareHostName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Artifact",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TechniqueId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "FirstRunOrAccessed",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "Hostname",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventActivity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Country",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Md5Hash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Sha1Hash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Sha256Hash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MachineId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RiskLevel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ScanTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "Username",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2025-02-01",
+                      "name": "[format('{0}/{1}', parameters('workspaceName'), variables('tableName'))]",
+                      "properties": {
+                        "totalRetentionInDays": "[parameters('retentionInDays')]",
+                        "plan": "Analytics",
+                        "schema": {
+                          "name": "[variables('tableName')]",
+                          "columns": "[flatten(createArray(createArray(createObject('name', 'TimeGenerated', 'type', 'datetime')), variables('schemaColumns')))]"
+                        },
+                        "retentionInDays": "[parameters('retentionInDays')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2023-03-11",
+                      "name": "[variables('dcrName')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "dataCollectionEndpointId": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceResourceId.value]",
+                        "streamDeclarations": {
+                          "[format('{0}', variables('streamKey'))]": {
+                            "columns": "[variables('schemaColumns')]"
+                          }
+                        },
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+                              "name": "logAnalyticsDestination"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": [
+                              "[variables('streamKey')]"
+                            ],
+                            "destinations": [
+                              "logAnalyticsDestination"
+                            ],
+                            "transformKql": "source | extend TimeGenerated = now()",
+                            "outputStream": "[variables('streamKey')]"
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Resources/deployments', variables('dceName'))]",
+                        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2022-09-01",
+                      "name": "[variables('dceName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
+                          "dceName": {
+                            "value": "[variables('dceName')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.37.4.10188",
+                              "templateHash": "1382576923846382606"
+                            }
+                          },
+                          "parameters": {
+                            "location": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "The Azure region where resources will be deployed"
+                              }
+                            },
+                            "dceName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Name of the Data Collection Endpoint to be created"
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Insights/dataCollectionEndpoints",
+                              "apiVersion": "2023-03-11",
+                              "name": "[parameters('dceName')]",
+                              "location": "[parameters('location')]",
+                              "tags": {
+                                "displayName": "[parameters('dceName')]",
+                                "purpose": "Sentinel Custom Data Collection"
+                              },
+                              "properties": {
+                                "configurationAccess": {},
+                                "logsIngestion": {},
+                                "metricsIngestion": {},
+                                "networkAcls": {
+                                  "publicNetworkAccess": "Enabled"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "dceIngestionEndpoint": {
+                              "type": "string",
+                              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2023-03-11').logsIngestion.endpoint]"
+                            },
+                            "dceResourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "dcrImmutableId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2023-03-11').immutableId]"
+                    },
+                    "dceIngestionEndpoint": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+                    },
+                    "tableName": {
+                      "type": "string",
+                      "value": "[variables('tableName')]"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "VeeamSessionsTable",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "workspaceName": {
+                    "value": "[parameters('workspaceName')]"
+                  },
+                  "location": {
+                    "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), '2021-06-01', 'full').location]"
+                  },
+                  "retentionInDays": {
+                    "value": "[parameters('retentionInDays')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.37.4.10188",
+                      "templateHash": "17781797584480098826"
+                    }
+                  },
+                  "parameters": {
+                    "workspaceName": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "retentionInDays": {
+                      "type": "int",
+                      "defaultValue": 30
+                    }
+                  },
+                  "variables": {
+                    "baseName": "VeeamSessions",
+                    "tableName": "[format('{0}_CL', variables('baseName'))]",
+                    "dcrName": "[format('{0}DCR', variables('baseName'))]",
+                    "dceName": "[format('{0}DCE', variables('baseName'))]",
+                    "streamKey": "[format('Custom-{0}', variables('tableName'))]",
+                    "schemaColumns": [
+                      {
+                        "name": "VbrHostName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SessionType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "State",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PlatformName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "JobId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CreationTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "EndTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ProgressPercent",
+                        "type": "int"
+                      },
+                      {
+                        "name": "Result",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResultStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResultMessage",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResultIsCanceled",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "Message",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IsCanceled",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ResourceId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceReference",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentSessionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Usn",
+                        "type": "long"
+                      },
+                      {
+                        "name": "PlatformId",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2025-02-01",
+                      "name": "[format('{0}/{1}', parameters('workspaceName'), variables('tableName'))]",
+                      "properties": {
+                        "totalRetentionInDays": "[parameters('retentionInDays')]",
+                        "plan": "Analytics",
+                        "schema": {
+                          "name": "[variables('tableName')]",
+                          "columns": "[flatten(createArray(createArray(createObject('name', 'TimeGenerated', 'type', 'datetime')), variables('schemaColumns')))]"
+                        },
+                        "retentionInDays": "[parameters('retentionInDays')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2023-03-11",
+                      "name": "[variables('dcrName')]",
+                      "location": "[parameters('location')]",
+                      "properties": {
+                        "dataCollectionEndpointId": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceResourceId.value]",
+                        "streamDeclarations": {
+                          "[format('{0}', variables('streamKey'))]": {
+                            "columns": "[variables('schemaColumns')]"
+                          }
+                        },
+                        "dataSources": {},
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+                              "name": "logAnalyticsDestination"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": [
+                              "[variables('streamKey')]"
+                            ],
+                            "destinations": [
+                              "logAnalyticsDestination"
+                            ],
+                            "transformKql": "source | extend TimeGenerated = now()",
+                            "outputStream": "[variables('streamKey')]"
+                          }
+                        ]
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Resources/deployments', variables('dceName'))]",
+                        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.Resources/deployments",
+                      "apiVersion": "2022-09-01",
+                      "name": "[variables('dceName')]",
+                      "properties": {
+                        "expressionEvaluationOptions": {
+                          "scope": "inner"
+                        },
+                        "mode": "Incremental",
+                        "parameters": {
+                          "location": {
+                            "value": "[parameters('location')]"
+                          },
+                          "dceName": {
+                            "value": "[variables('dceName')]"
+                          }
+                        },
+                        "template": {
+                          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                          "contentVersion": "1.0.0.0",
+                          "metadata": {
+                            "_generator": {
+                              "name": "bicep",
+                              "version": "0.37.4.10188",
+                              "templateHash": "1382576923846382606"
+                            }
+                          },
+                          "parameters": {
+                            "location": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "The Azure region where resources will be deployed"
+                              }
+                            },
+                            "dceName": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Name of the Data Collection Endpoint to be created"
+                              }
+                            }
+                          },
+                          "resources": [
+                            {
+                              "type": "Microsoft.Insights/dataCollectionEndpoints",
+                              "apiVersion": "2023-03-11",
+                              "name": "[parameters('dceName')]",
+                              "location": "[parameters('location')]",
+                              "tags": {
+                                "displayName": "[parameters('dceName')]",
+                                "purpose": "Sentinel Custom Data Collection"
+                              },
+                              "properties": {
+                                "configurationAccess": {},
+                                "logsIngestion": {},
+                                "metricsIngestion": {},
+                                "networkAcls": {
+                                  "publicNetworkAccess": "Enabled"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "dceIngestionEndpoint": {
+                              "type": "string",
+                              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2023-03-11').logsIngestion.endpoint]"
+                            },
+                            "dceResourceId": {
+                              "type": "string",
+                              "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "dcrImmutableId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2023-03-11').immutableId]"
+                    },
+                    "dceIngestionEndpoint": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Resources/deployments', variables('dceName')), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+                    },
+                    "tableName": {
+                      "type": "string",
+                      "value": "[variables('tableName')]"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "malwareDCRImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamMalwareEventsTable'), '2022-09-01').outputs.dcrImmutableId.value]"
+            },
+            "malwareDCEIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamMalwareEventsTable'), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+            },
+            "malwareTableName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamMalwareEventsTable'), '2022-09-01').outputs.tableName.value]"
+            },
+            "bestPracticesDCRImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamSecurityComplianceAnalysisTable'), '2022-09-01').outputs.dcrImmutableId.value]"
+            },
+            "bestPracticesDCEIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamSecurityComplianceAnalysisTable'), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+            },
+            "bestPracticesTableName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamSecurityComplianceAnalysisTable'), '2022-09-01').outputs.tableName.value]"
+            },
+            "authorizationDCRImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamAuthorizationEventsTable'), '2022-09-01').outputs.dcrImmutableId.value]"
+            },
+            "authorizationDCEIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamAuthorizationEventsTable'), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+            },
+            "authorizationTableName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamAuthorizationEventsTable'), '2022-09-01').outputs.tableName.value]"
+            },
+            "triggeredAlarmsDCRImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamOneTriggeredAlarmsTable'), '2022-09-01').outputs.dcrImmutableId.value]"
+            },
+            "triggeredAlarmsDCEIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamOneTriggeredAlarmsTable'), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+            },
+            "triggeredAlarmsTableName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamOneTriggeredAlarmsTable'), '2022-09-01').outputs.tableName.value]"
+            },
+            "CovewareFindingsDCRImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'CovewareFindingsTable'), '2022-09-01').outputs.dcrImmutableId.value]"
+            },
+            "CovewareFindingsDCEIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'CovewareFindingsTable'), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+            },
+            "CovewareFindingsTableName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'CovewareFindingsTable'), '2022-09-01').outputs.tableName.value]"
+            },
+            "sessionDCRImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamSessionsTable'), '2022-09-01').outputs.dcrImmutableId.value]"
+            },
+            "sessionDCEIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamSessionsTable'), '2022-09-01').outputs.dceIngestionEndpoint.value]"
+            },
+            "sessionTableName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'VeeamSessionsTable'), '2022-09-01').outputs.tableName.value]"
+            }
+          }
+        }
+      }
+    },
+    "Roles": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "CustomTablesRoles",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "functionAppName": {
+            "value": "[parameters('functionAppName')]"
+          },
+          "logAnalyticsWorkspaceName": {
+            "value": "[parameters('workspaceName')]"
+          },
+          "version": {
+            "value": "1.0"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "7048573462950957005"
+            }
+          },
+          "parameters": {
+            "functionAppName": {
+              "type": "string"
+            },
+            "logAnalyticsWorkspaceName": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "metricsPublisherRoleImmutableId": "3913510d-42f4-4e42-8a64-420c390055eb",
+            "logAnalyticsContributorImmutableId": "92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', 'VeeamMalwareEventsDCR')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionRules', 'VeeamMalwareEventsDCR'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionEndpoints/{0}', 'VeeamMalwareEventsDCE')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionEndpoints', 'VeeamMalwareEventsDCE'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', 'VeeamSecurityComplianceAnalyzerDCR')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionRules', 'VeeamSecurityComplianceAnalyzerDCR'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionEndpoints/{0}', 'VeeamSecurityComplianceAnalyzerDCE')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionEndpoints', 'VeeamSecurityComplianceAnalyzerDCE'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', 'VeeamAuthorizationEventsDCR')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionRules', 'VeeamAuthorizationEventsDCR'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionEndpoints/{0}', 'VeeamAuthorizationEventsDCE')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionEndpoints', 'VeeamAuthorizationEventsDCE'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', 'VeeamOneTriggeredAlarmsDCR')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionRules', 'VeeamOneTriggeredAlarmsDCR'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionEndpoints/{0}', 'VeeamOneTriggeredAlarmsDCE')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionEndpoints', 'VeeamOneTriggeredAlarmsDCE'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', 'VeeamCovewareFindingsDCR')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionRules', 'VeeamCovewareFindingsDCR'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionEndpoints/{0}', 'VeeamCovewareFindingsDCE')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionEndpoints', 'VeeamCovewareFindingsDCE'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', 'VeeamSessionsDCR')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionRules', 'VeeamSessionsDCR'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.Insights/dataCollectionEndpoints/{0}', 'VeeamSessionsDCE')]",
+              "name": "[guid(subscription().id, parameters('functionAppName'), resourceId('Microsoft.Insights/dataCollectionEndpoints', 'VeeamSessionsDCE'), variables('metricsPublisherRoleImmutableId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleImmutableId'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('logAnalyticsWorkspaceName'))]",
+              "name": "[guid(resourceGroup().id, resourceId('Microsoft.Web/sites', parameters('functionAppName')), resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), variables('logAnalyticsContributorImmutableId'), parameters('version'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('logAnalyticsContributorImmutableId'))]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "functionApp"
+      ]
+    }
+  }
+}

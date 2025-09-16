@@ -1,5 +1,5 @@
-import { DataType } from "../dataConnector";
-import { DataConnectorValidationError } from "../validationError";
+import { DataType } from "../dataConnector.js";
+import { DataConnectorValidationError } from "../validationError.js";
 
 export function isValidDataType(dataTypes: Array<DataType>): boolean {
     dataTypes.forEach((dataType) => {

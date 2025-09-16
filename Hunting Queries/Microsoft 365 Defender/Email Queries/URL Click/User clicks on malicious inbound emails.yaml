@@ -1,4 +1,28 @@
 id: 891f4865-75e5-4d40-bc24-ebf97da3ca9a
 name: User clicks on malicious inbound emails
 description: |
-  'As part of content migration, this file is moved to new location. you can find here: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20Queries/URL%20Click/User%20clicks%20on%20malicious%20inbound%20emails.yaml'
+  This query provides insights on users who clicked on a suspicious URL
+description-detailed: |
+  This query provides insights on users who clicked on a suspicious URL from phishing/malware-categorized inbound emails over the past 30 days using Defender for Office 365 Data.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - EmailEvents
+      - UrlClickEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let UrlClicked = (UrlClickEvents
+  | where ActionType == "ClickAllowed" or IsClickedThrough !="0"
+  | extend Device_IPv4 = IPAddress
+  | project ActionType, Device_IPv4, Url, UrlChain, IPAddress, NetworkMessageId);
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where isnotempty(ThreatTypes) and EmailDirection == "Inbound"
+  | where ThreatTypes has_any ("Malware", "Phish")
+  | extend SenderFromAddress_IPv4 = strcat(SenderFromAddress, ", ", SenderIPv4)
+  | join kind = inner UrlClicked on NetworkMessageId
+  | project Timestamp,NetworkMessageId, Subject, SenderFromAddress_IPv4, RecipientEmailAddress, ThreatTypes, ActionType, Url, UrlChain, Device_IPv4, LatestDeliveryLocation, LatestDeliveryAction, EmailAction, EmailActionPolicy
+version: 1.0.0

@@ -1,4 +1,66 @@
 id: deb4b2c6-c10e-4044-8cf4-84243e40db73
 name: MDO daily detection summary report
 description: |
-  'As part of content migration, this file is moved to new location. you can find here: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20Queries/General/MDO%20daily%20detection%20summary%20report.yaml'
+  This query helps report daily on total number of emails, total number of emails detected aby Defender for Office 365
+description-detailed: |
+  This query helps report daily on total number of emails, total number of emails detected as Malware, Phish, Spam, Bulk, total number of user or admin submissions, total number of ZAP events, total number of AIR investigations and their result
+  Reference - https://learn.microsoft.com/en-us/defender-office-365/mdo-about
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - AlertEvidence
+  - EmailEvents
+  - EmailPostDeliveryEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let QueryTime = 30d;
+  let Reports = CloudAppEvents 
+  | where Timestamp > ago(QueryTime)
+  | where ActionType == "UserSubmission" or ActionType == "AdminSubmission"
+  | extend MessageDate = todatetime((parse_json(RawEventData)).MessageDate)
+  | extend NetworkMessageID = tostring((parse_json(RawEventData)).ObjectId)
+  | extend Date_value = tostring(format_datetime( MessageDate, "yyyy-MM-dd"))
+  | distinct Date_value,NetworkMessageID
+  | summarize count() by Date_value
+  | project Date_value, MessagesGotReported=count_;
+  let ThreatByAutomation = (AlertEvidence | where Title == "Email reported by user as malware or phish")
+  | extend LastVerdictfromAutomation = tostring((parse_json(AdditionalFields)).LastVerdict)
+  | extend Date_value = tostring(format_datetime( Timestamp, "yyyy-MM-dd"))
+  | extend DetectionFromAIR = iif(isempty(LastVerdictfromAutomation), "NoThreatsFound", tostring(LastVerdictfromAutomation))
+  | summarize PostDeliveryTotalAIRInvestigations = count(),
+           PostDeliveryAirNoThreatsFound = countif(DetectionFromAIR contains "NoThreatsFound"),
+           PostDeliveryAirSuspicious = countif(DetectionFromAIR contains "Suspicious"),
+           PostDeliveryAirMalicious = countif(DetectionFromAIR contains "Malicious")
+           by Date_value          //Date Reported from Message Submissions from CloudAppEvents does not match to the AIR Investigations from Alert playbooks
+  | project Date_value, PostDeliveryTotalAIRInvestigations, PostDeliveryAirNoThreatsFound, PostDeliveryAirSuspicious, PostDeliveryAirMalicious;
+  let DeliveryInboundEvents = (EmailEvents | where EmailDirection == "Inbound" and Timestamp > ago(QueryTime)
+  | extend Date_value = tostring(format_datetime( Timestamp, "yyyy-MM-dd"))
+  | project Date_value, Timestamp, NetworkMessageId, DetectionMethods ,RecipientEmailAddress);
+  let PostDeliveryEvents = (EmailPostDeliveryEvents | where ActionType contains "ZAP" and ActionResult == "Success"| join DeliveryInboundEvents on RecipientEmailAddress, NetworkMessageId //Only successful ZAP Events, there could still be more, join on Recipient and NetID
+  | extend Date_value = tostring(format_datetime( Timestamp, "yyyy-MM-dd")) //Zap Timestamp is used and not MessageDate received
+  | summarize PostDeliveryZAP=count() by Date_value);
+  let DeliveryByThreat = (DeliveryInboundEvents
+  | where Timestamp > ago(QueryTime)
+  | extend Date_value = tostring(format_datetime( Timestamp, "yyyy-MM-dd"))
+  | extend MDO_detection = parse_json(DetectionMethods)
+  | extend FirstDetection = iif(isempty(MDO_detection), "Clean", tostring(bag_keys(MDO_detection)[0]))
+  | extend FirstSubcategory = iif(FirstDetection != "Clean" and array_length(MDO_detection[FirstDetection]) > 0, strcat(FirstDetection, ": ", tostring(MDO_detection[FirstDetection][0])), "No Detection (clean)"))
+  | summarize TotalEmails = count(),
+           Clean = countif(FirstSubcategory contains "Clean"),
+           Malware = countif(FirstSubcategory contains "Malware"),
+           Phish = countif(FirstSubcategory contains "Phish"),
+           Spam = countif(FirstSubcategory contains "Spam" and FirstSubcategory !contains "Bulk"),
+           Bulk = countif(FirstSubcategory contains "Bulk")                  
+           by Date_value;
+  DeliveryByThreat
+  | join kind=fullouter Reports on Date_value
+  | join kind=fullouter PostDeliveryEvents on Date_value
+  | join kind=fullouter ThreatByAutomation on Date_value
+  | sort by Date_value asc
+  | project Date_value, Clean, Malware, Phish, Spam, Bulk, MessagesGotReported, PostDeliveryZAP, PostDeliveryTotalAIRInvestigations, PostDeliveryAirNoThreatsFound, PostDeliveryAirMalicious, PostDeliveryAirSuspicious
+  | where isnotempty(Date_value) // As Reports from CloudAppEvents Submissions could contain messages submitted before 30 days it is good to remove all > 30 days, otherwise EMailEvents wouldn't have a date
+version: 1.0.0

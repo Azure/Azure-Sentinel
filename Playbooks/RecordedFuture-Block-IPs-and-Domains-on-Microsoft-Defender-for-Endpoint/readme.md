@@ -19,7 +19,7 @@ The following Azure roles and permissions will be needed at various stages of in
 
 - Recorded Future Token
 
-The **RecordedFuture_IP_SCF_ImportToDefenderATP** logic app uses Graph API and permissions **ThreatIndicators.ReadWrite.OwnedBy** are described in [Microsoft Graph Security Permissions](https://learn.microsoft.com/en-us/graph/api/tiindicator-submittiindicators?view=graph-rest-beta&tabs=http#permissions).
+The **RecordedFuture_IP_SCF_ImportToDefenderEndpoint** logic app uses Graph API and permissions **ThreatIndicators.ReadWrite.OwnedBy** are described in [Microsoft Graph Security Permissions](https://learn.microsoft.com/en-us/graph/api/tiindicator-submittiindicators?view=graph-rest-beta&tabs=http#permissions).
 
 - [Microsoft Graph Security](https://learn.microsoft.com/en-us/graph/api/resources/tiindicator?view=graph-rest-beta)
 - [Microsoft Graph Security & Azure Logic Apps](https://learn.microsoft.com/en-us/azure/connectors/connectors-integrate-security-operations-create-api-microsoft-graph-security)

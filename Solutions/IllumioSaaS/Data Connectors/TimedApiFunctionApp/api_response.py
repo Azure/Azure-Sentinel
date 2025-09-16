@@ -19,14 +19,12 @@ from ..CommonCode.constants import (
     DCR_ID,
     WORKLOADS_API_LOGS_CUSTOM_TABLE,
     MAX_WORKLOADS,
+    ONPREM_API_KEY,
+    ONPREM_API_SECRET,
+    ONPREM_PCE_FQDN,
+    ONPREM_PCE_PORT,
+    ONPREM_PCE_ORGID,
 )
-
-URL = "https://{}:{}/api/v2/orgs/{}/workloads/?max_results={}".format(
-    PCE_FQDN, PORT, ORG_ID, MAX_WORKLOADS
-)
-
-credentials = b64encode(f"{API_KEY}:{API_SECRET}".encode()).decode("utf-8")
-headers = {"Authorization": f"Basic {credentials}", "Content-type": "application/json"}
 
 
 def getVensByVersion(data):
@@ -116,56 +114,100 @@ def getVensBySyncState(data):
         return {}
 
 
-async def main(mytimer: func.TimerRequest) -> None:
-    logging.debug("url to be exercised is {} ".format(URL))
+# Return list of pce fqdns for which workloads api call is executed
+# If onprem pce and saas pce are configured to send events, then this method
+# should return 2 entries else return only saas
+def getPceType():
+    if ONPREM_PCE_FQDN:
+        return ["onprem", "saas"]
+    return ["saas"]
 
-    response = requests.request("GET", URL, headers=headers, data={})
 
-    if response:
-        logging.info("[TimedApi] Response from url is {}".format(response.headers))
-    else:
-        logging.info("[TimedApi] Error in response {}".format(response))
-        return
+def getWorkloads(pce_fqdn, port, org, api_key, api_secret):
+    if pce_fqdn:
+        url = "https://{}:{}/api/v2/orgs/{}/workloads/?max_results={}".format(
+            pce_fqdn, port, org, MAX_WORKLOADS
+        )
 
-    response = json.loads(response.text)
-    df = pl.json_normalize(response, infer_schema_length=None)
+        logging.debug("url to be exercised is {} ".format(url))
 
-    vens_by_version = getVensByVersion(df)
-    vens_by_managed = getVensByManaged(df)
-    vens_by_type = getVensByType(df)
-    vens_by_os = getVensByOS(df)
-    vens_by_enf_mode = getVensByEnforcementMode(df)
-    vens_by_status = getVensByStatus(df)
-    vens_by_sync_state = getVensBySyncState(df)
-    api_response = []
-    api_response.append(
-        {
-            "vens_by_version": vens_by_version,
-            "vens_by_managed": vens_by_managed,
-            "vens_by_type": vens_by_type,
-            "vens_by_os": vens_by_os,
-            "vens_by_enforcement_mode": vens_by_enf_mode,
-            "vens_by_status": vens_by_status,
-            "vens_by_sync_state": vens_by_sync_state,
-            "pce_fqdn": PCE_FQDN,
+        credentials = b64encode(f"{api_key}:{api_secret}".encode()).decode("utf-8")
+        headers = {
+            "Authorization": f"Basic {credentials}",
+            "Content-type": "application/json",
         }
-    )
 
-    logging.info(
-        "[TimedApi] Summary of workload api response that will be stored in log analytics table is {}".format(
-            api_response
-        )
-    )
+        return requests.request("GET", url, headers=headers, data={})
 
-    async with aiohttp.ClientSession() as session:
-        sentinel = AzureSentinelConnectorAsync(
-            session,
-            DCE_ENDPOINT,
-            DCR_ID,
-            WORKLOADS_API_LOGS_CUSTOM_TABLE,
-            AZURE_CLIENT_ID,
-            AZURE_CLIENT_SECRET,
-            AZURE_TENANT_ID,
-            queue_size=1,
+
+async def main(mytimer: func.TimerRequest) -> None:
+
+    for pce_type in getPceType():
+        pce_fqdn = None
+        if pce_type == "onprem":
+            pce_fqdn = ONPREM_PCE_FQDN
+            response = getWorkloads(
+                ONPREM_PCE_FQDN,
+                ONPREM_PCE_PORT,
+                ONPREM_PCE_ORGID,
+                ONPREM_API_KEY,
+                ONPREM_API_SECRET,
+            )
+        else:
+            pce_fqdn = PCE_FQDN
+            response = getWorkloads(
+                PCE_FQDN,
+                PORT,
+                ORG_ID,
+                API_KEY,
+                API_SECRET,
+            )
+
+        if response:
+            logging.info("[TimedApi] Response from url is {}".format(response.headers))
+        else:
+            logging.info("[TimedApi] Error in response {}".format(response))
+            continue
+
+        response = json.loads(response.text)
+        df = pl.json_normalize(response, infer_schema_length=None)
+
+        vens_by_version = getVensByVersion(df)
+        vens_by_managed = getVensByManaged(df)
+        vens_by_type = getVensByType(df)
+        vens_by_os = getVensByOS(df)
+        vens_by_enf_mode = getVensByEnforcementMode(df)
+        vens_by_status = getVensByStatus(df)
+        vens_by_sync_state = getVensBySyncState(df)
+        api_response = []
+        api_response.append(
+            {
+                "vens_by_version": vens_by_version,
+                "vens_by_managed": vens_by_managed,
+                "vens_by_type": vens_by_type,
+                "vens_by_os": vens_by_os,
+                "vens_by_enforcement_mode": vens_by_enf_mode,
+                "vens_by_status": vens_by_status,
+                "vens_by_sync_state": vens_by_sync_state,
+                "pce_fqdn": pce_fqdn,
+            }
         )
-        await sentinel.send(api_response)
+
+        logging.info(
+            "[TimedApi] Summary of workload api response that will be stored in log analytics table is {}".format(
+                api_response
+            )
+        )
+
+        async with aiohttp.ClientSession() as session:
+            sentinel = AzureSentinelConnectorAsync(
+                session,
+                DCE_ENDPOINT,
+                DCR_ID,
+                WORKLOADS_API_LOGS_CUSTOM_TABLE,
+                AZURE_CLIENT_ID,
+                AZURE_CLIENT_SECRET,
+                AZURE_TENANT_ID,
+                queue_size=1,
+            )
+            await sentinel.send(api_response)

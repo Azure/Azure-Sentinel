@@ -1,0 +1,287 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Attack Path Overview"
+      },
+      "name": "attack-path-overview"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f83ce0ef-a752-49c8-9e57-38e59621e984",
+            "version": "KqlParameterItem/1.0",
+            "name": "time_range",
+            "type": 4,
+            "isRequired": true,
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "timeContext": {
+              "durationMs": 2592000000
+            },
+            "label": "Time Range",
+            "value": {
+              "durationMs": 31708800000,
+              "endTime": "2024-12-09T10:37:00.000Z"
+            }
+          },
+          {
+            "id": "39b26570-b884-4143-9b01-38a84d7f2663",
+            "version": "KqlParameterItem/1.0",
+            "name": "domain_name",
+            "label": "Domain Name",
+            "type": 2,
+            "isRequired": true,
+            "query": "BloodHoundLogs_CL \n| where data_type == \"posture_path\"\n| extend domainNameLabel = strcat(domain_name, \" (\", domain_type, \")\")\n| distinct domain_id, domainNameLabel\n",
+            "typeSettings": {
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": "7Y67V8G4-G4DD-6Y87-8764-8S23KJRE9834"
+          },
+          {
+            "id": "afbf7d11-42d2-4e8c-8b1a-9628bc27ab96",
+            "version": "KqlParameterItem/1.0",
+            "name": "attack_path",
+            "label": "Attack path",
+            "type": 2,
+            "isRequired": true,
+            "query": "BloodHoundLogs_CL\n| where data_type == \"posture_path\"\n| where domain_id == \"{domain_name}\"\n| distinct path_type, path_title\n| order by path_title",
+            "typeSettings": {
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": "AzureT0MGAddOwner"
+          },
+          {
+            "id": "cde4481a-66a9-4c6e-b126-02fa1c4b1b87",
+            "version": "KqlParameterItem/1.0",
+            "name": "relationship_type",
+            "label": "Relation Type",
+            "type": 1,
+            "isRequired": true,
+            "query": "BloodHoundLogs_CL\n| where domain_id == \"{domain_name}\"\n| where data_type == \"posture_path\"\n| where path_type == \"{attack_path}\"\n| extend PathCase = case(\n    path_type hasprefix \"LargeDefault\", \"LargeDefaultRelational\",\n    isnotempty(tier_zero_principal) and isnotempty(non_tier_zero_principal), \"Relational\",\n    isnotempty(tier_zero_principal) and isempty(non_tier_zero_principal), \"Configuration\",\n    \"Unknown\"\n)\n| limit 1\n| project PathCase\n| distinct PathCase",
+            "isHiddenWhenLocked": true,
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "above",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "BloodHoundLogs_CL\n| where data_type == \"posture_path\"\n| where created_at {time_range}\n| where path_type == \"{attack_path}\"\n| where domain_id == \"{domain_name}\"\n| summarize arg_max(\"updated_at\", *) by non_tier_zero_principal, tier_zero_principal, principal\n| extend PathType = path_type\n| extend PathCase = case(\n    PathType hasprefix \"LargeDefault\", \"Case1\",\n    isnotempty(tier_zero_principal) and isnotempty(non_tier_zero_principal), \"Case2\",\n    isnotempty(tier_zero_principal) and isempty(non_tier_zero_principal), \"Case3\",\n    \"Unknown\"\n)\n// Create columns based on the PathCase\n| extend [\"Group\"] = iff(PathCase == \"Case1\", non_tier_zero_principal, dynamic(null))\n| extend [\"Principal\"] = iff(PathCase == \"Case1\", tier_zero_principal, dynamic(null))\n| extend [\"Non-Tier Zero Principal\"] = iff(PathCase == \"Case2\", non_tier_zero_principal, dynamic(null))\n| extend [\"Tier Zero Principal\"] = iff(PathCase == \"Case2\", tier_zero_principal, dynamic(null))\n| extend [\"Principal (Tier Zero)\"] = iff(PathCase == \"Case3\", principal, dynamic(null))\n| extend [\"Column Check Error\"] = iff(PathCase == \"Unknown\", tier_zero_principal, dynamic(null))\n| extend [\"PATH_CASE\"] = PathCase\n// Project the relevant columns\n| project\n    [\"Non-Tier Zero Principal\"],\n    [\"Tier Zero Principal\"]",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "conditionalVisibility": {
+        "parameterName": "relationship_type",
+        "comparison": "isEqualTo",
+        "value": "Relational"
+      },
+      "customWidth": "100",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "BloodHoundLogs_CL\n| where data_type == \"posture_path\"\n| where created_at {time_range} \n| where path_type == \"{attack_path}\"\n| where domain_id == \"{domain_name}\"\n| extend PathType = path_type\n| extend PathCase = case(\n    PathType hasprefix \"LargeDefault\", \"Case1\",\n    isnotempty(tier_zero_principal) and isnotempty(non_tier_zero_principal), \"Case2\",\n    isnotempty(tier_zero_principal) and isempty(non_tier_zero_principal), \"Case3\",\n    \"Unknown\"\n)\n// Create columns based on the PathCase\n| extend [\"Group\"] = iff(PathCase == \"Case1\", non_tier_zero_principal, \"\")\n| extend [\"Principal\"] = iff(PathCase == \"Case1\", tier_zero_principal, \"\")\n| extend [\"Non-Tier Zero Principal\"] = iff(PathCase == \"Case2\", non_tier_zero_principal, \"\")\n| extend [\"Tier Zero Principal\"] = iff(PathCase == \"Case2\", tier_zero_principal, \"\")\n| extend [\"Principal (Tier Zero)\"] = iff(PathCase == \"Case3\", tier_zero_principal, \"\")\n| extend [\"Column Check Error\"] = iff(PathCase == \"Unknown\", tier_zero_principal, \"\")\n| extend [\"PATH_CASE\"] = PathCase\n// Project the relevant columns\n| project\n    [\"Principal (Tier Zero)\"]",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "conditionalVisibility": {
+        "parameterName": "relationship_type",
+        "comparison": "isEqualTo",
+        "value": "Configuration"
+      },
+      "customWidth": "100",
+      "name": "query - 3 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "BloodHoundLogs_CL\n| where data_type == \"posture_path\"\n| where created_at {time_range} \n| where path_type == \"{attack_path}\"\n| where domain_id == \"{domain_name}\"\n| extend PathType = path_type\n| extend PathCase = case(\n    PathType hasprefix \"LargeDefault\", \"Case1\",\n    isnotempty(tier_zero_principal) and isnotempty(non_tier_zero_principal), \"Case2\",\n    isnotempty(tier_zero_principal) and isempty(non_tier_zero_principal), \"Case3\",\n    \"Unknown\"\n)\n// Create columns based on the PathCase\n| extend [\"Group\"] = iff(PathCase == \"Case1\", non_tier_zero_principal, \"\")\n| extend [\"Principal\"] = iff(PathCase == \"Case1\", tier_zero_principal, \"\")\n| extend [\"Non-Tier Zero Principal\"] = iff(PathCase == \"Case2\", non_tier_zero_principal, \"\")\n| extend [\"Tier Zero Principal\"] = iff(PathCase == \"Case2\", tier_zero_principal, \"\")\n| extend [\"Principal (Tier Zero)\"] = iff(PathCase == \"Case3\", principal, \"\")\n| extend [\"Column Check Error\"] = iff(PathCase == \"Unknown\", tier_zero_principal, \"\")\n| extend [\"PATH_CASE\"] = PathCase\n// Project the relevant columns\n| project\n    [\"Group\"],\n    [\"Principal\"]",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "conditionalVisibility": {
+        "parameterName": "relationship_type",
+        "comparison": "isEqualTo",
+        "value": "LargeDefaultRelational"
+      },
+      "customWidth": "100",
+      "name": "query - 3 - Copy - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# Exposure %"
+      },
+      "name": "text - 6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "BloodHoundLogs_CL\n| where data_type == \"finding_export\"\n| where created_at {time_range}\n| where domain_id == \"{domain_name}\"\n| extend exposureAsPercent = exposure/100\n| summarize max(exposureAsPercent) by bin(created_at, 1d), domain_name",
+        "size": 0,
+        "aggregation": 5,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart",
+        "chartSettings": {
+          "xAxis": "created_at",
+          "yAxis": [
+            "max_exposureAsPercent"
+          ],
+          "xSettings": {
+            "dateFormatSettings": {
+              "formatName": "shortDateTimeNoMsPattern",
+              "showUtcTime": false
+            }
+          },
+          "ySettings": {
+            "numberFormatSettings": {
+              "unit": 0,
+              "options": {
+                "style": "percent",
+                "useGrouping": true
+              },
+              "missingSparkDataOption": "Zero"
+            },
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      "name": "query - 5"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# Findings\n## count"
+      },
+      "name": "text - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "BloodHoundLogs_CL\n| where data_type == \"finding_export\"\n| where created_at {time_range} \n| where domain_id == \"{domain_name}\"\n| summarize max(finding_count) by bin(created_at, 1d), domain_name",
+        "size": 0,
+        "aggregation": 2,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart",
+        "chartSettings": {
+          "xAxis": "created_at",
+          "xSettings": {
+            "dateFormatSettings": {
+              "formatName": "shortDateTimeNoMsPattern",
+              "showUtcTime": false
+            }
+          }
+        }
+      },
+      "name": "query - 8"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# Principals\n## count"
+      },
+      "name": "text - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "BloodHoundLogs_CL\n| where data_type == \"finding_export\"\n| where created_at {time_range} \n| where domain_id == \"{domain_name}\"\n| where path_type == \"{attack_path}\"\n| summarize max(domain_impact_value) by bin(created_at, 1d), domain_name",
+        "size": 0,
+        "aggregation": 2,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart",
+        "chartSettings": {
+          "xAxis": "created_at",
+          "xSettings": {
+            "dateFormatSettings": {
+              "formatName": "shortDateTimeNoMsPattern",
+              "showUtcTime": false
+            }
+          }
+        }
+      },
+      "name": "query - 10"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

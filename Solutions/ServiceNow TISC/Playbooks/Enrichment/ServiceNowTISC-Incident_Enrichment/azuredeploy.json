@@ -1,0 +1,521 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "ServiceNow TISC Incident Enrichment",
+        "description":  "This playbook leverages the ServiceNow TISC API to enrich IP, Domain, URL, and Hash indicators found in Microsoft Sentinel incidents. The enrichment content will be posted as a comment in the Microsoft Sentinel incident.",
+        "prerequisites":  [
+            "ServiceNow TISC Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription."
+        ],
+        "postDeployment":  [
+            "1. Once deployment is complete, you will need to configure/authorize each connection.",
+            "2. Navigate to playbook > API Connections > Select connections one by one > configure/authorize each connection > Save"
+        ],
+        "prerequisitesDeployTemplateFile":  "../../Connectors/ServiceNowTISCCustomConnector/azuredeploy.json",
+        "lastUpdateTime":  "2025-01-10T00:00:00.000Z",
+        "entities":  ["ip","filehash","url","dns"],
+        "tags": ["Threat Intelligence", "ServiceNow TISC"],
+        "support":  {
+            "tier":  "partner",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "ServiceNow"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "ServiceNowTISC-Incident_Enrichment",
+            "type":  "string"
+        },
+        "CustomConnectorName":  {
+            "defaultValue":  "ServiceNowTISCCustomConnector",
+            "type":  "string",
+            "metadata": {
+                "description": "Name of the custom connector, if you want to change the default name, make sure to use the same when you were installing ServiceNowTISC custom connector"
+            }            
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "ServiceNowTISC-MicrosoftSentinelConnection",
+        "ServicenowTISCCustomConnectorConnectionName":  "[concat('Connection-', parameters('CustomConnectorName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "For_each_entity":  {
+                            "foreach":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                            "actions":  {
+                                "Parse_Entity":  {
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@items('For_each_entity')",
+                                        "schema":  {
+                                            "properties":  {
+                                                "id":  {
+                                                    "type":  "string"
+                                                },
+                                                "kind":  {
+                                                    "type":  "string"
+                                                },
+                                                "properties":  {
+                                                    "type":  "object"
+                                                },
+                                                "type":  {
+                                                    "type":  "string"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        }
+                                    }
+                                },
+                                "Switch_on_Entity_Kind":  {
+                                    "runAfter":  {
+                                        "Parse_Entity":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "cases":  {
+                                        "Domain":  {
+                                            "case":  "DnsResolution",
+                                            "actions":  {
+                                                "Parse_JSON_-_DNS_Resolution":  {
+                                                    "type":  "ParseJson",
+                                                    "inputs":  {
+                                                        "content":  "@body('Parse_Entity')?['properties']",
+                                                        "schema":  {
+                                                            "properties":  {
+                                                                "domainName":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "friendlyName":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_domain_value_to_Entity_array":  {
+                                                    "runAfter":  {
+                                                        "Parse_JSON_-_DNS_Resolution":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "AppendToArrayVariable",
+                                                    "inputs":  {
+                                                        "name":  "EntityValues",
+                                                        "value":  {
+                                                            "field_name":  "value",
+                                                            "operator":  "=",
+                                                            "field_value":  "@{body('Parse_JSON_-_DNS_Resolution')?['domainName']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "FileHash":  {
+                                            "case":  "FileHash",
+                                            "actions":  {
+                                                "Parse_JSON_-_File_Hash":  {
+                                                    "type":  "ParseJson",
+                                                    "inputs":  {
+                                                        "content":  "@body('Parse_Entity')?['properties']",
+                                                        "schema":  {
+                                                            "properties":  {
+                                                                "algorithm":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "friendlyName":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "hashValue":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_Hash_value_to_Entity_array":  {
+                                                    "runAfter":  {
+                                                        "Parse_JSON_-_File_Hash":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "AppendToArrayVariable",
+                                                    "inputs":  {
+                                                        "name":  "EntityValues",
+                                                        "value":  {
+                                                            "field_name":  "value",
+                                                            "operator":  "=",
+                                                            "field_value":  "@{body('Parse_JSON_-_File_Hash')?['hashValue']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Url":  {
+                                            "case":  "Url",
+                                            "actions":  {
+                                                "Parse_JSON_-_Url":  {
+                                                    "type":  "ParseJson",
+                                                    "inputs":  {
+                                                        "content":  "@body('Parse_Entity')?['properties']",
+                                                        "schema":  {
+                                                            "properties":  {
+                                                                "friendlyName":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "url":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_URL_value_to_Entity_array":  {
+                                                    "runAfter":  {
+                                                        "Parse_JSON_-_Url":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "AppendToArrayVariable",
+                                                    "inputs":  {
+                                                        "name":  "EntityValues",
+                                                        "value":  {
+                                                            "field_name":  "value",
+                                                            "operator":  "=",
+                                                            "field_value":  "@{body('Parse_JSON_-_Url')?['url']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Ip":  {
+                                            "case":  "Ip",
+                                            "actions":  {
+                                                "Parse_JSON_-_Ip":  {
+                                                    "type":  "ParseJson",
+                                                    "inputs":  {
+                                                        "content":  "@body('Parse_Entity')?['properties']",
+                                                        "schema":  {
+                                                            "properties":  {
+                                                                "address":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "friendlyName":  {
+                                                                    "type":  "string"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_IP_value_to_Entity_array":  {
+                                                    "runAfter":  {
+                                                        "Parse_JSON_-_Ip":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "AppendToArrayVariable",
+                                                    "inputs":  {
+                                                        "name":  "EntityValues",
+                                                        "value":  {
+                                                            "field_name":  "value",
+                                                            "operator":  "=",
+                                                            "field_value":  "@{body('Parse_JSON_-_Ip')?['address']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default":  {
+                                        "actions":  {
+                                        }
+                                    },
+                                    "expression":  "@body('Parse_Entity')?['kind']",
+                                    "type":  "Switch"
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_Entity_Values_array":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Initialize_Entity_Values_array":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "EntityValues",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entity_Value_array_is_not_empty":  {
+                            "actions":  {
+                                "Until":  {
+                                    "actions":  {
+                                        "Fetch_Observables_TISC_API":  {
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['ServicenowTISCCustomConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "body":  {
+                                                    "page_size":  "100",
+                                                    "page_token":  "@{variables('NextPageToken')}",
+                                                    "included_fields":  {
+                                                        "observable":  {
+                                                            "common_fields":  {
+                                                                "include_all_fields":  true
+                                                            }
+                                                        }
+                                                    },
+                                                    "observable_filters":  {
+                                                        "boolean_operator":  "AND",
+                                                        "filters":  [
+                                                            {
+                                                                "field_name":  "status",
+                                                                "operator":  "=",
+                                                                "field_value":  "active"
+                                                            },
+                                                            {
+                                                                "boolean_operator":  "OR",
+                                                                "filters":  "@variables('EntityValues')"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                "path":  "/api/sn_sec_tisc/threat_intel_data/observables"
+                                            }
+                                        },
+                                        "For_each_observable_returned_from_TISC":  {
+                                            "foreach":  "@body('Fetch_Observables_TISC_API')?['observables']",
+                                            "actions":  {
+                                                "Add_comment_to_incident_(V3)":  {
+                                                    "type":  "ApiConnection",
+                                                    "inputs":  {
+                                                        "host":  {
+                                                            "connection":  {
+                                                                "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method":  "post",
+                                                        "body":  {
+                                                            "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                            "message":  "\u003cp class=\"editor-paragraph\"\u003e\u003cbr\u003eFound below information from ServiceNow-TISC for @{item()?['value']} (@{item()?['type']})\u003cbr\u003e----------------------------------------------------------------------\u003cbr\u003eReputation: @{item()?['reputation']}\u003cbr\u003eThreat Severity: @{item()?['threat_severity']}\u003cbr\u003eConfidence: @{item()?['confidence']}\u003cbr\u003eLast Update: @{item()?['sys_updated_on']}\u003cbr\u003e----------------------------------------------------------------------\u003c/p\u003e"
+                                                        },
+                                                        "path":  "/Incidents/Comment"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                                "Fetch_Observables_TISC_API":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "Foreach"
+                                        },
+                                        "Set_next_page_token":  {
+                                            "runAfter":  {
+                                                "For_each_observable_returned_from_TISC":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "NextPageToken",
+                                                "value":  "@body('Fetch_Observables_TISC_API')?['next_page_token']"
+                                            }
+                                        },
+                                        "Set_last_page_variable":  {
+                                            "runAfter":  {
+                                                "Set_next_page_token":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "IsLastPage",
+                                                "value":  "@body('Fetch_Observables_TISC_API')?['is_last_page']"
+                                            }
+                                        }
+                                    },
+                                    "expression":  "@equals(variables('IsLastPage'),true)",
+                                    "limit":  {
+                                        "count":  1000,
+                                        "timeout":  "PT1H"
+                                    },
+                                    "type":  "Until"
+                                }
+                            },
+                            "runAfter":  {
+                                "IsLastPage_variable":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                }
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@empty(variables('EntityValues'))",
+                                            false
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "IsLastPage_variable":  {
+                            "runAfter":  {
+                                "Next_page_token":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "IsLastPage",
+                                        "type":  "boolean",
+                                        "value":  true
+                                    }
+                                ]
+                            }
+                        },
+                        "Next_page_token":  {
+                            "runAfter":  {
+                                "For_each_entity":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "NextPageToken",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "ServicenowTISCCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('ServicenowTISCCustomConnectorConnectionName'))]",
+                                "connectionName":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "ServiceNowTISC-Incident_Enrichment",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('ServicenowTISCCustomConnectorConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        }
+    ]
+}

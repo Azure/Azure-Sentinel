@@ -21,13 +21,20 @@ ORG_ID = os.environ["ORG_ID"]
 MAX_WORKLOADS = os.environ.get("MAX_WORKLOADS", 100000)
 LOGS_TO_CONSUME = os.environ.get("logTypes", "all").lower()
 NETWORK_TRAFFIC_TO_CONSUME = os.environ.get("networkTrafficLogTypes", "All").lower()
-FLOW_EVENTS = "Flow Summaries"
-AUDIT_EVENTS = "Auditable Events"
+FLOW_EVENTS = "flow"
+AUDIT_EVENTS = "audit"
 ALLOWED_TRAFFIC = "allowed"
 POTENTIALLY_BLOCKED_TRAFFIC = "potentially_blocked"
 BLOCKED_TRAFFIC = "blocked"
 UNKNOWN_TRAFFIC = "unknown"
 ALL_TRAFFIC = "all"
+
+# Onprem PCE config
+ONPREM_API_KEY = os.environ.get("ONPREM_API_KEY", None)
+ONPREM_API_SECRET = os.environ.get("ONPREM_API_SECRET", None)
+ONPREM_PCE_FQDN = os.environ.get("ONPREM_PCE_FQDN", None)
+ONPREM_PCE_PORT = int(os.environ.get("ONPREM_PCE_PORT", 443))
+ONPREM_PCE_ORGID = int(os.environ.get("ONPREM_PCE_ORGID", 1))
 
 # Azure config
 AZURE_TENANT_ID = os.environ["AZURE_TENANT_ID"]

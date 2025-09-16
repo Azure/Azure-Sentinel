@@ -1,0 +1,91 @@
+id: 34a5d79b-8f9a-420c-aa64-7f4d262ac29a
+kind: Scheduled
+name: Dataverse - New user agent type that was not used before
+description: Identifies users accessing Dataverse from a User Agent that has not been
+  seen in any Dataverse instance in the last 14 days.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T0866
+  - T0819
+  - T1036
+query: |
+  let query_lookback = 14d;
+  let query_frequency = 1h;
+  let known_useragents = dynamic([
+      // Enter known user agents to exclude.
+      // example:
+      // "Agent1", "Agent2", "Agent3"
+      ]);
+  DataverseActivity
+  | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+  | where isnotempty(UserAgent)
+  | summarize by UserAgent
+  | join kind = rightanti (DataverseActivity
+      | where TimeGenerated > ago(query_frequency)
+      | where not (UserId has_any ("@onmicrosoft.com", "@microsoft.com", "Unknown"))
+      | where isnotempty(UserAgent)
+      | where UserAgent !in~ (known_useragents)
+      | where UserAgent !hasprefix "azure-logic-apps" and UserAgent !hasprefix "PowerApps")
+      on UserAgent
+  // Exclude user agents with a render agent to reduce noise.
+  | join kind = leftanti(
+      DataverseActivity
+      | where TimeGenerated > ago(query_frequency)
+      | where UserAgent has_any ("Gecko", "WebKit", "Presto", "Trident", "EdgeHTML", "Blink"))
+      on UserAgent
+  | summarize
+      FirstSeen = min(TimeGenerated),
+      LatestIP = arg_max(ClientIp, TimeGenerated)
+      by UserAgent, UserId, InstanceUrl
+  | extend
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1]),
+      CloudAppId = int(32780)
+  | project
+      FirstSeen,
+      UserId,
+      UserAgent,
+      LatestIP,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: LatestIP
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - new user agent detected in {{{InstanceUrl}} '
+  alertDescriptionFormat: |
+    {{UserId}} with new agent not seen previously in the Dataverse activity log.
+    Agent: {{UserAgent}}
+    Latest IP: {{LatestIP}}
+version: 3.2.0
