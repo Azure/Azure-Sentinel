@@ -1,0 +1,54 @@
+id: 29bf5bcd-6795-4c79-a91f-aaef5a618bab
+name: Lumen TI domain in DnsEvents
+displayName: Lumen TI domain in DnsEvents
+description: |
+  This query searches for matches between Lumen threat intelligence domain indicators and DnsEvents.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: LumenThreatFeedConnector
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+queryFrequency: 4h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 5h
+suppressionEnabled: true
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1d; // Data lookback for DnsEvents
+  let ioc_lookBack = 14d; // TI lookback
+  // Latest, active, non-expired Lumen domain indicators
+  let Domain_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == 'domain-name:value' or ObservableValue contains '.'
+    | extend TI_domainEntity = tostring(ObservableValue);
+  Domain_Indicators
+  | join kind=innerunique (
+      DnsEvents
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend DNS_domainEntity = Name
+      | extend DnsEvents_TimeGenerated = TimeGenerated
+    ) on $left.TI_domainEntity == $right.DNS_domainEntity
+  | where DnsEvents_TimeGenerated < ValidUntil
+  | summarize arg_max(DnsEvents_TimeGenerated, *), StartTime = min(DnsEvents_TimeGenerated), EndTime = max(DnsEvents_TimeGenerated) by Id, DNS_domainEntity
+  | project timestamp = EndTime, StartTime, EndTime, Name, QueryType, Computer, Id, Tags, ValidUntil, Confidence, TI_domainEntity, DNS_domainEntity, Type
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DNS_domainEntity
+version: 1.0.0
+kind: Scheduled
