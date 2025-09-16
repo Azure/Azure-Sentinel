@@ -1,0 +1,40 @@
+id: b70b02bd-fe1f-4466-8c4d-64d42adc59b3
+name: Endace - Pivot-to-Vision
+description: |
+  'This query displays a Pivot-to-Vision URL from the fields populated within the CommonSecurityLog.  This KQL can be used as-is, or adapted to suite other threat-hunting and playbook functionality'
+requiredDataConnectors:
+  - connectorId: CefAma
+    datatypes:
+      - CommonSecurityLog
+tactics:
+  - ResourceDevelopment
+  - InitialAccess
+  - Discovery
+  - LateralMovement
+  - CommandandControl
+  - Exfiltration
+query: |
+  // Specify the IP Address or FQDN of the Endace InvestigationManager (or EndaceProbe) and Rotation File Name
+  let Endace_IM = "<FQDN>";
+  let Endace_Rotfile = "main";
+  // Specify the default tools
+  let Endace_Tools = "conversations_by_ninetuple%2CtrafficOverTime_by_app";
+  // Identify the Database
+  CommonSecurityLog
+  // We're using the following DB fields to build the Pivot-to-Vision URL:
+  // SourceIP, DestinationIP, TimeGenerated
+  // Limit our search to 'Threat' records
+  | where Activity == "THREAT"
+  | extend p2v_ip = case(
+      isnotnull(SourceIP) and isnotnull(DestinationIP), strcat("&ip_conv=", SourceIP, "%20%26%20", DestinationIP),
+      isnotnull(SourceIP), strcat("&ip=", SourceIP),
+      isnotnull(DestinationIP), strcat("&ip=", DestinationIP),
+      ""
+    )
+  // Set the URL Variable
+  | extend Endace_p2v = strcat("https://", Endace_IM, "/vision2/pivotintovision/?datasources=", Endace_Rotfile, "&title=Pivot+From+Sentinel", p2v_ip, "&tools=", Endace_Tools, "&incidenttime=", tostring(TimeGenerated))
+  // Display the new Table
+  | project TimeGenerated, Activity, Message, SourceIP, DestinationIP, Endace_p2v
+  // Set a record limit
+  | limit 5
+version: 1.0.0

@@ -1,4 +1,47 @@
 id: 3131d0ba-32c9-483e-a25c-82e26a07e116
 name: Suspicious sign-in attempts from QR code phishing campaigns
 description: |
-  'As part of content migration, this file is moved to new location. you can find here: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20Queries/QR%20code/Suspicious%20sign-in%20attempts%20from%20QR%20code%20phishing%20campaigns.yaml'
+  This detection approach correlates a user accessing an email with image/document attachments and a risky sign-in attempt from non-trusted devices.
+description-detailed: |
+  This detection approach correlates a user accessing an email with image/document attachments and a risky sign-in attempt from non-trusted devices in closer proximity and validates if the location from where the email item was accessed is different from the location of sign-in attempt.
+  Reference - https://techcommunity.microsoft.com/t5/microsoft-defender-for-office/hunting-and-responding-to-qr-code-based-phishing-attacks-with/ba-p/4074730 
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - AADSignInEventsBeta
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let successfulRiskySignIn = materialize(AADSignInEventsBeta
+  | where Timestamp > ago(1d)
+  | where isempty(DeviceTrustType)
+  | where IsManaged != 1
+  | where IsCompliant != 1
+  | where RiskLevelDuringSignIn in (50, 100)
+  | project Timestamp, ReportId, IPAddress, AccountUpn, AccountObjectId, SessionId, Country, State, City
+  );
+  let suspiciousSignInUsers = successfulRiskySignIn
+  | distinct AccountObjectId;
+  let suspiciousSignInIPs = successfulRiskySignIn
+  | distinct IPAddress;
+  let suspiciousSignInCities = successfulRiskySignIn
+  | distinct City;
+  CloudAppEvents
+  | where Timestamp > ago(1d)
+  | where ActionType == "MailItemsAccessed"
+  | where AccountObjectId in (suspiciousSignInUsers)
+  | where IPAddress !in (suspiciousSignInIPs)
+  | where City !in (suspiciousSignInCities)
+  | join kind=inner successfulRiskySignIn on AccountObjectId
+  | where AccountObjectId in (suspiciousSignInUsers)
+  | where (Timestamp - Timestamp1) between (-5min .. 5min)
+  | extend folders = RawEventData.Folders
+  | mv-expand folders
+  | extend items = folders.FolderItems
+  | mv-expand items
+  | extend InternetMessageId = tostring(items.InternetMessageId)
+  | project Timestamp, ReportId, IPAddress, InternetMessageId, AccountObjectId, SessionId, Country, State, City
+version: 1.0.0 

@@ -72,7 +72,7 @@ class LogStashEventsBatcher
                     elsif ewr.class ==  Excon::Error::RequestTimeout
                         force_retry = true
                     elsif ewr.class ==  Excon::Error::TooManyRequests
-                        # thrutteling detected, backoff before resending
+                        # throttling detected, backoff before resending
                         parsed_retry_after = response.data[:headers].include?('Retry-After') ? response.data[:headers]['Retry-After'].to_i : 0
                         seconds_to_sleep = parsed_retry_after > 0 ? parsed_retry_after : 30
 
@@ -80,6 +80,9 @@ class LogStashEventsBatcher
                         force_retry = true
                     end               
                 rescue Excon::Error::Socket => ex
+                    @logger.trace("Exception: '#{ex.class.name}]#{ex} in posting data to #{api_name}. [amount_of_documents=#{amount_of_documents}]'")
+                    force_retry = true
+                rescue Excon::Error::Timeout => ex
                     @logger.trace("Exception: '#{ex.class.name}]#{ex} in posting data to #{api_name}. [amount_of_documents=#{amount_of_documents}]'")
                     force_retry = true
                 rescue Exception => ex

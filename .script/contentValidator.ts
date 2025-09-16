@@ -1,7 +1,7 @@
 import fs from "fs";
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
-import * as logger from "./utils/logger";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
+import * as logger from "./utils/logger.js";
 
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {

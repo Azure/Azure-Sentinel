@@ -1,7 +1,16 @@
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 import requests
 import yaml
 import re
-import os
 import subprocess
 import csv
 import json
@@ -9,7 +18,6 @@ from azure.monitor.ingestion import LogsIngestionClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import HttpResponseError
 import time
-import sys
 
 def get_modified_files(current_directory):
     # Add upstream remote if not already present
@@ -160,6 +168,8 @@ def get_schema_for_builtin(query_table):
     for each in json.loads(query_response.text).get('tables')[0].get('rows'):
         if each[0] in reserved_columns:
             continue
+        elif each[0] in guid_columns:
+            continue
         elif each[3] == "bool":
             schema.append({        
             'name': each[0],
@@ -177,7 +187,7 @@ def create_dcr(schema,table,table_type):
     #suffic_num = str(random.randint(100,999))
     dcrname=table+"_DCR"+str(prnumber)
     request_object={ 
-            "location": "eastus", 			
+            "location": "eastus2euap", 			
             "properties": {
                 "streamDeclarations": {
                     "Custom-dcringest"+str(prnumber): {
@@ -256,13 +266,19 @@ def extract_event_vendor_product(parser_query,parser_file):
 
     match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_vendor = match.group(1).replace(" ", "")
+        event_vendor = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventVendor' as 'Microsoft'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_vendor = 'Microsoft'
     else:
         print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
 
     match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_product = match.group(1).replace(" ", "")
+        event_product = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventProduct' as SchemaName + 'NativeTable'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_product = 'NativeTable'
     else:
         print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
     return event_vendor, event_product ,schema_name   
@@ -291,12 +307,12 @@ def convert_data_type(schema_result, data_result):
 
 #main starting point of script
 
-workspace_id = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
-workspaceName = "ASIM-SchemaDataTester-GithubShared"
-resourceGroupName = "asim-schemadatatester-githubshared"
-subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
-dataCollectionEndpointname = "asim-schemadatatester-githubshared"
-endpoint_uri = "https://asim-schemadatatester-githubshared-uetl.eastus-1.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
+workspace_id = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
+workspaceName = "ASIM-SchemaDataTester-GithubShared-Canary"
+resourceGroupName = "asim-schemadatatester-githubshared-canary"
+subscriptionId = "419581d6-4853-49bd-83b6-d94bb8a77887"
+dataCollectionEndpointname = "ASIM-SchemaDataTester-GithubShared-Canary"
+endpoint_uri = "https://asim-schemadatatester-githubshared-canary-qa1f.eastus2euap-1.canary.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
 SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
 dcr_directory=[]
@@ -319,9 +335,9 @@ for file in parser_yaml_files:
         SchemaName = SchemaNameMatch.group(1)
     else:
         SchemaName = None
-    # Check if changed file is a union parser. If Yes, skip the file
-    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')):
-        print(f"Ignoring this {file} because it is a union parser file")
+    # Check if changed file is a union or empty parser. If Yes, skip the file
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
+        print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
@@ -330,6 +346,7 @@ for file in parser_yaml_files:
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
     schema = normalization.get('Schema')
+    equivalent_built_in_parser = asim_parser.get('EquivalentBuiltInParser')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
     SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
@@ -395,10 +412,32 @@ for file in parser_yaml_files:
     elif log_ingestion_supported == True and table_type == "builtin":
         flag=0 #flag value is used to check if DCR is created for the table or not
         #create dcr for ingestion
+        guid_columns = []
         schema = get_schema_for_builtin(table_name)
+        data_result = convert_data_type(schema, data_result)
         request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
         response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of DCR creation: {response_body.text}") 
+        print(f"Response of DCR creation: {response_body.text}")
+        if response_body.status_code == 400 and "InvalidTransformOutput" in response_body.text:
+            guid_flag=0
+            print("*********Checking if failure reason is GUID Type columns and present in schema***********")
+            str_match = json.loads(response_body.text).get('error').get('details')[0].get('message')
+            match = re.findall(r'(\w+\s*\[produced:\s*\'String\',\s*output:\s*\'Guid\'\])', str_match)
+            print(f"Mismatched Column and there types : {match}")
+            for item in match:
+                if "Guid" not in item:
+                    guid_flag=1
+                    print(f"Provided column Type other than GUID TYPE is not matching with Output Stream : {item}")
+            if guid_flag == 1:
+                print("Please provide Same Type of columns in stream declaration that matches with output stream of DCR")
+                exit(1)
+            cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
+            guid_columns = cleaned_guid_columns
+            print("Re trying DCR creation after removing GUID columns")
+            schema = get_schema_for_builtin(table_name)
+            request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
+            response_body=hit_api(url_to_call,request_body,method_to_use)
+            print(f"Response of DCR creation: {response_body.text}")       
         dcr_directory.append({
         'DCRname':table_name+'_DCR'+str(prnumber),
         'imutableid':json.loads(response_body.text).get('properties').get('immutableId'),
@@ -416,4 +455,4 @@ for file in parser_yaml_files:
         senddtosentinel(immutable_id,data_result,stream_name,flag)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
-        continue 
+        continue

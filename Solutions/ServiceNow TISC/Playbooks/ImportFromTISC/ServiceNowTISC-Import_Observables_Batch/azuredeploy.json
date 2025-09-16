@@ -1,0 +1,243 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "ServiceNow TISC Import Observables from TISC",
+        "description":  "This playbook leverages the ServiceNow TISC API to import IP, Domain, URL, and Hash observables from TISC Workspace to Microsoft  ThreatIntelligenceIndicator log analytics table. The imported observables can be seen under the Threat Intelligence tab in Microsoft Sentinel Workspace.",
+        "prerequisites":  [
+            "1. ServiceNow TISC Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
+            "2. **ServiceNowTISC-Batch_Indicator_Uploader** playbook needs to be deployed prior to the deployment of this playbook under the same subscription."
+        ],
+        "postDeployment":  [
+            "1. Once deployment is complete, you will need to configure/authorize each API connection.",
+            "2. Navigate to playbook > API Connections > Select connections one by one > configure/authorize each connection > Save"
+        ],
+        "prerequisitesDeployTemplateFile":  "../../Connectors/ServiceNowTISCCustomConnector/azuredeploy.json",
+        "lastUpdateTime":  "2025-01-10T00:00:00.000Z",
+        "entities":  ["ip","filehash","url","dns"],
+        "tags": ["Threat Intelligence", "ServiceNow TISC"],
+        "support":  {
+            "tier":  "partner",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "ServiceNow"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "ServiceNowTISC-Import_Observables_Batch",
+            "type":  "string"
+        },
+        "CustomConnectorName":  {
+            "defaultValue":  "ServiceNowTISCCustomConnector",
+            "type":  "string",
+            "metadata": {
+                "description": "Name of the custom connector, if you want to change the default name, make sure to use the same when you were installing ServiceNowTISC custom connector"
+            }            
+        },
+        "IndicatorsUploadBatchingPlaybookname": {
+            "defaultValue": "ServiceNowTISC-Batch_Indicator_Uploader",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Indicators Upload Batching Playbook"
+            }
+        }
+    },
+    "variables":  {
+        "ServicenowTISCCustomConnectorConnectionName":  "[concat('Connection-', parameters('CustomConnectorName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Recurrence":  {
+                            "recurrence":  {
+                                "interval":  24,
+                                "frequency":  "Hour",
+                                "timeZone":  "India Standard Time",
+                                "startTime":  "2024-11-26T13:00:00Z"
+                            },
+                            "evaluatedRecurrence":  {
+                                "interval":  24,
+                                "frequency":  "Hour",
+                                "timeZone":  "India Standard Time",
+                                "startTime":  "2024-11-26T13:00:00Z"
+                            },
+                            "type":  "Recurrence"
+                        }
+                    },
+                    "actions":  {
+                        "Next_page_token":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Next page token",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Until":  {
+                            "actions":  {
+                                "Import_Observables_in_Indicator_STIX_format_TISC_API":  {
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['ServicenowTISCCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "post",
+                                        "body":  {
+                                            "page_size":  100,
+                                            "page_token":  "@variables('Next page token')",
+                                            "types": [],
+                                            "reputation": [],
+                                            "threat_severity": [],
+                                            "threat_level": [],
+                                            "delta_hours":  24
+                                        },
+                                        "path":  "/api/sn_sec_tisc/threat_intel_data/observables_indicator_stix_format"
+                                    }
+                                },
+                                "For_each":  {
+                                    "foreach":  "@body('Import_Observables_in_Indicator_STIX_format_TISC_API')?['indicators']",
+                                    "actions":  {
+                                        "ServiceNowTISC-Batch_Indicator_Uploader":  {
+                                            "type":  "SendToBatch",
+                                            "inputs":  {
+                                                "batchName":  "ServiceNowImportTISC",
+                                                "content":  "@items('For_each')",
+                                                "host":  {
+                                                    "triggerName":  "Batch_Trigger",
+                                                    "workflow":  {
+                                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('IndicatorsUploadBatchingPlaybookname'))]"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Import_Observables_in_Indicator_STIX_format_TISC_API":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "Set_next_page_token":  {
+                                    "runAfter":  {
+                                        "For_each":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "Next page token",
+                                        "value":  "@body('Import_Observables_in_Indicator_STIX_format_TISC_API')?['next_page_token']"
+                                    }
+                                },
+                                "Set_last_page_flag":  {
+                                    "runAfter":  {
+                                        "Set_next_page_token":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "Last page flag",
+                                        "value":  "@body('Import_Observables_in_Indicator_STIX_format_TISC_API')?['is_last_page']"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Last_page_flag":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  "@equals(variables('Last page flag'),true)",
+                            "limit":  {
+                                "count":  1000
+                            },
+                            "type":  "Until"
+                        },
+                        "Last_page_flag":  {
+                            "runAfter":  {
+                                "Next_page_token":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Last page flag",
+                                        "type":  "boolean",
+                                        "value":  true
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "ServicenowTISCCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('ServicenowTISCCustomConnectorConnectionName'))]",
+                                "connectionName":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "ServiceNowTISC-Import_Observables_Batch",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('ServicenowTISCCustomConnectorConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('ServicenowTISCCustomConnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        }
+    ]
+}

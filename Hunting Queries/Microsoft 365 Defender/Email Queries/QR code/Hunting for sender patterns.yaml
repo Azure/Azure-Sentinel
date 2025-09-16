@@ -1,4 +1,47 @@
 id: 68aa199c-259b-4bb0-8e7a-8ed6f96c5525
 name: Hunting for sender patterns
 description: |
-  'As part of content migration, this file is moved to new location. you can find here: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20Queries/QR%20code/Hunting%20for%20sender%20patterns.yaml'
+  In this detection approach, we correlate email from non-prevalent senders in the organization with impersonation intents
+description-detailed: |
+  In this detection approach, we correlate email from non-prevalent senders in the organization with impersonation intents using Defender for Office 365 data.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+  - EmailAttachmentInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let PhishingSenderDisplayNames = ()
+  {
+  pack_array("IT", "support", "Payroll", "HR", "admin", "2FA", "notification", "sign", "reminder", "consent", "workplace",
+  "administrator", "administration", "benefits", "employee", "update", "on behalf");
+  };
+  let suspiciousEmails = EmailEvents
+  | where Timestamp > ago(1d)
+  | where isnotempty(RecipientObjectId)
+  | where isnotempty(SenderFromAddress)
+  | where EmailDirection == "Inbound"
+  | where DeliveryAction == "Delivered"
+  | join kind=inner (EmailAttachmentInfo
+  | where Timestamp > ago(1d)
+  | where isempty(SenderObjectId)
+  | where FileType has_any ("png", "jpg", "jpeg", "bmp", "gif")
+   ) on NetworkMessageId
+  | where SenderDisplayName has_any (PhishingSenderDisplayNames())
+  | project Timestamp, Subject, FileName, SenderFromDomain, RecipientObjectId, NetworkMessageId;
+  let suspiciousSenders = suspiciousEmails | distinct SenderFromDomain;
+  let prevalentSenders = materialize(EmailEvents
+  | where Timestamp between (ago(7d) .. ago(1d))
+  | where isnotempty(RecipientObjectId)
+  | where isnotempty(SenderFromAddress)
+  | where SenderFromDomain in (suspiciousSenders)
+  | where EmailDirection == "Inbound"
+  | where DeliveryAction == "Delivered"
+  | distinct SenderFromDomain);
+  suspiciousEmails
+  | where SenderFromDomain !in (prevalentSenders)
+  | project Timestamp, Subject, FileName, SenderFromDomain, RecipientObjectId, NetworkMessageId
+version: 1.0.0 
