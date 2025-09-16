@@ -90,35 +90,43 @@ class AzureSentinel:
 
         :param logs: list of JSON-serializable log entries
         :param max_bytes: maximum size per chunk in bytes (default 1MB)
-        :return
+        :return: dict with upload statistics
         """
         logging.info("Called _upload_in_chunks")
         current_chunk = []
+        current_size = 2  # accounts for '[' and ']'
 
         for item in logs:
-            # Test adding the item to the current chunk
-            test_chunk = current_chunk + [item]
-            chunk_str = json.dumps(test_chunk, ensure_ascii=False)
-            chunk_size = len(chunk_str.encode("utf-8"))
+            # Serialize each item once
+            item_str = json.dumps(item, ensure_ascii=False)
+            item_size = len(item_str.encode("utf-8"))
 
-            if chunk_size <= max_bytes:
+            # Add 1 byte if not the first element (comma separator in JSON array)
+            if current_chunk:
+                item_size += 1
+
+            if current_size + item_size <= max_bytes:
                 current_chunk.append(item)
+                current_size += item_size
             else:
-                # Save current chunk and start a new one
+                # Flush the current chunk
                 if current_chunk:
                     self._add_to_upload_list(client, current_chunk)
 
+                # Start a new chunk with this item
                 current_chunk = [item]
+                current_size = 2 + len(item_str.encode("utf-8"))
 
-        # Add the last chunk if it has data
+        # Flush the last chunk
         if current_chunk:
             self._add_to_upload_list(client, current_chunk)
 
+        # Start uploads
         self._upload_list()
 
         return {
             "upload_chunk_count": self.upload_chunk_count,
-            "upload_fail_count": self.upload_fail_count
+            "upload_fail_count": self.upload_fail_count,
         }
 
     def _add_to_upload_list(self, client, chunk):
