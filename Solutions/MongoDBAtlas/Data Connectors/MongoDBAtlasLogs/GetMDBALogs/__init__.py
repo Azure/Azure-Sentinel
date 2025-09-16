@@ -92,6 +92,7 @@ class AzureSentinel:
         :param max_bytes: maximum size per chunk in bytes (default 1MB)
         :return
         """
+        logging.info("Called _upload_in_chunks")
         current_chunk = []
 
         for item in logs:
@@ -121,26 +122,42 @@ class AzureSentinel:
         }
 
     def _add_to_upload_list(self, client, chunk):
-        self.jobs.append(Thread(target=self._post_data, kwargs={"client": client, "rule_id": self.azure_dcr_immutableid,
-                                                                "stream_name": self.azure_stream_name, "logs": chunk}))
+        logging.info("Called _add_to_upload_list")
+        t = Thread(target=self._post_data, kwargs={"client": client, "rule_id": self.azure_dcr_immutableid,
+                                                   "stream_name": self.azure_stream_name, "logs": chunk})
+        t.daemon = False  # keep False so threads finish before process ends
+        self.jobs.append(t)
 
     def _upload_list(self):
-        for job in self.jobs:
-            job.start()
+        logging.info("Called _upload_list")
+        try:
+            for index, job in enumerate(self.jobs):
+                job.start()
+                logging.info("job.start() %s", index)
 
-        for job in self.jobs:
-            job.join()
-        self.jobs = []
+            for index, job in enumerate(self.jobs):
+                logging.info("job.join() waiting %s", index)
+                job.join()
+                logging.info("job.join() complete %s", index)
+        except Exception as e:
+            logging.exception(
+                "Error while starting/joining upload threads: %s", e)
+        finally:
+            self.jobs = []
 
     def _post_data(self, client, rule_id, stream_name, logs):
+        logging.info("Called _post_data")
         try:
-            logging.debug(
-                "Calling client.upload rule_id=%s, stream_name=%s", rule_id, stream_name)
+            logging.info(
+                "Calling client.upload rule_id=%s, stream_name=%s, logs_count=%d", rule_id, stream_name, getattr(logs, "__len__", lambda: None)() or 0)
             client.upload(rule_id=rule_id,
                           stream_name=stream_name, logs=logs)
             self.upload_chunk_count += 1
         except HttpResponseError as e:
-            logging.error("Upload failed: %s", e)
+            logging.error("Upload failed (HttpResponseError): %s", e)
+            self.upload_fail_count += 1
+        except Exception as e:
+            logging.exception("Upload failed (general): %s", e)
             self.upload_fail_count += 1
 
     def upload_data_to_log_analytics_table(self, json_log) -> dict:
