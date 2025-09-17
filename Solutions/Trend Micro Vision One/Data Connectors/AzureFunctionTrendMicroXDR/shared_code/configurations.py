@@ -14,8 +14,8 @@ XDR_HOSTS = {
     'jp': 'https://api.xdr.trendmicro.co.jp',
     'sg': 'https://api.sg.xdr.trendmicro.com',
     'au': 'https://api.au.xdr.trendmicro.com',
-    'uae': 'https://api.uae.xdr.trendmicro.com/',
     'mea': 'https://api.mea.xdr.trendmicro.com',
+    'uk': 'https://api.uk.xdr.trendmicro.com',
 }
 
 
