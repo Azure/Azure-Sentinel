@@ -35,13 +35,14 @@ def get_api_tokens():
     )
     if is_key_vault_enabled:
         # get tokens from key vault
-        from azure.identity import DefaultAzureCredential
+        from azure.identity import ManagedIdentityCredential
         from azure.keyvault.secrets import SecretClient
 
         clp_ids = set(filter(None, os.getenv('clpIds').split(',')))
-        credential = DefaultAzureCredential(
-            managed_identity_client_id=os.getenv('keyVaultIdentityClientId')
-        )
+
+        managed_identity_client_id = os.getenv('keyVaultIdentityClientId')
+        credential = ManagedIdentityCredential(client_id=managed_identity_client_id)
+
         client = SecretClient(vault_url=os.getenv('keyVaultUrl'), credential=credential)
 
         tokens = []
