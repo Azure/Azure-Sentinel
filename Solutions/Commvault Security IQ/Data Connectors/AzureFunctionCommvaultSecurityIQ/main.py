@@ -44,6 +44,7 @@ access_token = None
 refresh_token = None
 access_token_expiry = None
 secret_client = None
+is_saas_environment = False
 headers = {
     "Content-Type": "application/json",
     "Accept": "application/json",
@@ -227,7 +228,7 @@ def read_blob(connection_string, container_name, blob_name):
 
 
 def main(mytimer: func.TimerRequest) -> None:
-    global access_token, url, headers, secret_client, access_token_expiry, refresh_token
+    global access_token, url, headers, secret_client, access_token_expiry, refresh_token, is_saas_environment
     if mytimer.past_due:
         logging.info('The timer is past due!')
 
@@ -261,12 +262,19 @@ def main(mytimer: func.TimerRequest) -> None:
             raise ValueError(f"Secret {secret_name} not found in Key Vault")
         url = secret.value
         logging.debug(f"Fetched environment endpoint URL: {url}")
+        # Determine if this is a SaaS environment
+        is_saas_environment = "api.metallic.io" in url
+        logging.info(f"Environment type: {'SaaS' if is_saas_environment else 'Self-managed'}")
 
         # 2. Fetch access-token from Key Vault
         secret_name = "access-token"
         access_token = secret_client.get_secret(secret_name).value
-        headers["authtoken"] = access_token
+        if is_saas_environment:
+            headers["Authorization"] = f"Bearer {access_token}"
+        else:
+            headers["authtoken"] = access_token
         logging.debug("Fetched access token.")
+
 
         # 3. Fetch refresh-token from Key Vault
         secret_name = "refresh-token"
@@ -289,7 +297,11 @@ def main(mytimer: func.TimerRequest) -> None:
         # Check if token is expired and refresh if needed
         if access_token_expiry == -1 or is_access_token_expired_or_is_empty(access_token_expiry):
             logging.info("Token is expired or missing, refreshing access token")
-            headers["authtoken"] = refresh_access_token()
+            refreshed_token = refresh_access_token()
+            if is_saas_environment:
+                headers["Authorization"] = f"Bearer {refreshed_token}"
+            else:
+                headers["authtoken"] = refreshed_token
         else:
             logging.info("Access token is valid and not expired.")
 
@@ -304,7 +316,11 @@ def main(mytimer: func.TimerRequest) -> None:
                 error_code = company_data_json["errorCode"]
                 error_message = company_data_json.get("errorMessage")
                 if error_message == "Access denied" and error_code == 5: 
-                    headers["authtoken"] = refresh_access_token()
+                    refreshed_token = refresh_access_token()
+                    if is_saas_environment:
+                        headers["Authorization"] = f"Bearer {refreshed_token}"
+                    else:
+                        headers["authtoken"] = refreshed_token
                     company_response = requests.get(companyId_url, headers=headers, verify=False)
 
         if company_response.status_code == 200:
