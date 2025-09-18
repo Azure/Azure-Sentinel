@@ -1,23 +1,17 @@
 """
-Path Handler for ASim Parser if source_path and os.path.exists(source_path):
-        print(f"🔍 Analyzing code from: {source_path}")
-        _patch_functions()
-    else:
-        print("📂 Running tests in standard mode")sts
+Path Handler for ASim Parser Tests
 
 This module provides path override functionality for ASim parser test scripts
 to analyze code from different directories, supporting PR analysis workflows.
 
 Usage:
-    import secure_path_handler
-    secure_path_handler.setup_secure_paths("/path/to/pr-code")
+    import asim_path_handler_python
+    asim_path_handler_python.setup_secure_paths("/path/to/pr-code")
     # Now run your original script
 """
 
 import os
-import sys
 import subprocess
-from functools import wraps
 
 # Global variable to store the source path
 _source_path = None
@@ -52,7 +46,6 @@ def _patch_functions():
     def secure_dirname(path):
         if path and any(script in path for script in ['ASimFilteringTest.py', 'VerifyASimParserTemplate.py', 'ingestASimSampleData.py']):
             # Return the equivalent path in the source directory
-            script_name = os.path.basename(path)
             return os.path.join(_source_path, '.script', 'tests', 'asimParsersTest')
         return _original_functions['os_path_dirname'](path)
     

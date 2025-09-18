@@ -1,6 +1,4 @@
-# PR Analysis wrapper f     if ($SourcePath -and (Test-Path $SourcePath)) {
-        Write-ColorOutput "🔍 Using custom PR source path for testing: $SourcePath" $yellow if ($SourcePath -and (Test-Path $SourcePath)) {
-        Write-ColorOutput "🔍 Testing ASim parsers from custom source: $SourcePath" $yellow runAsimTesters.ps1
+# ASim Path Handler for PowerShell
 # This wrapper enables the original PowerShell script to analyze code from different directories
 # by modifying paths and git operations to work with PR code in an isolated folder.
 
