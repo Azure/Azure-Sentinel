@@ -59,7 +59,7 @@ namespace Teams.CustomConnector.Common
             try
             {
                 var baseUrl = Environment.GetEnvironmentVariable(Constants.KeyVaultBaseUrl);
-                SecretClient secretClient = new SecretClient(new Uri(baseUrl), new DefaultAzureCredential());
+                SecretClient secretClient = new SecretClient(new Uri(baseUrl), new DefaultAzureCredential());       // CodeQL [SM05137] Data connector is deprecated.
                 KeyVaultSecret keyVaultSecret = null;
 
                 await retryWithExponentialBackoff.RunAsync(async () =>
