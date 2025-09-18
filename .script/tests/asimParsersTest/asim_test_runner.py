@@ -41,18 +41,30 @@ def main():
     asim_path_handler_python.setup_git_environment()
     
     try:
-        # Dynamically import and run the original script
-        module = importlib.import_module(args.script_name)
-        
         # If there are additional arguments, modify sys.argv to pass them through
         if args.additional_args:
             sys.argv = [args.script_name + '.py'] + args.additional_args
         
-        # Call the main function
-        module.main()
+        # For scripts that run directly (like ingestASimSampleData.py), 
+        # we need to execute them rather than import them
+        if args.script_name == 'ingestASimSampleData':
+            # Execute the script directly
+            script_path = os.path.join(current_dir, f"{args.script_name}.py")
+            exec(compile(open(script_path).read(), script_path, 'exec'))
+        else:
+            # Dynamically import and run the original script
+            module = importlib.import_module(args.script_name)
+            
+            # Try to call the main function first, then run function as fallback
+            if hasattr(module, 'main'):
+                module.main()
+            elif hasattr(module, 'run'):
+                module.run()
+            else:
+                raise AttributeError(f"No main() or run() function found in {args.script_name}")
         
-    except AttributeError:
-        print(f"Error: {args.script_name}.py doesn't have a main() function")
+    except AttributeError as e:
+        print(f"Error: {args.script_name}.py doesn't have a main() or run() function: {e}")
         return 1
     except ImportError as e:
         print(f"Error: Could not import {args.script_name}.py: {e}")
