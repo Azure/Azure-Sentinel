@@ -6,8 +6,8 @@ import json
 import os
 import time
 import gzip
-from io import BytesIO
-from typing import Tuple
+from enum import Enum
+from threading import Thread
 
 import requests
 import azure.functions as func
@@ -79,6 +79,10 @@ class AzureSentinel:
         self.table_name = "JobState"
         self.job_state_table_store = JobStateTableStore(
             connection_string, self.table_name)
+        # A list of jobs to upload logs to Microsoft Sentinel. Allows multithreading.
+        self.jobs = []
+        self.upload_chunk_count = 0
+        self.upload_fail_count = 0
 
     def _upload_in_chunks(self, client, logs, max_bytes=1 * 1024 * 1024) -> dict:
         """
@@ -86,47 +90,83 @@ class AzureSentinel:
 
         :param logs: list of JSON-serializable log entries
         :param max_bytes: maximum size per chunk in bytes (default 1MB)
-        :return 
+        :return: dict with upload statistics
         """
+        logging.info("Called _upload_in_chunks")
         current_chunk = []
-        upload_chunk_count = 0
-        upload_fail_count = 0
+        current_size = 2  # accounts for '[' and ']'
 
         for item in logs:
-            # Test adding the item to the current chunk
-            test_chunk = current_chunk + [item]
-            chunk_str = json.dumps(test_chunk, ensure_ascii=False)
-            chunk_size = len(chunk_str.encode("utf-8"))
+            # Serialize each item once
+            item_str = json.dumps(item, ensure_ascii=False)
+            item_size = len(item_str.encode("utf-8"))
 
-            if chunk_size <= max_bytes:
+            # Add 1 byte if not the first element (comma separator in JSON array)
+            if current_chunk:
+                item_size += 1
+
+            if current_size + item_size <= max_bytes:
                 current_chunk.append(item)
+                current_size += item_size
             else:
-                # Save current chunk and start a new one
+                # Flush the current chunk
                 if current_chunk:
-                    try:
-                        logging.debug(
-                            "Calling client.upload rule_id=%s, stream_name=%s", self.azure_dcr_immutableid, self.azure_stream_name)
-                        client.upload(rule_id=self.azure_dcr_immutableid,
-                                      stream_name=self.azure_stream_name, logs=current_chunk)
-                        upload_chunk_count += 1
-                    except HttpResponseError as e:
-                        logging.error("Upload failed: %s", e)
-                        upload_fail_count += 1
+                    self._add_to_upload_list(client, current_chunk)
 
+                # Start a new chunk with this item
                 current_chunk = [item]
+                current_size = 2 + len(item_str.encode("utf-8"))
 
-        # Add the last chunk if it has data
+        # Flush the last chunk
         if current_chunk:
-            logging.debug(
-                "Calling client.upload rule_id=%s, stream_name=%s", self.azure_dcr_immutableid, self.azure_stream_name)
-            client.upload(rule_id=self.azure_dcr_immutableid,
-                          stream_name=self.azure_stream_name, logs=current_chunk)
-            upload_chunk_count += 1
+            self._add_to_upload_list(client, current_chunk)
+
+        # Start uploads
+        self._upload_list()
 
         return {
-            "upload_chunk_count": upload_chunk_count,
-            "upload_fail_count": upload_fail_count
+            "upload_chunk_count": self.upload_chunk_count,
+            "upload_fail_count": self.upload_fail_count,
         }
+
+    def _add_to_upload_list(self, client, chunk):
+        logging.info("Called _add_to_upload_list")
+        t = Thread(target=self._post_data, kwargs={"client": client, "rule_id": self.azure_dcr_immutableid,
+                                                   "stream_name": self.azure_stream_name, "logs": chunk})
+        t.daemon = False  # keep False so threads finish before process ends
+        self.jobs.append(t)
+
+    def _upload_list(self):
+        logging.info("Called _upload_list")
+        try:
+            for index, job in enumerate(self.jobs):
+                job.start()
+                logging.info("job.start() %s", index)
+
+            for index, job in enumerate(self.jobs):
+                logging.info("job.join() waiting %s", index)
+                job.join()
+                logging.info("job.join() complete %s", index)
+        except Exception as e:
+            logging.exception(
+                "Error while starting/joining upload threads: %s", e)
+        finally:
+            self.jobs = []
+
+    def _post_data(self, client, rule_id, stream_name, logs):
+        logging.info("Called _post_data")
+        try:
+            logging.info(
+                "Calling client.upload rule_id=%s, stream_name=%s, logs_count=%d", rule_id, stream_name, getattr(logs, "__len__", lambda: None)() or 0)
+            client.upload(rule_id=rule_id,
+                          stream_name=stream_name, logs=logs)
+            self.upload_chunk_count += 1
+        except HttpResponseError as e:
+            logging.error("Upload failed (HttpResponseError): %s", e)
+            self.upload_fail_count += 1
+        except Exception as e:
+            logging.exception("Upload failed (general): %s", e)
+            self.upload_fail_count += 1
 
     def upload_data_to_log_analytics_table(self, json_log) -> dict:
         """Authenticates with Azure before calling the LogIngestionAPI to upload logs."""
@@ -164,6 +204,14 @@ class AzureSentinel:
                      last_update_time)
 
 
+class FilterType(str, Enum):
+    """Permissable filter options for log messages"""
+    NONE = 'none'
+    ALL = 'all'
+    EXCLUDE = 'exclude'
+    INCLUDE = 'include'
+
+
 class MongoDbConnection:
     """Connection object for MongoDB Atlas API"""
 
@@ -184,27 +232,29 @@ class MongoDbConnection:
         self.total_size_downloaded = 0
         self.azure_sentinel_stats = {}
 
-        self.mdba_include_access_logs = config.get("mdba_include_access_logs")
-        if self.mdba_include_access_logs:
+        self.mdba_access_logs_filter_type = config.get(
+            "mdba_access_logs_filter_type")
+        if self.mdba_access_logs_filter_type not in (None, FilterType.NONE):
             self.filtered_categories.append("ACCESS")
             access_list_input = config.get("mbda_access_list")
-            self.access_ids_to_include, self.filter_by_access_id = self.parse_ids_list(
-                access_list_input)
+            self.access_ids_to_filter = self.parse_ids_list(
+                access_list_input, self.mdba_access_logs_filter_type)
 
-        self.mdba_include_network_logs = config.get(
-            "mdba_include_network_logs")
-        if self.mdba_include_network_logs:
+        self.mdba_network_logs_filter_type = config.get(
+            "mdba_network_logs_filter_type")
+        if self.mdba_network_logs_filter_type not in (None, FilterType.NONE):
             self.filtered_categories.append("NETWORK")
             network_list_input = config.get("mdba_network_list")
-            self.network_ids_to_include, self.filter_by_network_id = self.parse_ids_list(
-                network_list_input)
+            self.network_ids_to_filter = self.parse_ids_list(
+                network_list_input, self.mdba_network_logs_filter_type)
 
-        self.mdba_include_query_logs = config.get("mdba_include_query_logs")
-        if self.mdba_include_query_logs:
+        self.mdba_query_logs_filter_type = config.get(
+            "mdba_query_logs_filter_type")
+        if self.mdba_query_logs_filter_type not in (None, FilterType.NONE):
             self.filtered_categories.append("QUERY")
             query_list_input = config.get("mbda_query_list")
-            self.query_ids_to_include, self.filter_by_query_id = self.parse_ids_list(
-                query_list_input)
+            self.query_ids_to_filter = self.parse_ids_list(
+                query_list_input, self.mdba_query_logs_filter_type)
 
     def _encode_credentials(self):
         credentials = f"{self.mdba_client_id}:{self.mdba_client_secret}"
@@ -267,7 +317,7 @@ class MongoDbConnection:
             transformed[new_key] = value
         return transformed
 
-    def parse_ids_list(self, input_str: str, max_count: int = 10) -> Tuple[list[int], bool]:
+    def parse_ids_list(self, input_str: str, filter_type: str, max_count: int = 10) -> list[int]:
         """
         Parse a comma-separated string into a list of positive integers.
         Removes spaces/quotes and validates count and positivity.
@@ -277,7 +327,7 @@ class MongoDbConnection:
 
         :param input_str: Comma-separated string of numbers, e.g. "1, 2, '3'"
         :param max_count: Maximum number of allowed entries (default: 10)
-        :return: Tuple (list of ints, bool indicating do-filter if list is empty)
+        :return: list of ints
         :raises ValueError: If invalid, non-numeric, <=0, or too many entries
         """
         result = []
@@ -298,7 +348,12 @@ class MongoDbConnection:
             raise ValueError(
                 f"Too many numbers provided. Maximum allowed is {max_count}.")
 
-        return result, (len(result) > 0)
+        if len(result) == 0 and filter_type in (FilterType.INCLUDE, FilterType.EXCLUDE):
+            raise ValueError(
+                "Filtering requires at least one number."
+            )
+
+        return result
 
     def _should_skip_entry(self, raw_entry: dict) -> bool:
         """Return True if this entry should be skipped based on category and filtering rules."""
@@ -312,15 +367,17 @@ class MongoDbConnection:
 
         # Category-specific filtering rules
         filter_rules = {
-            "ACCESS": (self.filter_by_access_id, self.access_ids_to_include),
-            "NETWORK": (self.filter_by_network_id, self.network_ids_to_include),
-            "QUERY": (self.filter_by_query_id, self.query_ids_to_include),
+            "ACCESS": (self.mdba_access_logs_filter_type, self.access_ids_to_filter),
+            "NETWORK": (self.mdba_network_logs_filter_type, self.network_ids_to_filter),
+            "QUERY": (self.mdba_query_logs_filter_type, self.query_ids_to_filter),
         }
 
         # Apply filtering if category matches a rule
         if category in filter_rules:
-            filter_enabled, allowed_ids = filter_rules[category]
-            if filter_enabled and entry_id not in allowed_ids:
+            filter_type, filter_ids = filter_rules[category]
+            if filter_type == FilterType.INCLUDE and entry_id not in filter_ids:
+                return True
+            if filter_type == FilterType.EXCLUDE and entry_id in filter_ids:
                 return True
 
         return False
@@ -463,35 +520,36 @@ def configuration_set_up():
         mdba_client_secret=os.getenv("MDBA_CLIENT_SECRET"),
         mdba_group_id=os.getenv("MDBA_GROUP_ID"),
         mdba_cluster_id=os.getenv("MDBA_CLUSTER_ID"),
-        mdba_include_access_logs=os.getenv("MDBA_INCLUDE_ACCESS_LOGS"),
+        mdba_access_logs_filter_type=os.getenv("MDBA_ACCESS_LOGS_FILTER_TYPE"),
         mbda_access_list=os.getenv("MDBA_ACCESS_LIST"),
-        mdba_include_network_logs=os.getenv("MDBA_INCLUDE_NETWORK_LOGS"),
+        mdba_network_logs_filter_type=os.getenv(
+            "MDBA_NETWORK_LOGS_FILTER_TYPE"),
         mdba_network_list=os.getenv("MDBA_NETWORK_LIST"),
-        mdba_include_query_logs=os.getenv("MDBA_INCLUDE_QUERY_LOGS"),
+        mdba_query_logs_filter_type=os.getenv("MDBA_QUERY_LOGS_FILTER_TYPE"),
         mdba_query_list=os.getenv("MDBA_QUERY_LIST"),
     )
 
     mdba_client_id = config.get("mdba_client_id")
     mdba_group_id = config.get("mdba_group_id")
     mdba_cluster_id = config.get("mdba_cluster_id")
-    mdba_include_access_logs = config.get("mdba_include_access_logs")
+    mdba_access_logs_filter_type = config.get("mdba_access_logs_filter_type")
     mbda_access_list = config.get("mbda_access_list")
-    mdba_include_network_logs = config.get("mdba_include_network_logs")
+    mdba_network_logs_filter_type = config.get("mdba_network_logs_filter_type")
     mdba_network_list = config.get("mdba_network_list")
-    mdba_include_query_logs = config.get("mdba_include_query_logs")
+    mdba_query_logs_filter_type = config.get("mdba_query_logs_filter_type")
     mdba_query_list = config.get("mdba_query_list")
 
     logging.debug("config.mdba_client_id: %s", mdba_client_id)
     logging.debug("config.mdba_group_id: %s", mdba_group_id)
     logging.debug("config.mdba_cluster_id: %s", mdba_cluster_id)
-    logging.debug("config.mdba_include_access_logs: %s",
-                  mdba_include_access_logs)
+    logging.debug("config.mdba_access_logs_filter_type: %s",
+                  mdba_access_logs_filter_type)
     logging.debug("config.mbda_access_list: %s", mbda_access_list)
-    logging.debug("config.mdba_include_network_logs: %s",
-                  mdba_include_network_logs)
+    logging.debug("config.mdba_network_logs_filter_type: %s",
+                  mdba_network_logs_filter_type)
     logging.debug("config.mdba_network_list: %s", mdba_network_list)
-    logging.debug("config.mdba_include_query_logs: %s",
-                  mdba_include_query_logs)
+    logging.debug("config.mdba_query_logs_filter_type: %s",
+                  mdba_query_logs_filter_type)
     logging.debug("config.mdba_query_list: %s", mdba_query_list)
 
     tenant_id = config.get("tenant_id")
