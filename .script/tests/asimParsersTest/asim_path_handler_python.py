@@ -44,9 +44,15 @@ def _patch_functions():
     
     # Override os.path.dirname for specific files
     def secure_dirname(path):
-        if path and any(script in path for script in ['ASimFilteringTest.py', 'VerifyASimParserTemplate.py', 'ingestASimSampleData.py']):
-            # Return the equivalent path in the source directory
-            return os.path.join(_source_path, '.script', 'tests', 'asimParsersTest')
+        # Handle both string and bytes objects
+        if path:
+            # Convert bytes to string for comparison if needed
+            path_str = path.decode('utf-8') if isinstance(path, bytes) else path
+            if any(script in path_str for script in ['ASimFilteringTest.py', 'VerifyASimParserTemplate.py', 'ingestASimSampleData.py']):
+                # Return the equivalent path in the source directory
+                result = os.path.join(_source_path, '.script', 'tests', 'asimParsersTest')
+                # Return in same format as input (bytes or string)
+                return result.encode('utf-8') if isinstance(path, bytes) else result
         return _original_functions['os_path_dirname'](path)
     
     # Override subprocess.run for git commands
@@ -95,24 +101,36 @@ def get_secure_parser_path():
 
 def setup_git_environment():
     """Set up git environment for the source path when analyzing external code."""
-    if _source_path and os.path.exists(_source_path):
-        # Change to source directory and ensure upstream remote exists
-        original_cwd = os.getcwd()
-        try:
-            os.chdir(_source_path)
-            
-            # Check if upstream remote exists
-            result = subprocess.run(['git', 'remote'], capture_output=True, text=True)
-            if 'upstream' not in result.stdout:
-                subprocess.run(['git', 'remote', 'add', 'upstream', 'https://github.com/Azure/Azure-Sentinel.git'], check=True)
-            
-            # Fetch upstream
-            subprocess.run(['git', 'fetch', 'upstream'], capture_output=True, check=True)
-            
-        except subprocess.CalledProcessError as e:
-            print(f"Warning: Git setup failed: {e}")
-        finally:
-            os.chdir(original_cwd)
+    if not _source_path:
+        # No source path provided, skip git setup
+        return
+    
+    if not os.path.exists(_source_path):
+        print(f"Warning: Source path {_source_path} does not exist, skipping git setup")
+        return
+        
+    # Change to source directory and ensure upstream remote exists
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(_source_path)
+        
+        # Temporarily use original subprocess to avoid recursive patching
+        original_subprocess_run = _original_functions.get('subprocess_run', subprocess.run)
+        
+        # Check if upstream remote exists
+        result = original_subprocess_run(['git', 'remote'], capture_output=True, text=True)
+        if 'upstream' not in result.stdout:
+            original_subprocess_run(['git', 'remote', 'add', 'upstream', 'https://github.com/Azure/Azure-Sentinel.git'], check=True)
+        
+        # Fetch upstream
+        original_subprocess_run(['git', 'fetch', 'upstream'], capture_output=True, check=True)
+        
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: Git setup failed: {e}")
+    except Exception as e:
+        print(f"Warning: Git setup encountered an error: {e}")
+    finally:
+        os.chdir(original_cwd)
 
 # Auto-setup if SOURCE_PATH environment variable is set
 if __name__ == "__main__":
