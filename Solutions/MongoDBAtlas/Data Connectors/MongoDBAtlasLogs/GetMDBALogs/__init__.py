@@ -7,7 +7,7 @@ import os
 import time
 import gzip
 from enum import Enum
-from threading import Thread
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 
 import requests
 import azure.functions as func
@@ -61,6 +61,80 @@ class ConfigStore:
         return f"ConfigStore(keys={list(self._config.keys())})"
 
 
+class Uploader:
+    """
+        Uploads pages of log messages to the Microsoft Sentinel Logs Ingestion API via a client.
+        The pages are uploaded in parallel. The number of threads available to do this is configurable.
+    """
+
+    def __init__(self, config, upload_timeout=60):
+        self.config = config
+        self.azure_dcr_immutableid = config.get("azure_dcr_immutableid")
+        azure_dce_endpoint = config.get("azure_dce_endpoint")
+        self.azure_stream_name = config.get("azure_stream_name")
+        azure_client_id = config.get("azure_client_id")
+        thread_max = config.get("azure_max_upload_threads")
+        if not thread_max.isdigit():
+            raise ValueError(
+                f"Invalid azure_max_upload_threads: '{thread_max}'")
+        azure_max_upload_threads = int(thread_max)
+
+        self.upload_chunk_count = 0
+        self.upload_fail_count = 0
+        self.jobs = []                     # holds futures
+        self.executor = ThreadPoolExecutor(
+            max_workers=azure_max_upload_threads)
+        self.upload_timeout = upload_timeout
+
+        credential = ManagedIdentityCredential(client_id=azure_client_id)
+        self.client = LogsIngestionClient(
+            endpoint=azure_dce_endpoint, credential=credential, logging_enable=True)
+
+    def add_to_upload_list(self, chunk):
+        future = self.executor.submit(
+            self._post_data,
+            client=self.client,
+            rule_id=self.azure_dcr_immutableid,
+            stream_name=self.azure_stream_name,
+            logs=chunk,
+        )
+        self.jobs.append(future)
+
+    def upload_list(self) -> dict:
+        logging.info("Called upload_list")
+        try:
+            for index, future in enumerate(as_completed(self.jobs), start=1):
+                try:
+                    future.result(timeout=self.upload_timeout)
+                    logging.info("job %s complete", index)
+                except TimeoutError:
+                    logging.error("job %s timed out after %s seconds",
+                                  index, self.upload_timeout)
+                    self.upload_fail_count += 1
+                except Exception as e:
+                    logging.exception("job %s failed: %s", index, e)
+                    self.upload_fail_count += 1
+        finally:
+            self.jobs = []
+
+        return {
+            "upload_chunk_count": self.upload_chunk_count,
+            "upload_fail_count": self.upload_fail_count,
+        }
+
+    def _post_data(self, client, rule_id, stream_name, logs):
+        logging.info("Called _post_data (logs_count=%d)", len(logs))
+        try:
+            client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)
+            self.upload_chunk_count += 1
+        except HttpResponseError as e:
+            logging.error("Upload failed (HttpResponseError): %s", e)
+            self.upload_fail_count += 1
+        except Exception as e:
+            logging.exception("Upload failed (general): %s", e)
+            self.upload_fail_count += 1
+
+
 class AzureSentinel:
     """Microsoft Sentinel client used to post data to log analytics."""
 
@@ -68,10 +142,6 @@ class AzureSentinel:
         self.config = config
         self.tenant_id = config.get("tenant_id")
 
-        self.azure_dce_endpoint = config.get("azure_dce_endpoint")
-        self.azure_dcr_immutableid = config.get("azure_dcr_immutableid")
-        self.azure_stream_name = config.get("azure_stream_name")
-        self.azure_client_id = config.get("azure_client_id")
         self.azure_main_storage = config.get("azure_main_storage")
         self.upload_chunk_size = 1024 * 1024  # 1MB of data
 
@@ -79,20 +149,18 @@ class AzureSentinel:
         self.table_name = "JobState"
         self.job_state_table_store = JobStateTableStore(
             connection_string, self.table_name)
-        # A list of jobs to upload logs to Microsoft Sentinel. Allows multithreading.
-        self.jobs = []
-        self.upload_chunk_count = 0
-        self.upload_fail_count = 0
 
-    def _upload_in_chunks(self, client, logs, max_bytes=1 * 1024 * 1024) -> dict:
+    def _upload_in_chunks(self, logs, max_bytes=1 * 1024 * 1024) -> dict:
         """
-        Splits a JSON array into smaller JSON arrays each ≤ max_bytes in size.
+        Splits a list of logs into smaller arrays of logs each ≤ max_bytes in size.
+        It performs a size check assuming each object is serialized to a JSON formatted string when uploaded
+        to the Log Ingestion API.
 
         :param logs: list of JSON-serializable log entries
         :param max_bytes: maximum size per chunk in bytes (default 1MB)
         :return: dict with upload statistics
         """
-        logging.info("Called _upload_in_chunks")
+        uploader = Uploader(self.config)
         current_chunk = []
         current_size = 2  # accounts for '[' and ']'
 
@@ -111,7 +179,7 @@ class AzureSentinel:
             else:
                 # Flush the current chunk
                 if current_chunk:
-                    self._add_to_upload_list(client, current_chunk)
+                    uploader.add_to_upload_list(current_chunk)
 
                 # Start a new chunk with this item
                 current_chunk = [item]
@@ -119,64 +187,15 @@ class AzureSentinel:
 
         # Flush the last chunk
         if current_chunk:
-            self._add_to_upload_list(client, current_chunk)
+            uploader.add_to_upload_list(current_chunk)
 
         # Start uploads
-        self._upload_list()
+        return uploader.upload_list()
 
-        return {
-            "upload_chunk_count": self.upload_chunk_count,
-            "upload_fail_count": self.upload_fail_count,
-        }
-
-    def _add_to_upload_list(self, client, chunk):
-        logging.info("Called _add_to_upload_list")
-        t = Thread(target=self._post_data, kwargs={"client": client, "rule_id": self.azure_dcr_immutableid,
-                                                   "stream_name": self.azure_stream_name, "logs": chunk})
-        t.daemon = False  # keep False so threads finish before process ends
-        self.jobs.append(t)
-
-    def _upload_list(self):
-        logging.info("Called _upload_list")
-        try:
-            for index, job in enumerate(self.jobs):
-                job.start()
-                logging.info("job.start() %s", index)
-
-            for index, job in enumerate(self.jobs):
-                logging.info("job.join() waiting %s", index)
-                job.join()
-                logging.info("job.join() complete %s", index)
-        except Exception as e:
-            logging.exception(
-                "Error while starting/joining upload threads: %s", e)
-        finally:
-            self.jobs = []
-
-    def _post_data(self, client, rule_id, stream_name, logs):
-        logging.info("Called _post_data")
-        try:
-            logging.info(
-                "Calling client.upload rule_id=%s, stream_name=%s, logs_count=%d", rule_id, stream_name, getattr(logs, "__len__", lambda: None)() or 0)
-            client.upload(rule_id=rule_id,
-                          stream_name=stream_name, logs=logs)
-            self.upload_chunk_count += 1
-        except HttpResponseError as e:
-            logging.error("Upload failed (HttpResponseError): %s", e)
-            self.upload_fail_count += 1
-        except Exception as e:
-            logging.exception("Upload failed (general): %s", e)
-            self.upload_fail_count += 1
-
-    def upload_data_to_log_analytics_table(self, json_log) -> dict:
+    def upload_data_to_log_analytics_table(self, log_entries) -> dict:
         """Authenticates with Azure before calling the LogIngestionAPI to upload logs."""
 
-        credential = ManagedIdentityCredential(client_id=self.azure_client_id)
-
-        client = LogsIngestionClient(
-            endpoint=self.azure_dce_endpoint, credential=credential, logging_enable=True)
-
-        return self._upload_in_chunks(client, json_log, self.upload_chunk_size)
+        return self._upload_in_chunks(log_entries, self.upload_chunk_size)
 
     def get_last_update_time(self):
         """upserts a row with last_time_stamp in JobStatus table"""
@@ -387,7 +406,7 @@ class MongoDbConnection:
         Retrieves logs from MongoDB Atlas API within a time frame.
         :param start_date: time in seconds since epoch of earliest log message to retrieve.
         :param end_date: time in seconds since epoch of latest log message to retrieve.
-        :return JSON object of response status and either json_lines containing all matched log entries or error
+        :return JSON object of response status and either log_entries containing all matched log entries or error
         """
 
         mdba_access_token = self.get_access_token()
@@ -405,7 +424,7 @@ class MongoDbConnection:
         logging.info("mongodb_url: %s", mongodb_url)
 
         try:
-            json_lines = []
+            log_entries = []
 
             with requests.get(mongodb_url, headers=headers, stream=True, timeout=self.timeout) as response:
                 response.raise_for_status()
@@ -432,7 +451,7 @@ class MongoDbConnection:
                                 continue
 
                             transformed = self._transform_log(raw_entry)
-                            json_lines.append(transformed)
+                            log_entries.append(transformed)
                             self.included_entries += 1
 
                         except json.JSONDecodeError:
@@ -441,7 +460,7 @@ class MongoDbConnection:
 
             return {
                 "status": response.status_code,
-                "logs": json_lines
+                "logs": log_entries
             }
 
         except requests.Timeout:
@@ -516,6 +535,7 @@ def configuration_set_up():
         azure_dcr_immutableid=os.getenv("DCR_IMMUTABLEID"),
         azure_stream_name=os.getenv("STREAM_NAME"),
         azure_main_storage=os.getenv("AZURE_MAIN_STORAGE"),
+        azure_max_upload_threads=os.getenv("AZURE_MAX_UPLOAD_THREADS"),
         mdba_client_id=os.getenv("MDBA_CLIENT_ID"),
         mdba_client_secret=os.getenv("MDBA_CLIENT_SECRET"),
         mdba_group_id=os.getenv("MDBA_GROUP_ID"),
@@ -559,6 +579,7 @@ def configuration_set_up():
     azure_dcr_immutableid = config.get("azure_dcr_immutableid")
     azure_stream_name = config.get("azure_stream_name")
     azure_main_storage = config.get("azure_main_storage")
+    azure_max_upload_threads = config.get("azure_max_upload_threads")
 
     logging.debug("config.tenant_id: %s", tenant_id)
     logging.debug("config.azure_web_job_storage: %s", azure_web_job_storage)
@@ -567,6 +588,8 @@ def configuration_set_up():
     logging.debug("config.azure_dcr_immutableid: %s", azure_dcr_immutableid)
     logging.debug("config.azure_stream_name: %s", azure_stream_name)
     logging.debug("config.azure_main_storage: %s", azure_main_storage)
+    logging.info("config.azure_max_upload_threads: %s",
+                 azure_max_upload_threads)
 
     return config
 
