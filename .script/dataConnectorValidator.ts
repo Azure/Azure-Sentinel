@@ -16,6 +16,12 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
 
     if(isPotentialConnectorJson(jsonFile))
     {
+        //WHEN DATATYPES ARRAY OBJECT IS NOT PRESENT OR EMPTY, SKIP VALIDATION
+      if (!jsonFile.dataTypes && jsonFile.dataTypes.length === 0) {
+        console.warn(`Skipping Files under Templates folder : ${filePath} - No dataTypes found`);
+        return ExitCode.SUCCESS;
+      }
+
       if(!jsonFile.dataTypes[0].name.includes("Event"))
       {
         let connectorCategory = getConnectorCategory(jsonFile.dataTypes, jsonFile.instructionSteps);
@@ -47,7 +53,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
   }
 
 function isPotentialConnectorJson(jsonFile: any) {
-  if(typeof jsonFile.id != "undefined" && typeof jsonFile.connectivityCriterias != "undefined")
+  if(typeof jsonFile.id != "undefined" && typeof jsonFile.connectivityCriterias != "undefined" && jsonFile.dataTypes.length > 0)
   {
     return true;
   }

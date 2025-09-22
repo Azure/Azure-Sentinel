@@ -1,10 +1,11 @@
 import uuid
+from datetime import datetime
+from typing import Any, List, Optional, Tuple
 
 import requests
 import urllib3
-from typing import List, Any, Tuple, Optional
-from datetime import datetime
 from requests.exceptions import HTTPError
+
 from shared_code import configurations
 from shared_code.customized_logger.customized_json_logger import (
     get_customized_json_logger,
@@ -22,22 +23,22 @@ WB_LIST_V3_FORMAT = configurations.get_wb_list_v3_datetime_format()
 def get_header(headers=None):
     headers = headers or {}
 
-    trace_manager.trace_id = headers['x-trace-id'] = str(uuid.uuid4())
+    trace_manager.trace_id = headers["x-trace-id"] = str(uuid.uuid4())
 
     if trace_manager.task_id:
-        headers['x-task-id'] = trace_manager.task_id
+        headers["x-task-id"] = trace_manager.task_id
 
-    headers['User-Agent'] = configurations.get_user_agent()
+    headers["User-Agent"] = configurations.get_user_agent()
 
     return headers
 
 
 def get_trace_log(headers):
-    log = 'headers is empty.'
+    log = "headers is empty."
     if headers:
-        task_id = headers.get('x-task-id')
-        trace_id = headers.get('x-trace-id')
-        log = f'task id: {task_id}, trace id: {trace_id}.'
+        task_id = headers.get("x-task-id")
+        trace_id = headers.get("x-trace-id")
+        log = f"task id: {task_id}, trace id: {trace_id}."
     return log
 
 
@@ -48,20 +49,18 @@ def transform_wb_list_v3_to_v2_fields(workbench_list_v3: List[dict]) -> List[dic
             "workbenchId": workbench["id"],
             "workbenchName": workbench["model"],
             "priorityScore": workbench["score"],
-            'investigationStatus': workbench["investigationStatus"],
-            'workbenchLink': workbench["workbenchLink"],
-            'createdTime': workbench["createdDateTime"],
-            'updatedTime': workbench["updatedDateTime"],
-            'severity': workbench["severity"],
-            'modelId': workbench["modelId"],
+            "investigationStatus": workbench["investigationStatus"],
+            "workbenchLink": workbench["workbenchLink"],
+            "createdTime": workbench["createdDateTime"],
+            "updatedTime": workbench["updatedDateTime"],
+            "severity": workbench["severity"],
+            "modelId": workbench["modelId"],
         }
         workbench_list_v2.append(workbench_v2)
     return workbench_list_v2
 
 
-def _get_workbench_list_v3(
-    token, url, tmv1_filter
-) -> Tuple[List[Any], Optional[str]]:
+def _get_workbench_list_v3(token, url, tmv1_filter) -> Tuple[List[Any], Optional[str]]:
     headers = get_header(
         {
             "Authorization": f"Bearer {token}",
@@ -95,7 +94,7 @@ def get_workbench_list_v3(
     start_time: str,
     end_time: str,
     query_aggressive_workbench: bool = False,
-    query_custom_workbench: bool = False
+    query_custom_workbench: bool = False,
 ) -> List[Any]:
     tmv1_filters = []
     if not query_custom_workbench:
@@ -131,31 +130,31 @@ def get_workbench_list_v3(
 # Deprecated
 def get_workbench_list(token, start_time, end_time, offset=0, limit=200):
     query_params = {
-        'source': 'all',
-        'investigationStatus': 'null',
-        'sortBy': 'createdTime',
-        'queryTimeField': 'createdTime',
-        'offset': offset,
-        'limit': limit,
-        'startDateTime': start_time,
-        'endDateTime': end_time,
+        "source": "all",
+        "investigationStatus": "null",
+        "sortBy": "createdTime",
+        "queryTimeField": "createdTime",
+        "offset": offset,
+        "limit": limit,
+        "startDateTime": start_time,
+        "endDateTime": end_time,
     }
 
     headers = get_header(
         {
-            'Authorization': f"Bearer {token}",
-            'Content-Type': 'application/json;charset=utf-8',
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json;charset=utf-8",
         }
     )
     url = f"{XDR_HOST_URL}/v2.0/siem/events"
-    logger.info(f'Get workbench list url: {url}')
+    logger.info(f"Get workbench list url: {url}")
 
     response = requests.get(
         url, headers=headers, params=query_params, timeout=HTTP_TIMEOUT
     )
     logger.info(
-        f'Get workbench list response: {response.text}'
-        f'Get workbench list trace: {get_trace_log(response.headers)}'
+        f"Get workbench list response: {response.text}"
+        f"Get workbench list trace: {get_trace_log(response.headers)}"
     )
 
     if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
@@ -165,8 +164,8 @@ def get_workbench_list(token, start_time, end_time, offset=0, limit=200):
     response.raise_for_status()
     response_data = response.json()
 
-    workbench_records = response_data['data']['workbenchRecords']
-    total_count = response_data['data']['totalCount']
+    workbench_records = response_data["data"]["workbenchRecords"]
+    total_count = response_data["data"]["totalCount"]
 
     return total_count, workbench_records
 
@@ -176,15 +175,15 @@ def get_workbench_detail(token, workbench_id):
     url = f"{XDR_HOST_URL}/v2.0/xdr/workbench/workbenches/{workbench_id}"
     headers = get_header(
         {
-            'Authorization': f"Bearer {token}",
-            'Content-Type': 'application/json;charset=utf-8',
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json;charset=utf-8",
         }
     )
-    logger.info(f'Get workbench detail url: {url}')
+    logger.info(f"Get workbench detail url: {url}")
     response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
     logger.info(
-        f'Get workbench detail response: {response.text}.'
-        f'Get workbench detail trace: {get_trace_log(response.headers)}'
+        f"Get workbench detail response: {response.text}."
+        f"Get workbench detail trace: {get_trace_log(response.headers)}"
     )
 
     if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
@@ -194,22 +193,22 @@ def get_workbench_detail(token, workbench_id):
     response.raise_for_status()
     response_data = response.json()
 
-    return response_data['data']
+    return response_data["data"]
 
 
 def get_workbench_detail_v3(token: str, workbench_id: str):
-    url = f'{XDR_HOST_URL}/v3.0/workbench/alerts/{workbench_id}'
+    url = f"{XDR_HOST_URL}/v3.0/workbench/alerts/{workbench_id}"
     headers = get_header(
         {
-            'Authorization': f"Bearer {token}",
-            'Content-Type': 'application/json;charset=utf-8',
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json;charset=utf-8",
         }
     )
-    logger.info(f'Get workbench detail v3 url: {url}')
+    logger.info(f"Get workbench detail v3 url: {url}")
     response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
     logger.info(
-        f'Get workbench detail v3 response: {response.text}.'
-        f'Get workbench detail v3 trace: {get_trace_log(response.headers)}'
+        f"Get workbench detail v3 response: {response.text}."
+        f"Get workbench detail v3 trace: {get_trace_log(response.headers)}"
     )
     response.raise_for_status()
     response_data = response.json()
@@ -217,20 +216,23 @@ def get_workbench_detail_v3(token: str, workbench_id: str):
     return response_data
 
 
-def get_rca_task(token, workbench_id):
+def get_rca_task(token, workbench_id, is_rca_disabled: bool = True):
     try:
-        url = f'{XDR_HOST_URL}/v3.0/xdr/mssp/workbench/workbenches/{workbench_id}/tasks/rca'
+        if is_rca_disabled:
+            return []
+
+        url = f"{XDR_HOST_URL}/v3.0/xdr/mssp/workbench/workbenches/{workbench_id}/tasks/rca"
         headers = get_header(
             {
-                'Authorization': f"Bearer {token}",
-                'Content-Type': 'application/json;charset=utf-8',
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json;charset=utf-8",
             }
         )
-        logger.info(f'Get rca task url: {url}')
+        logger.info(f"Get rca task url: {url}")
         response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
         logger.info(
-            f'Get rca task response: {response.text}'
-            f'Get rca task trace: {get_trace_log(response.headers)}'
+            f"Get rca task response: {response.text}"
+            f"Get rca task trace: {get_trace_log(response.headers)}"
         )
 
         if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
@@ -240,25 +242,28 @@ def get_rca_task(token, workbench_id):
         response.raise_for_status()
         response_data = response.json()
 
-        return response_data['data']
+        return response_data["data"]
     except HTTPError as e:
-        logger.warn(f'Failed to get rca tasks. Exception: {e}')
+        logger.warn(f"Failed to get rca tasks. Exception: {e}")
     return []
 
 
-def get_rca_task_detail(token, task_id, endpoint_guid):
-    url = f'{XDR_HOST_URL}/v3.0/xdr/mssp/workbench/tasks/rca/{task_id}/results/{endpoint_guid}'
+def get_rca_task_detail(token, task_id, endpoint_guid, is_rca_disabled: bool = True):
+    if is_rca_disabled:
+        return []
+
+    url = f"{XDR_HOST_URL}/v3.0/xdr/mssp/workbench/tasks/rca/{task_id}/results/{endpoint_guid}"
     headers = get_header(
         {
-            'Authorization': f"Bearer {token}",
-            'Content-Type': 'application/json;charset=utf-8',
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json;charset=utf-8",
         }
     )
-    logger.info(f'Get rca task detail url: {url}')
+    logger.info(f"Get rca task detail url: {url}")
     response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
     logger.info(
-        f'Get rca detail response: {response.text}'
-        f'Get rca detail trace: {get_trace_log(response.headers)}'
+        f"Get rca detail response: {response.text}"
+        f"Get rca detail trace: {get_trace_log(response.headers)}"
     )
 
     if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
@@ -268,4 +273,4 @@ def get_rca_task_detail(token, task_id, endpoint_guid):
     response.raise_for_status()
     response_data = response.json()
 
-    return response_data['data']
+    return response_data["data"]

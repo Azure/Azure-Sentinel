@@ -196,7 +196,7 @@ function Set-GuardDutyPublishDestinationBucket {
     $currentS3Destinations = $currentDestinationsObject.Destinations | Where-Object DestinationType -eq S3
     if ($null -eq $currentS3Destinations) {
         Write-Log -Message "Executing: aws guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
-        aws --region $Region guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName, KmsKeyArn=$kmsArn | Out-Null
+        aws --region $Region guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
     }
     else {
         Write-Log "Executing: aws guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json" -LogFileName $LogFileName -Severity Verbose
@@ -207,7 +207,7 @@ function Set-GuardDutyPublishDestinationBucket {
         $guardDutyBucketConfirmation = Read-ValidatedHost -Prompt "Are you sure that you want to override the existing bucket destination? [y/n]"
         if ($guardDutyBucketConfirmation -eq 'y') {
             Write-Log -Message "Executing: aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
-            aws --region $Region guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName, KmsKeyArn=$kmsArn | Out-Null
+            aws --region $Region guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
         }
         else {
             Write-Log -Message 'GuardDuty setup was not completed. You must manually update the GuardDuty destination bucket' -LogFileName $LogFileName -Severity Error -LinePadding 2
