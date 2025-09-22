@@ -72,7 +72,7 @@ def refresh_access_token() -> str:
             "refreshToken": refresh_token
         }
         logging.info(f"Attempting to refresh access token via API: {renew_token_url}")
-        response = requests.post(renew_token_url, headers=headers, verify=False, json=token_body)
+        response = requests.post(renew_token_url, headers=headers, json=token_body)
         logging.info(f"Refresh access token response status: {response.status_code}")
 
         if response.status_code == 200:
@@ -155,7 +155,6 @@ def gen_chunks(data):
         for row in chunk:
             if row != None and row != '':
                 if showAllEvents == "true":
-                    logging.info(f"ShowAllEvents=true: Including all events")
                     obj_array.append(row)
                 else:
                     event_code = row.get("eventCodeString") or row.get("eventCode")
@@ -246,7 +245,7 @@ def main(mytimer: func.TimerRequest) -> None:
         client_id = os.environ.get('AZURE_CLIENT_ID')
         if not client_id:
             logging.warning("AZURE_CLIENT_ID environment variable not set. Falling back to DefaultAzureCredential.")
-            credential = DefaultAzureCredential()
+            credential = ManagedIdentityCredential()
         else:
             credential = ManagedIdentityCredential(client_id=client_id)
             logging.info(f"Using ManagedIdentityCredential with client ID: {client_id}")
@@ -265,7 +264,8 @@ def main(mytimer: func.TimerRequest) -> None:
         # 2. Fetch access-token from Key Vault
         secret_name = "access-token"
         access_token = secret_client.get_secret(secret_name).value
-        headers["authtoken"] = access_token
+        headers["authtoken"] = access_token #sending both authtoken and bearer token, to support both SAAS and On-prem auth flow
+        headers["Authorization"] = f"Bearer {access_token}"
         logging.debug("Fetched access token.")
 
         # 3. Fetch refresh-token from Key Vault
@@ -290,13 +290,14 @@ def main(mytimer: func.TimerRequest) -> None:
         if access_token_expiry == -1 or is_access_token_expired_or_is_empty(access_token_expiry):
             logging.info("Token is expired or missing, refreshing access token")
             headers["authtoken"] = refresh_access_token()
+            headers["Authorization"] = f"Bearer {headers['authtoken']}"
         else:
             logging.info("Access token is valid and not expired.")
 
         # Fetch company ID
         companyId_url = f"{url}/v2/WhoAmI"
         logging.debug(f"Fetching company ID from URL: {companyId_url}")
-        company_response = requests.get(companyId_url, headers=headers, verify=False)
+        company_response = requests.get(companyId_url, headers=headers)
 
         if company_response.status_code == 401:
             company_data_json = company_response.json()
@@ -305,7 +306,8 @@ def main(mytimer: func.TimerRequest) -> None:
                 error_message = company_data_json.get("errorMessage")
                 if error_message == "Access denied" and error_code == 5: 
                     headers["authtoken"] = refresh_access_token()
-                    company_response = requests.get(companyId_url, headers=headers, verify=False)
+                    headers["Authorization"] = f"Bearer {headers['authtoken']}"
+                    company_response = requests.get(companyId_url, headers=headers)
 
         if company_response.status_code == 200:
             company_data_json = company_response.json()
@@ -318,7 +320,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 # Call SecurityPartners/Register/6
                 audit_url = f"{url}/V4/Company/{companyId}/SecurityPartners/Register/6"
                 logging.debug(f"Sending audit log request to URL: {audit_url}")
-                audit_response = requests.put(audit_url, headers=headers, verify=False)
+                audit_response = requests.put(audit_url, headers=headers)
                 if audit_response.status_code == 200:
                     logging.info(f"Audit Log request sent successfully. Response: {audit_response.json()}")
                 elif audit_response.status_code == 403:
@@ -366,7 +368,7 @@ def main(mytimer: func.TimerRequest) -> None:
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
         logging.info(f"Event endpoint: {event_endpoint}")
 
-        response = requests.get(event_endpoint, headers=headers, verify=False)
+        response = requests.get(event_endpoint, headers=headers)
         logging.info(f"Response Status Code: {response.status_code}")
 
         if response.status_code == 200:
