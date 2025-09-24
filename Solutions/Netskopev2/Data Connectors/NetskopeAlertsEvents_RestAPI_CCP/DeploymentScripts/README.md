@@ -1,270 +1,288 @@
-# Netskope Alerts and Events - Multiple Instance Deployment
+# Netskope Multiple Instance Deployment Solution
+
+This folder contains scripts and documentation for deploying multiple Netskope data connector instances in the same Microsoft Sentinel workspace.
 
 ## Problem Statement
 
-Microsoft Sentinel's Content Hub does not allow multiple instances of the same data connector type to be deployed within a single workspace. This limitation prevents customers from connecting multiple Netskope environments (e.g., PROD and DEV) to the same Microsoft Sentinel workspace using the standard UI deployment method.
-
-### Customer Scenario
-- Customer has separate Netskope environments for PROD and DEV with different organization URLs
-- Customer wants both environments' data in the same Microsoft Sentinel workspace
-- Customer wants to use identical table schemas for easy querying and analysis
-- Customer prefers to maintain a single workspace rather than separate workspaces for each environment
-- Customer has implemented policy naming conventions with "PROD" and "DEV" prefixes for easy data differentiation
+By design, Microsoft Sentinel's Content Hub only allows deploying one instance of the Netskope Alerts and Events data connector per workspace. However, many organizations need to collect data from multiple Netskope environments (e.g., PROD and DEV) in a single Sentinel workspace while maintaining data separation and identical table schemas.
 
 ## Solution Overview
 
-This PowerShell script solution deploys a second instance of the Netskope Alerts and Events connector by creating additional data connector pollers with unique names ("Dev" suffix) that point to the DEV Netskope environment while using the same Data Collection Rules and table schemas as the existing PROD deployment.
+This PowerShell-based deployment solution creates a second set of Netskope data pollers with unique names, allowing both PROD and DEV environments to send data to the same Log Analytics tables. Environment separation is achieved through policy name prefixes rather than separate connectors.
 
 ### Key Benefits
-- ✅ **Single Workspace**: Both PROD and DEV data in same workspace
-- ✅ **Identical Table Schemas**: Same table structure for easy querying
-- ✅ **Policy Name Differentiation**: Customer's PROD/DEV policy prefixes enable clean data separation
-- ✅ **Minimal Infrastructure**: Uses existing Data Collection Rules
-- ✅ **Quick Deployment**: 5-10 minute execution time
-- ✅ **Repeatable Process**: Script can be run multiple times safely
 
-## Architecture
+- ✅ **Same Table Schema**: Both environments write to identical Log Analytics tables
+- ✅ **Environment Separation**: Uses policy name prefixes (PROD-/DEV-) for clear identification
+- ✅ **Simple Deployment**: Single PowerShell script handles all 21 connector types
+- ✅ **Cost Effective**: No duplicate storage or complex data transformation
+- ✅ **Analytics Compatibility**: Existing queries work with simple filtering additions
 
-```
-┌─────────────────┐    ┌──────────────────────┐    ┌─────────────────────┐
-│   Netskope PROD │    │                      │    │                     │
-│                 │────┤   Microsoft Sentinel │    │   Same Log Tables   │
-│ company-prod... │    │      Workspace       │    │                     │
-└─────────────────┘    │                      │    │  • NetskopeAlerts_CL│
-                       │  ┌─────────────────┐ │    │  • NetskopeEvents*  │
-┌─────────────────┐    │  │ PROD Connectors │ │    │  • Policy Names:    │
-│   Netskope DEV  │    │  │ (Original)      │ │────┤    - PROD-*         │
-│                 │────┤  └─────────────────┘ │    │    - DEV-*          │
-│ company-dev...  │    │                      │    │                     │
-└─────────────────┘    │  ┌─────────────────┐ │    │                     │
-                       │  │ DEV Connectors  │ │────┤                     │
-                       │  │ (Script Deploy) │ │    │                     │
-                       │  └─────────────────┘ │    │                     │
-                       └──────────────────────┘    └─────────────────────┘
-```
+## Files in This Solution
+
+| File | Description |
+|------|-------------|
+| `Deploy-NetskopeDevInstance.ps1` | Main deployment script that creates DEV data pollers |
+| `parameters.json` | Template for deployment parameters |
+| `VerificationQueries.kql` | KQL queries to validate deployment and data ingestion |
+| `README.md` | This documentation file |
 
 ## Prerequisites
 
-### Azure Requirements
-- **Azure PowerShell Modules**: `Az.Accounts`, `Az.Resources`, `Az.OperationalInsights`
-- **Azure Permissions**: Contributor access to the resource group containing Microsoft Sentinel
-- **Existing Setup**: Working Netskope Alerts and Events connector for PROD environment
+Before running the deployment script, ensure you have:
 
-### Netskope Requirements
-- **DEV Environment**: Separate Netskope tenant/organization for DEV
-- **DEV API Token**: Valid API token with appropriate permissions for DEV environment
-- **Policy Naming**: PROD/DEV prefixes implemented in Netskope policy names
-
-### Information to Gather
-Before running the script, collect the following information from your existing PROD setup:
-
-1. **Azure Resource Details**:
-   - Resource Group Name
-   - Log Analytics Workspace Name
-
-2. **DEV Netskope Details**:
-   - DEV Organization URL (e.g., `company-dev.goskope.com`)
-   - DEV API Token
-
-3. **Data Collection Rule Details** (from existing PROD setup):
-   - Data Collection Endpoint URL
-   - Data Collection Rule Immutable ID
-
-#### How to Find DCR Details
-1. Go to Azure Portal → Resource Groups → [Your Sentinel RG]
-2. Find resources of type "Data collection rule"
-3. Open the Netskope-related DCR
-4. Copy the **Data Collection Endpoint** and **Immutable ID**
-
-## Files Included
-
-### 1. Deploy-NetskopeDevInstance.ps1
-Main PowerShell deployment script that creates 21 data connector pollers for the DEV environment.
-
-### 2. parameters.json
-Configuration file containing environment-specific values. Customize this file with your actual values.
-
-### 3. VerificationQueries.kql
-Sample KQL queries to verify the deployment and test data separation using policy name prefixes.
-
-### 4. README.md
-This documentation file.
-
-## Usage Instructions
-
-### Method 1: Using Parameter File (Recommended)
-
-1. **Customize parameters.json**:
-   ```json
-   {
-     "ResourceGroupName": "your-sentinel-resource-group",
-     "WorkspaceName": "your-log-analytics-workspace",
-     "DevOrgUrl": "company-dev.goskope.com",
-     "DevApiKey": "your-dev-api-token",
-     "DevIndex": "DevInstance",
-     "DataCollectionEndpoint": "https://dce-xxx.eastus-1.ingest.monitor.azure.com",
-     "DataCollectionRuleId": "dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-   }
-   ```
-
-2. **Run the deployment**:
+1. **Azure PowerShell Modules**:
    ```powershell
-   # Connect to Azure
-   Connect-AzAccount
-   
-   # Run the deployment script
-   .\Deploy-NetskopeDevInstance.ps1 -ParameterFile ".\parameters.json"
+   Install-Module -Name Az.Accounts, Az.Resources, Az.OperationalInsights -Force
    ```
 
-### Method 2: Using Command Line Parameters
+2. **Azure Authentication**:
+   ```powershell
+   Connect-AzAccount
+   ```
+
+3. **Existing Resources**:
+   - Log Analytics workspace
+   - PROD Netskope connector already deployed via Content Hub
+   - Appropriate Azure permissions (Contributor role on resource group)
+
+4. **Netskope Configuration**:
+   - Access to both PROD and DEV Netskope tenants
+   - Ability to configure data export policies
+
+## Deployment Steps
+
+### Step 1: Prepare Parameters
+
+Edit the `parameters.json` file or prepare the following information:
+
+```json
+{
+  "subscriptionId": "your-subscription-id",
+  "resourceGroupName": "your-resource-group",
+  "workspaceName": "your-log-analytics-workspace",
+  "location": "eastus"
+}
+```
+
+### Step 2: Run Deployment Script
+
+Execute the PowerShell script with your parameters:
 
 ```powershell
 .\Deploy-NetskopeDevInstance.ps1 `
-  -ResourceGroupName "rg-sentinel-prod" `
-  -WorkspaceName "law-sentinel-prod" `
-  -DevOrgUrl "company-dev.goskope.com" `
-  -DevApiKey (ConvertTo-SecureString "your-dev-api-key" -AsPlainText -Force) `
-  -DataCollectionEndpoint "https://dce-xxx.eastus-1.ingest.monitor.azure.com" `
-  -DataCollectionRuleId "dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+  -ResourceGroupName "rg-sentinel" `
+  -WorkspaceName "law-sentinel" `
+  -Location "eastus"
 ```
 
-## Verification Steps
+Optional parameters:
+- `-DevPrefix "DEV"` (default)
+- `-ProdPrefix "PROD"` (default)
 
-### 1. Check Data Connectors
-1. Go to Microsoft Sentinel → **Data Connectors**
-2. Search for "Netskope"
-3. You should see multiple connector instances (both PROD and DEV pollers)
-4. Verify all show as "Connected"
+### Step 3: Configure Netskope Tenants
 
-### 2. Verify Data Flow
-Run the verification queries from `VerificationQueries.kql`:
+After successful deployment:
 
-```kusto
-// Check data from both environments
-union 
-NetskopeAlerts_CL,
-NetskopeEventsApplication_CL
+1. **PROD Environment**: Configure policies with prefix `PROD-`
+   - Example: `PROD-WebPolicy`, `PROD-DLPPolicy`
+
+2. **DEV Environment**: Configure policies with prefix `DEV-`
+   - Example: `DEV-WebPolicy`, `DEV-DLPPolicy`
+
+3. **Data Export**: Configure both tenants to send data to their respective endpoints
+
+### Step 4: Verify Deployment
+
+Use the queries in `VerificationQueries.kql` to confirm:
+- Data collection rules are created
+- Data is flowing from both environments
+- Policy name prefixes are working correctly
+
+## Architecture
+
+The solution creates the following resources for each of the 21 Netskope event types:
+
+```
+PROD Environment (via Content Hub):
+├── DCE: dce-NetskopeAlertsEvents-ApplicationEvents
+├── DCR: dcr-NetskopeAlertsEvents-ApplicationEvents
+└── Target: NetskopeApplicationEvents_CL
+
+DEV Environment (via this script):
+├── DCE: dce-DEV-NetskopeAlertsEvents-ApplicationEvents  
+├── DCR: dcr-DEV-NetskopeAlertsEvents-ApplicationEvents
+└── Target: NetskopeApplicationEvents_CL (same table!)
+```
+
+## Supported Event Types
+
+The script deploys connectors for all 21 Netskope event types:
+
+| Event Type | Target Table |
+|------------|--------------|
+| Application Events | NetskopeApplicationEvents_CL |
+| Audit Events | NetskopeAuditEvents_CL |
+| Connection Events | NetskopeConnectionEvents_CL |
+| Infrastructure Events | NetskopeInfrastructureEvents_CL |
+| Network Events | NetskopeNetworkEvents_CL |
+| Pages Events | NetskopePagesEvents_CL |
+| Alerts Events | NetskopeAlertsEvents_CL |
+| Behavior Analytics | NetskopeBehaviorAnalyticsAlertsEvents_CL |
+| Compromised Credentials | NetskopeCompromisedCredentialsAlertsEvents_CL |
+| DLP Alerts | NetskopeDLPAlertsEvents_CL |
+| Legal Hold | NetskopeLegalHoldAlertsEvents_CL |
+| Malsite Alerts | NetskopeMalsiteAlertsEvents_CL |
+| Malware Alerts | NetskopeMalwareAlertsEvents_CL |
+| Policy Alerts | NetskopePolicyAlertsEvents_CL |
+| Quarantine Alerts | NetskopeQuarantineAlertsEvents_CL |
+| Remediation Alerts | NetskopeRemediationAlertsEvents_CL |
+| Security Assessment | NetskopeSecurityAssessmentAlertsEvents_CL |
+| UBA Alerts | NetskopeUBAAlertsEvents_CL |
+| Watchlist Alerts | NetskopeWatchlistAlertsEvents_CL |
+| WebTx Alerts | NetskopeWebTxAlertsEvents_CL |
+| CTEP Alerts | NetskopeCTEPAlertsEvents_CL |
+
+## Data Separation Strategy
+
+Instead of using separate tables or workspaces, this solution uses **policy name prefixes** for environment separation:
+
+### Analytics Rule Example
+
+Update your existing analytics rules to filter by environment:
+
+```kql
+// Original query
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)
+| where RiskLevel == "High"
+
+// Updated query for PROD only
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)
+| where RiskLevel == "High"
+| where PolicyName startswith "PROD-"
+
+// Updated query for DEV only  
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)
+| where RiskLevel == "High"
+| where PolicyName startswith "DEV-"
+
+// Query both environments
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)
+| where RiskLevel == "High"
 | extend Environment = case(
-    PolicyName startswith "DEV", "DEV",
-    PolicyName startswith "PROD", "PROD",
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
     "Unknown"
 )
-| where TimeGenerated > ago(1h)
-| summarize Count = count(), LatestEvent = max(TimeGenerated) by Environment, TableName = $table
-| order by Environment, TableName
-```
-
-### 3. Test Data Separation
-Verify that policy name prefixes correctly identify environments:
-
-```kusto
-NetskopeAlerts_CL
-| where TimeGenerated > ago(24h)
-| extend Environment = case(
-    PolicyName startswith "DEV", "DEV",
-    PolicyName startswith "PROD", "PROD",
-    "Mixed/Unknown"
-)
-| summarize AlertCount = count() by Environment, AlertType
-| order by Environment, AlertType
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### 1. Authentication Errors
-**Error**: "Unable to authenticate to Azure"
-**Solution**: Ensure you're logged in with `Connect-AzAccount` and have appropriate permissions.
+1. **Permission Errors**
+   ```
+   Error: Insufficient privileges to complete the operation
+   ```
+   **Solution**: Ensure you have Contributor role on the resource group
 
-#### 2. Resource Not Found
-**Error**: "Workspace not found"
-**Solution**: Verify resource group name and workspace name are correct.
+2. **Workspace Not Found**
+   ```
+   Error: Log Analytics workspace 'workspace-name' not found
+   ```
+   **Solution**: Verify workspace name and resource group are correct
 
-#### 3. DCR Configuration Issues
-**Error**: "Invalid Data Collection Rule"
-**Solution**: 
-- Verify DCR endpoint and immutable ID are correct
-- Ensure DCR exists and is accessible
-- Check that DCR is configured for Netskope data types
+3. **Resource Already Exists**
+   ```
+   Error: Resource with name 'dce-DEV-...' already exists
+   ```
+   **Solution**: Run the script with `-Force` parameter or manually delete existing resources
 
-#### 4. API Key Issues
-**Error**: "Authentication failed" for Netskope API
-**Solution**:
-- Verify DEV API key is valid and has appropriate permissions
-- Ensure DEV organization URL is correct (without https://)
-- Check API key hasn't expired
+4. **Module Not Found**
+   ```
+   Error: The term 'New-AzResource' is not recognized
+   ```
+   **Solution**: Install required Azure PowerShell modules
 
-### Deployment Failures
-If some connectors fail to deploy:
-1. Check the error messages in the script output
-2. Verify all parameters are correct
-3. Re-run the script (it's safe to run multiple times)
-4. Check Azure Activity Log for detailed error information
+### Validation Queries
 
-## Data Analysis Examples
+Check resource creation:
+```powershell
+# List all DCEs
+Get-AzResource -ResourceGroupName $ResourceGroupName -ResourceType "Microsoft.Insights/dataCollectionEndpoints" | Where-Object {$_.Name -like "*DEV*"}
 
-### Environment-Specific Queries
+# List all DCRs  
+Get-AzResource -ResourceGroupName $ResourceGroupName -ResourceType "Microsoft.Insights/dataCollectionRules" | Where-Object {$_.Name -like "*DEV*"}
+```
 
-```kusto
-// DEV environment alerts only
-NetskopeAlerts_CL
-| where PolicyName startswith "DEV"
-| where TimeGenerated > ago(24h)
-| summarize count() by AlertType
+### Data Flow Verification
 
-// PROD environment events only  
-NetskopeEventsApplication_CL
-| where PolicyName startswith "PROD"
-| where TimeGenerated > ago(24h)
-| summarize count() by ActivityType
+Use KQL queries in `VerificationQueries.kql` to verify data is flowing correctly from both environments.
 
-// Cross-environment comparison
-union NetskopeAlerts_CL, NetskopeEventsApplication_CL
+## Cost Considerations
+
+This solution has minimal additional cost impact:
+
+- **Data Collection Endpoints (DCE)**: ~$0.50/month each
+- **Data Collection Rules (DCR)**: No additional charge
+- **Data Ingestion**: Same cost as single environment (no duplication)
+- **Storage**: Same tables, no additional storage cost
+
+**Total Additional Cost**: ~$10-15/month for 21 DCEs
+
+## Support and Maintenance
+
+### Updates
+
+When updating Netskope connector configurations:
+
+1. Update PROD environment via Content Hub as usual
+2. Re-run this script if schema changes require DCR updates
+3. Test with DEV environment first
+
+### Monitoring
+
+Set up monitoring for both environments:
+
+```kql
+// Monitor data ingestion by environment
+union NetskopePl*_CL
+| where TimeGenerated > ago(1h) 
 | extend Environment = case(
-    PolicyName startswith "DEV", "DEV",
-    PolicyName startswith "PROD", "PROD",
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development",
     "Unknown"
 )
-| where TimeGenerated > ago(7d)
-| summarize EventCount = count() by Environment, bin(TimeGenerated, 1d)
+| summarize EventCount = count() by Environment, bin(TimeGenerated, 5m)
 | render timechart
 ```
 
-### Dashboard Integration
-The environment tagging enables easy filtering in workbooks:
-- Create dropdown parameter for Environment selection
-- Filter all visualizations based on policy name prefixes
-- Build environment-specific dashboards or combined views
+## Contributing
 
-## Security Considerations
+This solution is part of the Microsoft Sentinel community repository. To contribute improvements:
 
-- **API Key Storage**: The script handles API keys securely using SecureString
-- **Credential Management**: Consider using Azure Key Vault for production deployments
-- **Access Control**: Ensure appropriate RBAC permissions for script execution
-- **Audit Trail**: All deployments are logged in Azure Activity Log
+1. Test changes in a development environment
+2. Update documentation as needed
+3. Submit pull requests with clear descriptions
 
-## Maintenance
+## Version History
 
-### Updating Connectors
-- Script can be re-run safely to update configurations
-- Individual connectors can be removed through Azure Portal if needed
-- Monitor connector health through Sentinel Data Connectors page
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0 | 2024-12-24 | Initial release with support for all 21 Netskope event types |
 
-### Scaling
-- Additional environments can be added by modifying the script
-- Consider separate scripts for different environment types (staging, test, etc.)
+## License
 
-## Support
-
-For issues with this deployment script:
-1. Check the troubleshooting section above
-2. Review Azure Activity Log for detailed error information
-3. Verify all prerequisites are met
-4. Contact Microsoft Support for Sentinel-specific issues
+This solution is provided under the same license as the Microsoft Sentinel community repository.
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: September 2025  
-**Compatibility**: Microsoft Sentinel, Netskope Alerts and Events connector (Netskopev2 solution)
+**Questions or Issues?** 
+- Review the troubleshooting section above
+- Check the verification queries for data flow issues
+- Consult Microsoft Sentinel documentation for DCE/DCR concepts
