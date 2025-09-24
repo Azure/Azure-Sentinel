@@ -1,3 +1,0 @@
-| **Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                           |
-|------------|-------------------------------|----------------------------------------------------------------------------------------------|
-| 3.0.0      | 24-06-2025                    | Initial Solution Release. <br/>Added new CCF **Data Connector** 'AWSCloudFrontLog_CCF'       |

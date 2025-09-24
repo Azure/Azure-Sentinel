@@ -1,0 +1,254 @@
+// Netskope DEV Instance Deployment - Verification Queries
+// Use these queries to verify successful deployment and data flow
+
+// =============================================
+// 1. DEPLOYMENT VERIFICATION
+// =============================================
+
+// Check if data is flowing from both environments (last 1 hour)
+union 
+NetskopeAlerts_CL,
+NetskopeEventsApplication_CL,
+NetskopeEventsAudit_CL,
+NetskopeEventsConnection_CL,
+NetskopeEventsDLP_CL,
+NetskopeEventsEndpoint_CL,
+NetskopeEventsInfrastructure_CL,
+NetskopeEventsNetwork_CL,
+NetskopeEventsPage_CL
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| where TimeGenerated > ago(1h)
+| summarize Count = count(), 
+            LatestEvent = max(TimeGenerated), 
+            EarliestEvent = min(TimeGenerated) 
+  by Environment, TableName = $table
+| order by Environment, TableName
+
+// =============================================
+// 2. DATA FLOW HEALTH CHECK
+// =============================================
+
+// Verify consistent data flow over last 24 hours
+union 
+NetskopeAlerts_CL,
+NetskopeEventsApplication_CL,
+NetskopeEventsAudit_CL
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| where TimeGenerated > ago(24h)
+| summarize EventCount = count() by Environment, bin(TimeGenerated, 1h)
+| render timechart title="Netskope Data Flow - PROD vs DEV (Last 24 Hours)"
+
+// =============================================
+// 3. ENVIRONMENT SEPARATION VERIFICATION
+// =============================================
+
+// Verify policy name prefixes are working correctly
+NetskopeAlerts_CL
+| where TimeGenerated > ago(24h)
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Mixed/Unknown"
+)
+| summarize AlertCount = count(), 
+            UniqueUsers = dcount(UserName),
+            UniquePolicies = dcount(PolicyName)
+  by Environment
+| extend HealthStatus = case(
+    AlertCount > 0 and Environment != "Mixed/Unknown", "✅ Healthy",
+    AlertCount == 0, "⚠️ No Data",
+    "❌ Policy Naming Issue"
+)
+
+// =============================================
+// 4. DETAILED ENVIRONMENT BREAKDOWN
+// =============================================
+
+// Show sample policy names to verify naming convention
+NetskopeAlerts_CL
+| where TimeGenerated > ago(24h)
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| summarize SamplePolicies = make_set(PolicyName, 5) by Environment
+| project Environment, SamplePolicyNames = SamplePolicies
+
+// =============================================
+// 5. ALERT TYPE DISTRIBUTION
+// =============================================
+
+// Compare alert types between environments
+NetskopeAlerts_CL
+| where TimeGenerated > ago(7d)
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| summarize AlertCount = count() by Environment, AlertType
+| order by Environment, AlertCount desc
+
+// =============================================
+// 6. USER ACTIVITY COMPARISON
+// =============================================
+
+// Compare user activity between environments
+union 
+NetskopeEventsApplication_CL,
+NetskopeEventsAudit_CL
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| where TimeGenerated > ago(24h)
+| summarize EventCount = count(),
+            UniqueUsers = dcount(UserName),
+            UniqueApplications = dcount(ApplicationName)
+  by Environment
+| project Environment, EventCount, UniqueUsers, UniqueApplications,
+          AvgEventsPerUser = EventCount / UniqueUsers
+
+// =============================================
+// 7. DATA VOLUME ANALYSIS
+// =============================================
+
+// Analyze data ingestion volume by table and environment
+union withsource=TableName
+NetskopeAlerts_CL,
+NetskopeEventsApplication_CL,
+NetskopeEventsAudit_CL,
+NetskopeEventsConnection_CL,
+NetskopeEventsDLP_CL,
+NetskopeEventsEndpoint_CL,
+NetskopeEventsInfrastructure_CL,
+NetskopeEventsNetwork_CL,
+NetskopeEventsPage_CL
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| where TimeGenerated > ago(24h)
+| summarize RecordCount = count(),
+            DataSizeEstimate = count() * 2, // Rough estimate in KB
+            LatestRecord = max(TimeGenerated)
+  by TableName, Environment
+| order by TableName, Environment
+
+// =============================================
+// 8. CONNECTOR HEALTH SUMMARY
+// =============================================
+
+// Overall health summary for both environments
+union withsource=TableName
+NetskopeAlerts_CL,
+NetskopeEventsApplication_CL,
+NetskopeEventsAudit_CL,
+NetskopeEventsConnection_CL,
+NetskopeEventsDLP_CL,
+NetskopeEventsEndpoint_CL,
+NetskopeEventsInfrastructure_CL,
+NetskopeEventsNetwork_CL,
+NetskopeEventsPage_CL
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| where TimeGenerated > ago(6h)
+| summarize RecordsLast6Hours = count(),
+            LastRecordTime = max(TimeGenerated),
+            TablesWithData = dcount(TableName)
+  by Environment
+| extend HealthStatus = case(
+    RecordsLast6Hours > 0 and (now() - LastRecordTime) < 2h, "✅ Healthy",
+    RecordsLast6Hours > 0 and (now() - LastRecordTime) < 6h, "⚠️ Delayed",
+    "❌ No Recent Data"
+),
+MinutesSinceLastRecord = (now() - LastRecordTime) / 1m
+| project Environment, HealthStatus, RecordsLast6Hours, TablesWithData, 
+          MinutesSinceLastRecord, LastRecordTime
+
+// =============================================
+// 9. TROUBLESHOOTING QUERIES
+// =============================================
+
+// Check for records without environment classification
+union withsource=TableName
+NetskopeAlerts_CL,
+NetskopeEventsApplication_CL
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| where Environment == "Unknown" and TimeGenerated > ago(24h)
+| summarize UnknownRecords = count(),
+            SamplePolicyNames = make_set(PolicyName, 10)
+  by TableName
+| where UnknownRecords > 0
+
+// Check for missing policy names (could indicate data quality issues)
+union withsource=TableName
+NetskopeAlerts_CL,
+NetskopeEventsApplication_CL
+| where isempty(PolicyName) and TimeGenerated > ago(24h)
+| summarize RecordsWithoutPolicyName = count() by TableName
+| where RecordsWithoutPolicyName > 0
+
+// =============================================
+// 10. SAMPLE DATA INSPECTION
+// =============================================
+
+// Show sample records from each environment for manual verification
+NetskopeAlerts_CL
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| where TimeGenerated > ago(1h)
+| summarize arg_max(TimeGenerated, *) by Environment
+| project Environment, TimeGenerated, PolicyName, AlertType, UserName, ApplicationName
+
+// Show sample application events from each environment
+NetskopeEventsApplication_CL
+| extend Environment = case(
+    PolicyName startswith "DEV", "DEV",
+    PolicyName startswith "PROD", "PROD",
+    "Unknown"
+)
+| where TimeGenerated > ago(1h)
+| summarize arg_max(TimeGenerated, *) by Environment
+| project Environment, TimeGenerated, PolicyName, ActivityType, UserName, ApplicationName
+
+// =============================================
+// NOTES FOR VERIFICATION:
+// =============================================
+/*
+Expected Results After Successful Deployment:
+
+1. Both "DEV" and "PROD" environments should show data in verification queries
+2. All 9 Netskope table types should have recent data (within last 1-2 hours)
+3. Policy names should consistently start with either "DEV" or "PROD"
+4. No or minimal "Unknown" environment classifications
+5. Connector health should show "✅ Healthy" for both environments
+
+If Issues Are Found:
+- Check Data Connectors page in Microsoft Sentinel for connection status
+- Verify DEV Netskope API credentials and organization URL
+- Confirm policy naming convention is implemented in Netskope
+- Review Azure Activity Log for deployment errors
+- Re-run deployment script if needed (safe to run multiple times)
+*/
