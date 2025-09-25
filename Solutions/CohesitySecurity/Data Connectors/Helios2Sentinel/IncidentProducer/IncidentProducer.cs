@@ -24,6 +24,7 @@ namespace Helios2Sentinel
     {
         private static readonly string keyVaultName = Environment.GetEnvironmentVariable("keyVaultName");
         private static readonly string azureWebJobsStorage = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+        private static readonly string clientId = Environment.GetEnvironmentVariable("clientId");
         private static readonly object queueLock = new object();
         private static readonly string containerName = "cohesity-extra-parameters";
         private static readonly string lastRequestDetailsBlobKey = Environment.GetEnvironmentVariable("Workspace") + "\\last-request-details";
@@ -437,7 +438,16 @@ namespace Helios2Sentinel
             var kvUri = $"https://{IncidentProducer.keyVaultName}.vault.azure.net";
             try
             {
-                var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+                if (clientId == "your ClientId")
+                {
+                    log.LogInformation("ClientId is not set hence using DefaultAzureCredential");
+                    var defaultSecretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+                    return defaultSecretClient.GetSecret(secretName).Value.Value;
+                }
+
+                var secretClient = new SecretClient(new Uri(kvUri), new ManagedIdentityCredential(
+                    clientId: clientId));
+
                 return secretClient.GetSecret(secretName).Value.Value;
             }
             catch (Exception ex)
