@@ -920,8 +920,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 
                 $global:baseCreateUiDefinition.parameters.steps += $baseDataConnectorStep
             }
-
-            $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            # log the title to the console            
+            $title = $ccpItem.title ?? $solutionName
+            $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $title data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
 
             $baseDataConnectorTextElement = [PSCustomObject] @{
                 name    = "dataconnectors$global:connectorCounter-text";
@@ -1386,14 +1387,17 @@ function CreatePurviewAuditResourceProperties($armResource, $templateContentConn
             Write-Host "Processing TenantId placeholder..."
             if ($armResource.properties.TenantId.Contains("{{")) {
                 $armResource.properties.TenantId = "[[subscription().tenantId]"
-            } else {
+            }
+            else {
                 $tenantIdValue = $armResource.properties.TenantId
                 $armResource.properties.TenantId = Convert-ToParameterFormat -propValue $tenantIdValue
             }
-        } else {
+        }
+        else {
             Write-Host "TenantId preset to: $($armResource.properties.TenantId)"
         }
-    } else {
+    }
+    else {
         Write-Host "Adding default TenantId parameter..."
         $armResource.properties | Add-Member -MemberType NoteProperty -Name "TenantId" -Value "[[subscription().tenantId]"
     }
@@ -1404,10 +1408,12 @@ function CreatePurviewAuditResourceProperties($armResource, $templateContentConn
             Write-Host "Processing SourceType placeholder..."
             $sourceTypeValue = $armResource.properties.SourceType
             $armResource.properties.SourceType = Convert-ToParameterFormat -propValue $sourceTypeValue
-        } else {
+        }
+        else {
             Write-Host "SourceType preset to: $($armResource.properties.SourceType)"
         }
-    } else {
+    }
+    else {
         Write-Host "Adding default SourceType..."
         $armResource.properties | Add-Member -MemberType NoteProperty -Name "SourceType" -Value "CopilotGeneral"
     }
@@ -1420,11 +1426,13 @@ function CreatePurviewAuditResourceProperties($armResource, $templateContentConn
                 Write-Host "Processing DataTypes.Logs.state placeholder..."
                 $logsStateValue = $armResource.properties.DataTypes.Logs.state
                 $armResource.properties.DataTypes.Logs.state = Convert-ToParameterFormat -propValue $logsStateValue
-            } else {
+            }
+            else {
                 Write-Host "DataTypes.Logs.state preset to: $($armResource.properties.DataTypes.Logs.state)"
             }
         }
-    } else {
+    }
+    else {
         Write-Host "Adding default DataTypes structure..."
         $dataTypes = [PSCustomObject]@{
             Logs = [PSCustomObject]@{
@@ -1445,7 +1453,8 @@ function CreatePurviewAuditResourceProperties($armResource, $templateContentConn
             if ($propertyValue -is [string] -and $propertyValue.Contains("{{")) {
                 Write-Host "Processing request.$propertyName placeholder..."
                 $armResource.properties.request.$propertyName = Convert-ToParameterFormat -propValue $propertyValue
-            } else {
+            }
+            else {
                 Write-Host "request.$propertyName preset to: $propertyValue"
             }
         }
