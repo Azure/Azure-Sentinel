@@ -387,10 +387,10 @@ namespace Helios2Sentinel
                 ++alerts_received;
                 // Skip adding this alert to the queue if we already saw
                 // this alert in the last request.
-                if (previousAlertIds.Contains(((string)alert.id)))
+                if (previousAlertIds.Contains(((string)alert.alert_id)))
                 {
                     ++alerts_skipped;
-                    log.LogInformation("Skipping alert " + ((string)alert.id) + " as this was seen in the last request");
+                    log.LogInformation("Skipping alert " + ((string)alert.alert_id) + " as this was seen in the last request");
                     continue;
                 }
 
@@ -438,7 +438,7 @@ namespace Helios2Sentinel
             var kvUri = $"https://{IncidentProducer.keyVaultName}.vault.azure.net";
             try
             {
-                if (clientId == "your ClientId")
+                if (clientId == null)
                 {
                     log.LogInformation("ClientId is not set hence using DefaultAzureCredential");
                     var defaultSecretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
