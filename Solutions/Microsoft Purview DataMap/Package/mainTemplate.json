@@ -1,0 +1,929 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft",
+    "comments": "Solution template for Microsoft Purview DataMap"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Microsoft Purview DataMap",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-microsoftpurviewdatamap",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "MicrosoftPurviewDataMap",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "MicrosoftPurviewDataMapConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "TemplateEmptyObject": "[json('{}')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Microsoft Purview DataMap",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "MicrosoftPurviewDataMap",
+                  "title": "Microsoft Purview DataMap",
+                  "publisher": "Microsoft",
+                  "logo": "Microsoft.svg",
+                  "descriptionMarkdown": "Microsoft Purview is a unified data governance solution that helps organizations discover, classify, and protect data across on-premises, multicloud, and SaaS environments.\n\nThis data connector ingests Microsoft Purview asset ownership data, data lineage information, and governance activities into Microsoft Sentinel for security monitoring and compliance tracking.",
+                  "graphQueriesTableName": "PurviewDataMapOwnersInfo_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "{{graphQueriesTableName}}",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Purview Audited Tables",
+                      "query": "{{graphQueriesTableName}}\n            | summarize by TableName"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft Entra app registration",
+                        "description": "Application client ID and secret used to access Purview Asset Owners."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">Connectivity to Purview requires a Microsoft Entra app registration (client ID and secret). You'll also need the Microsoft Entra tenant ID and the Purview Account name."
+                    },
+                    {
+                      "title": "Step 1 - Microsoft Entra app registration",
+                      "description": "1. Navigate to the [Microsoft Entra portal](https://entra.microsoft.com). \n2. Under Applications, click on **App Registrations** and create a new app registration (leave all defaults).\n3. Open the new app registration and create a new secret.\n4. Retain the **Tenant ID**, **Application (client) ID**, and **Client secret** for later use."
+                    },
+                    {
+                      "title": "Step 2 - Role Assignment in Purview",
+                      "description": "1. In the Purview portal, navigate to **Data Map > Domain** and click **Role Assignment** tab.\n2. Under **Data Readers** search for the App Created in step1.\n3. Click **OK**.\n"
+                    },
+                    {
+                      "title": "Step 3 - Collect tenant ID and Purview Account",
+                      "description": "1. Get tenant id from the Microsoft Entra portal for token endpoint: https://login.microsoftonline.com/{TenantId}/oauth2/v2.0/token.\n2. Get the Purview Account name from the Purview portal for api endpoint https://{PurviewAccountName}.purview.azure.com/datamap/api/search/query?api-version=2023-09-01"
+                    },
+                    {
+                      "description": "Connect using client credentials",
+                      "title": "Connect events from Purview DataMap to Microsoft Sentinel",
+                      "instructions": [
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "label": "Add environment",
+                            "isPrimary": true,
+                            "title": "Purview connection",
+                            "instructionSteps": [
+                              {
+                                "title": "Environment details",
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Token Endpoint",
+                                      "name": "tokenEndpoint",
+                                      "placeholder": "https://login.microsoftonline.com/{TenantId}/oauth2/v2.0/token",
+                                      "type": "text",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "App registration client ID",
+                                      "placeholder": "App client ID",
+                                      "type": "text",
+                                      "name": "clientId"
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "App registration client secret",
+                                      "placeholder": "App client secret",
+                                      "type": "password",
+                                      "name": "clientSecret"
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "API Endpoint",
+                                      "placeholder": "https://{PurviewAccountName}.purview.azure.com/datamap/api/search/query?api-version=2023-09-01",
+                                      "type": "text",
+                                      "name": "apiEndpoint",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "Organizations",
+                      "description": "Each row represents purview connection",
+                      "instructions": [
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "Environment URL",
+                                "columnValue": "properties.request.apiEndpoint"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "PurviewDataMap-DCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-PurviewDataMapOwnersInfo_CL": {
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "objectType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "updateBy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "contact",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "collectionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "displayText",
+                        "type": "string"
+                      },
+                      {
+                        "name": "isIndexed",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "qualifiedName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "entityType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "updateTime",
+                        "type": "long"
+                      },
+                      {
+                        "name": "classification",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "domainId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "assetType",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "createBy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "createTime",
+                        "type": "long"
+                      },
+                      {
+                        "name": "name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sensitivityLabelId",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "label",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "searchScore",
+                        "type": "real"
+                      },
+                      {
+                        "name": "glossaryType",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "dataSources": "[variables('TemplateEmptyObject')]",
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-PurviewDataMapOwnersInfo_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = now() | project-away searchScore",
+                    "outputStream": "Custom-PurviewDataMapOwnersInfo_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]"
+              }
+            },
+            {
+              "name": "PurviewDataMapOwnersInfo_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "PurviewDataMapOwnersInfo_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "objectType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "updateBy",
+                      "type": "string"
+                    },
+                    {
+                      "name": "contact",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "collectionId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "displayText",
+                      "type": "string"
+                    },
+                    {
+                      "name": "isIndexed",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "qualifiedName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "entityType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "updateTime",
+                      "type": "long"
+                    },
+                    {
+                      "name": "classification",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "domainId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "assetType",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "createBy",
+                      "type": "string"
+                    },
+                    {
+                      "name": "createTime",
+                      "type": "long"
+                    },
+                    {
+                      "name": "name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "sensitivityLabelId",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "label",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "searchScore",
+                      "type": "real"
+                    },
+                    {
+                      "name": "glossaryType",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "MicrosoftPurviewDataMap",
+          "title": "Microsoft Purview DataMap",
+          "publisher": "Microsoft",
+          "logo": "Microsoft.svg",
+          "descriptionMarkdown": "Microsoft Purview is a unified data governance solution that helps organizations discover, classify, and protect data across on-premises, multicloud, and SaaS environments.\n\nThis data connector ingests Microsoft Purview asset ownership data, data lineage information, and governance activities into Microsoft Sentinel for security monitoring and compliance tracking.",
+          "graphQueriesTableName": "PurviewDataMapOwnersInfo_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "{{graphQueriesTableName}}",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Purview Audited Tables",
+              "query": "{{graphQueriesTableName}}\n            | summarize by TableName"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft Entra app registration",
+                "description": "Application client ID and secret used to access Purview Asset Owners."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">Connectivity to Purview requires a Microsoft Entra app registration (client ID and secret). You'll also need the Microsoft Entra tenant ID and the Purview Account name."
+            },
+            {
+              "title": "Step 1 - Microsoft Entra app registration",
+              "description": "1. Navigate to the [Microsoft Entra portal](https://entra.microsoft.com). \n2. Under Applications, click on **App Registrations** and create a new app registration (leave all defaults).\n3. Open the new app registration and create a new secret.\n4. Retain the **Tenant ID**, **Application (client) ID**, and **Client secret** for later use."
+            },
+            {
+              "title": "Step 2 - Role Assignment in Purview",
+              "description": "1. In the Purview portal, navigate to **Data Map > Domain** and click **Role Assignment** tab.\n2. Under **Data Readers** search for the App Created in step1.\n3. Click **OK**.\n"
+            },
+            {
+              "title": "Step 3 - Collect tenant ID and Purview Account",
+              "description": "1. Get tenant id from the Microsoft Entra portal for token endpoint: https://login.microsoftonline.com/{TenantId}/oauth2/v2.0/token.\n2. Get the Purview Account name from the Purview portal for api endpoint https://{PurviewAccountName}.purview.azure.com/datamap/api/search/query?api-version=2023-09-01"
+            },
+            {
+              "description": "Connect using client credentials",
+              "title": "Connect events from Purview DataMap to Microsoft Sentinel",
+              "instructions": [
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "label": "Add environment",
+                    "isPrimary": true,
+                    "title": "Purview connection",
+                    "instructionSteps": [
+                      {
+                        "title": "Environment details",
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Token Endpoint",
+                              "name": "tokenEndpoint",
+                              "placeholder": "https://login.microsoftonline.com/{TenantId}/oauth2/v2.0/token",
+                              "type": "text",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "App registration client ID",
+                              "placeholder": "App client ID",
+                              "type": "text",
+                              "name": "clientId"
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "App registration client secret",
+                              "placeholder": "App client secret",
+                              "type": "password",
+                              "name": "clientSecret"
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "API Endpoint",
+                              "placeholder": "https://{PurviewAccountName}.purview.azure.com/datamap/api/search/query?api-version=2023-09-01",
+                              "type": "text",
+                              "name": "apiEndpoint",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "title": "Organizations",
+              "description": "Each row represents purview connection",
+              "instructions": [
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Environment URL",
+                        "columnValue": "properties.request.apiEndpoint"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Microsoft Purview DataMap",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Microsoft Purview DataMap",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "tokenEndpoint": {
+              "defaultValue": "tokenEndpoint",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiEndpoint": {
+              "defaultValue": "apiEndpoint",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'Microsoft Purview DataMap Polling Config', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "MicrosoftPurviewDataMap",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-PurviewDataMapOwnersInfo_CL"
+                },
+                "dataType": "PurviewDataMapOwnersInfo_CL",
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[parameters('tokenEndpoint')]",
+                  "TokenEndpointHeaders": {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "TokenEndpointQueryParameters": {},
+                  "Scope": "https://purview.azure.net/.default"
+                },
+                "request": {
+                  "apiEndpoint": "[[parameters('apiEndpoint')]",
+                  "queryWindowInMin": 60,
+                  "httpMethod": "POST",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "queryTimeFormat": "UnixTimestampInMills",
+                  "logResponseContent": true,
+                  "IsPostPayloadJson": true,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "User-Agent": "Scuba"
+                  },
+                  "body": {
+                    "limit": 1000,
+                    "orderby": [
+                      {
+                        "updateTime": "ASC"
+                      }
+                    ]
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.value"
+                  ]
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSizeParaName": "limit",
+                  "pageSize": 1000
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Microsoft Purview DataMap",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Microsoft%20Purview%20DataMap/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Microsoft Purview is a unified data governance solution that helps organizations manage and govern their on-premises, multicloud, and software-as-a-service (SaaS) data. This solution leverages the Microsoft Purview Data Map REST API to provide comprehensive data asset discovery, classification, and lineage tracking.</p>\n<p>The Microsoft Sentinel solution for Microsoft Purview DataMap enables security monitoring of data governance activities, asset ownership changes, and access patterns across your data estate. It helps detect suspicious data access, unauthorized asset modifications, and compliance violations.</p>\n<p><strong>Key capabilities:</strong></p>\n<ul>\n<li>Monitor data asset ownership and access patterns</li>\n<li>Detect unauthorized data discovery and classification changes</li>\n<li>Track data lineage and governance policy violations</li>\n<li>Provide security insights for your unified data governance strategy</li>\n</ul>\n<p><strong>Important</strong></p>\n<ul>\n<li>Please review the solution <a href=\"https://learn.microsoft.com/en-us/purview/purview\">documentation</a> to learn more about deploying, configuring and using this solution.</li>\n</ul>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/MicrosoftPurview.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Microsoft Purview DataMap",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-10-01",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Application"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
