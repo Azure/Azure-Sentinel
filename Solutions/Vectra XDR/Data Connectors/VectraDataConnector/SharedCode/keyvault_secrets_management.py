@@ -1,6 +1,6 @@
 """This file is used for accessing keyvault to get or set secrets."""
 from azure.keyvault.secrets import SecretClient
-from azure.identity import DefaultAzureCredential
+from azure.identity import ManagedIdentityCredential
 from azure.core.exceptions import ResourceNotFoundError
 from ..SharedCode import consts
 
@@ -21,7 +21,7 @@ class KeyVaultSecretManage:
         Returns:
             SecretClient: returns client object for accessing AzureKeyVault.
         """
-        credential = DefaultAzureCredential()
+        credential = ManagedIdentityCredential()
         client = SecretClient(vault_url=self.keyvault_uri, credential=credential)
         return client
 
