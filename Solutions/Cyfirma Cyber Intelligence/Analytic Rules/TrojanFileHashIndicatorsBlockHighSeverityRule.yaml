@@ -1,0 +1,129 @@
+id: 649f525a-1f92-412d-bfc2-ce642e7a7f1f
+name: CYFIRMA - High severity Trojan File Hash Indicators with Block Action Rule
+description: |
+  "This KQL query extracts file hash indicators associated with Trojan activity from the CyfirmaIndicators_CL table. 
+  It specifically targets indicators containing file hashes linked to Trojan behavior and retrieves MD5, SHA1, and SHA256 values. 
+  The query also includes contextual threat intelligence such as threat actors, tags, sources, and geolocation information."
+version: 1.0.0
+kind: Scheduled
+severity: High
+enabled: false
+requiredDataConnectors:
+  - connectorId: CyfirmaCyberIntelligenceDC
+    dataTypes:
+      - CyfirmaIndicators_CL
+query: |
+  //Trojan File Hash Indicators with Block Action
+  let timeFrame = 5m;
+  CyfirmaIndicators_CL 
+  | where ConfidenceScore >= 80
+      and TimeGenerated between (ago(timeFrame) .. now())
+      and pattern contains 'file:hashes' and RecommendedActions has 'Block' and (Roles has 'Trojan')
+  | extend MD5 = extract(@"file:hashes\.md5\s*=\s*'([a-fA-F0-9]{32})'", 1, pattern)
+  | extend SHA1 = extract(@"file:hashes\.'SHA-1'\s*=\s*'([a-fA-F0-9]{40})'", 1, pattern)
+  | extend SHA256 = extract(@"file:hashes\.'SHA-256'\s*=\s*'([a-fA-F0-9]{64})'", 1, pattern)
+  | extend
+      Algo_MD5='MD5',
+      Algo_SHA1= 'SHA1',
+      Algo_SHA256='SHA256',
+      ProviderName = 'CYFIRMA',
+      ProductName = 'DeCYFIR/DeTCT'
+  | project  
+      MD5,
+      Algo_MD5,
+      SHA1,
+      Algo_SHA1,
+      SHA256,
+      Algo_SHA256,
+      ThreatActors,
+      Sources,
+      RecommendedActions,
+      Roles,
+      Country,
+      name,
+      Description,
+      ConfidenceScore,
+      SecurityVendors,
+      IndicatorID,
+      created,
+      modified,
+      valid_from,
+      Tags,
+      ThreatType,
+      TimeGenerated,
+      ProductName,
+      ProviderName
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: GreaterThan
+triggerThreshold: 0
+suppressionDuration: 5m
+suppressionEnabled: true
+tactics:
+  - InitialAccess
+  - Execution
+  - Persistence
+  - DefenseEvasion
+  - CommandAndControl
+  - CredentialAccess
+relevantTechniques:
+  - T1566
+  - T1204
+  - T1547
+  - T1027
+  - T1071
+  - T1003
+  - T1566.001
+  - T1547.001
+alertDetailsOverride:
+  alertDisplayNameFormat: "High-Confidence Trojan File Hash Indicators with Block Action Rule - {{name}} "
+  alertDescriptionFormat: "{{Description}} - {{name}} "
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+customDetails:
+  ThreatActors: ThreatActors
+  Sources: Sources
+  RecommendedActions: RecommendedActions
+  Roles: Roles
+  Country: Country
+  Description: Description
+  ConfidenceScore: ConfidenceScore
+  SecurityVendors: SecurityVendors
+  IndicatorID: IndicatorID
+  created: created
+  modified: modified
+  ValidFrom: valid_from
+  Tags: Tags
+  ThreatType: ThreatType
+  TimeGenerated: TimeGenerated
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: MD5
+      - identifier: Algorithm
+        columnName: Algo_MD5
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: SHA1
+      - identifier: Algorithm
+        columnName: Algo_SHA1
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: SHA256
+      - identifier: Algorithm
+        columnName: Algo_SHA256
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5m
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

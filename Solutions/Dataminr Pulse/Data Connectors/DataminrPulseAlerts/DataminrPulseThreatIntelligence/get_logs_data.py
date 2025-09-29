@@ -1,8 +1,9 @@
 """Module to get_log table data from Log Analytics Workspace."""
+
 import datetime
 import inspect
 from azure.monitor.query import LogsQueryClient, LogsQueryStatus
-from azure.identity import ClientSecretCredential
+from azure.identity import DefaultAzureCredential, AzureAuthorityHosts
 from ..shared_code import consts
 from ..shared_code.logger import applogger
 from ..shared_code.dataminrpulse_exception import DataminrPulseException
@@ -13,7 +14,7 @@ def parse_table_data(rows):
     data_to_return = []
     for row in rows:
         data = row._row_dict
-        data['TimeGenerated'] = data['TimeGenerated'].isoformat()
+        data["TimeGenerated"] = data["TimeGenerated"].isoformat()
         data_to_return.append(data)
     return data_to_return
 
@@ -28,18 +29,24 @@ def get_logs_data(time_generated):
         list: List containing the table data.
     """
     __method_name = inspect.currentframe().f_code.co_name
-    credential = ClientSecretCredential(
-        client_id=consts.AZURE_CLIENT_ID,
-        client_secret=consts.AZURE_CLIENT_SECRET,
-        tenant_id=consts.AZURE_TENANT_ID,
-    )
-    client = LogsQueryClient(credential)
+    if ".us" in consts.LOG_ANALYTICS_URL:
+        credential = DefaultAzureCredential(
+            authority=AzureAuthorityHosts.AZURE_GOVERNMENT
+        )
+        endpoint = "https://api.loganalytics.us/v1"
+    else:
+        credential = DefaultAzureCredential()
+        endpoint = "https://api.loganalytics.io/v1"
+
+    client = LogsQueryClient(credential, endpoint=endpoint)
     query = """{}_CL
     | extend Source=extract("via (.+)",1,headline_s)
     | extend Source=substring(Source,0,strlen(Source)-1)
     | where Source  in~ ('Greynoise', 'Shodan', 'VirusTotal', 'alienvault open threat exchange', 'URLScan', 'CSIRT')
     | sort by  TimeGenerated asc
-    | project TimeGenerated, index_s, _embedded_labels_s, alertType_id_s, headline_s, Source""".format(consts.ALERTS_TABLE_NAME)
+    | project TimeGenerated, index_s, _embedded_labels_s, alertType_id_s, headline_s, Source""".format(
+        consts.ALERTS_TABLE_NAME
+    )
     if time_generated is None or time_generated == "":
         start_time = datetime.datetime.now(tz=datetime.timezone.utc)
     else:
