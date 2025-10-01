@@ -1,5 +1,6 @@
  **Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
 |------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.7      | 28-08-2025                    | Improved type handling in the parser query by explicitly converting certain fields to bool and datetime.|
 | 3.0.6      | 31-07-2025                    | Removed deprecated **Data Connector** |
 | 3.0.5      | 27-06-2025                    | GoogleCloudPlatformIAM **CCF Data Connector** moving to GA |
 | 3.0.4      | 13-06-2025                    | Updated Standard Table configuration in **CCF Data Connector**.   |
