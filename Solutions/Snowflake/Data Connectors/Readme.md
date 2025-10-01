@@ -27,14 +27,28 @@ To enable permanent access via a Programmatic Access Token, configuring a **Netw
 --------------------------------------------------------------------------------------------------------------------
 
 - Log in to your Snowflake account and navigate to a **SQL Worksheet**.
-- Execute the following SQL statements to create and apply a permissive network policy:
-  ```
-  CREATE OR REPLACE NETWORK POLICY allow_all_ips
-    ALLOWED_IP_LIST = ('0.0.0.0/0');
-  ```
-  ```
-  ALTER ACCOUNT SET NETWORK_POLICY = allow_all_ips;
-  ```
+- Execute **only one** of the following configurations based on your specific scenario:
+  #### Scenario 1: No Existing IP Restrictions
+  - If there are no prior IP restrictions, create and apply a permissive network policy that allows access from all IP addresses:
+    ```
+    CREATE OR REPLACE NETWORK POLICY allow_all_ips
+      ALLOWED_IP_LIST = ('0.0.0.0/0');
+    ```
+    ```
+    ALTER ACCOUNT SET NETWORK_POLICY = allow_all_ips;
+    ```
+  #### Scenario 2: Existing IP Restrictions
+  - If your account already has IP restrictions in place, you can create a more flexible policy that allows all IPs but explicitly blocks specific addresses:
+    ```
+    CREATE OR REPLACE NETWORK POLICY allow_all_with_blocks
+      ALLOWED_IP_LIST = ('0.0.0.0/0')
+      BLOCKED_IP_LIST = ('<IP_ADDRESS1>', '<IP_ADDRESS2>');
+    ```
+    ```
+    ALTER ACCOUNT SET NETWORK_POLICY = allow_all_with_blocks;
+    ```
+    > **Note:** If you have multiple blocked IP addresses, provide all IP addresses separated by commas as shown in above query.
+
 Once these commands are successfully executed, the network policy configuration is complete.
 ### Generate Programmatic Access Token
 --------------------------------------------------------------------------------------------
