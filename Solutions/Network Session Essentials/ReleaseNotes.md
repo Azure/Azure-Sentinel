@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                    |
 |-------------|--------------------------------|-----------------------------------------------------------------------|
-| 3.0.8       | 23-09-2025                    | Updated analytic rule queries by lowering the threshold for event per second (eps) filtering.
+| 3.0.8       | 23-09-2025                    | Removed duplicate and redundant query blocks that previously handled different eps ranges, reducing code complexity and improving maintainability.
 | 3.0.7       | 4-07-2025                     | Summary rules added and updated requiredDataConnectors.			       |
 | 3.0.6       | 15-04-2025                     | Updated **Analytic Rule** NetworkPortSweepFromExternalNetwork.			       |
 | 3.0.5       | 12-12-2024                     | Added IllumioSaaS solution in a domain solution list			       |
