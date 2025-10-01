@@ -1,23 +1,21 @@
 Parser:
   Title: Authentication ASIM parser for OpenSSH sshd
-  Version: '0.2.2'
-  LastUpdated: Sept 18, 2023
+  Version: '0.2.4'
+  LastUpdated: May 29, 2025
 Product:
   Name: OpenSSH
 Normalization:
   Schema: Authentication
-  Version: '0.1.2'
+  Version: '0.1.3'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
-- Title: ASIM
-  Link: https:/aka.ms/AboutASIM
 Description: |
   This ASIM parser supports normalizing OpenSSH server (sshd) sign in logs, collected using Syslog to the ASIM Authentication schema.
 Notes: |
   - The parser does not use sshd PAN and preauth events, which are in most cases duplicates of the core sshd events. 
   - Certain preauth events log unsuccessful authentication negotiation, which have security importance but are not authentication events per se, and therefore are not used by this parser.
-  - The parser may support other sshd servers, but this has not been tested. 
+  - The parser may support other sshd servers, but this has not been tested.
 ParserName: ASimAuthenticationSshd
 EquivalentBuiltInParser: _ASim_Authentication_Sshd
 ParserParams:
@@ -30,11 +28,11 @@ ParserQuery: |
     //
     // -- Successful login
     let SSHDAccepted=(disabled:bool=false) { 
-        // -- Parse events with the format "Accepted password for <User> from <IP address> port <port> ssh2"
+        // -- Parse events with the format "Accepted (password|none|publickey)  for <User> from <IP address> port <port> ssh2"
         SyslogProjects 
         | where not(disabled)
         | where ProcessName == "sshd" and SyslogMessage startswith 'Accepted'
-        | parse SyslogMessage with "Accepted password for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
+        | parse SyslogMessage with "Accepted " * " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
         | extend
             EventCount    = int(1),
             EventResult   = 'Success',
@@ -203,7 +201,8 @@ ParserQuery: |
         TargetFQDN            = DvcFQDN,
         TargetHostname        = DvcHostname,
         TargetIpAddr          = DvcIpAddr,
-        User                  = TargetUsername
+        User                  = TargetUsername,
+        Application           = TargetAppName
     };
     parser (
         disabled=disabled
