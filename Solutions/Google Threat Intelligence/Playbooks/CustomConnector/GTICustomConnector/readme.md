@@ -97,10 +97,24 @@ This document provides detailed descriptions of all actions available in the Goo
 * **Get Threat List**
 
     * **Description:**  Retrieval of all google threat information for the last hour in a specific category.
-    * **Input:** Category (string).
+    * **Input:**
+      * Category (string).
+      * Filter (string).
     * **Output:** JSON bundle with indicators in STIX format.
 
 
 **Note:** All actions require an API key for authentication.  Please refer to the "Pre-requisites" section in the `readme.md` file for instructions on obtaining and using your API key.
 
+### IoC Stream
+
+* **Get IoC Stream**
+
+  * **Description**: Obtains a list of threats (Indicators of Compromise) based on a specified filter. This action supports pagination to retrieve large sets of indicators in batches.
+
+  * **Input**:
+    * filter (string): Required. The filter query to define the IoC stream search.
+    * limit (string, optional): The maximum number of IoCs to return in a single batch (default is 40).
+    * cursor (string, optional): The cursor from a previous response used to retrieve the next batch of results.
+
+  * **Output**: A JSON bundle object containing a list of indicators in STIX format and pagination information (including a cursor for the next batch).
 
