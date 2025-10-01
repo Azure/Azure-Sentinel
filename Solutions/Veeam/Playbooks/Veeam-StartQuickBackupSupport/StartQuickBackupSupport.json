@@ -1,0 +1,571 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Veeam-StartQuickBackupSupport",
+    "description": "A Microsoft Sentinel playbook with an incident trigger, that performs quick backup support for affected backupObject (specifided by the BackupObjectId incidents custom field) when triggered by Microsoft Sentinel incidents. Indicates results as incident comments.",
+    "prerequisites": [
+      "1. Microsoft Sentinel workspace configured.",
+      "2. Permissions to create Logic Apps and API Connections.",
+      "3. Permissions to assign roles to the Resource Group.",
+      "4. Veeam Azure Function App deployed and configured.",
+      "5. Hybrid Connection and Key Vault secrets configured for each VBR Server."
+    ],
+    "entities": [],
+    "tags": [ "Automation", "Veeam", "QuickBackup", "Support", "IncidentResponse" ],
+    "lastUpdateTime": "2025-08-25T00:00:00.000Z",
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Custom Template"
+    },
+    "parameterTemplateVersion": "1.0.1",
+    "postDeployment": [
+      "1. Assign the Microsoft Sentinel Contributor role to the Logic App's managed identity on the Microsoft Sentinel workspace."
+    ],
+    "_generator": {
+      "name": "bicep",
+      "version": "0.36.177.2456",
+      "templateHash": "8701067040678761767"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Veeam-StartQuickBackupSupport",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the playbook (Logic App) to be created"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the Azure Function App for Veeam integration"
+      }
+    },
+    "AzureSentinelConnectionName": {
+      "type": "string",
+      "defaultValue": "azuresentinel-connection",
+      "metadata": {
+        "description": "The name to use for the Microsoft Sentinel Connector in the Logic App (This will exist as an API Connection in your subscription)"
+      }
+    }
+  },
+  "variables": {
+    "functionAppId": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        },
+        "parameterValueType": "Alternative"
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Veeam-StartQuickBackupSupport",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.1",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@listCallbackUrl()"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_VbrHostName": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "VbrHostName",
+                    "type": "string",
+                    "value": "none"
+                  }
+                ]
+              }
+            },
+            "Initialize_BackupObjectId": {
+              "runAfter": {
+                "Initialize_VbrHostName": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "BackupObjectId",
+                    "type": "string",
+                    "value": "none"
+                  }
+                ]
+              }
+            },
+            "Get_variables_from_custom_fields": {
+              "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+              "actions": {
+                "Parse_JSON": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@item()?['properties']?['additionalData']?['Custom Details']",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "VbrHostName": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "MachineDisplayName": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "MachineUuid": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "BackupObjectId": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Get_VbrHostName": {
+                  "foreach": "@body('Parse_JSON')?['VbrHostName']",
+                  "actions": {
+                    "Set_variable": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VbrHostName",
+                        "value": "@{items('Get_VbrHostName')}"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Parse_JSON": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach"
+                },
+                "Get_BackupObjectId": {
+                  "foreach": "@body('Parse_JSON')?['BackupObjectId']",
+                  "actions": {
+                    "Set_BackupObjectId": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "BackupObjectId",
+                        "value": "@items('Get_BackupObjectId')"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Get_VbrHostName": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach"
+                }
+              },
+              "runAfter": {
+                "Initialize_BackupObjectId": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "GetBackupObjectByIdAsync": {
+              "runAfter": {
+                "Get_variables_from_custom_fields": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Function",
+              "inputs": {
+                "queries": {
+                  "vbrHostName": "@variables('VbrHostName')",
+                  "backupObjectId": "@variables('BackupObjectId')"
+                },
+                "function": {
+                  "id": "[concat(variables('functionAppId'), '/functions/GetBackupObjectByIdAsync')]"
+                }
+              }
+            },
+            "Parse_properties": {
+              "runAfter": {
+                "GetBackupObjectByIdAsync": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('GetBackupObjectByIdAsync')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ViType": {
+                      "type": "string"
+                    },
+                    "VmHostName": {
+                      "type": "string"
+                    },
+                    "VmName": {
+                      "type": "string"
+                    },
+                    "ObjectId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "StartQuickBackupJobAsync": {
+              "runAfter": {
+                "Parse_properties": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Function",
+              "inputs": {
+                "queries": {
+                  "vbrHostName": "@variables('VbrHostName')",
+                  "ViType": "@body('Parse_properties')?['ViType']",
+                  "VmHostName": "@body('Parse_properties')?['VmHostName']",
+                  "VmName": "@body('Parse_properties')?['VmName']",
+                  "ObjectId": "@body('Parse_properties')?['ObjectId']"
+                },
+                "function": {
+                  "id": "[concat(variables('functionAppId'), '/functions/StartQuickBackupJobAsync')]"
+                }
+              }
+            },
+            "Check_StartQuickBackup_Result": {
+              "runAfter": {
+                "StartQuickBackupJobAsync": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@outputs('StartQuickBackupJobAsync')?['statusCode']",
+                      200
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Indicate_starting_with_comment": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p class=\"editor-paragraph\">Quick backup for @{variables('VbrHostName')} has started.</p>"
+                    },
+                    "path": "/Incidents/Comment"
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Indicate_failure_with_comment": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "<p class=\"editor-paragraph\">Quick backup for @{variables('VbrHostName')} has failed to start.</p>"
+                      },
+                      "path": "/Incidents/Comment"
+                    }
+                  }
+                }
+              }
+            },
+            "Parse_session_ID": {
+              "runAfter": {
+                "Check_StartQuickBackup_Result": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('StartQuickBackupJobAsync')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionType": {
+                      "type": "integer"
+                    },
+                    "state": {
+                      "type": "integer"
+                    },
+                    "platformName": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "jobId": {
+                      "type": "string"
+                    },
+                    "creationTime": {
+                      "type": "string"
+                    },
+                    "endTime": {},
+                    "progressPercent": {
+                      "type": "integer"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "integer"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "isCanceled": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "resourceId": {},
+                    "resourceReference": {},
+                    "parentSessionId": {},
+                    "usn": {
+                      "type": "integer"
+                    },
+                    "platformId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "Until_state_is_not_Stopped": {
+              "actions": {
+                "GetSession_": {
+                  "type": "Function",
+                  "inputs": {
+                    "queries": {
+                      "vbrHostName": "@variables('VbrHostName')",
+                      "sessionId": "@body('Parse_session_ID')?['id']"
+                    },
+                    "function": {
+                      "id": "[concat(variables('functionAppId'), '/functions/GetSessionAsync')]"
+                    }
+                  }
+                },
+                "Parse_session": {
+                  "runAfter": {
+                    "GetSession_": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('GetSession_')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "sessionType": {
+                          "type": "integer"
+                        },
+                        "state": {
+                          "type": "integer"
+                        },
+                        "platformName": {
+                          "type": "integer"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "jobId": {
+                          "type": "string"
+                        },
+                        "creationTime": {
+                          "type": "string"
+                        },
+                        "endTime": {},
+                        "progressPercent": {
+                          "type": "integer"
+                        },
+                        "result": {
+                          "type": "object",
+                          "properties": {
+                            "result": {
+                              "type": "integer"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "isCanceled": {
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "resourceId": {},
+                        "resourceReference": {},
+                        "parentSessionId": {},
+                        "usn": {
+                          "type": "integer"
+                        },
+                        "platformId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "Delay": {
+                  "runAfter": {
+                    "Parse_session": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Wait",
+                  "inputs": {
+                    "interval": {
+                      "count": 3,
+                      "unit": "Minute"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_session_ID": [
+                  "Succeeded"
+                ]
+              },
+              "expression": "@equals(body('Parse_session')?['state'],1)",
+              "limit": {
+                "timeout": "PT3H"
+              },
+              "type": "Until"
+            },
+            "Result": {
+              "runAfter": {
+                "Until_state_is_not_Stopped": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@body('Parse_session')?['result']"
+            },
+            "Show_result_as_a_comment": {
+              "runAfter": {
+                "Result": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p class=\"editor-paragraph\">Quick backup has finished. Details: @{outputs('Result')}.</p>"
+                },
+                "path": "/Incidents/Comment"
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionName": "[parameters('AzureSentinelConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]",
+                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
