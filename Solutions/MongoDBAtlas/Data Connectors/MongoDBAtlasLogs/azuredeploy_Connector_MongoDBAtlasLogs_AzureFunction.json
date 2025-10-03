@@ -1,0 +1,827 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "useExistingWorkspace": {
+            "type": "string" 
+        },
+        "LogAnalyticsWorkspaceResourceID": {
+            "type": "string",
+            "defaultValue": "/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx",
+            "metadata": {
+                "description": "Azure Resource ID (NOT THE WORKSPACE ID) of the existing Log Analytics Workspace where you would like the MongoDB Atlas data and optional Function App Application Insights data to reside. This can be found by clicking the \"JSON View\" link within the Overview page of the Log Analytics workspace resource. The format is: \"/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx\""
+            }
+        },
+        "newWorkspaceName": {
+            "type": "string", "defaultValue": "" 
+        },
+        "ConnectorSchedule": {
+            "type": "string",
+            "defaultValue": "0 */5 * * * *",
+            "metadata": {
+                "description": "The polling schedule at which logs will be uploaded from MongoDB Atlas into the Log Analytics workspace"
+            }
+        },
+        "MongoDbGroupId": {
+            "type": "string",
+            "metadata": {
+                "description": "The MongoDB Atlas Group Id to which you will connect."
+            }
+        },
+        "MongoDbClusterId": {
+            "type": "string",
+            "metadata": {
+                "description": "The MongoDB Atlas Cluster Id to which you will connect."
+            }
+        },
+        "MongoDbClientId": {
+            "type": "string",
+            "metadata": {
+                "description": "The MongoDB Atlas client id which you can obtain from their portal."
+            }
+        },
+        "MongoDbClientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The MongoDB Atlas client secret which you can obtain from their portal."
+            }
+        },
+        "packageUri": {
+            "type": "string",
+            "defaultValue": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/MongoDBAtlas/Data%20Connectors/MongoDBAtlasLogs/MongoDBAtlasLogs.zip",
+            "metadata": {
+                "description": "The URL of the zip file containing the Python function code"
+            }
+        },
+        "accessLogsFilterType": {
+            "type": "string",
+            "metadata": {
+                "description": "Select how to filter this category. Valid values: none, all, include, exclude"
+            }
+        },
+        "accessIdFilterList": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Comma separated list of access IDs (Max 10) for which the log entries will be included or excluded from the uploaded to Microsoft Sentinel."
+            }
+        },
+        "networkLogsFilterType": {
+            "type": "string",
+            "metadata": {
+                "description": "Select how to filter this category. Valid values: none, all, include, exclude"
+            }
+        },
+        "networkIdFilterList": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Comma separated list of network IDs (Max 10) for which the log entries will be included or excluded from the uploaded to Microsoft Sentinel."
+            }
+        },
+        "queryLogsFilterType": {
+            "type": "string",
+            "metadata": {
+                "description": "Select how to filter this category. Valid values: none, all, include, exclude"
+            }
+        },
+        "queryIdFilterList": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Comma separated list of query IDs (Max 10) for which the log entries will be included or excluded from the uploaded to Microsoft Sentinel."
+            }
+        }
+    },
+    "variables": {
+        "deploymentVersion": "3.0.2",
+        "location": "[resourceGroup().location]",
+        "roleIdStorageBlobDataOwner": "/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
+        "storageSuffix": "[environment().suffixes.storage]",
+        "FunctionAppName": "[format('fa-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "KeyVaultName": "[format('kv-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "StorageAccountName": "[format('samdba{0}', uniqueString(resourceGroup().id))]",
+        "FunctionAppStorageAccountName": "[format('safamdba{0}', uniqueString(resourceGroup().id))]",
+        "DataCollectionEndpointName": "[format('dce-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "DataCollectionRuleName": "[format('dcr-mdba-{0}', uniqueString(resourceGroup().id))]"
+    },
+    "resources": [
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "provisionWorkspace",
+            "properties": {
+                "expressionEvaluationOptions": {
+                    "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                    "LogAnalyticsWorkspaceResourceId": {
+                        "value": "[parameters('LogAnalyticsWorkspaceResourceID')]"
+                    },
+                    "useExistingWorkspace": {
+                        "value": "[parameters('useExistingWorkspace')]"
+                    },
+                    "newWorkspaceName": {
+                        "value": "[parameters('newWorkspaceName')]" 
+                    },
+                    "location": {
+                        "value": "[variables('location')]" 
+                    }
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "useExistingWorkspace": {
+                            "type": "string" 
+                        },
+                        "LogAnalyticsWorkspaceResourceId": {
+                            "type": "string",
+                            "metadata": {
+                                "description": "Azure Resource Id of the Log Analytics Workspace where you like the data and optional Function App Application Insights data to reside. The format is: \"/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx\""
+                            }
+                        },
+                        "newWorkspaceName": {
+                            "type": "string",
+                            "defaultValue": "" 
+                        },
+                        "location": {
+                            "type": "string",
+                            "defaultValue": ""
+                        }
+                    },
+                    "variables": {
+                        "workspaceName": "[if(equals(parameters('useExistingWorkspace'),'yes'), last(split(parameters('LogAnalyticsWorkspaceResourceId'), '/')), parameters('newWorkspaceName'))]"
+                    },
+                    "resources": [
+                        {
+                            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
+                            "type": "Microsoft.OperationalInsights/workspaces",
+                            "apiVersion": "2025-02-01",
+                            "name": "[variables('workspaceName')]",
+                            "location": "[parameters('location')]",
+                            "properties": {
+                                "sku": {
+                                "name": "PerGB2018"
+                                },
+                                "retentionInDays": 30,
+                                "publicNetworkAccessForIngestion": "Enabled",
+                                "publicNetworkAccessForQuery": "Enabled"
+                            }
+                        }
+                    ],
+                    "outputs": {
+                        "workspaceName": {
+                            "type": "string",
+                            "value": "[variables('workspaceName')]"
+                        },
+                        "workspaceSubscription": {
+                            "type": "string",
+                            "value": "[split(resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), '/')[2]]"
+                        },
+                        "workspaceResourceGroup": {
+                            "type": "string",
+                            "value": "[split(resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), '/')[4]]"
+                        },
+                        "workspaceResourceId": {
+                            "type": "string",
+                            "value": "[if(equals(parameters('useExistingWorkspace'),'no'), resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), parameters('LogAnalyticsWorkspaceResourceId'))]"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+            "apiVersion": "2023-01-31",
+            "name": "[format('uami-{0}', variables('FunctionAppName'))]",
+            "location": "[variables('location')]"
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2023-05-01",
+            "name": "[variables('StorageAccountName')]",
+            "location": "[variables('location')]",
+            "kind": "StorageV2",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "properties": {
+                "allowBlobPublicAccess": false,
+                "publicNetworkAccess": "Enabled",
+                "minimumTlsVersion": "TLS1_2",
+                "networkAcls": {
+                    "defaultAction": "Allow",
+                    "bypass": "AzureServices"
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]"
+            ]
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2023-07-01",
+            "name": "[variables('KeyVaultName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "premium"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [
+                    {
+                        "objectId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2023-01-31').principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "get",
+                                "set",
+                                "list",
+                                "delete"
+                            ]
+                        },
+                        "tenantId": "[subscription().tenantId]"
+                    }
+                ],
+                "publicNetworkAccess": "Enabled",
+                "networkAcls": {
+                    "defaultAction": "Allow",
+                    "bypass": "AzureServices"
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
+            ]
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
+            "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), variables('roleIdStorageBlobDataOwner'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))))]",
+            "properties": {
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2023-01-31').principalId]",
+                "roleDefinitionId": "[variables('roleIdStorageBlobDataOwner')]",
+                "principalType": "ServicePrincipal"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
+            ]
+        },
+        {
+            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, variables('FunctionAppName'), 'Reader', deployment().name)]",
+            "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2018-11-30').principalId]",
+                "principalType": "ServicePrincipal",
+                "scope": "[resourceGroup().id]"
+            }
+        },
+        {
+            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
+            "type": "Microsoft.Resources/deploymentScripts",
+            "apiVersion": "2020-10-01",
+            "name": "waitForWorkspaceActive",
+            "location": "[resourceGroup().location]",
+            "kind": "AzurePowerShell",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'provisionWorkspace')]",
+                "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, variables('FunctionAppName'), 'Reader', deployment().name))]"
+            ],
+            "identity": {
+                "type": "userAssigned",
+                "userAssignedIdentities": {
+                    "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]": {}
+                }
+            },
+            "properties": {
+                "azPowerShellVersion": "9.0",
+                "timeout": "PT10M",
+                "retentionInterval": "P1D",
+                "scriptContent": "param([string]$workspaceId, [string]$rgName, [string]$wsName)\nWrite-Output ('Waiting for workspace ' + $workspaceId + ' to become active...')\n$end = (Get-Date).AddMinutes(8)\ndo {\n    try {\n        $ws = Get-AzOperationalInsightsWorkspace -ResourceGroupName $rgName -Name $wsName -ErrorAction Stop\n        if ($ws.ProvisioningState -eq 'Succeeded') {\n            Write-Output 'Workspace is active.'\n            exit 0\n        } else {\n            Write-Output ('Provisioning state: ' + $($ws.ProvisioningState) + '. Retrying...')\n        }\n    } catch {\n        Write-Output 'Workspace not found yet. Retrying...'\n    }\n    Start-Sleep -Seconds 15\n} while ((Get-Date) -lt $end)\nthrow 'Timeout waiting for workspace to become active'",
+                "arguments": "[format('-workspaceId \"{0}\" -rgName \"{1}\" -wsName \"{2}\"', reference('provisionWorkspace').outputs.workspaceResourceId.value, reference('provisionWorkspace').outputs.workspaceResourceGroup.value, reference('provisionWorkspace').outputs.workspaceName.value)]"
+            }
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "createCustomTables",
+            "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]",
+                "[resourceId('Microsoft.Resources/deploymentScripts', 'waitForWorkspaceActive')]"
+            ],
+            "properties": {
+                "expressionEvaluationOptions": {
+                    "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                    "LogAnalyticsWorkspaceLocation": {
+                        "value": "[variables('location')]"
+                    },
+                    "LogAnalyticsWorkspaceResourceId": {
+                        "value": "[reference(resourceId('Microsoft.Resources/deployments', 'provisionWorkspace'), '2022-09-01').outputs.workspaceResourceId.value]"
+                    },
+                    "DataCollectionEndpointName": {
+                        "value": "[variables('DataCollectionEndpointName')]"
+                    },
+                    "DataCollectionRuleName": {
+                        "value": "[variables('DataCollectionRuleName')]"
+                    },
+                    "ServicePrincipalId": {
+                        "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2023-01-31').principalId]"
+                    }
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "DataCollectionEndpointName": {
+                            "type": "string",
+                            "defaultValue": "[format('dce-{0}', uniqueString(resourceGroup().id))]",
+                            "metadata": {
+                                "description": "Name for Data Collection Endpoint used to ingest data into Log Analytics workspace."
+                            }
+                        },
+                        "DataCollectionRuleName": {
+                            "type": "string",
+                            "defaultValue": "[format('dcr-{0}', uniqueString(resourceGroup().id))]",
+                            "metadata": {
+                                "description": "Name for Data Collection Rule used to ingest data into Log Analytics workspace."
+                            }
+                        },
+                        "LogAnalyticsWorkspaceResourceId": {
+                            "type": "string",
+                            "metadata": {
+                                "description": "Azure Resource Id of the Log Analytics Workspace where you like the data and optional Function App Application Insights data to reside. The format is: \"/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx\""
+                            }
+                        },
+                        "LogAnalyticsWorkspaceLocation": {
+                            "type": "string",
+                            "metadata": {
+                                "description": "Azure location/region of the Log Analytics Workspace referenced in the LogAnalyticsWorkspaceResourceId parameter."
+                            }
+                        },
+                        "ServicePrincipalId": {
+                            "type": "string",
+                            "defaultValue": "",
+                            "metadata": {
+                                "description": "Optional: Managed Identity or Service Principal ID to be assigned the Metrics Publisher role on the data collection rule."
+                            }
+                        }
+                        },
+                    "variables": {
+                        "roleIdMonitoringMetricsPublisher": "/providers/Microsoft.Authorization/roleDefinitions/3913510d-42f4-4e42-8a64-420c390055eb"
+                    },
+                    "resources": [
+                        {
+                            "type": "Microsoft.Resources/deployments",
+                            "apiVersion": "2022-09-01",
+                            "name": "tableMDBALog",
+                            "subscriptionId": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[2]]",
+                            "resourceGroup": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[4]]",
+                            "properties": {
+                                "expressionEvaluationOptions": {
+                                    "scope": "inner"
+                                },
+                                "mode": "Incremental",
+                                "parameters": {
+                                    "LawName": {
+                                        "value": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[8]]"
+                                    },
+                                    "TableName": {
+                                        "value": "MDBALogTable_CL"
+                                    },
+                                    "Plan": {
+                                        "value": "Analytics"
+                                    },
+                                    "Columns": {
+                                        "value": [
+                                            {
+                                                "name": "TimeGenerated",
+                                                "type": "datetime",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "The time at which the data was generated."
+                                            },
+                                            {
+                                                "name": "severity",
+                                                "type": "string",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "MongoDB log severity."
+                                            },
+                                            {
+                                                "name": "category",
+                                                "type": "string",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "MongoDB log entry category."
+                                            },
+                                            {
+                                                "name": "id",
+                                                "type": "int",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "MongoDB log id."
+                                            },
+                                            {
+                                                "name": "ctx",
+                                                "type": "string",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "MongoDB log context."
+                                            },
+                                            {
+                                                "name": "msg",
+                                                "type": "string",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "MongoDB log message."
+                                            },
+                                            {
+                                                "name": "attr",
+                                                "type": "dynamic",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "MongoDB log attributes. Structure may vary."
+                                            }
+                                        ]
+                                    }
+                                },
+                                "template": {
+                                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                                    "contentVersion": "1.0.0.0",
+                                    "parameters": {
+                                        "LawName": {
+                                        "type": "string"
+                                        },
+                                        "TableName": {
+                                        "type": "string"
+                                        },
+                                        "Plan": {
+                                        "type": "string"
+                                        },
+                                        "Columns": {
+                                        "type": "array"
+                                        },
+                                        "Retention": {
+                                        "type": "int",
+                                        "defaultValue": -1
+                                        }
+                                    },
+                                    "resources": [
+                                        {
+                                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                                            "apiVersion": "2023-09-01",
+                                            "name": "[format('{0}/{1}', parameters('LawName'), parameters('TableName'))]",
+                                            "properties": {
+                                                "schema": {
+                                                    "name": "[parameters('TableName')]",
+                                                    "tableSubType": "DataCollectionRuleBased",
+                                                    "tableType": "CustomLog",
+                                                    "columns": "[parameters('Columns')]"
+                                                },
+                                                "plan": "[parameters('Plan')]",
+                                                "retentionInDays": "[if(not(equals(parameters('Retention'), -1)), parameters('Retention'), null())]"
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Insights/dataCollectionEndpoints",
+                            "apiVersion": "2023-03-11",
+                            "name": "[parameters('DataCollectionEndpointName')]",
+                            "location": "[parameters('LogAnalyticsWorkspaceLocation')]",
+                            "properties": {}
+                        },
+                        {
+                            "condition": "[not(equals(parameters('ServicePrincipalId'), ''))]",
+                            "type": "Microsoft.Authorization/roleAssignments",
+                            "apiVersion": "2022-04-01",
+                            "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', parameters('DataCollectionRuleName'))]",
+                            "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName')), variables('roleIdMonitoringMetricsPublisher'), parameters('ServicePrincipalId'))]",
+                            "properties": {
+                                "roleDefinitionId": "[variables('roleIdMonitoringMetricsPublisher')]",
+                                "principalId": "[parameters('ServicePrincipalId')]",
+                                "principalType": "ServicePrincipal"
+                            },
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]"
+                            ]
+                        },
+                        {
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "apiVersion": "2023-03-11",
+                            "name": "[parameters('DataCollectionRuleName')]",
+                            "location": "[parameters('LogAnalyticsWorkspaceLocation')]",
+                            "properties": {
+                                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
+                                "streamDeclarations": {
+                                    "Custom-MDBALogTable_CL": {
+                                        "columns": [
+                                            {
+                                                "name": "TimeGenerated",
+                                                "type": "datetime"
+                                            },
+                                            {
+                                                "name": "severity",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "category",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "id",
+                                                "type": "int"
+                                            },
+                                            {
+                                                "name": "ctx",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "msg",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "attr",
+                                                "type": "dynamic"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                        "name": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[8]]",
+                                        "workspaceResourceId": "[parameters('LogAnalyticsWorkspaceResourceId')]"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": [
+                                            "Custom-MDBALogTable_CL"
+                                        ],
+                                        "destinations": [
+                                            "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[8]]"
+                                        ],
+                                        "transformKql": "source",
+                                        "outputStream": "Custom-MDBALogTable_CL"
+                                    }
+                                ]
+                            },
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
+                                "[resourceId('Microsoft.Resources/deployments', 'tableMDBALog')]"
+                            ]
+                        }
+                    ],
+                    "outputs": {
+                        "DcrImmutableId": {
+                        "type": "string",
+                        "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName')), '2023-03-11').immutableId]"
+                        },
+                        "DceUri": {
+                        "type": "string",
+                        "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName')), '2023-03-11').logsIngestion.endpoint]"
+                        },
+                        "DcrName": {
+                        "type": "string",
+                        "value": "[parameters('DataCollectionRuleName')]"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2024-04-01",
+            "name": "[variables('FunctionAppName')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "EP1"
+            },
+            "kind": "linux",
+            "properties": {
+                "reserved": true
+            }
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[format('appInsights-{0}', variables('FunctionAppName'))]",
+            "location": "[variables('location')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "Request_Source": "rest",
+                "WorkspaceResourceId": "[reference(resourceId('Microsoft.Resources/deployments', 'provisionWorkspace'), '2022-09-01').outputs.workspaceResourceId.value]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'provisionWorkspace')]"
+            ]
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2023-01-01",
+            "name": "[variables('FunctionAppStorageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2",
+            "properties": {}
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2024-04-01",
+            "name": "[variables('FunctionAppName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('FunctionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionAppStorageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', format('appInsights-{0}', variables('FunctionAppName')))]",
+                "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]"
+            ],
+            "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                    "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]": {}
+                }
+            },
+            "kind": "functionapp,linux",
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionAppName'))]",
+                "httpsOnly": true,
+                "functionsExtensionVersion": "~4",
+                "siteConfig": {
+                    "linuxFxVersion": "PYTHON|3.11",
+                    "appSettings": [
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY", 
+                            "value": "[reference(resourceId('Microsoft.Insights/components', format('appInsights-{0}', variables('FunctionAppName'))), '2020-02-02').InstrumentationKey]"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING", 
+                            "value": "[reference(resourceId('Microsoft.Insights/components', format('appInsights-{0}', variables('FunctionAppName'))), '2020-02-02').ConnectionString]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage", 
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionAppStorageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionAppStorageAccountName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
+                        },
+                        {
+                            "name": "AZURE_MAIN_STORAGE", 
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('StorageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('StorageAccountName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
+                        },
+                        {
+                            "name": "DCE_ENDPOINT", 
+                            "value": "[reference('createCustomTables').outputs.DceUri.value]"
+                        },
+                        {
+                            "name": "AZURE_MAX_UPLOAD_THREADS", 
+                            "value": "8"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION", 
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME", 
+                            "value": "python"
+                        },
+                        {
+                            "name": "DCR_IMMUTABLEID",
+                            "value": "[reference('createCustomTables').outputs.DcrImmutableId.value]"
+                        },
+                        {
+                            "name": "STREAM_NAME",
+                            "value": "Custom-MDBALogTable_CL"
+                        },
+                        {
+                            "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+                            "value": "true"
+                        },
+                        {
+                            "name": "ENABLE_ORYX_BUILD",
+                            "value": "true"
+                        },
+                        {
+                            "name": "Schedule",
+                            "value": "[parameters('ConnectorSchedule')]"
+                        },
+                        {
+                            "name": "AZURE_TENANT_ID", 
+                            "value": "[subscription().tenantId]"
+                        },
+                        {
+                            "name": "AZURE_CLIENT_ID",
+                            "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2023-01-31').clientId]"
+                        },
+                        {
+                            "name": "MDBA_CLIENT_ID",
+                            "value": "[parameters('MongoDbClientId')]"
+                        },
+                        {
+                            "name": "MDBA_CLIENT_SECRET",
+                            "value": "[parameters('MongoDbClientSecret')]"
+                        },
+                        {
+                            "name": "MDBA_GROUP_ID",
+                            "value": "[parameters('MongoDbGroupId')]"
+                        },
+                        {
+                            "name": "MDBA_CLUSTER_ID",
+                            "value": "[parameters('MongoDbClusterId')]"
+
+                        },
+                        {
+                            "name": "MDBA_ACCESS_LOGS_FILTER_TYPE",
+                            "value": "[parameters('accessLogsFilterType')]"
+
+                        },
+                        {
+                            "name": "MDBA_ACCESS_LIST",
+                            "value": "[parameters('accessIdFilterList')]"
+
+                        },
+                        {
+                            "name": "MDBA_NETWORK_LOGS_FILTER_TYPE",
+                            "value": "[parameters('networkLogsFilterType')]"
+
+                        },
+                        {
+                            "name": "MDBA_NETWORK_LIST",
+                            "value": "[parameters('networkIdFilterList')]"
+
+                        },
+                        {
+                            "name": "MDBA_QUERY_LOGS_FILTER_TYPE",
+                            "value": "[parameters('queryLogsFilterType')]"
+
+                        },
+                        {
+                            "name": "MDBA_QUERY_LIST",
+                            "value": "[parameters('queryIdFilterList')]"
+
+                        }
+                    ],
+                    "minTlsVersion": "1.2",
+                    "ftpsState": "Disabled",
+                    "http20Enabled": true,
+                    "alwaysOn": true,
+                    "publicNetworkAccess": "Enabled",
+                    "cors": {
+                        "allowedOrigins": [
+                        "https://portal.azure.com"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "type": "Microsoft.Web/sites/extensions",
+            "apiVersion": "2021-02-01",
+            "name": "[format('{0}/zipdeploy', variables('FunctionAppName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('FunctionAppName'))]"
+            ],
+            "properties": {
+                "packageUri": "[parameters('packageUri')]"
+            }
+        }
+ 
+    ],
+    "outputs": {
+        "functionAppName": {
+            "type": "string",
+            "value": "[variables('FunctionAppName')]"
+        },
+        "functionAppId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Web/sites', variables('FunctionAppName'))]"
+        }
+    }
+}
