@@ -250,6 +250,9 @@ class MongoDbConnection:
         self.malformed_entries = 0
         self.total_size_downloaded = 0
         self.azure_sentinel_stats = {}
+        self.access_ids_to_filter = None
+        self.network_ids_to_filter = None
+        self.query_ids_to_filter = None
 
         self.mdba_access_logs_filter_type = config.get(
             "mdba_access_logs_filter_type")
@@ -388,7 +391,7 @@ class MongoDbConnection:
         filter_rules = {
             "ACCESS": (self.mdba_access_logs_filter_type, self.access_ids_to_filter),
             "NETWORK": (self.mdba_network_logs_filter_type, self.network_ids_to_filter),
-            "QUERY": (self.mdba_query_logs_filter_type, self.query_ids_to_filter),
+            "QUERY": (self.mdba_query_logs_filter_type, self.query_ids_to_filter)
         }
 
         # Apply filtering if category matches a rule
