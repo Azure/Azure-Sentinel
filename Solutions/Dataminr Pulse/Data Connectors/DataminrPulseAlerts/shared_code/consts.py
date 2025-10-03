@@ -10,10 +10,10 @@ ENDPOINTS = {
 }
 LOGS_STARTS_WITH = "DataminrPulseAlerts:"
 ALERTS_TABLE_NAME = os.environ.get("AlertsTableName", "DataminrPulse_Alerts")
-RELATEDALERTS_TABLE_NAME = "{}_relatedAlerts"
-VULNERABILITY_PRODUCTS_TABLE_NAME = "{}_vulnerabilities_products"
+RELATEDALERTS_TABLE_NAME = "{}_relAlerts"
+VULNERABILITY_PRODUCTS_TABLE_NAME = "{}_vuln_prod"
 VULNERABILITY_PRODUCTS_RELATEDALERTS_TABLE_NAME = (
-    "{}_vulnerabilities_products_relatedAlerts"
+    "{}_vuln_prod_relAlert"
 )
 DEFAULT_LOG_LEVEL = "INFO"
 LOG_LEVEL = os.environ.get("LogLevel", "")
@@ -21,6 +21,9 @@ DATAMINR_PULSE_THREAT_INTELLIGENCE = "Dataminr Pulse ThreatIntelligence"
 AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
 AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
 AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
+SCOPE = os.environ["SCOPE"]
+AZURE_DATA_COLLECTION_ENDPOINT = os.environ["AZURE_DATA_COLLECTION_ENDPOINT"]
+DCR_RULE_ID = os.environ["AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES"]
 CREATE_SENTINEL_INDICATORS_URL = (
     "https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups"
     "/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}"
