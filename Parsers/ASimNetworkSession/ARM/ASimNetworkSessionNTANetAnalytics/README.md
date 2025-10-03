@@ -1,8 +1,9 @@
-# NTANetAnalytics ASIM NetworkSession Normalization Parser
+# Azure NTANetAnalytics ASIM NetworkSession Normalization Parser
 
-ARM template for ASIM NetworkSession schema parser for the table NTANetAnalytics.
+ARM template for ASIM NetworkSession schema parser for Azure NTANetAnalytics.
 
-This ASIM parser supports filters and normalizing the Traffic Analytics records for Flowlog enriched data to the ASIM NetworkSession normalized schema.
+This ASIM parser supports normalizing the Traffic Analytics records for Flowlog enriched data to the ASIM NetworkSession normalized schema.
+
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 

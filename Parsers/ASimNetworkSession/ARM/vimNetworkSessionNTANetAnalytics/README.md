@@ -1,6 +1,6 @@
 # Azure NTANetAnalytics ASIM NetworkSession Normalization Parser
 
-ARM template for ASIM NetworkSession schema parser for the NTANetAnalytics table.
+ARM template for ASIM NetworkSession schema parser for Azure NTANetAnalytics.
 
 This ASIM parser supports filters and normalizing the Traffic Analytics records for Flowlog enriched data to the ASIM NetworkSession normalized schema.
 
