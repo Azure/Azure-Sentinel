@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using VoneApiClient.Configuration;
+using VoneApiClient.Constants;
 using VoneApiClient.Exceptions;
 using VoneApiClient.Models;
 
@@ -19,11 +20,48 @@ namespace VoneApiClient
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<List<TriggeredAlarm>> GetTriggeredAlarmsAsync(int offset = 0, int limit = 100)
+        public async Task<List<TriggeredAlarm>> GetTriggeredAlarmsAsync(TriggeredAlarmFilter alarmsFilter)
         {
-            _logger.LogInformation($"Getting triggered alarms with Offset={offset}, Limit={limit}");
+            _logger.LogInformation($"Getting triggered alarms with Offset={alarmsFilter.Offset}, Limit={alarmsFilter.Limit}");
 
-            var url = $"/api/v2.2/alarms/triggeredAlarms?Offset={offset}&Limit={limit}";
+            var detectedAfter = alarmsFilter.DetectedAfterTimeUtcFilter.ToUniversalTime();
+            
+            // Always include predefinedAlarmId filter
+            var filterItems = new List<object>
+            {
+                new
+                {
+                    property = "predefinedAlarmId",
+                    operation = "in",
+                    value = alarmsFilter.PredefinedAlarmIdsFilter
+                }
+            };
+
+            // Only add triggeredTime filter if detectedAfter is not MinValue
+            if (alarmsFilter.DetectedAfterTimeUtcFilter != DateTime.MinValue)
+            {
+                filterItems.Add(new
+                {
+                    property = "triggeredTime",
+                    operation = "greaterThan",
+                    value = detectedAfter.ToString(ApiConstants.DateTimeFormat)
+                });
+            }
+
+            var combinedFilter = new
+            {
+                operation = "and",
+                items = filterItems.ToArray()
+            };
+
+            _logger.LogInformation($"Combined filter: {JsonSerializer.Serialize(combinedFilter)}");
+            
+            var filterJson = JsonSerializer.Serialize(combinedFilter);
+            var encodedFilter = Uri.EscapeDataString(filterJson);
+
+            var url = $"/api/v2.2/alarms/triggeredAlarms?Offset={alarmsFilter.Offset}&Limit={alarmsFilter.Limit}&Filter={encodedFilter}";
+
+            _logger.LogInformation($"Triggered alarms request URL (relative): {url}");
 
             //_configuration.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "_configuration.AccessToken");
 

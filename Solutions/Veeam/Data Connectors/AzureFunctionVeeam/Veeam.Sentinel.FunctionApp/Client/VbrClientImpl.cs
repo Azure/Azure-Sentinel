@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Sentinel.Constants;
 using Sentinel.Managers;
 using Veeam.AC.VBR.ApiClient.Api.v1_2_rev1;
 using Veeam.AC.VBR.ApiClient.Api.v1_2_rev1.Models;
@@ -41,7 +42,9 @@ namespace Sentinel.Client
         public async Task<SuspiciousActivityEventsResult> GetAllMalwareEventsAsync(SuspiciousActivityEventsFilters suspiciousActivityEventsFilters)
         {
             _logger.LogInformation($"{nameof(GetAllMalwareEventsAsync)} called for \"{_vbrId}\" with request {suspiciousActivityEventsFilters.ToJson()}");
+            _apiConfig.DateTimeFormat = LogAnalyticsConstants.TimeFormatMalwareEvents;
             var response = await SendAsync((_) => _malwareDetectionApi.ViewSuspiciousActivityEventsAsync(suspiciousActivityEventsFilters), default);
+            _apiConfig.DateTimeFormat = LogAnalyticsConstants.DefaultTimeFormat;
             _logger.LogInformation($"{nameof(GetAllMalwareEventsAsync)} response fetched {response.Data.Count} events for \"{_vbrId}\"");
             return response;
         }

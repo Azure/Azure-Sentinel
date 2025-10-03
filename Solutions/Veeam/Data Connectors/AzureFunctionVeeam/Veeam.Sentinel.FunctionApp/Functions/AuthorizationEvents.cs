@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Sentinel.Constants;
 using Sentinel.DTOs;
 using Sentinel.Extensions;
 using Sentinel.Helpers;
@@ -42,15 +43,40 @@ public class AuthorizationEvents
                 var filter = new AuthorizationEventsFilters();
                 var latestDataTime = await _logAnalyticsManager.GetLatestDateTimeIngested(vbrHostName, IngestedStreamType.AuthorizationEvents);
 
+                _logger.LogInformation($"Latest ingested Authorization event time for host {vbrHostName} is {latestDataTime.ToString(LogAnalyticsConstants.DefaultTimeFormat)}");
+                
                 filter.CreatedAfterFilter = latestDataTime;
 
-                var resp = await client.GetAllAuthorizationEventsAsync(filter);
+                var totalCount = 0;
+                filter.Limit = VbrRestApiConstants.DefaultPageSize;
+                
+                var allEvents = new List<AuthorizationEventsDTO?>();
+                
+                for (var pageIndex = 0;; pageIndex++)
+                {
+                    filter.Skip = pageIndex * filter.Limit.Value;
 
-                var dtos = resp.Data.Select(me => me.ToDTO(vbrHostName)).ToList();
+                    var eventsPage = await client.GetAllAuthorizationEventsAsync(filter);
 
-                await _logAnalyticsManager.SaveAuthorizationEventsToCustomTableAsync(dtos, vbrHostName);
+                    if (eventsPage.Data.Count == 0)
+                        break;
 
-                return dtos;
+                    var dtos = eventsPage.Data.Select(me => me.ToDTO(vbrHostName)).ToList();
+
+                    totalCount += dtos.Count;
+
+                    _logger.LogInformation($"Adding page {pageIndex + 1} with {dtos.Count} Authorization events to the list of all events for host {vbrHostName}");
+
+                    allEvents.AddRange(dtos);
+
+                    // If returned less than page size we reached the end
+                    if (eventsPage.Data.Count < filter.Limit)
+                        break;
+                }
+                
+                await _logAnalyticsManager.SaveAuthorizationEventsToCustomTableAsync(allEvents, vbrHostName);
+                
+                return $"Ingested total {totalCount} Authorization events for host {vbrHostName}";
             },
 
             resp => Task.FromResult<IActionResult>(new OkObjectResult(resp))

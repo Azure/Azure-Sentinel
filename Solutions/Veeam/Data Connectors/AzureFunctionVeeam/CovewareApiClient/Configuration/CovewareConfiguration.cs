@@ -10,16 +10,13 @@
 
         public string EarliestEventTime { get; set; }
 
-        public string MaxRiskLevel { get; set; }
-
         public CovewareConfiguration()
         {
         }
 
         public CovewareConfiguration(string authBasePath, string eventsBasePath,
-            string earliestEventTime, string maxRiskLevel)
+            string earliestEventTime)
         {
-            MaxRiskLevel = maxRiskLevel;
             EarliestEventTime = earliestEventTime;
             AuthBasePath = authBasePath;
             DataBasePath = eventsBasePath;

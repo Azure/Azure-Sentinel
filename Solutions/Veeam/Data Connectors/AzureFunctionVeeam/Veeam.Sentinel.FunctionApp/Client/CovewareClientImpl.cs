@@ -9,17 +9,17 @@ public class CovewareClientImpl: AuthenticatedCovewareClientHandler, ICovewareCl
 {
     private readonly ICovewareFindingsApi _covewareFindingsApi;
     
-    public CovewareClientImpl(string covewareId, ISecretsManager secretsManager,
-        ILogger<AuthenticatedCovewareClientHandler> logger) : base(covewareId, secretsManager, logger)
+    public CovewareClientImpl(string baseUrl, string covewareId, ISecretsManager secretsManager,
+        ILogger<AuthenticatedCovewareClientHandler> logger) : base(baseUrl, covewareId, secretsManager, logger)
     {
         _covewareFindingsApi = new CovewareFindingsApi(_apiConfig, logger);
     }
 
-    public async Task<CovewareFindingsResponse> GetCovewareFindingsAsync()
+    public async Task<CovewareFindingsResponse> GetCovewareFindingsAsync(CovewareFindingFilter filter)
     {
         _logger.LogInformation($"{nameof(GetCovewareFindingsAsync)} called");
 
-        var response = await SendAsync(async (cancellationToken) => await _covewareFindingsApi.GetFindingsAsync(), default);
+        var response = await SendAsync(async (cancellationToken) => await _covewareFindingsApi.GetFindingsAsync(filter), default);
         _logger.LogInformation($"{nameof(GetCovewareFindingsAsync)} response fetched {response.Data.Count} events");
         return response;
     }

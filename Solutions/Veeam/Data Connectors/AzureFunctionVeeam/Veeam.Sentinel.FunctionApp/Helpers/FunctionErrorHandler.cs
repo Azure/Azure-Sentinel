@@ -28,7 +28,7 @@ namespace Sentinel.Helpers
                 if (ex.ErrorCode == (int)HttpStatusCode.Unauthorized)
                     return new BadRequestObjectResult($"Invalid username or password for {vbrHostName}, check settings.");
 
-                logger.LogError(ex, $"Error in {functionName} for \"{vbrHostName}\". Details: {ex.Message}");
+                logger.LogError(ex, $"Error {ex.ErrorCode} in {functionName} for \"{vbrHostName}\". Details: {ex.Message} - {ex.ErrorContent} - {ex.StackTrace} ");
 
                 return new ObjectResult("An unexpected error occurred. See server logs for details.") { StatusCode = StatusCodes.Status500InternalServerError };
             }

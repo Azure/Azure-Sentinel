@@ -172,5 +172,11 @@ namespace Sentinel.Managers
             _logger.LogInformation($"Calling {nameof(GetCovewareClientIdAliasAsync)} for \"{cowareId}\"");
             return GetColumnFromWatchlist(_cowareWatchlistAlias, cowareId, CovewareWatchlistConstants.CovewareClientIdAlias);
         }
+
+        public Task<string> GetCovewareBaseUrlAsync(string cowareId)
+        {
+            _logger.LogInformation($"Calling {nameof(GetCovewareBaseUrlAsync)} for \"{cowareId}\"");
+            return GetColumnFromWatchlist(_cowareWatchlistAlias, cowareId, CovewareWatchlistConstants.CovewareBaseUrlAlias);
+        }
     }
 }

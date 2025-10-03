@@ -36,6 +36,9 @@ namespace Sentinel.Managers
         private readonly string _dcrSessionDataEndpoint;
         private readonly string _sessionDataStreamName;
 
+        private readonly string _veeamEarliestEventTime;
+        private readonly string _covewareEarliestEventTime;
+
         private readonly string _workspaceId;
         private readonly ILogger<LogAnalyticsManagerImpl> _logger;
 
@@ -66,25 +69,25 @@ namespace Sentinel.Managers
             _dcrSessionDataEndpoint = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.DcrSessionDataIdLabel) ?? throw new ArgumentNullException(nameof(_dcrSessionDataEndpoint), $"Calling {EnvironmentVariablesConstants.DcrSessionDataIdLabel} not found");
             _sessionDataStreamName = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.SessionDataStreamNameLabel) ?? throw new ArgumentNullException(nameof(_sessionDataStreamName), $"Calling {EnvironmentVariablesConstants.SessionDataStreamNameLabel} not found");
 
-
             _workspaceId = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.WorkspaceIdLabel) ?? throw new ArgumentNullException(nameof(_workspaceId), $"Calling {EnvironmentVariablesConstants.WorkspaceIdLabel} not found");
+
+            _veeamEarliestEventTime = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.VeeamEarliestEventLabel) ?? throw new ArgumentNullException(nameof(_veeamEarliestEventTime), $"Calling {EnvironmentVariablesConstants.VeeamEarliestEventLabel} not found");
+            _covewareEarliestEventTime = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.CovewareEarliestEventTimeLabel) ?? throw new ArgumentNullException(nameof(_covewareEarliestEventTime), $"Calling {EnvironmentVariablesConstants.CovewareEarliestEventTimeLabel} not found");
 
             _logger = logger;
         }
 
-        public async Task SaveMalwareEventsToCustomTableAsync(SuspiciousActivityEventsResult malwareEvents, string vbrHostName)
+        public async Task SaveMalwareEventsToCustomTableAsync(List<MalwareEventsDTO> malwareEventsDtos, string vbrHostName)
         {
             _logger.LogInformation($"Calling {nameof(SaveMalwareEventsToCustomTableAsync)}");
 
             var credential = new DefaultAzureCredential();
             var ingestionClient = new LogsIngestionClient(new Uri(_dceMalwareEventsEndpoint), credential);
 
-            var dtos = malwareEvents.Data.Select(me => me.ToDTO(vbrHostName)).Where(me => me != null).ToList();
-
-            if (dtos.Count > 0)
+            if (malwareEventsDtos.Count > 0)
             {
-                _logger.LogInformation($"{dtos.Count} malware events detected on {vbrHostName}, ingesting them all to {_malwareEventsStreamName} using {_dcrMalwareEventsImmutableId}");
-                await ingestionClient.UploadAsync(_dcrMalwareEventsImmutableId, _malwareEventsStreamName, dtos);
+                _logger.LogInformation($"{malwareEventsDtos.Count} malware events detected on {vbrHostName}, ingesting them all to {_malwareEventsStreamName} using {_dcrMalwareEventsImmutableId}");
+                await ingestionClient.UploadAsync(_dcrMalwareEventsImmutableId, _malwareEventsStreamName, malwareEventsDtos);
             }
             else
                 _logger.LogInformation($"No malware events for {vbrHostName} will be ingested, because they are already present in the {_malwareEventsStreamName} table.");
@@ -118,7 +121,7 @@ namespace Sentinel.Managers
             var hostName = ingestedStreamType switch
             {
                 IngestedStreamType.TriggeredAlarms => "VoneHostName",
-                IngestedStreamType.CowareFindings => "CovewareHostName",
+                IngestedStreamType.CovewareFindings => "CovewareHostName",
                 _ => "VbrHostName"
             };
 
@@ -133,14 +136,20 @@ namespace Sentinel.Managers
             var result = await client.QueryWorkspaceAsync(_workspaceId, kustoQuery, LogAnalyticsConstants.DefaultQueryTimeSpan);
 
             _logger.LogInformation($"Executing kusto query: {kustoQuery}");
-            _logger.LogInformation($"Kusto query result: {result.Value.Table.Rows}");
 
             var table = result.Value.Table;
 
             if (table.Rows.Count == 0 || table.Rows[0].Count == 0 || table.Rows[0][0] is not object cell)
             {
                 _logger.LogInformation($"No {ingestedStreamType} found for {vbrHostName}");
-                return DateTime.MinValue;
+
+                var earliestEvent =
+                    ingestedStreamType switch
+                    {
+                        IngestedStreamType.CovewareFindings => DateTime.Parse(_covewareEarliestEventTime),
+                        _ => DateTime.Parse(_veeamEarliestEventTime)
+                    };
+                return earliestEvent;
             }
 
             var dateString = cell.ToString();
@@ -148,7 +157,13 @@ namespace Sentinel.Managers
             if (string.IsNullOrEmpty(dateString))
             {
                 _logger.LogInformation($"No {ingestedStreamType} found for {vbrHostName} withing the Log Analytic Workspace");
-                return DateTime.MinValue;
+                var earliestEvent =
+                    ingestedStreamType switch
+                    {
+                        IngestedStreamType.CovewareFindings => DateTime.Parse(_covewareEarliestEventTime),
+                        _ => DateTime.Parse(_veeamEarliestEventTime)
+                    };
+                return earliestEvent;
             }
 
             _logger.LogInformation($"Last {ingestedStreamType} time for {vbrHostName} = '{dateString}'");
@@ -216,7 +231,7 @@ namespace Sentinel.Managers
                 IngestedStreamType.BestPracticeAnalysis => new QueryInfo { TableName = GetTableName(_bestPracticeAnalysisStreamName), TimeColumn = QueryConstants.EndTime },
                 IngestedStreamType.AuthorizationEvents => new QueryInfo { TableName = GetTableName(_authorizationEventsStreamName), TimeColumn = QueryConstants.CreationTime },
                 IngestedStreamType.TriggeredAlarms => new QueryInfo { TableName = GetTableName(_triggeredAlarmStreamName), TimeColumn = QueryConstants.TriggeredTime },
-                IngestedStreamType.CowareFindings => new QueryInfo { TableName = GetTableName(_cowareFindingsStreamName), TimeColumn = QueryConstants.EventTime },
+                IngestedStreamType.CovewareFindings => new QueryInfo { TableName = GetTableName(_cowareFindingsStreamName), TimeColumn = QueryConstants.EventTime },
                 _ => throw new NotImplementedException($"Unsupported stream type: {ingestedStreamType}")
             };
         }
@@ -281,18 +296,18 @@ namespace Sentinel.Managers
 
         public async Task SaveTriggeredAlarmsToCustomTableAsync(List<TriggeredAlarmDTO> dtos, string voneHostName)
         {
-            _logger.LogInformation($"Calling {nameof(SaveAuthorizationEventsToCustomTableAsync)}");
+            _logger.LogInformation($"Calling {nameof(SaveTriggeredAlarmsToCustomTableAsync)}");
 
             var credential = new DefaultAzureCredential();
             var ingestionClient = new LogsIngestionClient(new Uri(_dceTriggeredAlarmEndpoint), credential);
 
             if (dtos.Count > 0)
             {
-                _logger.LogInformation($"{dtos.Count} authorization events detected on {voneHostName}, ingesting them all to {_triggeredAlarmStreamName} using {_dcrTriggeredAlarmImmutableId}");
+                _logger.LogInformation($"{dtos.Count} alarms detected on {voneHostName}, ingesting them all to {_triggeredAlarmStreamName} using {_dcrTriggeredAlarmImmutableId}");
                 await ingestionClient.UploadAsync(_dcrTriggeredAlarmImmutableId, _triggeredAlarmStreamName, dtos);
             }
             else
-                _logger.LogInformation($"No authorization events for {voneHostName} will be ingested, because they are already present in the {_triggeredAlarmStreamName} table.");
+                _logger.LogInformation($"No alarms for {voneHostName} will be ingested, because they are already present in the {_triggeredAlarmStreamName} table.");
         }
     }
 }
