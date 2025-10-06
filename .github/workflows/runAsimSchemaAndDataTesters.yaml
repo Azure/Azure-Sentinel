@@ -61,7 +61,7 @@ jobs:
           ref: master
           repository: Azure/Azure-Sentinel
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
           sparse-checkout: |
             Parsers/
             .script/tests/asimParsersTest/
@@ -73,7 +73,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
           sparse-checkout: |
             Parsers/
             .script/tests/asimParsersTest/
@@ -82,18 +82,21 @@ jobs:
         run: |
           cd pr-code
           git remote add upstream https://github.com/Azure/Azure-Sentinel.git
-          # Use partial fetch for master to save bandwidth
-          git fetch upstream master --depth=1
+          # Fetch with enough depth to establish relationship
+          git fetch upstream master --depth=50
           set +e
-          git merge --no-commit --no-ff upstream/master
+          # Try merge with allow-unrelated-histories in case of shallow repo issues
+          git merge --no-commit --no-ff --allow-unrelated-histories upstream/master
           status=$?
           Conflicts=$(git ls-files -u | wc -l)
           if [ "$Conflicts" -gt 0 ] || [ $status -ne 0 ]; then
             echo "Merge conflict detected between PR and current master. Failing early." >&2
-            git merge --abort || true
+            echo "Exit status: $status, Conflicts: $Conflicts"
+            git merge --abort 2>/dev/null || true
             exit 1
           fi
-          git merge --abort || true
+          git merge --abort 2>/dev/null || true
+          echo "✅ Merge validation passed - no conflicts detected"
       - name: Copy parser assets (sanitized)
         run: |
           mkdir -p sanitized
