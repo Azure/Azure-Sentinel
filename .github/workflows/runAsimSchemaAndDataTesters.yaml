@@ -77,15 +77,32 @@ jobs:
         run: |
           cd pr-code
           set +e
-          git merge --no-commit --no-ff upstream/master
+          echo "Attempting dry merge with shallow upstream/master" >&2
+          git merge --no-commit --no-ff upstream/master 2>merge.err
           status=$?
+          if grep -qi 'refusing to merge unrelated histories' merge.err; then
+            echo "Shallow fetch insufficient (unrelated histories warning). Deepening fetch for proper merge base..." >&2
+            git merge --abort 2>/dev/null || true
+            git fetch --deepen=200 upstream master || git fetch --unshallow upstream master || true
+            git merge --no-commit --no-ff upstream/master 2>merge2.err
+            status=$?
+            if grep -qi 'refusing to merge unrelated histories' merge2.err; then
+              echo "Still appears unrelated; proceeding to allow merge check with --allow-unrelated-histories (informational only)." >&2
+              git merge --abort 2>/dev/null || true
+              git merge --no-commit --no-ff --allow-unrelated-histories upstream/master 2>merge3.err
+              status=$?
+            fi
+          fi
           Conflicts=$(git ls-files -u | wc -l)
           if [ "$Conflicts" -gt 0 ] || [ $status -ne 0 ]; then
-            echo "Merge conflict detected between PR and current master. Failing early." >&2
-            git merge --abort || true
+            echo "Merge conflict (or merge error) detected between PR and current master. Failing early." >&2
+            git merge --abort 2>/dev/null || true
+            echo '--- merge.err ---' >&2; cat merge.err 2>/dev/null || true
+            echo '--- merge2.err ---' >&2; cat merge2.err 2>/dev/null || true
+            echo '--- merge3.err ---' >&2; cat merge3.err 2>/dev/null || true
             exit 1
           fi
-          git merge --abort || true
+          git merge --abort 2>/dev/null || true
       - name: Copy parser assets (sanitized)
         run: |
           mkdir -p sanitized
