@@ -1,12 +1,16 @@
 # Each pull request that updates ASIM parsers triggers the script.
 # The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
+# 
+# PERFORMANCE OPTIMIZATIONS:
+# - Uses sparse checkout to only download Parsers/ and .script/tests/asimParsersTest/ directories
+# - Uses shallow fetch with --depth=1 for merge validation to reduce bandwidth
+# - Downloads scripts directly from URLs to avoid needing full repository content
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
   pull_request_target:
     types: [opened, edited, reopened, synchronize]
     branches:
       - master
-      - asim-github-workflow
     paths:
     - 'Parsers/ASimDns/Parsers/**'
     - 'Parsers/ASimNetworkSession/Parsers/**'
@@ -44,68 +48,55 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      pr-number: ${{ steps.meta.outputs.pr_number }}
     steps:
-      - name: Preflight disk usage
-        run: |
-          echo "Initial disk status:" >&2
-          df -h >&2 || true
-          echo "Workspace usage (top 20 dirs):" >&2
-          du -h -d1 2>/dev/null | sort -hr | head -20 >&2 || true
-      - name: Checkout PR head into pr-code (isolated, sparse & shallow)
-        # Minimize disk usage: shallow + blobless + sparse filter for Parsers subtree
+      - name: Extract PR number
+        id: meta
+        run: echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+      - name: Checkout trusted base (master) - sparse
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
-            path: pr-code
-            ref: ${{ github.event.pull_request.head.ref }}
-            repository: ${{ github.event.pull_request.head.repo.full_name }}
-            persist-credentials: false
-            fetch-depth: 20            # enough for merge-base while limiting objects
-            filter: blob:none          # partial clone without blobs initially
-            sparse-checkout: |
-              Parsers
-            sparse-checkout-cone-mode: false
-      - name: Add upstream master (shallow) for merge test
-        run: |
-          cd pr-code
-          git config --local core.autocrlf false
-          git config --local filter.lfs.smudge "git-lfs smudge --skip -- %f" || true
-          git config --local filter.lfs.process "git-lfs filter-process --skip" || true
-          git remote add upstream https://github.com/Azure/Azure-Sentinel.git
-          # Fetch only latest master commit (shallow) for merge conflict detection
-          git fetch --depth=1 upstream master
+          ref: master
+          repository: Azure/Azure-Sentinel
+          persist-credentials: false
+          fetch-depth: 0
+          sparse-checkout: |
+            Parsers/
+            .script/tests/asimParsersTest/
+          sparse-checkout-cone-mode: false
+      - name: Checkout PR head into pr-code (isolated) - sparse
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          path: pr-code
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          persist-credentials: false
+          fetch-depth: 0
+          sparse-checkout: |
+            Parsers/
+            .script/tests/asimParsersTest/
+          sparse-checkout-cone-mode: false
       - name: Validate merge (no execution of PR code)
         run: |
           cd pr-code
+          git remote add upstream https://github.com/Azure/Azure-Sentinel.git
+          # Use partial fetch for master to save bandwidth
+          git fetch upstream master --depth=1
           set +e
-          echo "Attempting dry merge with shallow upstream/master" >&2
-          git merge --no-commit --no-ff upstream/master 2>merge.err
+          git merge --no-commit --no-ff upstream/master
           status=$?
-          if grep -qi 'refusing to merge unrelated histories' merge.err; then
-            echo "Shallow fetch insufficient (unrelated histories warning). Deepening fetch for proper merge base..." >&2
-            git merge --abort 2>/dev/null || true
-            git fetch --deepen=200 upstream master || git fetch --unshallow upstream master || true
-            git merge --no-commit --no-ff upstream/master 2>merge2.err
-            status=$?
-            if grep -qi 'refusing to merge unrelated histories' merge2.err; then
-              echo "Still appears unrelated; proceeding to allow merge check with --allow-unrelated-histories (informational only)." >&2
-              git merge --abort 2>/dev/null || true
-              git merge --no-commit --no-ff --allow-unrelated-histories upstream/master 2>merge3.err
-              status=$?
-            fi
-          fi
           Conflicts=$(git ls-files -u | wc -l)
           if [ "$Conflicts" -gt 0 ] || [ $status -ne 0 ]; then
-            echo "Merge conflict (or merge error) detected between PR and current master. Failing early." >&2
-            git merge --abort 2>/dev/null || true
-            echo '--- merge.err ---' >&2; cat merge.err 2>/dev/null || true
-            echo '--- merge2.err ---' >&2; cat merge2.err 2>/dev/null || true
-            echo '--- merge3.err ---' >&2; cat merge3.err 2>/dev/null || true
+            echo "Merge conflict detected between PR and current master. Failing early." >&2
+            git merge --abort || true
             exit 1
           fi
-          git merge --abort 2>/dev/null || true
+          git merge --abort || true
       - name: Copy parser assets (sanitized)
         run: |
           mkdir -p sanitized
+          # Since we already have sparse checkout, we can copy more efficiently
           rsync -a --prune-empty-dirs --include '*/' --include '*.yaml' --include '*.yml' --include '*.json' --exclude '*' pr-code/Parsers/ sanitized/Parsers/ || true
           # Fallback to full copy if selective copy produced nothing (to preserve behavior)
           if [ ! -d sanitized/Parsers ] || [ "$(find sanitized/Parsers -type f | wc -l)" -eq 0 ]; then
@@ -118,22 +109,17 @@ jobs:
             find sanitized/Parsers -type l -print >&2
             exit 1
           fi
+          # Display space savings
+          echo "Space usage summary:"
+          echo "PR checkout size: $(du -sh pr-code 2>/dev/null | cut -f1)"
+          echo "Sanitized artifact size: $(du -sh sanitized 2>/dev/null | cut -f1)"
       - name: Upload sanitized artifact
-        # Use maintained major version tag instead of obsolete commit SHA (previous SHA returned 404)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@83b7061638ee4956cf7545a6f7efe594e5ad0247 # v4.3.3
         with:
           name: sanitized-parsers
           path: sanitized/Parsers
           if-no-files-found: error
           retention-days: 3
-      - name: Free checkout workspace to save disk
-        run: |
-          echo "Disk usage before cleanup:" >&2
-          df -h >&2 || true
-          rm -rf pr-code || true
-          rm -rf ~/.cache/pip || true
-          echo "Disk usage after cleanup:" >&2
-          df -h >&2 || true
 
   Run-ASim-TemplateValidation:
     name: Run ASIM Template Validation tests
@@ -143,21 +129,17 @@ jobs:
       contents: read
     steps:
       - name: Download sanitized parsers
-        # Use stable major tag for download-artifact
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4.1.7
         with:
           name: sanitized-parsers
           path: Parsers
       - name: Write dependency manifest
-        # Create a manifest file for cache key generation - this ensures pip cache
-        # is invalidated only when dependencies actually change, improving performance
         run: |
           printf "requests\nPyYAML\ntabulate\n" > deps-template.txt
       - name: Restore pip cache
         uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: ~/.cache/pip
-          # Cache key uses hash of dependency manifest - same deps = cache hit, different deps = cache miss
           key: pip-${{ runner.os }}-${{ hashFiles('deps-template.txt') }}
           restore-keys: |
             pip-${{ runner.os }}-
@@ -166,8 +148,6 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install dependencies
-        # Install the same packages listed in the manifest above
-        # With cache: ~5-10 seconds, without cache: ~30-60 seconds
         run: |
           python -m pip install --upgrade pip
           pip install requests PyYAML tabulate
@@ -190,7 +170,7 @@ jobs:
       contents: read
     steps:
       - name: Download sanitized parsers
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e
         with:
           name: sanitized-parsers
           path: Parsers
@@ -238,6 +218,7 @@ jobs:
           [ -f "$filePath" ] && rm -f "$filePath"
           echo "Downloading script: $url"
           curl -sSL -o "$filePath" "$url"
+          chmod +x "$filePath"
           python "$filePath" "${{ github.event.pull_request.number }}"
       - name: Skip Azure ingestion notice
         if: steps.azure-check.outputs.available == 'false'
@@ -254,7 +235,7 @@ jobs:
       contents: read
     steps:
       - name: Download sanitized parsers
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e
         with:
           name: sanitized-parsers
           path: Parsers
@@ -302,7 +283,7 @@ jobs:
       contents: read
     steps:
       - name: Download sanitized parsers
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e
         with:
           name: sanitized-parsers
           path: Parsers
@@ -355,8 +336,7 @@ jobs:
   fork-pr-comment:
     name: Fork PR Notification
     runs-on: ubuntu-latest
-    needs: [prepare-parsers, Run-ASim-TemplateValidation, Run-ASim-Sample-Data-Ingest, Run-ASim-Schema-Data-tests, Run-ASim-Parser-Filtering-Tests]
-    if: always() && github.event.pull_request.head.repo.fork == true
+    if: github.event.pull_request.head.repo.fork == true
     permissions:
       pull-requests: write
     steps:
@@ -382,44 +362,15 @@ jobs:
               return;
             }
             
-            // Get job results
-            const templateResult = '${{ needs.Run-ASim-TemplateValidation.result }}';
-            const prepareResult = '${{ needs.prepare-parsers.result }}';
-            
-            // Determine status icons and messages
-            const getStatusIcon = (result) => {
-              switch(result) {
-                case 'success': return '✅';
-                case 'failure': return '❌';
-                case 'cancelled': return '⏹️';
-                case 'skipped': return '⏭️';
-                default: return '⚠️';
-              }
-            };
-            
-            const templateIcon = getStatusIcon(templateResult);
-            const templateText = templateResult === 'success' ? 'PASSED' : 
-                                templateResult === 'failure' ? 'FAILED' : 
-                                templateResult.toUpperCase();
-            
-            const overallSuccess = templateResult === 'success' && prepareResult === 'success';
-            const headerIcon = overallSuccess ? '✅' : '❌';
-            
             // Post the comment since it doesn't exist yet
-            const comment = `## ${headerIcon} Fork PR Validation Results
+            const comment = `## 🔄 Fork PR Detected
             
             Thank you for your contribution to Azure Sentinel ASIM parsers! 
             
-            ### � Test Results:
-            - **${templateIcon} Template Validation**: ${templateText}
-            - **⚠️ Azure Sample Data Ingestion**: SKIPPED (requires Azure secrets)
-            - **⚠️ Azure Schema Data Tests**: SKIPPED (requires Azure secrets) 
-            - **⚠️ Azure Parser Filtering Tests**: SKIPPED (requires Azure secrets)
-            
-            ### 📋 Summary:
-            ${overallSuccess ? 
-              '🎉 **Your changes have passed validation!** The Azure-dependent tests will be run by maintainers before merge.' : 
-              '⚠️ **Please review and fix the validation errors** before your PR can be reviewed. Check the workflow logs above for details.'}
+            ### 📋 What happens next:
+            - ✅ Your PR will be automatically tested with our ASIM validation suite
+            - 🔍 Maintainers will review your changes and test results
+            - 🚀 Once approved, your contribution will be merged
             
             ### 🛡️ Security Note:
             This workflow runs with repository privileges for testing purposes. Our security measures ensure safe execution of external contributions.
