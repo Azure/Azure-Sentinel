@@ -3,8 +3,9 @@
 # 
 # PERFORMANCE OPTIMIZATIONS:
 # - Uses sparse checkout to only download Parsers/ and .script/tests/asimParsersTest/ directories
-# - Uses shallow fetch with --depth=1 for merge validation to reduce bandwidth
+# - Uses shallow fetch with --depth=1 to minimize bandwidth and storage
 # - Downloads scripts directly from URLs to avoid needing full repository content
+# - Relies on GitHub's native merge conflict detection instead of custom validation
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
   pull_request_target:
@@ -78,29 +79,6 @@ jobs:
             Parsers/
             .script/tests/asimParsersTest/
           sparse-checkout-cone-mode: false
-      - name: Validate merge (no execution of PR code)
-        run: |
-          cd pr-code
-          # Configure Git identity for merge operations
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          
-          git remote add upstream https://github.com/Azure/Azure-Sentinel.git
-          # Fetch with enough depth to establish relationship
-          git fetch upstream master --depth=50
-          set +e
-          # Try merge with allow-unrelated-histories in case of shallow repo issues
-          git merge --no-commit --no-ff --allow-unrelated-histories upstream/master
-          status=$?
-          Conflicts=$(git ls-files -u | wc -l)
-          if [ "$Conflicts" -gt 0 ] || [ $status -ne 0 ]; then
-            echo "Merge conflict detected between PR and current master. Failing early." >&2
-            echo "Exit status: $status, Conflicts: $Conflicts"
-            git merge --abort 2>/dev/null || true
-            exit 1
-          fi
-          git merge --abort 2>/dev/null || true
-          echo "✅ Merge validation passed - no conflicts detected"
       - name: Copy parser assets (sanitized)
         run: |
           mkdir -p sanitized
