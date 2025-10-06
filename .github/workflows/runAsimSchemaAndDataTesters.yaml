@@ -45,26 +45,37 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout trusted base (master)
+      - name: Preflight disk usage
+        run: |
+          echo "Initial disk status:" >&2
+          df -h >&2 || true
+          echo "Workspace usage (top 20 dirs):" >&2
+          du -h -d1 2>/dev/null | sort -hr | head -20 >&2 || true
+      - name: Checkout PR head into pr-code (isolated, sparse & shallow)
+        # Minimize disk usage: shallow + blobless + sparse filter for Parsers subtree
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
-          ref: master
-          repository: Azure/Azure-Sentinel
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Checkout PR head into pr-code (isolated)
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
-        with:
-          path: pr-code
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          persist-credentials: false
-          fetch-depth: 0
+            path: pr-code
+            ref: ${{ github.event.pull_request.head.ref }}
+            repository: ${{ github.event.pull_request.head.repo.full_name }}
+            persist-credentials: false
+            fetch-depth: 20            # enough for merge-base while limiting objects
+            filter: blob:none          # partial clone without blobs initially
+            sparse-checkout: |
+              Parsers
+            sparse-checkout-cone-mode: false
+      - name: Add upstream master (shallow) for merge test
+        run: |
+          cd pr-code
+          git config --local core.autocrlf false
+          git config --local filter.lfs.smudge "git-lfs smudge --skip -- %f" || true
+          git config --local filter.lfs.process "git-lfs filter-process --skip" || true
+          git remote add upstream https://github.com/Azure/Azure-Sentinel.git
+          # Fetch only latest master commit (shallow) for merge conflict detection
+          git fetch --depth=1 upstream master
       - name: Validate merge (no execution of PR code)
         run: |
           cd pr-code
-          git remote add upstream https://github.com/Azure/Azure-Sentinel.git
-          git fetch upstream master
           set +e
           git merge --no-commit --no-ff upstream/master
           status=$?
@@ -98,6 +109,14 @@ jobs:
           path: sanitized/Parsers
           if-no-files-found: error
           retention-days: 3
+      - name: Free checkout workspace to save disk
+        run: |
+          echo "Disk usage before cleanup:" >&2
+          df -h >&2 || true
+          rm -rf pr-code || true
+          rm -rf ~/.cache/pip || true
+          echo "Disk usage after cleanup:" >&2
+          df -h >&2 || true
 
   Run-ASim-TemplateValidation:
     name: Run ASIM Template Validation tests
