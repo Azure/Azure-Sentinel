@@ -1,0 +1,1321 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft",
+    "comments": "Solution template for Illumio Insight"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Illumio Insight",
+    "_solutionVersion": "3.3.2",
+    "solutionId": "illumioinc1629822633689.azure-sentinel-solution-illumioinsight",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "IllumioInsightsDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "IllumioInsightsDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_dataConnectorContentIdConnectorDefinition2": "IllumioInsightsSummaryCCP",
+    "dataConnectorTemplateNameConnectorDefinition2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition2')))]",
+    "_dataConnectorContentIdConnections2": "IllumioInsightsSummaryCCPConnections",
+    "dataConnectorTemplateNameConnections2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections2')))]",
+    "DataCollectionEndpointId2": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Illumio Insights",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "IllumioInsightsDefinition",
+                  "title": "Illumio Insights",
+                  "descriptionMarkdown": "Illumio Insights Connector sends workload and security graph data from Illumio Insights into the Azure Microsoft Sentinel Data Lake, providing deep context for threat detection, lateral movement analysis, and real-time investigation.",
+                  "publisher": "Microsoft",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total incident logs received",
+                      "legend": "Illumio Insights incident Logs",
+                      "baseQuery": "IllumioInsights_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of Illumio Insights logs",
+                      "query": "IllumioInsights_CL| take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "IllumioInsights_CL",
+                      "lastDataReceivedQuery": "IllumioInsights_CL\n       | where TimeGenerated > ago(12h)                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": null
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Configuration steps for the Illumio Insights Connector\n\n**Prerequisites**\n- Register and Login to Illumio Console with valid credentials\n- Purchase Illumio Insights or Start a free Trial for Illumio Insights\n\n**Step 1: Register the Service Account**\n1. Go to **Illumio Console → Access → Service Accounts**\n2. Create a service account for the tenant\n3. Once you create a service account, you will receive the client credentials\n4. Copy the **auth_username** (Illumio Insights API Key) and the **Secret** (API Secret)\n\n**Step 2: Add Client Credentials to Sentinel Account**\n- Add the API key and secret to Sentinel Account for tenant authentication\n- These credentials will be used to authenticate calls to the Illumio SaaS API\n\nPlease fill in the required fields below with the credentials obtained from the Illumio Console:"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Illumio Insights Api Key",
+                            "placeholder": "api_XXXXXX",
+                            "type": "password",
+                            "name": "apiKey"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Api Secret",
+                            "placeholder": "API Secret",
+                            "type": "password",
+                            "name": "apiToken"
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "Illumio Tenant Id",
+                            "placeholder": "{IllumioTenantId - Optional}",
+                            "type": "text",
+                            "name": "illumioTenantId"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Illumio",
+                  "email": "illumio-msc@illumio.com",
+                  "tier": "Partner",
+                  "link": "https://www.illumio.com/support/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "illumioInsightsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Microsoft-IlumioInsights"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ]
+                  }
+                ],
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]"
+              }
+            },
+            {
+              "name": "IllumioInsightsSummary_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "IllumioInsightsSummary_CL",
+                  "description": "Illumio Insights Summary reports containing security insights and threat analysis data",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "ReportId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SummaryStartDate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SummaryEndDate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ComparisonStartDate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ComparisonEndDate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Persona",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DataSources",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "ReportPayload",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "IllumioTenantId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Tags",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "IllumioInsightsDefinition",
+          "title": "Illumio Insights",
+          "descriptionMarkdown": "Illumio Insights Connector sends workload and security graph data from Illumio Insights into the Azure Microsoft Sentinel Data Lake, providing deep context for threat detection, lateral movement analysis, and real-time investigation.",
+          "publisher": "Microsoft",
+          "graphQueries": [
+            {
+              "metricName": "Total incident logs received",
+              "legend": "Illumio Insights incident Logs",
+              "baseQuery": "IllumioInsights_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of Illumio Insights logs",
+              "query": "IllumioInsights_CL| take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "IllumioInsights_CL",
+              "lastDataReceivedQuery": "IllumioInsights_CL\n       | where TimeGenerated > ago(12h)                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors",
+              "value": null
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Configuration steps for the Illumio Insights Connector\n\n**Prerequisites**\n- Register and Login to Illumio Console with valid credentials\n- Purchase Illumio Insights or Start a free Trial for Illumio Insights\n\n**Step 1: Register the Service Account**\n1. Go to **Illumio Console → Access → Service Accounts**\n2. Create a service account for the tenant\n3. Once you create a service account, you will receive the client credentials\n4. Copy the **auth_username** (Illumio Insights API Key) and the **Secret** (API Secret)\n\n**Step 2: Add Client Credentials to Sentinel Account**\n- Add the API key and secret to Sentinel Account for tenant authentication\n- These credentials will be used to authenticate calls to the Illumio SaaS API\n\nPlease fill in the required fields below with the credentials obtained from the Illumio Console:"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Illumio Insights Api Key",
+                    "placeholder": "api_XXXXXX",
+                    "type": "password",
+                    "name": "apiKey"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Api Secret",
+                    "placeholder": "API Secret",
+                    "type": "password",
+                    "name": "apiToken"
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "Illumio Tenant Id",
+                    "placeholder": "{IllumioTenantId - Optional}",
+                    "type": "text",
+                    "name": "illumioTenantId"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Illumio",
+          "email": "illumio-msc@illumio.com",
+          "tier": "Partner",
+          "link": "https://www.illumio.com/support/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Illumio Insights",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Illumio Insights",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apiKey": {
+              "defaultValue": "apiKey",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiToken": {
+              "defaultValue": "apiToken",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "illumioTenantId": {
+              "defaultValue": "illumioTenantId",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Illumio",
+                  "email": "illumio-msc@illumio.com",
+                  "tier": "Partner",
+                  "link": "https://www.illumio.com/support/support"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'IllumioInsights', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "IllumioInsightsDefinition",
+                "dataType": "IlumioInsights",
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apiToken')]",
+                  "ApiKeyName": "X-api-secret"
+                },
+                "request": {
+                  "apiEndpoint": "https://gw.console.illum.io/api/v1/resource-insights",
+                  "queryWindowInMin": 15,
+                  "queryTimeFormat": "UnixTimestampInMills",
+                  "queryParameters": {
+                    "after": "{_QueryWindowEndTime}"
+                  },
+                  "timeoutInSeconds": 60,
+                  "rateLimitQPS": 10,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba",
+                    "x-illumio-tenant-id": "[[parameters('illumioTenantId')]",
+                    "X-api-key": "[[parameters('apiKey')]"
+                  },
+                  "httpMethod": "Get"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "ConvertChildPropertiesToArray": true,
+                  "format": "json"
+                },
+                "dcrConfig": {
+                  "streamName": "ILUMIO_INSIGHTS",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition2'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+        "displayName": "Illumio Insights Summary",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "IllumioInsightsSummaryCCP",
+                  "title": "Illumio Insights Summary",
+                  "publisher": "Illumio",
+                  "descriptionMarkdown": "The Illumio Insights Summary connector Publishes AI-powered threat discovery and anomaly reports generated by the Illumio Insights Agent. Leveraging the MITRE ATT&CK framework, these reports surface high-fidelity insights into emerging threats and risky behaviors, directly into the Data Lake.",
+                  "graphQueriesTableName": "IllumioInsightsSummary_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total reports received",
+                      "legend": "Illumio Insights Summary Reports",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    },
+                    {
+                      "metricName": "Threat Hunter reports",
+                      "legend": "Threat Hunter Reports",
+                      "baseQuery": "{{graphQueriesTableName}} | where Persona == \"threat_hunter\""
+                    },
+                    {
+                      "metricName": "Compliance Manager reports",
+                      "legend": "Compliance Manager Reports",
+                      "baseQuery": "{{graphQueriesTableName}} | where Persona == \"compliance_manager\""
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Illumio insights summary reports",
+                      "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Get sample of Illumio insights summary reports",
+                      "query": "{{graphQueriesTableName}}\n| take 10"
+                    },
+                    {
+                      "description": "Summary by persona type",
+                      "query": "{{graphQueriesTableName}}\n| summarize count() by Persona"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "IllumioInsightsSummary_CL",
+                      "lastDataReceivedQuery": "IllumioInsightsSummary_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Configuration",
+                      "description": "Configure the Illumio Insights Summary connector.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "> This data connector may take 24 hrs for the latest report after onboarding"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Configuration steps for the Illumio Insights Summary Connector\n\n**Prerequisites**\n- Register and Login to Illumio Console with valid credentials\n- Purchase Illumio Insights or Start a free Trial for Illumio Insights\n- Enable The Illumio Insights Agent\n\n**Step 1: Register the Service Account**\n1. Go to **Illumio Console → Access → Service Accounts**\n2. Create a service account for the tenant\n3. Once you create a service account, you will receive the client credentials\n4. Copy the **auth_username** (Illumio Insights API Key) and the **Secret** (API Secret)\n\n**Step 2: Add Client Credentials to Sentinel Account**\n- Add the API key and secret to Sentinel Account for tenant authentication\n- These credentials will be used to authenticate calls to the Illumio SaaS API \n\nPlease fill in the required fields below with the credentials obtained from the Illumio Console:"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Illumio Insights Api Key",
+                            "placeholder": "api_XXXXXX",
+                            "type": "password",
+                            "name": "apiKey"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Api Secret",
+                            "placeholder": "API Secret",
+                            "type": "password",
+                            "name": "apiToken"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Illumio Tenant ID",
+                            "placeholder": "{IllumioTenantId - Optional}",
+                            "type": "text",
+                            "name": "illumioTenantId"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Connect",
+                      "description": "Enable the Illumio Insights Summary connector.",
+                      "instructions": [
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "disconnectLabel": "Disconnect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Illumio",
+                  "email": "illumio-msc@illumio.com",
+                  "tier": "Partner",
+                  "link": "https://www.illumio.com/support/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "IllumioInsightsSummaryDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('DataCollectionEndpointId2')]",
+                "streamDeclarations": {
+                  "Custom-IllumioInsightsSummary_CL": {
+                    "columns": [
+                      {
+                        "name": "ReportId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SummaryStartDate",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SummaryEndDate",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ComparisonStartDate",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ComparisonEndDate",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CreatedAt",
+                        "type": "long"
+                      },
+                      {
+                        "name": "Persona",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DataSources",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "ReportPayload",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IllumioTenantId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Tags",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-IllumioInsightsSummary_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-IllumioInsightsSummary_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isempty(CreatedAt), now(), datetime_add('millisecond', tolong(CreatedAt), datetime(1970-01-01))) , ReportPayload = todynamic(ReportPayload) | project TimeGenerated , ReportId , SummaryStartDate , SummaryEndDate , ComparisonStartDate , ComparisonEndDate , CreatedAt , Persona , DataSources , ReportPayload , IllumioTenantId , Tags"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "IllumioInsightsSummary_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "IllumioInsightsSummary_CL",
+                  "description": "Illumio Insights Summary reports containing security insights and threat analysis data",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "ReportId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SummaryStartDate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SummaryEndDate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ComparisonStartDate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ComparisonEndDate",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "long"
+                    },
+                    {
+                      "name": "Persona",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DataSources",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "ReportPayload",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "IllumioTenantId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Tags",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "IllumioInsightsSummaryCCP",
+          "title": "Illumio Insights Summary",
+          "publisher": "Illumio",
+          "descriptionMarkdown": "The Illumio Insights Summary connector Publishes AI-powered threat discovery and anomaly reports generated by the Illumio Insights Agent. Leveraging the MITRE ATT&CK framework, these reports surface high-fidelity insights into emerging threats and risky behaviors, directly into the Data Lake.",
+          "graphQueriesTableName": "IllumioInsightsSummary_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total reports received",
+              "legend": "Illumio Insights Summary Reports",
+              "baseQuery": "{{graphQueriesTableName}}"
+            },
+            {
+              "metricName": "Threat Hunter reports",
+              "legend": "Threat Hunter Reports",
+              "baseQuery": "{{graphQueriesTableName}} | where Persona == \"threat_hunter\""
+            },
+            {
+              "metricName": "Compliance Manager reports",
+              "legend": "Compliance Manager Reports",
+              "baseQuery": "{{graphQueriesTableName}} | where Persona == \"compliance_manager\""
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Illumio insights summary reports",
+              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Get sample of Illumio insights summary reports",
+              "query": "{{graphQueriesTableName}}\n| take 10"
+            },
+            {
+              "description": "Summary by persona type",
+              "query": "{{graphQueriesTableName}}\n| summarize count() by Persona"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "IllumioInsightsSummary_CL",
+              "lastDataReceivedQuery": "IllumioInsightsSummary_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Configuration",
+              "description": "Configure the Illumio Insights Summary connector.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "> This data connector may take 24 hrs for the latest report after onboarding"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Configuration steps for the Illumio Insights Summary Connector\n\n**Prerequisites**\n- Register and Login to Illumio Console with valid credentials\n- Purchase Illumio Insights or Start a free Trial for Illumio Insights\n- Enable The Illumio Insights Agent\n\n**Step 1: Register the Service Account**\n1. Go to **Illumio Console → Access → Service Accounts**\n2. Create a service account for the tenant\n3. Once you create a service account, you will receive the client credentials\n4. Copy the **auth_username** (Illumio Insights API Key) and the **Secret** (API Secret)\n\n**Step 2: Add Client Credentials to Sentinel Account**\n- Add the API key and secret to Sentinel Account for tenant authentication\n- These credentials will be used to authenticate calls to the Illumio SaaS API \n\nPlease fill in the required fields below with the credentials obtained from the Illumio Console:"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Illumio Insights Api Key",
+                    "placeholder": "api_XXXXXX",
+                    "type": "password",
+                    "name": "apiKey"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Api Secret",
+                    "placeholder": "API Secret",
+                    "type": "password",
+                    "name": "apiToken"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Illumio Tenant ID",
+                    "placeholder": "{IllumioTenantId - Optional}",
+                    "type": "text",
+                    "name": "illumioTenantId"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "2. Connect",
+              "description": "Enable the Illumio Insights Summary connector.",
+              "instructions": [
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "disconnectLabel": "Disconnect",
+                    "name": "toggle"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Illumio",
+          "email": "illumio-msc@illumio.com",
+          "tier": "Partner",
+          "link": "https://www.illumio.com/support/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections2'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+        "displayName": "Illumio Insights Summary",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Illumio Insights Summary",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apiKey": {
+              "defaultValue": "apiKey",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiToken": {
+              "defaultValue": "apiToken",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "illumioTenantId": {
+              "defaultValue": "illumioTenantId",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections2": "[variables('_dataConnectorContentIdConnections2')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections2')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections2'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Illumio",
+                  "email": "illumio-msc@illumio.com",
+                  "tier": "Partner",
+                  "link": "https://www.illumio.com/support/support"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'illumioInsightsSummaryPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "IllumioInsightsSummaryCCP",
+                "dataType": "IllumioInsightsSummary",
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apiToken')]",
+                  "ApiKeyName": "X-api-secret"
+                },
+                "request": {
+                  "apiEndpoint": "https://gw.console.illum.io/api/v1/insights-summary",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 360,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "MS-Sentinel-CCP-IllumioInsightsSummary",
+                    "x-illumio-tenant-id": "[[parameters('illumioTenantId')]",
+                    "X-api-key": "[[parameters('apiKey')]"
+                  },
+                  "queryParameters": {
+                    "persona": "threat_hunter",
+                    "report_interval": "daily"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "format": "json"
+                },
+                "dcrConfig": {
+                  "streamName": "Custom-IllumioInsightsSummary_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.3.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Illumio Insight",
+        "publisherDisplayName": "Illumio",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Illumio%20Insight/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Illumio Insights data connector allows ingesting logs from the Illumio API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the Illumio API to fetch logs and it supports DCR-based ingestion time transformations that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.</p>\n<p><strong>Data Connectors:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Workbooks/Images/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Illumio Insight",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Illumio",
+          "email": "illumio-msc@illumio.com",
+          "tier": "Partner",
+          "link": "https://www.illumio.com/support/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-08-10",
+        "providers": [
+          "Illumio"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

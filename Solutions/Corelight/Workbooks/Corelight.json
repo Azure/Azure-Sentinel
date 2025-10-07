@@ -202,7 +202,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "union Corelight_v2_*_CL\n| where ('*' in ({Sensor}) or _system_name_s in ({Sensor}))\n| where TimeGenerated {GlobalTimeRestriction}\n|make-series Trend = count() on TimeGenerated from {GlobalTimeRestriction:start} to {GlobalTimeRestriction:end} step {GlobalTimeRestriction:grain} by _path_s;",
+                    "query": "let dummy_table = datatable(_system_name_s: string, TimeGenerated: datetime, _path_s: string)[];\nunion isfuzzy=true Corelight_v2_*_CL, dummy_table\n| where ('*' in ({Sensor}) or _system_name_s in ({Sensor}))\n| where TimeGenerated {GlobalTimeRestriction}\n|make-series Trend = count() on TimeGenerated from {GlobalTimeRestriction:start} to {GlobalTimeRestriction:end} step {GlobalTimeRestriction:grain} by _path_s;",
                     "size": 0,
                     "showAnalytics": true,
                     "title": "Sensor Events Timechart",
@@ -224,7 +224,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "union Corelight_v2_*_CL\n| where ('*' in ({Sensor}) or _system_name_s in ({Sensor}))\n| where TimeGenerated {GlobalTimeRestriction}\n| summarize Count=count() by _path_s | sort by Count desc",
+                    "query": "let dummy_table = datatable(_system_name_s: string, TimeGenerated: datetime, _path_s: string)[];\nunion isfuzzy=true Corelight_v2_*_CL, dummy_table\n| where ('*' in ({Sensor}) or _system_name_s in ({Sensor}))\n| where TimeGenerated {GlobalTimeRestriction}\n| summarize Count=count() by _path_s | sort by Count desc",
                     "size": 0,
                     "showAnalytics": true,
                     "title": "Sensor Events Count",
@@ -262,7 +262,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let QueryResults = ((corelight_notice\r\n| where ('*' in ({Sensor}) or _system_name in ({Sensor}))\r\n//| where note != \"LongConnection::found\" and note != \"SSL::Invalid_Server_Cert\"\r\n//| project-rename Alert = note \r\n| union corelight_suricata_corelight)\r\n| where ('*' in ({Sensor}) or _system_name in ({Sensor}))\r\n//| where alert_category != \"Not Suspicious Traffic\" and alert_category != \"Attempted Information Leak\" and alert_category != \"Potentially Bad Traffic\"\r\n//| where _path_s == \"notice\"\r\n//| project-rename Alert = alert_category\r\n| extend\r\n    Category = coalesce(note, alert_category),\r\n    Alert = coalesce(msg, alert_signature),\r\n    Severity=coalesce(severity_level, alert_severity, 7.),\r\n    Type = _path\r\n| extend PartitionKey = case(_path == \"suricata_corelight\", Alert, Category)\r\n| where (isnotempty(uid) or isnotempty(community_id))\r\n| partition hint.strategy=native by PartitionKey\r\n    (\r\n    top 10 by TimeGenerated\r\n    )\r\n| order by Severity asc, TimeGenerated\r\n// hack to hide empty columns\r\n| evaluate narrow()\r\n| where isnotempty(Value) and Value != \"##(null)\" or Column == \"_system_name_s\"\r\n| evaluate pivot(Column, any(Value), Row)\r\n);\r\nlet QueryCount=QueryResults\r\n| summarize count()\r\n| project count_;\r\nlet NoResults = datatable(TimeGenerated: string , Type: string , Category: string, Alert: string, Severity: string, uid: string, id_orig_h: string, id_resp_h: string, id_resp_p: string )[];\r\nunion isfuzzy=true\r\n(QueryResults| where toscalar(QueryCount) != 0),\r\n(NoResults| where toscalar(QueryCount) == 0)\r\n| project-reorder\r\n    TimeGenerated,\r\n    Type,\r\n    Category,\r\n    Alert,\r\n    Severity,\r\n    uid,\r\n    id_orig_h,\r\n    id_resp_h,\r\n    id_resp_p",
+                    "query": "let QueryResults = ((corelight_notice\r\n| where ('*' in ({Sensor}) or system_name in ({Sensor}))\r\n//| where note != \"LongConnection::found\" and note != \"SSL::Invalid_Server_Cert\"\r\n//| project-rename Alert = note \r\n| union corelight_suricata_corelight)\r\n| where ('*' in ({Sensor}) or system_name in ({Sensor}))\r\n//| where alert_category != \"Not Suspicious Traffic\" and alert_category != \"Attempted Information Leak\" and alert_category != \"Potentially Bad Traffic\"\r\n//| where _path_s == \"notice\"\r\n//| project-rename Alert = alert_category\r\n| extend\r\n    Category = coalesce(note, alert_category),\r\n    Alert = coalesce(msg, alert_signature),\r\n    Severity=coalesce(severity_level, alert_severity, 7.),\r\n    Type = path\r\n| extend PartitionKey = case(path == \"suricata_corelight\", Alert, Category)\r\n| where (isnotempty(uid) or isnotempty(community_id))\r\n| partition hint.strategy=native by PartitionKey\r\n    (\r\n    top 10 by TimeGenerated\r\n    )\r\n| order by Severity asc, TimeGenerated\r\n// hack to hide empty columns\r\n| evaluate narrow()\r\n| where isnotempty(Value) and Value != \"##(null)\" or Column == \"_system_name_s\"\r\n| evaluate pivot(Column, any(Value), Row)\r\n);\r\nlet QueryCount=QueryResults\r\n| summarize count()\r\n| project count_;\r\nlet NoResults = datatable(TimeGenerated: string , Type: string , Category: string, Alert: string, Severity: string, uid: string, id_orig_h: string, id_resp_h: string, id_resp_p: string )[];\r\nunion isfuzzy=true\r\n(QueryResults| where toscalar(QueryCount) != 0),\r\n(NoResults| where toscalar(QueryCount) == 0)\r\n| project-reorder\r\n    TimeGenerated,\r\n    Type,\r\n    Category,\r\n    Alert,\r\n    Severity,\r\n    uid,\r\n    id_orig_h,\r\n    id_resp_h,\r\n    id_resp_p",
                     "size": 0,
                     "showAnalytics": true,
                     "title": "Recent Events Summary (10 most recent per message type)",
@@ -314,7 +314,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "corelight_suricata_corelight\r\n| where ('*' in ({Sensor}) or _system_name in ({Sensor}))\r\n| summarize alert_count=count() by source_ip=id_orig_h, alert_signature, severity=alert_severity\r\n| top 10 by alert_count\r\n",
+                    "query": "corelight_suricata_corelight\r\n| where ('*' in ({Sensor}) or system_name in ({Sensor}))\r\n| summarize alert_count=count() by source_ip=id_orig_h, alert_signature, severity=alert_severity\r\n| top 10 by alert_count\r\n",
                     "size": 0,
                     "showAnalytics": true,
                     "title": "Suricata Top Alerts by Source",
@@ -543,7 +543,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "corelight_notice\n| where ('*' in ({Sensor}) or _system_name in ({Sensor}))\n| where note == \"LongConnection::found\"\n| summarize Count=count(1), arg_max(TimeGenerated, id_orig_h, id_resp_h, id_resp_p, sub, msg) by uid\n| extend seconds=sub\n| top 20 by seconds desc\n",
+                    "query": "corelight_notice\n| where ('*' in ({Sensor}) or system_name in ({Sensor}))\n| where note == \"LongConnection::found\"\n| summarize Count=count(1), arg_max(TimeGenerated, id_orig_h, id_resp_h, id_resp_p, sub, msg) by uid\n| extend seconds=sub\n| top 20 by seconds desc\n",
                     "size": 0,
                     "showAnalytics": true,
                     "title": "Longest Lived Connections, (May have already closed)",
@@ -689,8 +689,7 @@
                           "title": "Open/Active Long Lived Connections (requires Long Connections Pkg)",
                           "timeContextFromParameter": "GlobalTimeRestriction",
                           "queryType": 0,
-                          "resourceType": "microsoft.operationalinsights/workspaces",
-                          "sortBy": []
+                          "resourceType": "microsoft.operationalinsights/workspaces"
                         },
                         "customWidth": "50",
                         "name": "Open/Active Long Lived Connections (requires Long Connections Pkg)"
@@ -1486,7 +1485,6 @@
                                       "resourceType": "microsoft.operationalinsights/workspaces",
                                       "visualization": "tiles",
                                       "tileSettings": {
-                                        "titleContent": {},
                                         "leftContent": {
                                           "columnMatch": "Count",
                                           "formatter": 12,
@@ -1527,7 +1525,6 @@
                                       "resourceType": "microsoft.operationalinsights/workspaces",
                                       "visualization": "tiles",
                                       "tileSettings": {
-                                        "titleContent": {},
                                         "leftContent": {
                                           "columnMatch": "Count",
                                           "formatter": 12,
@@ -1568,7 +1565,6 @@
                                       "resourceType": "microsoft.operationalinsights/workspaces",
                                       "visualization": "tiles",
                                       "tileSettings": {
-                                        "titleContent": {},
                                         "leftContent": {
                                           "columnMatch": "Distinct Certs",
                                           "formatter": 12,
@@ -1727,7 +1723,6 @@
                                       "resourceType": "microsoft.operationalinsights/workspaces",
                                       "visualization": "tiles",
                                       "tileSettings": {
-                                        "titleContent": {},
                                         "leftContent": {
                                           "columnMatch": "Sum",
                                           "formatter": 12,
@@ -1779,7 +1774,6 @@
                                       "resourceType": "microsoft.operationalinsights/workspaces",
                                       "visualization": "tiles",
                                       "tileSettings": {
-                                        "titleContent": {},
                                         "leftContent": {
                                           "columnMatch": "Count",
                                           "formatter": 12,
@@ -1825,7 +1819,6 @@
                                       "resourceType": "microsoft.operationalinsights/workspaces",
                                       "visualization": "tiles",
                                       "tileSettings": {
-                                        "titleContent": {},
                                         "leftContent": {
                                           "columnMatch": "Count",
                                           "formatter": 12,
@@ -1927,7 +1920,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "union corelight_http,\r\ncorelight_conn,\r\ncorelight_dns,\r\ncorelight_ssl,\r\ncorelight_files\r\n| where ('*' in ({Sensor}) or sensor_name in ({Sensor}))\r\n| where id_resp_p == 23\r\n",
+                                "query": "union isfuzzy=true corelight_http,\r\ncorelight_conn,\r\ncorelight_dns,\r\ncorelight_ssl,\r\ncorelight_files\r\n| where ('*' in ({Sensor}) or sensor_name in ({Sensor}))\r\n| where id_resp_p == 23\r\n",
                                 "size": 0,
                                 "showAnalytics": true,
                                 "title": "Details of Telnet Sessions",
@@ -2093,7 +2086,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "today",
                                     "formatter": 12,
@@ -2149,7 +2141,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "today",
                                     "formatter": 12,
@@ -2205,7 +2196,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "NumberOfInternalDnsServers",
                                     "formatter": 12,
@@ -2596,8 +2586,7 @@
                                 "gridSettings": {
                                   "rowLimit": 10000,
                                   "filter": true
-                                },
-                                "sortBy": []
+                                }
                               },
                               "name": "query - 2",
                               "styleSettings": {
@@ -2630,7 +2619,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "TotalCount",
                                     "formatter": 12,
@@ -2745,7 +2733,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "Sum",
                                     "formatter": 12,
@@ -2836,7 +2823,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "TotalCount",
                                     "formatter": 12,
@@ -2922,7 +2908,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "Count",
                                     "formatter": 12,
@@ -3013,7 +2998,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "TotalCount",
                                     "formatter": 12,
@@ -3092,7 +3076,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "Count",
                                     "formatter": 12,
@@ -3171,7 +3154,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "TotalCount",
                                     "formatter": 12,
@@ -3250,7 +3232,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "TotalCount",
                                     "formatter": 12,
@@ -3884,7 +3865,6 @@
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "visualization": "tiles",
                                 "tileSettings": {
-                                  "titleContent": {},
                                   "leftContent": {
                                     "columnMatch": "TotalTraffic",
                                     "formatter": 12,

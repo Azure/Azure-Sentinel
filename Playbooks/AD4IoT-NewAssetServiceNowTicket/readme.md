@@ -10,7 +10,7 @@ This playbook parses explicitly the IOT device entity fields.
 
 
 ## screenshots
-![screenshot1](./images/ticketSnow.png)<br>
+![screenshot1](./images/ticketServiceNow.png)<br>
 ![screenshot2](./images/designerOverviewLight.png)<br>
 
 ## Deploy to Azure

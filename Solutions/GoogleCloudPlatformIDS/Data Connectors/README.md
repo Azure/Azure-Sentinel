@@ -31,7 +31,7 @@ To generate the above resources, you must execute the following terraform script
 <a name="log">
 
 ## Steps to execute Terraform scripts for Log Setup
-To access the terraform script for Log Setup [Click here](https://github.com/v-gsrihitha/v-gsrihitha/tree/main/Terraform-CloudIDS).
+To access the terraform script for Log Setup [Click here](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/GCP/Terraform/sentinel_resources_creation/GCPCloudIDSLogSetup).
 - Launch the cloud shell in Google Cloud Console.
 - Execute the below mentioned commands.
 - create a directory

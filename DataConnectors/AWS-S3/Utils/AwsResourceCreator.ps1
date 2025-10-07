@@ -168,23 +168,6 @@ function New-S3Bucket {
                     
                     if ($lastexitcode -eq 0) {
                         Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
-                        if ($PSVersionTable.PSVersion.Major -lt 7) {
-                            function abc {
-                                $key = "Operator"
-                                $value = "Microsoft_Sentinel_Automation_Script"
-                                return "{\""Key\"": \""$key\"", \""Value\"": \""$value\""}"                              
-                            }
-                            Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(abc)]}""" -LogFileName $LogFileName -Severity Verbose
-                            aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(abc)]}"
-                        }
-                        else {
-                            Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging $(ConvertTo-Json -InputObject @{'TagSet'=@($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json)} -Depth 99 -Compress)" -LogFileName $LogFileName -Severity Verbose
-                            aws s3api put-bucket-tagging --bucket $bucketName --tagging  $(ConvertTo-Json -InputObject @{'TagSet' = @($(Get-SentinelTagInJsonFormat) | ConvertFrom-Json) } -Depth 99 -Compress)
-                        }
-                    }
-                    elseif ($error[0] -Match "InvalidBucketName") {
-                        Write-Log -Message "Please see AWS bucket name documentation https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html" -LogFileName $LogFileName -Severity Error
-                    }
                 }
                 else {
                     exit
