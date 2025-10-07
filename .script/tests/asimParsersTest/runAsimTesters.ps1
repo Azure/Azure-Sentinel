@@ -105,7 +105,12 @@ function run {
 }
 
 function testSchema([string] $ParserFile) {
-    $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1" -Path "$ParserFile"
+    # Get workspace root directory (GitHub Actions sets this, fallback for local development)
+    $workspaceRoot = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Item "$PSScriptRoot/../../../").FullName }
+    $fullParserPath = Join-Path $workspaceRoot $ParserFile
+    
+    Write-Host "Reading parser file from: $fullParserPath"
+    $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1" -Path "$fullParserPath"
     $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.', ''))"
     # Iterate over the modified files
     for ($i = 0; $i -lt $modifiedFiles.Count; $i++) {
