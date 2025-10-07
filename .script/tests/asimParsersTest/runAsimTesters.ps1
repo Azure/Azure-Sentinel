@@ -29,42 +29,66 @@ Class Parser {
 
 function run {
     Write-Host "This is the script from PR."
-    # Check if upstream remote already exists
-    $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
-
-    if (-not $remoteExists) {
-        Write-Host "Adding upstream remote..."
-        Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+    
+    # Check if we're in GitHub Actions environment and have changed files from the workflow
+    if ($env:GITHUB_ACTIONS -eq "true" -and $env:PR_CHANGED_PARSER_FILES) {
+        $changedFiles = $env:PR_CHANGED_PARSER_FILES -split "," | Where-Object { $_.Trim() }
+        Write-Host "Found $($changedFiles.Length) changed parser files from PR for schema testing:"
+        $global:modifiedFiles = @()
+        foreach ($file in $changedFiles) {
+            $file = $file.Trim()
+            if ($file) {
+                Write-Host "  - $file"
+                $global:modifiedFiles += New-Object PSObject -Property @{
+                    Name = $file
+                    Status = "Modified"  # Assume modified for all files from PR
+                }
+            }
+        }
+        if ($changedFiles.Length -eq 0) {
+            Write-Host "No parser files changed in this PR - skipping schema tests."
+            return
+        }
     }
+    else {
+        # Original logic for local development
+        # Check if upstream remote already exists
+        $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
 
-    # Fetch the latest changes from upstream repositories
-    Write-Host "Fetching latest changes from upstream..."
-    Invoke-Expression "git fetch upstream" *> $null
+        if (-not $remoteExists) {
+            Write-Host "Adding upstream remote..."
+            Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+        }
 
-    # Get modified ASIM Parser files along with their status
-    $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
-    # Split the output into lines
-    $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
-    # Initialize an empty array to store the file names and their status
-    $global:modifiedFiles = @()
-    # Iterate over the lines
-    foreach ($line in $modifiedFilesStatusLines) {
-        # Split the line into status and file name
-        $parts = $line -split "\t"
-        # Assigning the first part to $status and the last part to $file
-        $status = $parts[0]
-        $file = $parts[-1]  # -1 index refers to the last element
-        # Check if the file is a YAML file
-        if ($file -like "*.yaml") {
-            # Add the file name and status to the array
-            $global:modifiedFiles += New-Object PSObject -Property @{
-                Name = $file
-                Status = switch -Regex ($status) {
-                    "A" { "Added" }
-                    "M" { "Modified" }
-                    "D" { "Deleted" }
-                    "R" { "Renamed" }
-                    default { "Unknown" }
+        # Fetch the latest changes from upstream repositories
+        Write-Host "Fetching latest changes from upstream..."
+        Invoke-Expression "git fetch upstream" *> $null
+
+        # Get modified ASIM Parser files along with their status
+        $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
+        # Split the output into lines
+        $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
+        # Initialize an empty array to store the file names and their status
+        $global:modifiedFiles = @()
+        # Iterate over the lines
+        foreach ($line in $modifiedFilesStatusLines) {
+            # Split the line into status and file name
+            $parts = $line -split "\t"
+            # Assigning the first part to $status and the last part to $file
+            $status = $parts[0]
+            $file = $parts[-1]  # -1 index refers to the last element
+            # Check if the file is a YAML file
+            if ($file -like "*.yaml") {
+                # Add the file name and status to the array
+                $global:modifiedFiles += New-Object PSObject -Property @{
+                    Name = $file
+                    Status = switch -Regex ($status) {
+                        "A" { "Added" }
+                        "M" { "Modified" }
+                        "D" { "Deleted" }
+                        "R" { "Renamed" }
+                        default { "Unknown" }
+                    }
                 }
             }
         }

@@ -196,6 +196,21 @@ jobs:
           eval "$INIT_GIT_FUNC"
           init_git_if_needed
           
+          # Get the list of changed files in this PR (only parser files)
+          echo "Getting changed files from PR..."
+          changed_parser_files=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            | jq -r '.[] | select(.filename | startswith("Parsers/") and endswith(".yaml")) | .filename' \
+            | tr '\n' ',' | sed 's/,$//')
+          
+          if [ -n "$changed_parser_files" ]; then
+            echo "Changed parser files: $changed_parser_files"
+            export PR_CHANGED_PARSER_FILES="$changed_parser_files"
+          else
+            echo "No parser files changed in this PR"
+            export PR_CHANGED_PARSER_FILES=""
+          fi
+          
           # Set environment variable to help the script work with our setup
           export GITHUB_WORKSPACE="${PWD}"
           
@@ -266,6 +281,13 @@ jobs:
           fi
           chmod +x "$filePath"
           
+          # Get changed parser files and set environment variable
+          changed_parser_files=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            | jq -r '.[] | select(.filename | startswith("Parsers/") and endswith(".yaml")) | .filename' \
+            | tr '\n' ',' | sed 's/,$//')
+          export PR_CHANGED_PARSER_FILES="$changed_parser_files"
+          
           # Initialize git using common function
           eval "$INIT_GIT_FUNC"
           init_git_if_needed
@@ -319,6 +341,22 @@ jobs:
               git config user.email "actions@github.com" | Out-Null
               git add . | Out-Null
               git commit -m "Initial commit with parser files" | Out-Null
+            }
+            
+            # Get changed parser files and set environment variable for PowerShell
+            $prNumber = "${{ github.event.pull_request.number }}"
+            $repo = "${{ github.repository }}"
+            $apiUrl = "https://api.github.com/repos/$repo/pulls/$prNumber/files"
+            
+            try {
+                $response = Invoke-RestMethod -Uri $apiUrl -Headers @{ "Accept" = "application/vnd.github.v3+json" }
+                $changedParserFiles = $response | Where-Object { $_.filename -like "Parsers/*.yaml" } | Select-Object -ExpandProperty filename
+                $env:PR_CHANGED_PARSER_FILES = $changedParserFiles -join ","
+                Write-Host "Changed parser files: $($env:PR_CHANGED_PARSER_FILES)"
+            }
+            catch {
+                Write-Host "Warning: Could not get changed files from API: $_"
+                $env:PR_CHANGED_PARSER_FILES = ""
             }
             
             # Check for local runAsimTesters.ps1 script first
@@ -409,6 +447,13 @@ jobs:
             echo "No local script found, downloading from master: $url"
             curl -sSL -o "$filePath" "$url"
           fi
+          
+          # Get changed parser files and set environment variable
+          changed_parser_files=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            | jq -r '.[] | select(.filename | startswith("Parsers/") and endswith(".yaml")) | .filename' \
+            | tr '\n' ',' | sed 's/,$//')
+          export PR_CHANGED_PARSER_FILES="$changed_parser_files"
           
           # Initialize git using common function
           eval "$INIT_GIT_FUNC"
