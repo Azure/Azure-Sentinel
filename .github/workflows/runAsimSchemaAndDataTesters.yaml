@@ -43,6 +43,18 @@ env:
   RUN_TESTERS_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/runAsimTesters.ps1
   CONVERT_YAML_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/convertYamlToObject.ps1
   FILTERING_TEST_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ASimFilteringTest.py
+  # Common git initialization function
+  INIT_GIT_FUNC: |
+    init_git_if_needed() {
+      if [ ! -d ".git" ]; then
+        echo "Initializing git repository for script compatibility..."
+        git init
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add .
+        git commit -m "Initial commit with parser files"
+      fi
+    }
 
 jobs:
   prepare-parsers:
@@ -145,6 +157,14 @@ jobs:
           [ -f "$filePath" ] && rm -f "$filePath"
           echo "Downloading script: $url"
           curl -sSL -o "$filePath" "$url"
+          
+          # Initialize git using common function
+          eval "$INIT_GIT_FUNC"
+          init_git_if_needed
+          
+          # Set environment variable to help the script work with our setup
+          export GITHUB_WORKSPACE="${PWD}"
+          
           python "$filePath"
 
   Run-ASim-Sample-Data-Ingest:
@@ -205,6 +225,11 @@ jobs:
           echo "Downloading script: $url"
           curl -sSL -o "$filePath" "$url"
           chmod +x "$filePath"
+          
+          # Initialize git using common function
+          eval "$INIT_GIT_FUNC"
+          init_git_if_needed
+          
           python "$filePath" "${{ github.event.pull_request.number }}"
       - name: Skip Azure ingestion notice
         if: steps.azure-check.outputs.available == 'false'
@@ -247,6 +272,15 @@ jobs:
         uses: azure/powershell@1c23bea6616927f9405ab4a2c61a3999d2b25c83
         with:
           inlineScript: |
+            # Initialize git repository if scripts expect git context (simplified)
+            if (-not (Test-Path ".git")) {
+              git init | Out-Null
+              git config user.name "GitHub Actions" | Out-Null
+              git config user.email "actions@github.com" | Out-Null
+              git add . | Out-Null
+              git commit -m "Initial commit with parser files" | Out-Null
+            }
+            
             $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
             $url = "$env:RUN_TESTERS_SCRIPT"
             if (Test-Path $filePath) { Remove-Item $filePath -Force }
@@ -316,6 +350,11 @@ jobs:
           [ -f "$filePath" ] && rm -f "$filePath"
           echo "Downloading script: $url"
           curl -sSL -o "$filePath" "$url"
+          
+          # Initialize git using common function
+          eval "$INIT_GIT_FUNC"
+          init_git_if_needed
+          
           python "$filePath"
 
   # Comment on fork PRs to notify contributors
