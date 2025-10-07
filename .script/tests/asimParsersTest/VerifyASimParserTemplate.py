@@ -186,17 +186,21 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
 
     # Check if parser_name exists in another_yaml_file's 'ParserQuery'
     if parser_name:
-        if parser_name in Union_Parser__file.get('ParserQuery', ''):
-            results.append((parser_name, 'Parser entry exists in union parser under "ParserQuery" property', 'Pass'))
+        # For ASim parsers, we need to check for the corresponding vim function name in the union parser
+        vim_parser_name = parser_name.replace('ASim', 'vim', 1)  # Replace first occurrence only
+        if vim_parser_name in Union_Parser__file.get('ParserQuery', ''):
+            results.append((parser_name, f'Parser entry exists in union parser under "ParserQuery" property as "{vim_parser_name}"', 'Pass'))
         else:
-            results.append(( f'{RED}' + parser_name + f'{RESET}', f'{RED}Parser entry not found in union parser under "ParserQuery" property{RESET}', f'{RED}Fail{RESET}'))
+            results.append(( f'{RED}' + parser_name + f'{RESET}', f'{RED}Parser entry not found in union parser under "ParserQuery" property (looking for "{vim_parser_name}"){RESET}', f'{RED}Fail{RESET}'))
 
     # Check if equivalent_built_in_parser exists in another_yaml_file's 'Parsers'
     if equivalent_built_in_parser:
-        if equivalent_built_in_parser in Union_Parser__file.get('Parsers', []):
-            results.append((equivalent_built_in_parser, 'Parser entry exists in union parser under "Parsers" property', 'Pass'))
+        # For ASim parsers, we need to check for the corresponding Im identifier in the union parser
+        im_parser_name = equivalent_built_in_parser.replace('_ASim_', '_Im_', 1)  # Replace first occurrence only
+        if im_parser_name in Union_Parser__file.get('Parsers', []):
+            results.append((equivalent_built_in_parser, f'Parser entry exists in union parser under "Parsers" property as "{im_parser_name}"', 'Pass'))
         else:
-            results.append((f'{RED}' + str(equivalent_built_in_parser) + f'{RESET}', f'{RED}Parser entry not found in union parser under "Parsers" property{RESET}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}' + str(equivalent_built_in_parser) + f'{RESET}', f'{RED}Parser entry not found in union parser under "Parsers" property (looking for "{im_parser_name}"){RESET}', f'{RED}Fail{RESET}'))
 
     # Check if title exists in yaml_file's 'Parser'->'Title'       
     if title:
