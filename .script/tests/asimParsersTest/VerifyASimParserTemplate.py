@@ -84,16 +84,22 @@ def run():
         
         # Use local file paths instead of URLs
         asim_parser_path = os.path.join(workspace_root, parser)
-        asim_union_parser_path = os.path.join(workspace_root, f'Parsers/ASim{schema_name}/Parsers/ASim{schema_name}.yaml')
         
+        # Read the parser first to get the EquivalentBuiltInParser value
         print(f'{YELLOW}Reading parser file:  {asim_parser_path}{RESET}') # for debugging
-        print(f'{YELLOW}Reading union parser file:  {asim_union_parser_path}{RESET}') # for debugging
-        
         asim_parser = read_local_yaml(asim_parser_path)
+        
+        if not check_parser_found(asim_parser, asim_parser_path):
+            continue
+            
+        # The union parser is typically the "im" version in the same directory
+        asim_union_parser_path = os.path.join(workspace_root, f'Parsers/ASim{schema_name}/Parsers/im{schema_name}.yaml')
+        
+        print(f'{YELLOW}Reading union parser file:  {asim_union_parser_path}{RESET}') # for debugging
         asim_union_parser = read_local_yaml(asim_union_parser_path)
         
-        # Both ASim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(asim_parser, asim_parser_path) and check_parser_found(asim_union_parser, asim_union_parser_path)):
+        # Union parser file should be present to proceed with the tests
+        if not check_parser_found(asim_union_parser, asim_union_parser_path):
             continue
         print_test_header(asim_parser.get('EquivalentBuiltInParser'))
         results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", asim_parser_path, sample_data_url)
@@ -279,13 +285,25 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     if FileType == "ASim":
         # construct filename
         SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
-        SampleDataUrl = ASIMSampleDataURL+SampleDataFile
-        # check if file exists
-        response = requests.get(SampleDataUrl)
-        if response.status_code == 200:
-            results.append((SampleDataFile, 'Sample data file exists', 'Pass'))
+        
+        # Check if we're in GitHub Actions environment and try local file first
+        workspace_root = os.environ.get('GITHUB_WORKSPACE', os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+        local_sample_path = os.path.join(workspace_root, 'Sample Data', 'ASIM', SampleDataFile)
+        
+        if os.path.exists(local_sample_path):
+            results.append((SampleDataFile, 'Sample data file exists (local)', 'Pass'))
         else:
-            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{event_vendor}_{event_product}_{schema}_IngestedLogs.csv"{RESET}', f'{RED}Fail{RESET}'))
+            # Fall back to checking remote URL
+            SampleDataUrl = ASIMSampleDataURL+SampleDataFile
+            # check if file exists remotely
+            try:
+                response = requests.get(SampleDataUrl)
+                if response.status_code == 200:
+                    results.append((SampleDataFile, 'Sample data file exists (remote)', 'Pass'))
+                else:
+                    results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}" in either local "Sample Data/ASIM/" directory or remote repository{RESET}', f'{RED}Fail{RESET}'))
+            except Exception as e:
+                results.append((f'{RED}Error checking sample file{RESET}', f'{RED}Error checking sample data file "{SampleDataFile}": {e}{RESET}', f'{RED}Fail{RESET}'))
     return results
 
 def filter_yaml_files(modified_files):
@@ -357,45 +375,6 @@ def get_current_commit_number():
         return None
 
 def extract_schema_name(parser):
-    match = re.search(r'ASim(\\w+)/', parser)
-    return match.group(1) if match else None
-
-def print_test_header(parser_name):
-    print("***********************************")
-    print(f"{GREEN}Performing tests for Parser: {parser_name}{RESET}")
-    print("***********************************")
-
-def print_results_table(results):
-    table = [[index + 1] + list(result) for index, result in enumerate(results)]
-    print(tabulate(table, headers=['S.No', 'Test Value', 'Test Name', 'Result'], tablefmt="grid"))
-
-# Remove old get_modified_files function - using the improved one above
-
-    # Add upstream remote if not already present
-    git_remote_command = "git remote"
-    remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
-    if 'upstream' not in remote_result.stdout.split():
-        git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
-        subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
-    # Fetch from upstream
-    git_fetch_upstream_command = "git fetch upstream"
-    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
-    cmd = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
-    try:
-        return subprocess.check_output(cmd, shell=True).decode().split("\n")
-    except subprocess.CalledProcessError as e:
-        print(f"::error::Error occurred while executing the command: {e}")
-        return []
-
-def get_current_commit_number():
-    cmd = "git rev-parse HEAD"
-    try:
-        return subprocess.check_output(cmd, shell=True, text=True).strip()
-    except subprocess.CalledProcessError as e:
-        print(f"::error::Error occurred while executing the command: {e}")
-        return None
-
-def extract_schema_name(parser):
     match = re.search(r'ASim(\w+)/', parser)
     return match.group(1) if match else None
 
@@ -427,6 +406,7 @@ def print_test_header(parser_name):
 def print_results_table(results):
     table = [[index + 1] + list(result) for index, result in enumerate(results)]
     print(tabulate(table, headers=['S.No', 'Test Value', 'Test Name', 'Result'], tablefmt="grid"))
+
 
 def check_test_failures(results, parser):
     if any(result[-1] == f'{RED}Fail{RESET}' for result in results):
