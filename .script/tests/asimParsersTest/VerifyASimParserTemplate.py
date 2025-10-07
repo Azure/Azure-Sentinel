@@ -58,7 +58,12 @@ def run():
     sample_data_url = f'{SENTINEL_REPO_RAW_URL}/master/{SAMPLE_DATA_PATH}'
     parser_yaml_files = filter_yaml_files(modified_files)
     
-    print(f"{GREEN}Following files were found to be modified:{RESET}")
+    # Check if no parser files were changed
+    if not parser_yaml_files:
+        print(f"{GREEN}No ASIM parser files were changed in this PR - validation complete!{RESET}")
+        return
+    
+    print(f"{GREEN}Following parser files were found to be modified:{RESET}")
     for file in parser_yaml_files:
         print(f"{YELLOW}{file}{RESET}")
     
@@ -312,29 +317,47 @@ def filter_yaml_files(modified_files):
 
 def get_modified_files(current_directory):
     # In the optimized workflow, we should check if this is running in GitHub Actions
-    # and use a simpler approach for getting modified files
+    # and get the actual changed files from the PR
     
     # Check if we're in GitHub Actions environment
     if os.environ.get('GITHUB_ACTIONS') == 'true':
-        # In GitHub Actions, we can look for specific parser files based on the PR changes
-        # Since we're in a sparse checkout environment, let's scan the Parsers directory
         workspace_root = os.environ.get('GITHUB_WORKSPACE', os.path.abspath(os.path.join(current_directory, '../../..')))
-        parsers_dir = os.path.join(workspace_root, 'Parsers')
         
-        modified_files = []
-        # Scan for YAML files in the Parsers directory, focusing on ASIM parsers
-        for root, dirs, files in os.walk(parsers_dir):
-            for file in files:
-                if file.endswith('.yaml') and not file.endswith('Empty.yaml'):
-                    # Only include ASIM parser files (those in ASim* directories or with ASim/vim naming)
-                    if ('/ASim' in root or file.startswith(('ASim', 'vim', 'im')) and 'ASim' in root):
-                        # Get relative path from workspace root
-                        full_path = os.path.join(root, file)
-                        rel_path = os.path.relpath(full_path, workspace_root).replace('\\', '/')
-                        modified_files.append(rel_path)
+        # Check if we have the changed parser files from the environment variable (set by workflow)
+        changed_files_env = os.environ.get('PR_CHANGED_PARSER_FILES', '')
+        if changed_files_env:
+            changed_files = [f.strip() for f in changed_files_env.split(',') if f.strip()]
+            print(f"Found {len(changed_files)} changed parser files from PR:")
+            for file in changed_files:
+                print(f"  - {file}")
+            return changed_files
         
-        print(f"Found {len(modified_files)} ASIM parser files in sparse checkout")
-        return modified_files
+        try:
+            # Fallback: Get the list of changed files in this PR using git diff
+            # We compare against the merge base to get only the changes in this PR
+            result = subprocess.run([
+                'git', 'diff', '--name-only', 'HEAD~1'
+            ], capture_output=True, text=True, cwd=workspace_root)
+            
+            if result.returncode == 0:
+                changed_files = result.stdout.strip().split('\n')
+                # Filter for parser files only (yaml files in Parsers directory)
+                parser_files = [f for f in changed_files if f.startswith('Parsers/') and f.endswith('.yaml')]
+                
+                if parser_files:
+                    print(f"Found {len(parser_files)} changed parser files in PR via git:")
+                    for file in parser_files:
+                        print(f"  - {file}")
+                    return parser_files
+            else:
+                print(f"Git command failed: {result.stderr}")
+                
+        except Exception as e:
+            print(f"Error getting changed files via git: {e}")
+        
+        # If no changed parser files found, print a message and exit
+        print("No parser files were changed in this PR - skipping parser validation.")
+        return []
     
     print("DEBUG: Using local development logic")
     # Original logic for local development

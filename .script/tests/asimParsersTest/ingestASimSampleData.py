@@ -20,6 +20,20 @@ from azure.core.exceptions import HttpResponseError
 import time
 
 def get_modified_files(current_directory):
+    # Check if we're in GitHub Actions environment and have changed files from the workflow
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        changed_files_env = os.environ.get('PR_CHANGED_PARSER_FILES', '')
+        if changed_files_env:
+            changed_files = [f.strip() for f in changed_files_env.split(',') if f.strip()]
+            print(f"Found {len(changed_files)} changed parser files from PR for ingestion:")
+            for file in changed_files:
+                print(f"  - {file}")
+            return changed_files
+        else:
+            print("No parser files changed in this PR - skipping sample data ingestion.")
+            return []
+    
+    # Original logic for local development
     # Add upstream remote if not already present
     git_remote_command = "git remote"
     remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
@@ -325,6 +339,11 @@ current_directory = os.path.dirname(os.path.abspath(__file__))
 modified_files = get_modified_files(current_directory)
 
 parser_yaml_files = filter_yaml_files(modified_files)
+
+# Check if no parser files were changed
+if not parser_yaml_files:
+    print("No ASIM parser files were changed in this PR - skipping sample data ingestion.")
+    sys.exit(0)
 
 commit_number = get_current_commit_number()
 prnumber = sys.argv[1]
