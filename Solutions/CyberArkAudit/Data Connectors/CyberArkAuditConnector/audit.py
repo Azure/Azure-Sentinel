@@ -105,7 +105,7 @@ def _call_audit_api(route: str, body: dict) -> dict:
         elif response.status_code in [400, 401, 403]:
             logging.error(f'Error {response.status_code} {response.text}')
         else:
-            logging.error(f'Error {response.status_code}')
+            logging.error(f'Error HTTP {response.status_code} when calling {url}')
     except Exception as err:
         logging.error(f'Something went wrong {err}')
     return res_content
