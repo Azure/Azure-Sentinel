@@ -2,9 +2,9 @@
 # The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
 # 
 # PERFORMANCE OPTIMIZATIONS:
-# - Uses sparse checkout to only download Parsers/ and .script/tests/asimParsersTest/ directories
+# - Uses sparse checkout to only download Parsers/, .script/tests/asimParsersTest/, and Sample Data/ASIM/ directories
 # - Uses shallow fetch with --depth=1 to minimize bandwidth and storage
-# - Downloads scripts directly from URLs to avoid needing full repository content
+# - Prefers local script and sample data files from PR over downloading from remote URLs
 # - Relies on GitHub's native merge conflict detection instead of custom validation
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
@@ -78,6 +78,7 @@ jobs:
           sparse-checkout: |
             Parsers/
             .script/tests/asimParsersTest/
+            Sample Data/ASIM/
           sparse-checkout-cone-mode: false
       - name: Checkout PR head into pr-code (isolated) - sparse
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
@@ -90,6 +91,7 @@ jobs:
           sparse-checkout: |
             Parsers/
             .script/tests/asimParsersTest/
+            Sample Data/ASIM/
           sparse-checkout-cone-mode: false
       - name: Copy parser assets (sanitized)
         run: |
@@ -101,6 +103,27 @@ jobs:
             echo "Selective copy empty; copying entire Parsers directory." >&2
             rsync -a pr-code/Parsers/ sanitized/Parsers/
           fi
+          
+          # Copy script files from PR if they exist (prefer PR version over master)
+          if [ -d "pr-code/.script/tests/asimParsersTest" ]; then
+            echo "Copying test scripts from PR..."
+            rsync -a pr-code/.script/tests/asimParsersTest/ sanitized/.script/tests/asimParsersTest/
+          elif [ -d ".script/tests/asimParsersTest" ]; then
+            echo "Copying test scripts from master..."
+            rsync -a .script/tests/asimParsersTest/ sanitized/.script/tests/asimParsersTest/
+          fi
+          
+          # Copy sample data files from PR if they exist (prefer PR version over master)
+          if [ -d "pr-code/Sample Data/ASIM" ]; then
+            echo "Copying ASIM sample data from PR..."
+            mkdir -p "sanitized/Sample Data"
+            rsync -a "pr-code/Sample Data/ASIM/" "sanitized/Sample Data/ASIM/"
+          elif [ -d "Sample Data/ASIM" ]; then
+            echo "Copying ASIM sample data from master..."
+            mkdir -p "sanitized/Sample Data"
+            rsync -a "Sample Data/ASIM/" "sanitized/Sample Data/ASIM/"
+          fi
+          
           # Detect symlinks (fail if any to avoid traversal attacks)
           if find sanitized/Parsers -type l | grep -q '.'; then
             echo 'Symlinks detected in Parsers directory. Aborting for safety.' >&2
@@ -115,7 +138,10 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: sanitized-parsers
-          path: sanitized/Parsers
+          path: |
+            sanitized/Parsers
+            sanitized/.script/tests/asimParsersTest
+            sanitized/Sample Data
           if-no-files-found: error
           retention-days: 3
 
@@ -130,7 +156,7 @@ jobs:
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: sanitized-parsers
-          path: Parsers
+          path: .
       - name: Write dependency manifest
         run: |
           printf "requests\nPyYAML\ntabulate\n" > deps-template.txt
@@ -152,11 +178,17 @@ jobs:
       - name: Run ASim parsers template validations python script
         run: |
           filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
-          url="$VERIFY_TEMPLATE_SCRIPT"
-          mkdir -p .script/tests/asimParsersTest
-          [ -f "$filePath" ] && rm -f "$filePath"
-          echo "Downloading script: $url"
-          curl -sSL -o "$filePath" "$url"
+          
+          # Check if we have a local version from the PR (preferred)
+          if [ -f "$filePath" ]; then
+            echo "Using local script version from PR: $filePath"
+          else
+            # Fall back to downloading from master
+            url="$VERIFY_TEMPLATE_SCRIPT"
+            mkdir -p .script/tests/asimParsersTest
+            echo "No local script found, downloading from master: $url"
+            curl -sSL -o "$filePath" "$url"
+          fi
           
           # Initialize git using common function
           eval "$INIT_GIT_FUNC"
@@ -219,11 +251,17 @@ jobs:
         if: steps.azure-check.outputs.available == 'true'
         run: |
           filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
-          url="$INGEST_SAMPLE_SCRIPT" 
-          mkdir -p .script/tests/asimParsersTest
-          [ -f "$filePath" ] && rm -f "$filePath"
-          echo "Downloading script: $url"
-          curl -sSL -o "$filePath" "$url"
+          
+          # Check if we have a local version from the PR (preferred)
+          if [ -f "$filePath" ]; then
+            echo "Using local script version from PR: $filePath"
+          else
+            # Fall back to downloading from master
+            url="$INGEST_SAMPLE_SCRIPT" 
+            mkdir -p .script/tests/asimParsersTest
+            echo "No local script found, downloading from master: $url"
+            curl -sSL -o "$filePath" "$url"
+          fi
           chmod +x "$filePath"
           
           # Initialize git using common function
@@ -281,16 +319,29 @@ jobs:
               git commit -m "Initial commit with parser files" | Out-Null
             }
             
+            # Check for local runAsimTesters.ps1 script first
             $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
-            $url = "$env:RUN_TESTERS_SCRIPT"
-            if (Test-Path $filePath) { Remove-Item $filePath -Force }
-            Write-Host "Downloading script: $url"
-            New-Item -ItemType Directory -Force -Path (Split-Path $filePath) | Out-Null
-            Invoke-WebRequest -Uri $url -OutFile $filePath
+            if (Test-Path $filePath) {
+              Write-Host "Using local script version from PR: $filePath"
+            } else {
+              # Fall back to downloading from master
+              $url = "$env:RUN_TESTERS_SCRIPT"
+              Write-Host "No local script found, downloading from master: $url"
+              New-Item -ItemType Directory -Force -Path (Split-Path $filePath) | Out-Null
+              Invoke-WebRequest -Uri $url -OutFile $filePath
+            }
+            
+            # Check for local convertYamlToObject.ps1 script first
             $filePath_convert_yaml = ".script/tests/asimParsersTest/convertYamlToObject.ps1"
-            $url_convert_yaml = "$env:CONVERT_YAML_SCRIPT"
-            if (Test-Path $filePath_convert_yaml) { Remove-Item $filePath_convert_yaml -Force }
-            Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml
+            if (Test-Path $filePath_convert_yaml) {
+              Write-Host "Using local convertYaml script version from PR: $filePath_convert_yaml"
+            } else {
+              # Fall back to downloading from master
+              $url_convert_yaml = "$env:CONVERT_YAML_SCRIPT"
+              Write-Host "No local convertYaml script found, downloading from master: $url_convert_yaml"
+              Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml
+            }
+            
             & $filePath
           azPSVersion: "latest"
 
@@ -345,11 +396,17 @@ jobs:
         if: steps.azure-check.outputs.available == 'true'
         run: |
           filePath=".script/tests/asimParsersTest/ASimFilteringTest.py"
-          url="$FILTERING_TEST_SCRIPT"
-          mkdir -p .script/tests/asimParsersTest
-          [ -f "$filePath" ] && rm -f "$filePath"
-          echo "Downloading script: $url"
-          curl -sSL -o "$filePath" "$url"
+          
+          # Check if we have a local version from the PR (preferred)
+          if [ -f "$filePath" ]; then
+            echo "Using local script version from PR: $filePath"
+          else
+            # Fall back to downloading from master
+            url="$FILTERING_TEST_SCRIPT"
+            mkdir -p .script/tests/asimParsersTest
+            echo "No local script found, downloading from master: $url"
+            curl -sSL -o "$filePath" "$url"
+          fi
           
           # Initialize git using common function
           eval "$INIT_GIT_FUNC"
