@@ -52,13 +52,18 @@ RESET = '\033[0m'  # Reset to default color
 def run():
     """Main function to execute the script logic."""
     current_directory = os.path.dirname(os.path.abspath(__file__))
+    
+    # Dynamically discover modified files (works for any parser files)
     modified_files = get_modified_files(current_directory)
-    commit_number = get_current_commit_number()
-    sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
+    sample_data_url = f'{SENTINEL_REPO_RAW_URL}/master/{SAMPLE_DATA_PATH}'
     parser_yaml_files = filter_yaml_files(modified_files)
+    
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
         print(f"{YELLOW}{file}{RESET}")
+    
+    # Get workspace root directory
+    workspace_root = os.environ.get('GITHUB_WORKSPACE', os.path.abspath(os.path.join(current_directory, '../../..')))
     
     for parser in parser_yaml_files:
         
@@ -76,27 +81,32 @@ def run():
              else :
                  # Skip the vim parser file as the corresponding ASim parser file is present and vim files will be tested with ASim files in upcoming steps.
                  continue 
-        asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{parser}'
-        print(f'{YELLOW}Constructed parser raw url:  {asim_parser_url}{RESET}') # uncomment for debugging
-        asim_union_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/Parsers/ASim{schema_name}/Parsers/ASim{schema_name}.yaml'
-        print(f'{YELLOW}Constructed union parser raw url:  {asim_union_parser_url}{RESET}') # uncomment for debugging
-        asim_parser = read_github_yaml(asim_parser_url)
-        asim_union_parser = read_github_yaml(asim_union_parser_url)
+        
+        # Use local file paths instead of URLs
+        asim_parser_path = os.path.join(workspace_root, parser)
+        asim_union_parser_path = os.path.join(workspace_root, f'Parsers/ASim{schema_name}/Parsers/ASim{schema_name}.yaml')
+        
+        print(f'{YELLOW}Reading parser file:  {asim_parser_path}{RESET}') # for debugging
+        print(f'{YELLOW}Reading union parser file:  {asim_union_parser_path}{RESET}') # for debugging
+        
+        asim_parser = read_local_yaml(asim_parser_path)
+        asim_union_parser = read_local_yaml(asim_union_parser_path)
+        
         # Both ASim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(asim_parser, asim_parser_url) and check_parser_found(asim_union_parser, asim_union_parser_url)):
+        if not (check_parser_found(asim_parser, asim_parser_path) and check_parser_found(asim_union_parser, asim_union_parser_path)):
             continue
         print_test_header(asim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", asim_parser_url, sample_data_url)
+        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", asim_parser_path, sample_data_url)
         print_results_table(results)
 
         check_test_failures(results, asim_parser)
 
-        vim_parser, vim_union_parser = get_vim_parsers(asim_parser_url, asim_union_parser_url, asim_parser)
+        vim_parser, vim_union_parser = get_vim_parsers_local(asim_parser_path, asim_union_parser_path, asim_parser, workspace_root)
         # Both vim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(vim_parser, asim_parser_url) and check_parser_found(vim_union_parser, asim_union_parser_url)):
+        if not (check_parser_found(vim_parser, asim_parser_path) and check_parser_found(vim_union_parser, asim_union_parser_path)):
             continue
         print_test_header(vim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", asim_parser_url, sample_data_url)
+        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", asim_parser_path, sample_data_url)
         print_results_table(results)
 
         check_test_failures(results, vim_parser)
@@ -130,12 +140,15 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     # Use a regular expression to find 'EventProduct' in the KQL query
     match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
 
+    # Initialize event_product with a default value
+    event_product = 'Unknown'
+    
     # If 'EventProduct' was found in the KQL query, extract its value
     if match:
         event_product = match.group(1)
         results.append((event_product, '"EventProduct" field is mapped in parser', 'Pass'))
     # if equivalent_built_in_parser end with Native, then use 'EventProduct' as SchemaName + 'NativeTable'
-    elif equivalent_built_in_parser.endswith('_Native'):
+    elif equivalent_built_in_parser and equivalent_built_in_parser.endswith('_Native'):
         event_product = 'NativeTable'
         results.append((event_product, '"EventProduct" field is not required since this is a native table parser. Static value will be used for "EventProduct".', 'Pass'))
     # If 'EventProduct' was not found in the KQL query, add to results
@@ -145,12 +158,15 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     # Use a regular expression to find 'EventVendor' in the KQL query
     match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
 
+    # Initialize event_vendor with a default value
+    event_vendor = 'Unknown'
+    
     # If 'EventVendor' was found in the KQL query, extract its value
     if match:
         event_vendor = match.group(1)
         results.append((event_vendor, '"EventVendor" field is mapped in parser', 'Pass'))
     # if equivalent_built_in_parser end with Native, then use 'EventVendor' as 'Microsoft'
-    elif equivalent_built_in_parser.endswith('_Native'):
+    elif equivalent_built_in_parser and equivalent_built_in_parser.endswith('_Native'):
         event_vendor = 'Microsoft'
         results.append((event_vendor, '"EventVendor" field is not required since this is a native table parser. Static value will be used for "EventVendor".', 'Pass'))
     # If 'EventVendor' was not found in the KQL query, add to results
@@ -277,6 +293,83 @@ def filter_yaml_files(modified_files):
     return [line for line in modified_files if line.endswith('.yaml')]
 
 def get_modified_files(current_directory):
+    # In the optimized workflow, we should check if this is running in GitHub Actions
+    # and use a simpler approach for getting modified files
+    
+    # Check if we're in GitHub Actions environment
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        # In GitHub Actions, we can look for specific parser files based on the PR changes
+        # Since we're in a sparse checkout environment, let's scan the Parsers directory
+        workspace_root = os.environ.get('GITHUB_WORKSPACE', os.path.abspath(os.path.join(current_directory, '../../..')))
+        parsers_dir = os.path.join(workspace_root, 'Parsers')
+        
+        modified_files = []
+        # Scan for YAML files in the Parsers directory, focusing on ASIM parsers
+        for root, dirs, files in os.walk(parsers_dir):
+            for file in files:
+                if file.endswith('.yaml') and not file.endswith('Empty.yaml'):
+                    # Only include ASIM parser files (those in ASim* directories or with ASim/vim naming)
+                    if ('/ASim' in root or file.startswith(('ASim', 'vim', 'im')) and 'ASim' in root):
+                        # Get relative path from workspace root
+                        full_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(full_path, workspace_root).replace('\\', '/')
+                        modified_files.append(rel_path)
+        
+        print(f"Found {len(modified_files)} ASIM parser files in sparse checkout")
+        return modified_files
+    
+    print("DEBUG: Using local development logic")
+    # Original logic for local development
+    try:
+        # Add upstream remote if not already present
+        git_remote_command = "git remote"
+        remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
+        if 'upstream' not in remote_result.stdout.split():
+            git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
+            subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
+        # Fetch from upstream
+        git_fetch_upstream_command = "git fetch upstream"
+        subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+        cmd = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
+        return subprocess.check_output(cmd, shell=True).decode().split("\\n")
+    except subprocess.CalledProcessError as e:
+        print(f"::error::Error occurred while executing git command: {e}")
+        print(f"::warning::Falling back to scanning all parser files")
+        # Fallback: scan all parser files
+        workspace_root = os.path.abspath(os.path.join(current_directory, '../../..'))
+        parsers_dir = os.path.join(workspace_root, 'Parsers')
+        
+        modified_files = []
+        for root, dirs, files in os.walk(parsers_dir):
+            for file in files:
+                if file.endswith('.yaml') and not file.endswith('Empty.yaml'):
+                    full_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(full_path, workspace_root).replace('\\', '/')
+                    modified_files.append(rel_path)
+        return modified_files
+
+def get_current_commit_number():
+    cmd = "git rev-parse HEAD"
+    try:
+        return subprocess.check_output(cmd, shell=True, text=True).strip()
+    except subprocess.CalledProcessError as e:
+        print(f"::error::Error occurred while executing the command: {e}")
+        return None
+
+def extract_schema_name(parser):
+    match = re.search(r'ASim(\\w+)/', parser)
+    return match.group(1) if match else None
+
+def print_test_header(parser_name):
+    print("***********************************")
+    print(f"{GREEN}Performing tests for Parser: {parser_name}{RESET}")
+    print("***********************************")
+
+def print_results_table(results):
+    table = [[index + 1] + list(result) for index, result in enumerate(results)]
+    print(tabulate(table, headers=['S.No', 'Test Value', 'Test Name', 'Result'], tablefmt="grid"))
+
+# Remove old get_modified_files function - using the improved one above
 
     # Add upstream remote if not already present
     git_remote_command = "git remote"
@@ -312,6 +405,19 @@ def read_github_yaml(url):
     except Exception as e:
         print(f"::error::An error occurred while trying to get content of YAML file located at {url}: {e}")
     return yaml.safe_load(response.text) if response.status_code == 200 else None
+
+def read_local_yaml(file_path):
+    """Read YAML content from a local file."""
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as file:
+                return yaml.safe_load(file)
+        else:
+            print(f"::error::Local file not found: {file_path}")
+            return None
+    except Exception as e:
+        print(f"::error::An error occurred while reading local YAML file {file_path}: {e}")
+        return None
 
 def print_test_header(parser_name):
     print("***********************************")
@@ -357,13 +463,38 @@ def get_vim_parsers(asim_parser_url, asim_union_parser_url, asim_parser):
     vim_union_parser = read_github_yaml(vim_union_parser_url)
     return vim_parser, vim_union_parser
 
+def get_vim_parsers_local(asim_parser_path, asim_union_parser_path, asim_parser, workspace_root):
+    """Get vim parsers using local file paths."""
+    # Get vim parser path by replacing 'ASim' with 'vim' in filename
+    vim_parser_filename = os.path.basename(asim_parser_path).replace('ASim', 'vim', 1)
+    vim_parser_dir = os.path.dirname(asim_parser_path)
+    vim_parser_path = os.path.join(vim_parser_dir, vim_parser_filename)
+    
+    # Get vim union parser path by replacing 'ASim' with 'im' in filename
+    vim_union_parser_filename = os.path.basename(asim_union_parser_path).replace('ASim', 'im', 1)
+    vim_union_parser_dir = os.path.dirname(asim_union_parser_path)
+    vim_union_parser_path = os.path.join(vim_union_parser_dir, vim_union_parser_filename)
+    
+    vim_parser = read_local_yaml(vim_parser_path)
+    vim_union_parser = read_local_yaml(vim_union_parser_path)
+    return vim_parser, vim_union_parser
+
 # Function to read Exclusion list for ASim Parser test from a CSV file
 def read_exclusion_list_from_csv():
     exclusion_list = []
-    with open(parser_exclusion_file_path, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            exclusion_list.append(row[0])
+    workspace_root = os.environ.get('GITHUB_WORKSPACE', os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+    exclusion_file_full_path = os.path.join(workspace_root, parser_exclusion_file_path)
+    
+    try:
+        with open(exclusion_file_full_path, newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                exclusion_list.append(row[0])
+    except FileNotFoundError:
+        print(f"::warning::Exclusion file not found at {exclusion_file_full_path}. Continuing without exclusions.")
+    except Exception as e:
+        print(f"::warning::Error reading exclusion file: {e}. Continuing without exclusions.")
+    
     return exclusion_list
 
 # Script starts here
