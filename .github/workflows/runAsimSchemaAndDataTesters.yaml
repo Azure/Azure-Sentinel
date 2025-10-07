@@ -492,7 +492,7 @@ jobs:
             }
             
             // Post the comment since it doesn't exist yet
-            const comment = `## 🔄 Fork PR Detected
+            const comment = \`## 🔄 Fork PR Detected
             
             Thank you for your contribution to Azure Sentinel ASIM parsers! 
             
@@ -506,11 +506,11 @@ jobs:
             
             ### ❓ Need Help?
             - Check the [ASIM documentation](https://docs.microsoft.com/azure/sentinel/normalization) for parser guidelines
-            - Review existing parsers in the \`Parsers/\` directory for examples
+            - Review existing parsers in the \\\`Parsers/\\\` directory for examples
             - Comment on this PR if you have questions
             
             ---
-            *This comment was automatically generated for fork PR contributions.*`;
+            *This comment was automatically generated for fork PR contributions.*\`;
             
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -520,3 +520,42 @@ jobs:
             });
             
             console.log('Fork PR welcome comment posted successfully');
+
+  # Completion job that always runs to ensure workflow shows as completed
+  workflow-completion:
+    name: Workflow Completion
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [Run-ASim-TemplateValidation, Run-ASim-Sample-Data-Ingest, Run-ASim-Schema-Data-tests, Run-ASim-Parser-Filtering-Tests]
+    steps:
+      - name: Check workflow status
+        run: |
+          echo "Workflow completion status check:"
+          echo "✅ Template Validation: ${{ needs.Run-ASim-TemplateValidation.result }}"
+          echo "✅ Sample Data Ingestion: ${{ needs.Run-ASim-Sample-Data-Ingest.result }}"
+          echo "✅ Schema Data Tests: ${{ needs.Run-ASim-Schema-Data-tests.result }}"
+          echo "✅ Filtering Tests: ${{ needs.Run-ASim-Parser-Filtering-Tests.result }}"
+          
+          # Check if any critical jobs failed
+          if [[ "${{ needs.Run-ASim-TemplateValidation.result }}" == "failure" ]]; then
+            echo "❌ Template validation failed"
+            exit 1
+          fi
+          
+          # Sample data ingestion and schema tests are allowed to be skipped for fork PRs
+          if [[ "${{ needs.Run-ASim-Sample-Data-Ingest.result }}" == "failure" ]]; then
+            echo "❌ Sample data ingestion failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.Run-ASim-Schema-Data-tests.result }}" == "failure" ]]; then
+            echo "❌ Schema data tests failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.Run-ASim-Parser-Filtering-Tests.result }}" == "failure" ]]; then
+            echo "❌ Parser filtering tests failed"
+            exit 1
+          fi
+          
+          echo "🎉 All workflow jobs completed successfully!"
