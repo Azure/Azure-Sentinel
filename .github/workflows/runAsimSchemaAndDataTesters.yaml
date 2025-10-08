@@ -6,9 +6,14 @@
 # - Uses shallow fetch with --depth=1 to minimize bandwidth and storage
 # - Prefers local script and sample data files from PR over downloading from remote URLs
 # - Relies on GitHub's native merge conflict detection instead of custom validation
+# 
+# FORK PR SUPPORT:
+# - Runs full Azure testing for both internal and fork PRs
+# - No longer skips Azure-dependent steps for fork contributions
+# - Provides complete validation coverage for all contributions
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, reopened, synchronize]
     branches:
       - master
@@ -62,12 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    outputs:
-      pr-number: ${{ steps.meta.outputs.pr_number }}
     steps:
-      - name: Extract PR number
-        id: meta
-        run: echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
       - name: Checkout trusted base (master) - sparse
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
@@ -247,25 +247,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install azure-identity requests PyYAML azure-monitor-ingestion azure-core
-      - name: Check Azure secrets availability
-        id: azure-check
-        run: |
-          if [ -n "${{ secrets.AZURE_ASIM_CLIENT_ID }}" ] && [ -n "${{ secrets.AZURE_TENANT_ID }}" ]; then
-            echo "available=true" >> $GITHUB_OUTPUT
-            echo "✅ Azure secrets available - full testing enabled" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "available=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Azure secrets not available (likely fork PR) - skipping Azure-dependent steps" >> $GITHUB_STEP_SUMMARY
-          fi
       - name: Login to Azure Public Cloud
-        if: steps.azure-check.outputs.available == 'true'
         uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
       - name: Asim Sample Log Ingestion
-        if: steps.azure-check.outputs.available == 'true'
         run: |
           filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
           
@@ -293,11 +281,6 @@ jobs:
           init_git_if_needed
           
           python "$filePath" "${{ github.event.pull_request.number }}"
-      - name: Skip Azure ingestion notice
-        if: steps.azure-check.outputs.available == 'false'
-        run: |
-          echo "⚠️ Skipping Azure log ingestion - secrets not available" >> $GITHUB_STEP_SUMMARY
-          echo "This is normal for fork PRs. Template validation was still performed." >> $GITHUB_STEP_SUMMARY
 
   Run-ASim-Schema-Data-tests:
     needs: Run-ASim-Sample-Data-Ingest
@@ -312,17 +295,7 @@ jobs:
         with:
           name: sanitized-parsers
           path: .
-      - name: Check Azure secrets availability
-        id: azure-check
-        run: |
-          if [ -n "${{ secrets.AZURE_ASIM_CLIENT_ID }}" ] && [ -n "${{ secrets.AZURE_TENANT_ID }}" ]; then
-            echo "available=true" >> $GITHUB_OUTPUT
-          else
-            echo "available=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Skipping Azure schema tests - secrets not available (likely fork PR)" >> $GITHUB_STEP_SUMMARY
-          fi
       - name: Login to Azure Public Cloud with AzPowershell
-        if: steps.azure-check.outputs.available == 'true'
         uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
@@ -330,7 +303,6 @@ jobs:
           enable-AzPSSession: true
           allow-no-subscriptions: true
       - name: Run ASIM Schema and Data tests PowerShell script
-        if: steps.azure-check.outputs.available == 'true'
         uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709
         with:
           inlineScript: |
@@ -416,24 +388,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install PyYAML azure-identity azure-monitor-query
-      - name: Check Azure secrets availability
-        id: azure-check
-        run: |
-          if [ -n "${{ secrets.AZURE_ASIM_CLIENT_ID }}" ] && [ -n "${{ secrets.AZURE_TENANT_ID }}" ]; then
-            echo "available=true" >> $GITHUB_OUTPUT
-          else
-            echo "available=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Skipping Azure filtering tests - secrets not available (likely fork PR)" >> $GITHUB_STEP_SUMMARY
-          fi
       - name: Login to Azure Public Cloud
-        if: steps.azure-check.outputs.available == 'true'
         uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
       - name: Run ASim parsers filtering tests python script
-        if: steps.azure-check.outputs.available == 'true'
         run: |
           filePath=".script/tests/asimParsersTest/ASimFilteringTest.py"
           
@@ -461,66 +422,6 @@ jobs:
           
           python "$filePath"
 
-  # Comment on fork PRs to notify contributors
-  fork-pr-comment:
-    name: Fork PR Notification
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.head.repo.fork == true
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Comment on Fork PR
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
-        with:
-          script: |
-            // Check if we already commented on this PR
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number
-            });
-            
-            // Look for our bot comment (identified by unique text)
-            const botCommentExists = comments.some(comment => 
-              comment.body.includes('Fork PR Detected') && 
-              comment.body.includes('automatically generated for fork PR contributions')
-            );
-            
-            if (botCommentExists) {
-              console.log('Fork PR comment already exists - skipping duplicate');
-              return;
-            }
-            
-            // Post the comment since it doesn't exist yet
-            const comment = \`## 🔄 Fork PR Detected
-            
-            Thank you for your contribution to Azure Sentinel ASIM parsers! 
-            
-            ### 📋 What happens next:
-            - ✅ Your PR will be automatically tested with our ASIM validation suite
-            - 🔍 Maintainers will review your changes and test results
-            - 🚀 Once approved, your contribution will be merged
-            
-            ### 🛡️ Security Note:
-            This workflow runs with repository privileges for testing purposes. Our security measures ensure safe execution of external contributions.
-            
-            ### ❓ Need Help?
-            - Check the [ASIM documentation](https://docs.microsoft.com/azure/sentinel/normalization) for parser guidelines
-            - Review existing parsers in the \\\`Parsers/\\\` directory for examples
-            - Comment on this PR if you have questions
-            
-            ---
-            *This comment was automatically generated for fork PR contributions.*\`;
-            
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
-            
-            console.log('Fork PR welcome comment posted successfully');
-
   # Completion job that always runs to ensure workflow shows as completed
   workflow-completion:
     name: Workflow Completion
@@ -542,7 +443,6 @@ jobs:
             exit 1
           fi
           
-          # Sample data ingestion and schema tests are allowed to be skipped for fork PRs
           if [[ "${{ needs.Run-ASim-Sample-Data-Ingest.result }}" == "failure" ]]; then
             echo "❌ Sample data ingestion failed"
             exit 1
