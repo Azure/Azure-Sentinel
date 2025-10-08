@@ -15,7 +15,15 @@ FunctionQuery: |
       EventStartTime = column_ifexists('START_TIME_t', ''),
       EventType = column_ifexists('EVENT_TYPE_s', ''),
       TargetUsername = column_ifexists('USER_NAME_s', ''),
-      SrcDvcIpAddr = column_ifexists('CLIENT_IP_s', '')
+      SrcDvcIpAddr = column_ifexists('CLIENT_IP_s', ''),
+      QueryType = column_ifexists('QUERY_TYPE_s', ''),
+      QueryText = column_ifexists('QUERY_TEXT_s',''),
+      QueryExecutionStatus = column_ifexists('EXECUTION_STATUS_s', ''),
+      QueryTotalElapsedTime = toreal(column_ifexists('TOTAL_ELAPSED_TIME_d', '0')),
+      LoginIsSuccess = column_ifexists('IS_SUCCESS_s',''),
+      QueryCreditsUsedCloudServices = toreal(column_ifexists('CREDITS_USED_CLOUD_SERVICES_d','0')),
+      QueryExecutionTime = toreal(column_ifexists('EXECUTION_TIME_d','0')),
+      RoleName = column_ifexists('ROLE_NAME_s','')
     | extend 
       User=TargetUsername,
       EventEndTime=iff(isnotempty(EVENT_TIMESTAMP_t), EVENT_TIMESTAMP_t, END_TIME_t)
@@ -43,6 +51,7 @@ FunctionQuery: |
       LoginConnection = tostring(DataList[13]),
       LoginClientPrivateLinkId = tostring(DataList[14])
     | extend User = TargetUsername
+    //| extend EventStartTime = column_ifexists('START_TIME', '')
   };
   let SnowflakeUserGrant_view = view ()  {
     SnowflakeUserGrant_CL
@@ -286,7 +295,10 @@ FunctionQuery: |
     | mv-expand DataList = todynamic(Data)
     | extend
       STime = toreal(DataList[19]),
-      ETime = toreal(DataList[20])
+      ETime = toreal(DataList[20]),
+      QueryTotalElapsedTime = toreal(DataList[21]),
+      QueryExecutionTime = toreal(DataList[39]),
+      QueryCreditsUsedCloudServices = toreal(DataList[51])
     | extend
       QueryId = tostring(DataList[0]),
       QueryText = tostring(DataList[1]),
@@ -309,7 +321,6 @@ FunctionQuery: |
       QueryErrorMessage = tostring(DataList[18]),
       QueryStartTime = unixtime_seconds_todatetime(STime),
       EventEndTime = unixtime_seconds_todatetime(ETime),
-      QueryTotalElapsedTime = tostring(DataList[21]),
       QueryBytesScanned = tostring(DataList[22]),
       QueryPercentageScannedFromCache = tostring(DataList[23]),
       QueryBytesWritten = tostring(DataList[24]),
@@ -327,7 +338,6 @@ FunctionQuery: |
       QueryBytesSpilledToRemoteStorage = tostring(DataList[36]),
       QueryBytesSentOverTheNetwork = tostring(DataList[37]),
       QueryCompilationTime = tostring(DataList[38]),
-      QueryExecutionTime = tostring(DataList[39]),
       QueryQueuedProvisioningTime = tostring(DataList[40]),
       QueryQueuedRepairTime = tostring(DataList[41]),
       QueryQueuedOverloadTime = tostring(DataList[42]),
@@ -339,7 +349,6 @@ FunctionQuery: |
       QueryInboundDataTransferRegion = tostring(DataList[48]),
       QueryInboundDataTransferBytes = tostring(DataList[49]),
       QueryListExternalFilesTime = tostring(DataList[50]),
-      QueryCreditsUsedCloudServices = tostring(DataList[51]),
       QueryReleaseVersion = tostring(DataList[52]),
       QueryExternalFunctionTotalInvocations = tostring(DataList[53]),
       QueryExternalFunctionTotalSentRows = tostring(DataList[54]),
@@ -381,6 +390,8 @@ FunctionQuery: |
   (SnowflakeTables_view),
   (SnowflakeUsers_view),
   (SnowflakeQuery_view)
+  | extend DatabaseName = coalesce(QueryDatabaseName, UserDatabaseName, RoleDatabaseName, MaterializedViewDatabaseName)
+  | extend TableNames = coalesce(TableName, MaterializedViewTableName, LoadTableName, TableStorageMetricsTableName)
   | project
     EventVendor, 
     EventProduct, 
@@ -481,6 +492,7 @@ FunctionQuery: |
     TableStorageMetricsInstanceId,
     TableId,
     TableName,
+    TableNames,
     TableSchemaId,
     TableSchema,
     TableCatalogId,
@@ -623,4 +635,6 @@ FunctionQuery: |
     QueryUserDatabaseName,
     QueryUserDatabaseId,
     QueryUserSchemaName,
-    QueryUserSchemaId
+    QueryUserSchemaId,
+    DatabaseName,
+    TimeGenerated

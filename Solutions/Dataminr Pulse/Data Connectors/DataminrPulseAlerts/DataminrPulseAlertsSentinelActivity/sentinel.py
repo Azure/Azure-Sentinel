@@ -8,6 +8,7 @@ import requests
 from shared_code.logger import applogger
 from shared_code.consts import LOGS_STARTS_WITH
 from shared_code.dataminrpulse_exception import DataminrPulseException
+from shared_code import consts
 
 customer_id = os.environ.get("WorkspaceID")
 shared_key = os.environ.get("WorkspaceKey")
@@ -79,12 +80,11 @@ class MicrosoftSentinel:
                 "Error while generating signature for posting data into log analytics."
             )
         uri = (
-            "https://"
-            + customer_id
-            + ".ods.opinsights.azure.com"
+            consts.LOG_ANALYTICS_URL
             + resource
             + "?api-version=2016-04-01"
         )
+        applogger.debug("uri: {}".format(uri))
 
         headers = {
             "content-type": content_type,
