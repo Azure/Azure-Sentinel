@@ -182,7 +182,7 @@
 
 - Click on below button to deploy
   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2JoeSandbox%2Playbooks%2JoeSandbox_Outlook_Attachment_Analysis%2azuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2JoeSandbox%2Playbooks%2JoeSandbox-Submit-File-Outlook-Attachment%2azuredeploy.json)
 
 - It will redirect to configuration page
 
