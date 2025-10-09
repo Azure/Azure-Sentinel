@@ -104,7 +104,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
     logging.info('Fetching data from IdentityNow at %s', utc_timestamp)
 
-    url = f'https://{tenant_id}.api.identitynow-demo.com/oauth/token'
+    url = f'https://{tenant_id}.api.identitynow.com/oauth/token'
     new_checkpoint_time = (datetime.datetime.utcnow() - datetime.timedelta(minutes=60)).isoformat() + "Z"
     checkpoint_table_name = 'checkpointTable'
     table_service = TableService(account_name=storage_account_name, account_key=access_key)
@@ -180,7 +180,7 @@ def main(mytimer: func.TimerRequest) -> None:
             "sort": ["created"],
             "searchAfter": []
         }
-        audit_url = f'https://{tenant_id}.api.identitynow-demo.com/v2025/search/events'
+        audit_url = f'https://{tenant_id}.api.identitynow.com/v2025/search/events'
 
         # Initiate request
         audit_events_response = requests.request("POST", url=audit_url, params=queryparams, json=searchpayload,
