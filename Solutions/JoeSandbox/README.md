@@ -90,11 +90,11 @@
 ### Flex Consumption Plan 
 - Click on below button to deploy with Flex Consumption plan:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FJoeSandbox%2FData%20Connectors%2Fazuredeploy_JoeSandboxThreatIntelligenceFuncApp_AzureFunction_flex.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FJoeSandbox%2FData%20Connectors%2Fazuredeploy_JoeSandboxThreatIntelligenceFuncApp_AzureFunction_flex.json)
 ### Premium Plan
 - Click on below button to deploy with Premium plan:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FJoeSandbox%2FData%20Connectors%2Fazuredeploy_JoeSandboxThreatIntelligenceFuncApp_AzureFunction_premium.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FJoeSandbox%2FData%20Connectors%2Fazuredeploy_JoeSandboxThreatIntelligenceFuncApp_AzureFunction_premium.json)
 
 - It will redirect to feed Configuration page.
   ![09](Images/09.png)
@@ -125,7 +125,7 @@
 
 - Click on below button to deploy 
 
-  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2JoeSandbox%2Playbooks%2CustomConnector%2JoeSandboxEnrichment_FunctionAppConnector%2azuredeploy.json)
+  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2JoeSandbox%2Playbooks%2CustomConnector%2JoeSandboxEnrichment_FunctionAppConnector%2azuredeploy.json)
   
 - It will redirect to feed Configuration page.
 
@@ -155,7 +155,7 @@
 
 - Click on below button to deploy
   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2JoeSandbox%2Playbooks%2JoeSandbox-Submit-Url-Sentinel-Incident%2azuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2JoeSandbox%2Playbooks%2JoeSandbox-Submit-Url-Sentinel-Incident%2azuredeploy.json)
 
 - It will redirect to configuration page
 
@@ -182,7 +182,7 @@
 
 - Click on below button to deploy
   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2JoeSandbox%2Playbooks%2JoeSandbox-Submit-File-Outlook-Attachment%2azuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2JoeSandbox%2Playbooks%2JoeSandbox-Submit-File-Outlook-Attachment%2azuredeploy.json)
 
 - It will redirect to configuration page
 
