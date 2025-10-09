@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 3.3.6       | 29-08-2025                     | Updated  **Analytical Rule** to fix the rule saving issue  | 
+| 3.3.6       | 23-09-2025                     | Updated  **Analytical Rule** to fix the rule saving issue. <br/> Removed Preview Designation from **Microsoft Entra ID Connector** Data Types.  | 
 | 3.3.5       | 25-07-2025                     | Updated Entra id Conditional Access (prefix) **Analytical Rule** |
 | 3.3.4       | 10-07-2025                     | Updated **Analytical Rule** NRT_UseraddedtoPrivilgedGroups.yaml and UseraddedtoPrivilgedGroups.yaml
 | 3.3.3       | 03-06-2025                     | Updates to multiple **Playbooks** to improve documentation, streamline deployment instructions, and add links to detailed setup steps.							                    	   |

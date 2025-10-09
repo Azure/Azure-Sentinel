@@ -4,5 +4,5 @@ namespace Sentinel.Client;
 
 public interface ICovewareClient
 {
-    Task<CovewareFindingsResponse> GetCovewareFindingsAsync();
+    Task<CovewareFindingsResponse> GetCovewareFindingsAsync(CovewareFindingFilter filter);
 }
