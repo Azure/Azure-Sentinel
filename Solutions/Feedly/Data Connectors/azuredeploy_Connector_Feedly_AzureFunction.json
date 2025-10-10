@@ -9,17 +9,24 @@
             "type": "String"
         },
         "DceName": {
-            "defaultValue": "Feedly-DCE",
+            "defaultValue": "[concat(parameters('TableName'), '-DCE')]",
             "type": "String",
             "metadata": {
                 "description": "Name of the Data Collection Endpoint to create"
             }
         },
         "DcrName": {
-            "defaultValue": "DCR_feedly_indicators_v2_CL",
+            "defaultValue": "[concat('DCR_', parameters('TableName'))]",
             "type": "String",
             "metadata": {
                 "description": "Name of the Data Collection Rule to create for Feedly IoCs"
+            }
+        },
+        "TableName": {
+            "defaultValue": "feedly_indicators_v2_CL",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the custom table to create for Feedly IoCs"
             }
         },
         "AzureTenantId": {
@@ -69,7 +76,8 @@
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
-        "StorageSuffix": "[environment().suffixes.storage]"
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "StreamName": "[concat('Custom-', parameters('TableName'))]"
     },
     "resources": [
         {
@@ -98,12 +106,12 @@
         {
             "type": "Microsoft.OperationalInsights/workspaces/tables",
             "apiVersion": "2023-01-01-preview",
-            "name": "[concat(last(split(parameters('AppInsightsWorkspaceResourceID'), '/')), '/feedly_indicators_v2_CL')]",
+            "name": "[concat(last(split(parameters('AppInsightsWorkspaceResourceID'), '/')), '/', parameters('TableName'))]",
             "properties": {
                 "totalRetentionInDays": 365,
                 "plan": "Auxiliary",
                 "schema": {
-                    "name": "feedly_indicators_v2_CL",
+                    "name": "[parameters('TableName')]",
                     "columns": [
                         {
                             "name": "TimeGenerated",
@@ -140,12 +148,12 @@
             "apiVersion": "2021-09-01-preview",
             "dependsOn": [
                 "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName'))]",
-                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', last(split(parameters('AppInsightsWorkspaceResourceID'), '/')), 'feedly_indicators_v2_CL')]"
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', last(split(parameters('AppInsightsWorkspaceResourceID'), '/')), parameters('TableName'))]"
             ],
             "properties": {
                 "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName'))]",
                 "streamDeclarations": {
-                    "Custom-feedly_indicators_v2_CL": {
+                    "[variables('StreamName')]": {
                         "columns": [
                             {
                                 "name": "TimeGenerated",
@@ -185,13 +193,13 @@
                 "dataFlows": [
                     {
                         "streams": [
-                            "Custom-feedly_indicators_v2_CL"
+                            "[variables('StreamName')]"
                         ],
                         "destinations": [
                             "clv2ws1"
                         ],
                         "transformKql": "source | project TimeGenerated, indicatorType, value, articleTitle, articleUrl, source",
-                        "outputStream": "Custom-feedly_indicators_v2_CL"
+                        "outputStream": "[variables('StreamName')]"
                     }
                 ]
             }
@@ -327,7 +335,7 @@
                         "WEBSITE_CONTENTSHARE": "[toLower(variables('FunctionName'))]",
                         "DataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName')), '2021-04-01').logsIngestion.endpoint]",
                         "DcrImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DcrName')), '2021-09-01-preview').immutableId]",
-                        "DcrStreamName": "feedly_indicators_v2_CL",
+                        "DcrStreamName": "[parameters('TableName')]",
                         "AzureTenantId": "[parameters('AzureTenantId')]",
                         "AzureClientId": "[parameters('AzureClientId')]",
                         "AzureClientSecret": "[parameters('AzureClientSecret')]",
@@ -399,7 +407,7 @@
         },
         "customTableName": {
             "type": "string",
-            "value": "feedly_indicators_v2_CL"
+            "value": "[parameters('TableName')]"
         }
     }
 }
