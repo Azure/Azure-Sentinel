@@ -78,7 +78,7 @@ class FeedlySentinelWorker:
 def build_indicators_from_article(article: dict) -> DataFrame:
     df = DataFrame(
         [
-            {"type": indicator["type"], "value": indicator["canonical"]}
+            {"indicatorType": indicator["type"], "value": indicator["canonical"]}
             for indicator in article.get("indicatorsOfCompromise", {}).get("mentions", [])
         ]
     )

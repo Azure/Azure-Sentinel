@@ -2,31 +2,6 @@
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "FunctionName": {
-            "defaultValue": "Feedly",
-            "minLength": 1,
-            "maxLength": 11,
-            "type": "String"
-        },
-        "DataCollectionEndpoint": {
-            "type": "String",
-            "metadata": {
-                "description": "The Data Collection Endpoint URL (e.g., https://<unique-dce-name>.<region>.ingest.monitor.azure.com)"
-            }
-        },
-        "DcrImmutableId": {
-            "type": "String",
-            "metadata": {
-                "description": "The Immutable ID of the Data Collection Rule (DCR) that will receive the Feedly IoCs"
-            }
-        },
-        "DcrStreamName": {
-            "defaultValue": "DCR_feedly_indicators_CL",
-            "type": "String",
-            "metadata": {
-                "description": "The stream name for the Data Collection Rule (should match the custom table name with Custom- prefix)"
-            }
-        },
         "AzureTenantId": {
             "type": "String",
             "metadata": {
@@ -36,7 +11,7 @@
         "AzureClientId": {
             "type": "String",
             "metadata": {
-                "description": "Azure AD Application (client) ID with permissions to write to the DCR"
+                "description": "Azure AD Application (client) ID - this is different from the Service Principal object ID"
             }
         },
         "AzureClientSecret": {
@@ -44,6 +19,18 @@
             "metadata": {
                 "description": "Azure AD Application client secret"
             }
+        },
+        "AzureObjectId": {
+            "type": "String",
+            "metadata": {
+                "description": "Azure AD Service Principal object ID (not Application object ID)"
+            }
+        },
+        "FunctionName": {
+            "defaultValue": "Feedly",
+            "minLength": 1,
+            "maxLength": 11,
+            "type": "String"
         },
         "FeedlyApiKey": {
             "type": "SecureString",
@@ -65,6 +52,27 @@
                 "description": "The number of days to backfill when ingesting from a new stream id"
             }
         },
+        "TableName": {
+            "defaultValue": "feedly_indicators_CL",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the custom table to create for Feedly IoCs (must end with _CL)"
+            }
+        },
+        "DceName": {
+            "defaultValue": "[concat(replace(parameters('TableName'), '_', '-'), '-DCE')]",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Data Collection Endpoint to create"
+            }
+        },
+        "DcrName": {
+            "defaultValue": "[concat('DCR_', parameters('TableName'))]",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Data Collection Rule to create for Feedly IoCs"
+            }
+        },
         "AppInsightsWorkspaceResourceID": {
             "type": "string",
             "metadata": {
@@ -74,7 +82,8 @@
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
-        "StorageSuffix": "[environment().suffixes.storage]"
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "StreamName": "[concat('Custom-', parameters('TableName'))]"
     },
     "resources": [
         {
@@ -87,6 +96,118 @@
                 "Application_Type": "web",
                 "ApplicationId": "[variables('FunctionName')]",
                 "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-04-01",
+            "name": "[parameters('DceName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "name": "[parameters('DcrName')]",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2021-09-01-preview",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', last(split(parameters('AppInsightsWorkspaceResourceID'), '/')), parameters('TableName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName'))]",
+                "streamDeclarations": {
+                    "[variables('StreamName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "indicatorType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "value",
+                                "type": "string"
+                            },
+                            {
+                                "name": "articleTitle",
+                                "type": "string"
+                            },
+                            {
+                                "name": "articleUrl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "clv2ws1"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamName')]"
+                        ],
+                        "destinations": [
+                            "clv2ws1"
+                        ],
+                        "transformKql": "source | project TimeGenerated, indicatorType, value, articleTitle, articleUrl, source",
+                        "outputStream": "[variables('StreamName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2023-01-01-preview",
+            "name": "[concat(last(split(parameters('AppInsightsWorkspaceResourceID'), '/')), '/', parameters('TableName'))]",
+            "properties": {
+                "totalRetentionInDays": 365,
+                "plan": "Auxiliary",
+                "schema": {
+                    "name": "[parameters('TableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "DateTime"
+                        },
+                        {
+                            "name": "indicatorType",
+                            "type": "String"
+                        },
+                        {
+                            "name": "value",
+                            "type": "String"
+                        },
+                        {
+                            "name": "articleTitle",
+                            "type": "String"
+                        },
+                        {
+                            "name": "articleUrl",
+                            "type": "String"
+                        },
+                        {
+                            "name": "source",
+                            "type": "String"
+                        }
+                    ]
+                }
             }
         },
         {
@@ -218,9 +339,9 @@
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
                         "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
                         "WEBSITE_CONTENTSHARE": "[toLower(variables('FunctionName'))]",
-                        "DataCollectionEndpoint": "[parameters('DataCollectionEndpoint')]",
-                        "DcrImmutableId": "[parameters('DcrImmutableId')]",
-                        "DcrStreamName": "[parameters('DcrStreamName')]",
+                        "DataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName')), '2021-04-01').logsIngestion.endpoint]",
+                        "DcrImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DcrName')), '2021-09-01-preview').immutableId]",
+                        "DcrStreamName": "[variables('StreamName')]",
                         "AzureTenantId": "[parameters('AzureTenantId')]",
                         "AzureClientId": "[parameters('AzureClientId')]",
                         "AzureClientSecret": "[parameters('AzureClientSecret')]",
@@ -267,6 +388,46 @@
             "properties": {
                 "shareQuota": 5120
             }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, 'functionAppDcrRoleAssignment', parameters('DcrName'), parameters('AzureObjectId'))]",
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DcrName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DcrName'))]"
+            ],
+            "properties": {
+                "principalId": "[parameters('AzureObjectId')]",
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+                "principalType": "ServicePrincipal"
+            }
         }
-    ]
+    ],
+    "outputs": {
+        "functionAppName": {
+            "type": "string",
+            "value": "[variables('FunctionName')]"
+        },
+        "dataCollectionEndpointId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName'))]"
+        },
+        "dataCollectionEndpointUrl": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName')), '2021-04-01').logsIngestion.endpoint]"
+        },
+        "dataCollectionRuleId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DcrName'))]"
+        },
+        "dataCollectionRuleImmutableId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DcrName')), '2021-09-01-preview').immutableId]"
+        },
+        "customTableName": {
+            "type": "string",
+            "value": "[parameters('TableName')]"
+        }
+    }
 }
