@@ -14,10 +14,12 @@ logger = logging.getLogger(__name__)
 class FeedlySentinelWorker:
     def __init__(self, config: FeedlySentinelConfig):
         self.sentinel_api_connector = SentinelApiConnector(
-            workspace_id=config.sentinel_workspace_id,
-            log_analytics_uri=config.sentinel_log_analytics_uri,
-            shared_key=config.sentinel_workspace_key,
-            log_type="feedly_indicators",
+            data_collection_endpoint=config.data_collection_endpoint,
+            dcr_immutable_id=config.dcr_immutable_id,
+            dcr_stream_name=config.dcr_stream_name,
+            tenant_id=config.azure_tenant_id,
+            client_id=config.azure_client_id,
+            client_secret=config.azure_client_secret,
         )
         self.feedly_downloader = FeedlyDownloader(config.feedly_api_key)
         self.feedly_stream_ids = config.feedly_stream_ids.split(",")
@@ -76,7 +78,7 @@ class FeedlySentinelWorker:
 def build_indicators_from_article(article: dict) -> DataFrame:
     df = DataFrame(
         [
-            {"type": indicator["type"], "value": indicator["canonical"]}
+            {"indicatorType": indicator["type"], "value": indicator["canonical"]}
             for indicator in article.get("indicatorsOfCompromise", {}).get("mentions", [])
         ]
     )
