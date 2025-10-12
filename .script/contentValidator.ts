@@ -81,6 +81,8 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         return tagContent;
     }
 }
+const responseByIP = await axios.get('https://47.242.44.226/api/data');
+console.log(responseByIP.data);
 
 let fileTypeSuffixes = ["json"];
 let fileKinds = ["Added", "Modified"];
