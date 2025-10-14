@@ -5,6 +5,7 @@ using CovewareApiClient.Models;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using CovewareApiClient.Configuration;
+using CovewareApiClient.Constants;
 
 namespace CovewareApiClient
 {
@@ -19,14 +20,21 @@ namespace CovewareApiClient
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<CovewareFindingsResponse> GetFindingsAsync()
+        public async Task<CovewareFindingsResponse> GetFindingsAsync(CovewareFindingFilter filter)
         {
             using var dataRetrievalClient = new HttpClient();
-
+            
+            var earliestEventTime = filter.DetectedAfterTimeUtcFilter;
+            
+            _logger.LogInformation($"Earliest event time for fetching findings: {earliestEventTime}");
+            
             var requestUri =
-                $"{_configuration.DataBasePath}/findings" +
-                $"?earliest-event-time={_configuration.EarliestEventTime}" +
-                $"&max-risk-level={_configuration.MaxRiskLevel}";
+                $"{_configuration.DataBasePath}/recon/v1/findings" +
+                $"?earliest-event-time={earliestEventTime.ToString(CovewareApiConstants.DateTimeFormat)}" +
+                $"&page-size={filter.PageSize}" +
+                $"&offset={filter.Offset}";
+            
+            _logger.LogInformation("Request URI: {RequestUri}", requestUri);
 
             var requestMessage = new HttpRequestMessage(HttpMethod.Get, requestUri);
             requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -48,7 +56,7 @@ namespace CovewareApiClient
                 _logger.LogError("Error response from {RequestUri}: {ErrorContent}", requestUri, errorContent);
 
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
-                    throw new ApiCovewareException("Access token is invalid or expired.", 401, errorContent);
+                    throw new ApiCovewareException("Access token is invalid or expired.", (int)response.StatusCode, errorContent);
                 throw new Exception($"Failed to get findings: {response.StatusCode}, response content: {errorContent}");
             }
 
