@@ -101,12 +101,12 @@
 ### Flex Consumption Plan 
 - Click on below button to deploy with Flex Consumption plan:
 
-  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FVMRay%2FData%20Connectors%2Fazuredeploy_VMRayThreatIntelligenceFuncApp_AzureFunction_flex.json)
+  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeployflex)
 
 ### Premium Plan
 - Click on below button to deploy with Premium plan:
 
-  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FVMRay%2FData%20Connectors%2Fazuredeploy_VMRayThreatIntelligenceFuncApp_AzureFunction_premium.json)
+  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-VMRay-azuredeploypremium)
 
 - It will redirect to feed Configuration page.
   ![09](Images/09.png)
@@ -138,7 +138,7 @@
 
 - Click on below button to deploy 
 
-  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2VMRay%2Playbooks%2CustomConnector%2VMRayEnrichment_FunctionAppConnector%2azuredeploy.json)
+  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FVMRay%2FPlaybooks%2FCustomConnector%2FVMRayEnrichment_FunctionAppConnector%2Fazuredeploy.json)
   
 - It will redirect to feed Configuration page.
 
@@ -168,7 +168,7 @@
 
 - Click on below button to deploy
   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2VMRay%2Playbooks%2Submit-URL-VMRay-Analyzer%2azuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FVMRay%2FPlaybooks%2FSubmit-URL-VMRay-Analyzer%2Fazuredeploy.json)
 
 - It will redirect to configuration page
 
@@ -195,7 +195,7 @@
 
 - Click on below button to deploy
   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2raw.githubusercontent.com%2Azure%2Azure-Sentinel%2refs%2heads%2master%2Solutions%2VMRay%2Playbooks%2VMRay-Sandbox_Outlook_Attachment%2azuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FVMRay%2FPlaybooks%2FVMRay-Sandbox_Outlook_Attachment%2Fazuredeploy.json)
 
 - It will redirect to configuration page
 
