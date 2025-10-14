@@ -1,0 +1,94 @@
+{
+  "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+  "apiVersion": "2024-03-01-preview",
+  "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'RSAIDPlus_SendEmail_Playbook')]",
+  "location": "[parameters('workspace-location')]",
+  "properties": {
+    "contentId": "RSAIDPlus_SendEmail_Playbook",
+    "displayName": "Send Email on RSA ID Plus Alert",
+    "contentKind": "Playbook",
+    "description": "Sends an email notification when an RSA ID Plus analytic rule triggers. This playbook can be linked via automation rules.",
+    "mainTemplate": {
+      "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+      "contentVersion": "1.0.0.0",
+      "resources": [
+        {
+          "type": "Microsoft.Logic/workflows",
+          "apiVersion": "2019-05-01",
+          "name": "SendEmailOnRSAIDPlusAlert",
+          "location": "[parameters('workspace-location')]",
+          "properties": {
+            "state": "Enabled",
+            "definition": {
+              "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+              "contentVersion": "1.0.0.0",
+              "triggers": {
+                "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                  "type": "Request",
+                  "kind": "Http",
+                  "inputs": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "IncidentName": { "type": "string" },
+                        "Severity": { "type": "string" },
+                        "Description": { "type": "string" },
+                        "AlertLink": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              },
+              "actions": {
+                "Send_email": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['office365']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/v2/Mail",
+                    "body": {
+                      "Message": {
+                        "Subject": "@concat('Sentinel Alert: ', triggerBody()?['IncidentName'])",
+                        "Body": "@concat('<p><b>Alert:</b> ', triggerBody()?['IncidentName'], '</p><p><b>Severity:</b> ', triggerBody()?['Severity'], '</p><p><b>Description:</b> ', triggerBody()?['Description'], '</p><p><b>Alert Link:</b> <a href=\"', triggerBody()?['AlertLink'], '\">View in Sentinel</a></p>')",
+                        "ToRecipients": [
+                          {
+                            "EmailAddress": {
+                              "Address": "securityteam@company.com"
+                            }
+                          }
+                        ]
+                      },
+                      "SaveToSentItems": "false"
+                    }
+                  },
+                  "runAfter": {}
+                }
+              },
+              "outputs": {}
+            },
+            "parameters": {
+              "$connections": {
+                "value": {
+                  "office365": {
+                    "connectionId": "/subscriptions/<yourSubId>/providers/Microsoft.Web/connections/office365",
+                    "connectionName": "office365",
+                    "id": "/subscriptions/<yourSubId>/providers/Microsoft.Web/locations/<region>/managedApis/office365"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "packageKind": "Solution",
+    "packageVersion": "1.0.0",
+    "packageName": "RSA ID Plus",
+    "contentSchemaVersion": "3.0.0",
+    "version": "1.0.0"
+  }
+}
