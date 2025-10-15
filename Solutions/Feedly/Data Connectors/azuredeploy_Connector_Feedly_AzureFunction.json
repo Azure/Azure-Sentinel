@@ -2,12 +2,6 @@
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "AzureTenantId": {
-            "type": "String",
-            "metadata": {
-                "description": "Azure AD Tenant ID"
-            }
-        },
         "AzureClientId": {
             "type": "String",
             "metadata": {
@@ -24,6 +18,12 @@
             "type": "String",
             "metadata": {
                 "description": "Azure AD Service Principal object ID (not Application object ID)"
+            }
+        },
+        "LogAnalyticsWorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics Workspace to use for Application Insights and data ingestion"
             }
         },
         "FunctionName": {
@@ -60,30 +60,25 @@
             }
         },
         "DceName": {
-            "defaultValue": "[concat(replace(parameters('TableName'), '_', '-'), '-DCE')]",
+            "defaultValue": "feedly-indicators-CL-DCE",
             "type": "String",
             "metadata": {
                 "description": "Name of the Data Collection Endpoint to create"
             }
         },
         "DcrName": {
-            "defaultValue": "[concat('DCR_', parameters('TableName'))]",
+            "defaultValue": "DCR_feedly_indicators_CL",
             "type": "String",
             "metadata": {
                 "description": "Name of the Data Collection Rule to create for Feedly IoCs"
             }
-        },
-        "AppInsightsWorkspaceResourceID": {
-            "type": "string",
-            "metadata": {
-                "description": "Log Analytics Workspace Resource ID for Application Insights. Use 'Log Analytics Workspace-->Properties' blade having 'Resource ID' property value. Format: '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
         }
-    }
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
         "StorageSuffix": "[environment().suffixes.storage]",
-        "StreamName": "[concat('Custom-', parameters('TableName'))]"
+        "StreamName": "[concat('Custom-', parameters('TableName'))]",
+        "LogAnalyticsWorkspaceResourceID": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('LogAnalyticsWorkspaceName'))]"
     },
     "resources": [
         {
@@ -95,7 +90,7 @@
             "properties": {
                 "Application_Type": "web",
                 "ApplicationId": "[variables('FunctionName')]",
-                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+                "WorkspaceResourceId": "[variables('LogAnalyticsWorkspaceResourceID')]"
             }
         },
         {
@@ -116,7 +111,7 @@
             "apiVersion": "2021-09-01-preview",
             "dependsOn": [
                 "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName'))]",
-                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', last(split(parameters('AppInsightsWorkspaceResourceID'), '/')), parameters('TableName'))]"
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('LogAnalyticsWorkspaceName'), parameters('TableName'))]"
             ],
             "properties": {
                 "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName'))]",
@@ -153,7 +148,7 @@
                 "destinations": {
                     "logAnalytics": [
                         {
-                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "workspaceResourceId": "[variables('LogAnalyticsWorkspaceResourceID')]",
                             "name": "clv2ws1"
                         }
                     ]
@@ -175,7 +170,7 @@
         {
             "type": "Microsoft.OperationalInsights/workspaces/tables",
             "apiVersion": "2023-01-01-preview",
-            "name": "[concat(last(split(parameters('AppInsightsWorkspaceResourceID'), '/')), '/', parameters('TableName'))]",
+            "name": "[concat(parameters('LogAnalyticsWorkspaceName'), '/', parameters('TableName'))]",
             "properties": {
                 "totalRetentionInDays": 365,
                 "plan": "Auxiliary",
@@ -342,7 +337,7 @@
                         "DataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DceName')), '2021-04-01').logsIngestion.endpoint]",
                         "DcrImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DcrName')), '2021-09-01-preview').immutableId]",
                         "DcrStreamName": "[variables('StreamName')]",
-                        "AzureTenantId": "[parameters('AzureTenantId')]",
+                        "AzureTenantId": "[tenant().tenantId]",
                         "AzureClientId": "[parameters('AzureClientId')]",
                         "AzureClientSecret": "[parameters('AzureClientSecret')]",
                         "FeedlyApiKey": "[parameters('FeedlyApiKey')]",
