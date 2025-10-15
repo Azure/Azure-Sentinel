@@ -293,6 +293,12 @@ class MongoDbConnection:
         self.config = config
         self.mdba_client_id = config.get("mdba_client_id")
         self.mdba_client_secret = config.get("mdba_client_secret")
+
+        # Debugging: Log credentials at the moment of object creation
+        client_id_to_log = self.mdba_client_id
+        client_secret_to_log = (self.mdba_client_secret[:4] + "...") if self.mdba_client_secret else "None"
+        logging.info(f"MongoDbConnection initialized with Client ID: '{client_id_to_log}' and Client Secret starting with: '{client_secret_to_log}'")
+
         self.mdba_group_id = config.get("mdba_group_id")
         self.mdba_cluster_ids = config.get("mdba_cluster_ids")
         self.mdba_token_url = "https://cloud.mongodb.com/api/oauth/token"
@@ -830,15 +836,40 @@ def _parse_cluster_ids(raw_cluster_ids):
     return cluster_ids
 
 
+from azure.keyvault.secrets import SecretClient
+
+
 def configuration_set_up():
     """environment variable configuration"""
 
     load_dotenv()  # take environment variables
 
+    # Fetch the secret from Key Vault
+    key_vault_uri = os.getenv("KEY_VAULT_URI")
+    secret_name = os.getenv("MDBA_SECRET_NAME")
+    azure_client_id = os.getenv("AZURE_CLIENT_ID")
+    
+    mdba_client_secret = None
+    if key_vault_uri and secret_name and azure_client_id:
+        try:
+            credential = ManagedIdentityCredential(client_id=azure_client_id)
+            secret_client = SecretClient(vault_url=key_vault_uri, credential=credential)
+            retrieved_secret = secret_client.get_secret(secret_name)
+            mdba_client_secret = retrieved_secret.value
+            logging.info("Successfully retrieved secret from Key Vault.")
+        except Exception as e:
+            logging.error(f"Failed to retrieve secret from Key Vault: {e}")
+            # Depending on requirements, you might want to raise the exception
+            # raise e
+    else:
+        logging.warning("Key Vault URI, Secret Name, or Azure Client ID is not configured. Trying to fall back to direct environment variable.")
+        mdba_client_secret = os.getenv("MDBA_CLIENT_SECRET")
+
+
     config = ConfigStore(
         tenant_id=os.getenv("AZURE_TENANT_ID"),
         azure_web_job_storage=os.getenv("AzureWebJobsStorage"),
-        azure_client_id=os.getenv("AZURE_CLIENT_ID"),
+        azure_client_id=azure_client_id,
         azure_client_secret=os.getenv("AZURE_CLIENT_SECRET"),
         azure_dce_endpoint=os.getenv("DCE_ENDPOINT"),
         azure_dcr_immutableid=os.getenv("DCR_IMMUTABLEID"),
@@ -846,7 +877,7 @@ def configuration_set_up():
         azure_main_storage=os.getenv("AZURE_MAIN_STORAGE"),
         azure_max_upload_threads=os.getenv("AZURE_MAX_UPLOAD_THREADS"),
         mdba_client_id=os.getenv("MDBA_CLIENT_ID"),
-        mdba_client_secret=os.getenv("MDBA_CLIENT_SECRET"),
+        mdba_client_secret=mdba_client_secret,
         mdba_group_id=os.getenv("MDBA_GROUP_ID"),
         mdba_cluster_ids=_parse_cluster_ids(os.getenv("MDBA_CLUSTER_ID")),
         mdba_access_logs_filter_type=os.getenv("MDBA_ACCESS_LOGS_FILTER_TYPE"),
@@ -881,7 +912,6 @@ def configuration_set_up():
 
     tenant_id = config.get("tenant_id")
     azure_web_job_storage = config.get("azure_web_job_storage")
-    azure_client_id = config.get("azure_client_id")
     azure_dce_endpoint = config.get("azure_dce_endpoint")
     azure_dcr_immutableid = config.get("azure_dcr_immutableid")
     azure_stream_name = config.get("azure_stream_name")
