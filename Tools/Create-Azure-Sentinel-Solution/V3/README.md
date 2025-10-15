@@ -267,7 +267,7 @@ These files will be created in the solution's `Package` folder with respect to t
 
 Upon package creation, the automation will automatically import and run validation on the generated files using the Azure Toolkit / TTK CLI tool.
 
-#### *<span style="color:blue">Note:</span> <span style="color:green"> To create a CCP based connector refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCP_README.md).</span>*
+#### *<span style="color:blue">Note:</span> <span style="color:green"> To create a CCF based connector refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCF_README.md).</span>*
 
 #### *<span style="color:blue">Note:</span> <span style="color:green"> For Summary Rules refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/SUMMARYRULE_README.md).</span>*
 
