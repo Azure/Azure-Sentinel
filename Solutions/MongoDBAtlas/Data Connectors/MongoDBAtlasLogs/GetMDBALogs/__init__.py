@@ -29,6 +29,9 @@ from .job_state_table_store import JobStateTableStore
 # For future usage if CPU intensive work is added to the parallelized workers,
 # allow switching to the Process Pool to avoid running into GIL.
 EXECUTOR_TYPE: Type[Union[ThreadPoolExecutor, ProcessPoolExecutor]] = ThreadPoolExecutor
+executor_model_env = os.getenv("EXECUTOR_MODEL")
+if executor_model_env and executor_model_env.lower() == "multiprocessing":
+    EXECUTOR_TYPE = ProcessPoolExecutor
 
 
 class ConfigStore:
@@ -73,6 +76,27 @@ class ConfigStore:
         return f"ConfigStore(keys={list(self._config.keys())})"
 
 
+def _upload_worker(azure_dce_endpoint, azure_client_id, rule_id, stream_name, logs):
+    """
+    Worker function to upload a single chunk of logs.
+    This function is defined at the top level to be pickleable for multiprocessing.
+    """
+    logging.info("Called _upload_worker (logs_count=%d)", len(logs))
+    try:
+        credential = ManagedIdentityCredential(client_id=azure_client_id)
+        client = LogsIngestionClient(
+            endpoint=azure_dce_endpoint, credential=credential, logging_enable=True
+        )
+        client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)
+        return True  # Success
+    except HttpResponseError as e:
+        logging.error("Upload failed (HttpResponseError): %s", e)
+        return False  # Failure
+    except Exception as e:
+        logging.exception("Upload failed (general): %s", e)
+        return False  # Failure
+
+
 class Uploader:
     """
     Uploads pages of log messages to the Microsoft Sentinel Logs Ingestion API via a client.
@@ -82,9 +106,9 @@ class Uploader:
     def __init__(self, config, executor, upload_timeout=60):
         self.config = config
         self.azure_dcr_immutableid = config.get("azure_dcr_immutableid")
-        azure_dce_endpoint = config.get("azure_dce_endpoint")
+        self.azure_dce_endpoint = config.get("azure_dce_endpoint")
         self.azure_stream_name = config.get("azure_stream_name")
-        azure_client_id = config.get("azure_client_id")
+        self.azure_client_id = config.get("azure_client_id")
         thread_max = config.get("azure_max_upload_threads")
         if not thread_max.isdigit():
             raise ValueError(f"Invalid azure_max_upload_threads: '{thread_max}'")
@@ -96,18 +120,14 @@ class Uploader:
         self.executor = executor
         self.upload_timeout = upload_timeout
 
-        credential = ManagedIdentityCredential(client_id=azure_client_id)
-        self.client = LogsIngestionClient(
-            endpoint=azure_dce_endpoint, credential=credential, logging_enable=True
-        )
-
     def add_to_upload_list(self, chunk):
         future = self.executor.submit(
-            self._post_data,
-            client=self.client,
-            rule_id=self.azure_dcr_immutableid,
-            stream_name=self.azure_stream_name,
-            logs=chunk,
+            _upload_worker,
+            self.azure_dce_endpoint,
+            self.azure_client_id,
+            self.azure_dcr_immutableid,
+            self.azure_stream_name,
+            chunk,
         )
         self.jobs.append(future)
         return future
@@ -134,18 +154,6 @@ class Uploader:
             "upload_chunk_count": self.upload_chunk_count,
             "upload_fail_count": self.upload_fail_count,
         }
-
-    def _post_data(self, client, rule_id, stream_name, logs):
-        logging.info("Called _post_data (logs_count=%d)", len(logs))
-        try:
-            client.upload(rule_id=rule_id, stream_name=stream_name, logs=logs)
-            self.upload_chunk_count += 1
-        except HttpResponseError as e:
-            logging.error("Upload failed (HttpResponseError): %s", e)
-            self.upload_fail_count += 1
-        except Exception as e:
-            logging.exception("Upload failed (general): %s", e)
-            self.upload_fail_count += 1
 
 
 class AzureSentinel:
@@ -296,8 +304,12 @@ class MongoDbConnection:
 
         # Debugging: Log credentials at the moment of object creation
         client_id_to_log = self.mdba_client_id
-        client_secret_to_log = (self.mdba_client_secret[:4] + "...") if self.mdba_client_secret else "None"
-        logging.info(f"MongoDbConnection initialized with Client ID: '{client_id_to_log}' and Client Secret starting with: '{client_secret_to_log}'")
+        client_secret_to_log = (
+            (self.mdba_client_secret[:4] + "...") if self.mdba_client_secret else "None"
+        )
+        logging.info(
+            f"MongoDbConnection initialized with Client ID: '{client_id_to_log}' and Client Secret starting with: '{client_secret_to_log}'"
+        )
 
         self.mdba_group_id = config.get("mdba_group_id")
         self.mdba_cluster_ids = config.get("mdba_cluster_ids")
@@ -708,15 +720,27 @@ class MongoDbConnection:
             cluster_upload_success = True
             for upload_future in upload_futures:
                 try:
-                    upload_future.result(timeout=uploader.upload_timeout)
-                    upload_chunk_count += 1
-                    logging.debug("[Cluster %s] Upload chunk complete.", cluster_id)
+                    success = upload_future.result(timeout=uploader.upload_timeout)
+                    if success:
+                        upload_chunk_count += 1
+                        logging.debug("[Cluster %s] Upload chunk complete.", cluster_id)
+                    else:
+                        upload_fail_count += 1
+                        cluster_upload_success = False
+                        logging.warning(
+                            "[Cluster %s] Upload chunk failed (handled in worker).",
+                            cluster_id,
+                        )
                 except TimeoutError:
                     logging.error("[Cluster %s] Upload timed out.", cluster_id)
                     upload_fail_count += 1
                     cluster_upload_success = False
                 except Exception as e:
-                    logging.exception("[Cluster %s] Upload failed: %s", cluster_id, e)
+                    logging.exception(
+                        "[Cluster %s] Upload failed with unexpected exception: %s",
+                        cluster_id,
+                        e,
+                    )
                     upload_fail_count += 1
                     cluster_upload_success = False
 
@@ -848,7 +872,7 @@ def configuration_set_up():
     key_vault_uri = os.getenv("KEY_VAULT_URI")
     secret_name = os.getenv("MDBA_SECRET_NAME")
     azure_client_id = os.getenv("AZURE_CLIENT_ID")
-    
+
     mdba_client_secret = None
     if key_vault_uri and secret_name and azure_client_id:
         try:
@@ -862,9 +886,10 @@ def configuration_set_up():
             # Depending on requirements, you might want to raise the exception
             # raise e
     else:
-        logging.warning("Key Vault URI, Secret Name, or Azure Client ID is not configured. Trying to fall back to direct environment variable.")
+        logging.warning(
+            "Key Vault URI, Secret Name, or Azure Client ID is not configured. Trying to fall back to direct environment variable."
+        )
         mdba_client_secret = os.getenv("MDBA_CLIENT_SECRET")
-
 
     config = ConfigStore(
         tenant_id=os.getenv("AZURE_TENANT_ID"),
@@ -939,6 +964,13 @@ def main(mytimer: func.TimerRequest = None) -> None:
 
     """
     utc_timestamp_start = datetime.now()
+
+    # Log the selected executor model
+    if EXECUTOR_TYPE == ProcessPoolExecutor:
+        logging.info("Using ProcessPoolExecutor for concurrency.")
+    else:
+        logging.info("Using ThreadPoolExecutor for concurrency.")
+
     logging.info(
         "MongoDB Atlas Connector: Python timer trigger function ran at %s",
         utc_timestamp_start,
@@ -985,6 +1017,6 @@ def main(mytimer: func.TimerRequest = None) -> None:
         for cluster, downloaded in cluster_size_downloaded.items():
             logging.info("[Cluster %s] Total size downloaded: %s", cluster, downloaded)
 
-    if myTimer and "mytimer" in locals():
+    if mytimer and "mytimer" in locals():
         if mytimer.past_due:
             logging.info("MongoDB Atlas Connector: The timer is past due.")
