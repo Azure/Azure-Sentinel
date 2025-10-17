@@ -35,12 +35,13 @@ query: |
       | where TimeGenerated > ago(queryperiod)
       | where  (isempty(HttpStatus) or HttpStatus in (successCode))
       | extend TimeKey = bin(TimeGenerated, sessionBin)
-      | extend Hostname = coalesce(Host,OriginalHost), ClientIp = ClientIp
+      | extend Hostname = coalesce(Host,OriginalHost)
+      | extend ClientIp = tostring(ClientIP)
   ) on TimeKey, Hostname, ClientIp
   | where TimeGenerated between (SessionBlockedStarted..SessionBlockedEnded)
   | extend
-      originalRequestUriWithArgs_s = column_ifexists("originalRequestUriWithArgs_s", ""),
-      serverStatus_s = column_ifexists("serverStatus_s", "")
+      OriginalRequestUriWithArgs = column_ifexists("OriginalRequestUriWithArgs", ""),
+      ServerStatus = column_ifexists("ServerStatus", "")
   | summarize
       SuccessfulAccessCount = count(),
       UserAgents = make_set(UserAgent, 250),
@@ -49,7 +50,7 @@ query: |
       SuccessCodes = make_set(HttpStatus, 250),
       SuccessCodes_BackendServer = make_set(ServerStatus, 250),
       take_any(SessionBlockedEnded, SessionBlockedCount)
-      by Hostname, ClientIp, SessionBlockedStarted
+      by Hostname, ClientIp, SessionBlockedStarted 
   | where SessionBlockedCount > SuccessfulAccessCount
   | extend BlockvsSuccessRatio = SessionBlockedCount/toreal(SuccessfulAccessCount)
   | sort by BlockvsSuccessRatio desc, SessionBlockedStarted asc
@@ -58,6 +59,6 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: clientIp_s
+        columnName: ClientIp
 version: 1.0.6
 kind: Scheduled
