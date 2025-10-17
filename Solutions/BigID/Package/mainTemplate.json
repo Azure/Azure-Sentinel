@@ -1,0 +1,709 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "BigID - mhebrard@bigid.com",
+    "comments": "Solution template for BigID"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "mhebrard@bigid.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "BigID",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "bigid.azure-sentinel-solution-bigid",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "BigIDDSPMLogsConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "BigIDDSPMLogsConnectorDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "BigID DSPM connector",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "BigIDDSPMLogsConnectorDefinition",
+                  "title": "BigID DSPM connector",
+                  "publisher": "BigID",
+                  "descriptionMarkdown": "The [BigID DSPM](https://bigid.com/data-security-posture-management/) data connector provides the capability to ingest BigID DSPM cases with affected objects and datasource information into Microsoft Sentinel.",
+                  "graphQueriesTableName": "BigIDDSPMCatalog_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Cases received",
+                      "legend": "BigID DSPM Catalog",
+                      "baseQuery": "BigIDDSPMCatalog_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get a sample of BigID DSPM Event logs",
+                      "query": "BigIDDSPMCatalog_CL\n| take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "BigIDDSPMCatalog_CL",
+                      "lastDataReceivedQuery": "BigIDDSPMCatalog_CL\n|summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": null
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "BigID DSPM API access",
+                        "description": "Access to the BigID DSPM API through a BigID Token is required."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Provide your BigID domain name like 'customer.bigid.cloud' and your BigID token. Generate a token in the BigID console via Settings -> Access Management -> Users -> Select User and generate a token.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "BigID FQDN",
+                            "placeholder": "BigID FQDN",
+                            "type": "text",
+                            "name": "bigidFqdn",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "BigID Token",
+                            "placeholder": "BigID Token",
+                            "type": "password",
+                            "name": "bigidToken",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ],
+                      "title": "Connect to BigID DSPM API to start collecting BigID DSPM cases and affected Objects in Microsoft Sentinel"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "BigID",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "BigID",
+                  "email": "support@bigid.com",
+                  "tier": "Partner",
+                  "link": "https://www.bigid.com/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "BigIDDSPMDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-BigIDDSPMCatalog_CL": {
+                    "columns": [
+                      {
+                        "name": "case",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "affectedObjects",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "datasource",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-BigIDDSPMCatalog_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = now(), EventType = 'catalog', EventVendor = 'BigID', EventProduct = 'DSPM'",
+                    "outputStream": "Custom-BigIDDSPMCatalog_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "BigIDDSPMCatalog_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "BigIDDSPMCatalog_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "Datetime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "case",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "affectedObjects",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "datasource",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "BigIDDSPMLogsConnectorDefinition",
+          "title": "BigID DSPM connector",
+          "publisher": "BigID",
+          "descriptionMarkdown": "The [BigID DSPM](https://bigid.com/data-security-posture-management/) data connector provides the capability to ingest BigID DSPM cases with affected objects and datasource information into Microsoft Sentinel.",
+          "graphQueriesTableName": "BigIDDSPMCatalog_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total Cases received",
+              "legend": "BigID DSPM Catalog",
+              "baseQuery": "BigIDDSPMCatalog_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get a sample of BigID DSPM Event logs",
+              "query": "BigIDDSPMCatalog_CL\n| take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "BigIDDSPMCatalog_CL",
+              "lastDataReceivedQuery": "BigIDDSPMCatalog_CL\n|summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors",
+              "value": null
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "BigID DSPM API access",
+                "description": "Access to the BigID DSPM API through a BigID Token is required."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Provide your BigID domain name like 'customer.bigid.cloud' and your BigID token. Generate a token in the BigID console via Settings -> Access Management -> Users -> Select User and generate a token.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "BigID FQDN",
+                    "placeholder": "BigID FQDN",
+                    "type": "text",
+                    "name": "bigidFqdn",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "BigID Token",
+                    "placeholder": "BigID Token",
+                    "type": "password",
+                    "name": "bigidToken",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ],
+              "title": "Connect to BigID DSPM API to start collecting BigID DSPM cases and affected Objects in Microsoft Sentinel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "BigID",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "BigID",
+          "email": "support@bigid.com",
+          "tier": "Partner",
+          "link": "https://www.bigid.com/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "BigID DSPM connector",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "BigID DSPM connector",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "bigidFqdn": {
+              "defaultValue": "bigidFqdn",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "bigidToken": {
+              "defaultValue": "bigidToken",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "BigID",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "BigID",
+                  "email": "support@bigid.com",
+                  "tier": "Partner",
+                  "link": "https://www.bigid.com/support"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'BigIDDSPMCatalog', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "BigIDDSPMLogsConnectorDefinition",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-BigIDDSPMCatalog_CL"
+                },
+                "dataType": "BigIDDSPMCatalog_CL",
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('bigidToken')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "",
+                  "isApiKeyInPostPayload": false
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://',parameters('bigidFqdn'),'/api/v1/actionable-insights/all-cases')]",
+                  "rateLimitQPS": 20,
+                  "queryWindowInMin": 10,
+                  "httpMethod": "GET",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 10,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data.cases"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "PageSize": 50,
+                  "PageSizeParameterName": "limit",
+                  "OffsetParaName": "offset"
+                },
+                "shouldJoinNestedData": true,
+                "joinedDataStepName": "case",
+                "stepInfo": {
+                  "stepType": "Nested",
+                  "nextSteps": [
+                    {
+                      "stepId": "fetchObjectsDetails",
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project dataSourceName = res.dataSourceName, policyName = res.policyName"
+                    },
+                    {
+                      "stepId": "fetchDataSourceDetails",
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project dataSourceName = res.dataSourceName"
+                    }
+                  ]
+                },
+                "stepCollectorConfigs": {
+                  "fetchObjectsDetails": {
+                    "shouldJoinNestedData": true,
+                    "joinedDataStepName": "affectedObjects",
+                    "request": {
+                      "httpMethod": "GET",
+                      "apiEndpoint": "[[concat('https://',parameters('bigidFqdn'),'/api/v1/data-catalog/')]",
+                      "queryParameters": {
+                        "limit": 32,
+                        "requireTotalCount": "true",
+                        "filter": "SYSTEM = \"$dataSourceName$\" AND policy IN (\"$policyName$\")"
+                      },
+                      "headers": {
+                        "Accept": "application/json",
+                        "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector"
+                      }
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$.results"
+                      ],
+                      "format": "json"
+                    }
+                  },
+                  "fetchDataSourceDetails": {
+                    "shouldJoinNestedData": true,
+                    "joinedDataStepName": "datasource",
+                    "request": {
+                      "httpMethod": "GET",
+                      "apiEndpoint": "[[concat('https://',parameters('bigidFqdn'),'/api/v1/ds_connections/$dataSourceName$')]",
+                      "queryParameters": {
+                        "withoutCredentialValue": "true"
+                      },
+                      "headers": {
+                        "Accept": "application/json",
+                        "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector"
+                      }
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$.ds_connection"
+                      ],
+                      "format": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "BigID",
+        "publisherDisplayName": "BigID",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/BigID/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The BigID solution for Microsoft Sentinel enables you to ingest BigID DSPM cases and affected objects into Microsoft Sentinel.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/bigid.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "BigID",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "BigID",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "BigID",
+          "email": "support@bigid.com",
+          "tier": "Partner",
+          "link": "https://www.bigid.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-10-07",
+        "providers": [
+          "BigID"
+        ],
+        "categories": {
+          "domains": [
+            "Compliance",
+            "Security - Information Protection",
+            "Storage"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
