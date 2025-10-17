@@ -35,8 +35,9 @@
         },
         "MongoDbClientSecret": {
             "type": "securestring",
+            "defaultValue": "",
             "metadata": {
-                "description": "The MongoDB Atlas client secret which you can obtain from their portal."
+                "description": "Provide a Client Secret OR an existing Key Vault Name, but not both. If provided, a new Key Vault will be created to store this secret."
             }
         },
         "packageUri": {
@@ -84,19 +85,41 @@
             "metadata": {
                 "description": "Comma separated list of query IDs (Max 10) for which the log entries will be included or excluded from the uploaded to Microsoft Sentinel."
             }
+        },
+        "keyVaultName": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Provide an existing Key Vault Name OR a Client Secret, but not both. If provided, the function will use the 'mongodb-client-secret' from this vault."
+            }
+        },
+        "executorModel": {
+            "type": "string",
+            "defaultValue": "Multithreading",
+            "allowedValues": [
+                "Multithreading",
+                "Multiprocessing"
+            ],
+            "metadata": {
+                "description": "Select the concurrency model for the function. Multithreading is suitable for I/O-bound tasks, while Multiprocessing can be better for CPU-bound tasks."
+            }
         }
     },
     "variables": {
-        "deploymentVersion": "3.0.2",
+        "deploymentVersion": "3.0.6",
         "location": "[resourceGroup().location]",
         "roleIdStorageBlobDataOwner": "/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
         "storageSuffix": "[environment().suffixes.storage]",
         "FunctionAppName": "[format('fa-mdba-{0}', uniqueString(resourceGroup().id))]",
-        "KeyVaultName": "[format('kv-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "generatedKeyVaultName": "[format('kv-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "effectiveKeyVaultName": "[if(empty(parameters('keyVaultName')), variables('generatedKeyVaultName'), parameters('keyVaultName'))]",
         "StorageAccountName": "[format('samdba{0}', uniqueString(resourceGroup().id))]",
         "FunctionAppStorageAccountName": "[format('safamdba{0}', uniqueString(resourceGroup().id))]",
         "DataCollectionEndpointName": "[format('dce-mdba-{0}', uniqueString(resourceGroup().id))]",
-        "DataCollectionRuleName": "[format('dcr-mdba-{0}', uniqueString(resourceGroup().id))]"
+        "DataCollectionRuleName": "[format('dcr-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "hasKeyVault": "[not(equals(parameters('keyVaultName'), ''))]",
+        "hasClientSecret": "[not(equals(parameters('MongoDbClientSecret'), ''))]",
+        "VALIDATION_ERROR_Provide_either_keyVaultName_OR_MongoDbClientSecret_not_both": "[if(and(variables('hasKeyVault'), variables('hasClientSecret')), div(1, 0), if(and(not(variables('hasKeyVault')), not(variables('hasClientSecret'))), div(1, 0), 1))]"
     },
     "resources": [
         {
@@ -130,10 +153,10 @@
             ]
         },
         {
-            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "condition": "[and(or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none'))), empty(parameters('keyVaultName')))]",
             "type": "Microsoft.KeyVault/vaults",
             "apiVersion": "2023-07-01",
-            "name": "[variables('KeyVaultName')]",
+            "name": "[variables('generatedKeyVaultName')]",
             "location": "[variables('location')]",
             "properties": {
                 "sku": {
@@ -163,6 +186,43 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
+            ]
+        },
+        {
+            "condition": "[and(or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none'))), not(empty(parameters('keyVaultName'))))]",
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "apiVersion": "2023-07-01",
+            "name": "[format('{0}/add', parameters('keyVaultName'))]",
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "objectId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2023-01-31').principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "get",
+                                "set",
+                                "list",
+                                "delete"
+                            ]
+                        },
+                        "tenantId": "[subscription().tenantId]"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
+            ]
+        },
+        {
+            "condition": "[and(or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none'))), not(empty(parameters('MongoDbClientSecret'))))]",
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2023-07-01",
+            "name": "[format('{0}/mongodb-client-secret', variables('effectiveKeyVaultName'))]",
+            "properties": {
+                "value": "[parameters('MongoDbClientSecret')]"
+            },
+            "dependsOn": [
+                "[if(empty(parameters('keyVaultName')), resourceId('Microsoft.KeyVault/vaults', variables('generatedKeyVaultName')), resourceId('Microsoft.KeyVault/vaults/accessPolicies', parameters('keyVaultName'), 'add'))]"
             ]
         },
         {
@@ -536,7 +596,9 @@
                 "[resourceId('Microsoft.Web/serverfarms', variables('FunctionAppName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionAppStorageAccountName'))]",
                 "[resourceId('Microsoft.Insights/components', format('appInsights-{0}', variables('FunctionAppName')))]",
-                "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]"
+                "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]",
+                "[if(empty(parameters('keyVaultName')), resourceId('Microsoft.KeyVault/vaults', variables('generatedKeyVaultName')), resourceId('Microsoft.KeyVault/vaults/accessPolicies', parameters('keyVaultName'), 'add'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
             ],
             "identity": {
                 "type": "UserAssigned",
@@ -551,6 +613,7 @@
                 "functionsExtensionVersion": "~4",
                 "siteConfig": {
                     "linuxFxVersion": "PYTHON|3.11",
+                    "keyVaultReferenceIdentity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]",
                     "appSettings": [
                         {
                             "name": "APPINSIGHTS_INSTRUMENTATIONKEY", 
@@ -617,8 +680,12 @@
                             "value": "[parameters('MongoDbClientId')]"
                         },
                         {
-                            "name": "MDBA_CLIENT_SECRET",
-                            "value": "[parameters('MongoDbClientSecret')]"
+                            "name": "KEY_VAULT_URI",
+                            "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('effectiveKeyVaultName')), '2023-07-01').vaultUri]"
+                        },
+                        {
+                            "name": "MDBA_SECRET_NAME",
+                            "value": "mongodb-client-secret"
                         },
                         {
                             "name": "MDBA_GROUP_ID",
@@ -658,6 +725,10 @@
                             "name": "MDBA_QUERY_LIST",
                             "value": "[parameters('queryIdFilterList')]"
 
+                        },
+                        {
+                            "name": "EXECUTOR_MODEL",
+                            "value": "[parameters('executorModel')]"
                         }
                     ],
                     "minTlsVersion": "1.2",
