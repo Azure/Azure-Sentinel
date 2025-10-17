@@ -35,8 +35,9 @@
         },
         "MongoDbClientSecret": {
             "type": "securestring",
+            "defaultValue": "",
             "metadata": {
-                "description": "The MongoDB Atlas client secret which you can obtain from their portal."
+                "description": "Provide a Client Secret OR an existing Key Vault Name, but not both. If provided, a new Key Vault will be created to store this secret."
             }
         },
         "packageUri": {
@@ -89,7 +90,7 @@
             "type": "string",
             "defaultValue": "",
             "metadata": {
-                "description": "Optional. The name of an existing Key Vault to use. If not provided, a new one will be created."
+                "description": "Provide an existing Key Vault Name OR a Client Secret, but not both. If provided, the function will use the 'mongodb-client-secret' from this vault."
             }
         },
         "executorModel": {
@@ -115,7 +116,11 @@
         "StorageAccountName": "[format('samdba{0}', uniqueString(resourceGroup().id))]",
         "FunctionAppStorageAccountName": "[format('safamdba{0}', uniqueString(resourceGroup().id))]",
         "DataCollectionEndpointName": "[format('dce-mdba-{0}', uniqueString(resourceGroup().id))]",
-        "DataCollectionRuleName": "[format('dcr-mdba-{0}', uniqueString(resourceGroup().id))]"
+        "DataCollectionRuleName": "[format('dcr-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "hasKeyVault": "[not(equals(parameters('keyVaultName'), ''))]",
+        "hasClientSecret": "[not(equals(parameters('MongoDbClientSecret'), ''))]",
+        // Validation: div(1,0) triggers template validation error when both parameters are provided or neither is provided
+        "VALIDATION_ERROR_Provide_either_keyVaultName_OR_MongoDbClientSecret_not_both": "[if(and(variables('hasKeyVault'), variables('hasClientSecret')), div(1, 0), if(and(not(variables('hasKeyVault')), not(variables('hasClientSecret'))), div(1, 0), 1))]"
     },
     "resources": [
         {
@@ -210,7 +215,7 @@
             ]
         },
         {
-            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "condition": "[and(or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none'))), not(empty(parameters('MongoDbClientSecret'))))]",
             "type": "Microsoft.KeyVault/vaults/secrets",
             "apiVersion": "2023-07-01",
             "name": "[format('{0}/mongodb-client-secret', variables('effectiveKeyVaultName'))]",
@@ -593,7 +598,7 @@
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionAppStorageAccountName'))]",
                 "[resourceId('Microsoft.Insights/components', format('appInsights-{0}', variables('FunctionAppName')))]",
                 "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]",
-                "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('effectiveKeyVaultName'), 'mongodb-client-secret')]",
+                "[if(empty(parameters('keyVaultName')), resourceId('Microsoft.KeyVault/vaults', variables('generatedKeyVaultName')), resourceId('Microsoft.KeyVault/vaults/accessPolicies', parameters('keyVaultName'), 'add'))]",
                 "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
             ],
             "identity": {
