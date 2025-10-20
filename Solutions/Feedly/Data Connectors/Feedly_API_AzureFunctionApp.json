@@ -67,51 +67,44 @@
         "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
       },
       {
-        "name": "Custom prerequisites if necessary, otherwise delete this customs tag",
-        "description": "Description for any custom pre-requisites"
+        "name": "Azure AD Application Registration",
+        "description": "An Azure AD App Registration with client credentials and permissions to write to the Data Collection Rule. The application must be granted 'Monitoring Metrics Publisher' role on the DCR."
+      },
+      {
+        "name": "Data Collection Endpoint and Rule",
+        "description": "A Data Collection Endpoint (DCE) and Data Collection Rule (DCR) must be created before deploying this connector. [See the documentation to learn more](https://learn.microsoft.com/azure/azure-monitor/logs/custom-logs-migrate)."
       }
     ]
   },
   "instructionSteps": [
     {
       "title": "",
-      "description": ">**NOTE:** This connector uses Azure Functions to connect to Feedly to pull IoCs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+      "description": ">**NOTE:** This connector uses Azure Functions and the Logs Ingestion API to pull IoCs from Feedly into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
     },
     {
-      "title": "(Optional Step) Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault.",
-      "description": "Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+      "title": "Step 1 - Prepare Your Environment",
+      "description": "The Feedly connector will automatically create:\n\n- **Custom Table**: `feedly_indicators_CL` with the required schema\n- **Data Collection Endpoint (DCE)**: For ingesting data\n- **Data Collection Rule (DCR)**: For processing and routing data\n\nNo manual resource creation is required - everything will be created during deployment!\n\nFor detailed instructions, see: [Migrate from HTTP Data Collector API to Logs Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/custom-logs-migrate)"
     },
     {
-      "title": "Step 1 - Get your Feedly API token",
+      "title": "Step 2 - Deploy the Connector",
+      "description": "The ARM template will automatically:\n\n1. Create a managed identity for the Azure Function\n2. Assign the **Monitoring Metrics Publisher** role to the Function App on the DCR\n3. Configure all necessary permissions for data ingestion\n\nNo manual role assignments are required - everything is handled automatically during deployment!"
+    },
+    {
+      "title": "Step 3 - Get your Feedly API token",
       "description": "Go to https://feedly.com/i/team/api and generate a new API token for the connector."
     },
     {
-      "title": "Step 2 - Deploy the connector",
-      "description": "Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Feedly connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Feedly API Token, readily available.",
-      "instructions": [
-        {
-          "parameters": {
-            "fillWith": [
-              "WorkspaceId"
-            ],
-            "label": "Workspace Id"
-          },
-          "type": "CopyableLabel"
-        },
-        {
-          "parameters": {
-            "fillWith": [
-              "PrimaryKey"
-            ],
-            "label": "Primary Key"
-          },
-          "type": "CopyableLabel"
-        }
-      ],
+      "title": "(Optional Step) Securely store credentials in Azure Key Vault",
+      "description": "Azure Key Vault provides a secure mechanism to store and retrieve secrets. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App by using the `@Microsoft.KeyVault(SecretUri={Security Identifier})` schema."
+    },
+    {
+      "title": "Step 4 - Deploy the connector",
+      "description": "Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function\n\n>**IMPORTANT:** Before deploying, gather the following information:\n- Feedly API Token and Stream IDs\n\nAll Azure Monitor resources (DCE, DCR, custom table, and role assignments) will be created automatically during deployment.",
+      "instructions": [],
       "innerSteps": [
         {
           "title": "Option 1 - Azure Resource Manager (ARM) Template",
-          "description": "Use this method for automated deployment of the Feedly connector.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-Feedly-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the SentinelWorkspaceId, SentinelWorkspaceKey, FeedlyApiKey, FeedlyStreamIds, DaysToBackfill. \n>Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy."
+          "description": "Use this method for automated deployment of the Feedly connector.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-Feedly-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the required parameters:\n   - **TableName**: Name for the custom table (default: `feedly_indicators_CL`)\n   - **FeedlyApiKey**: Your Feedly API token from Step 3\n   - **FeedlyStreamIds**: Comma-separated list of Feedly stream IDs\n   - **DaysToBackfill**: Number of days to backfill (default: 7)\n\n>**Note**: If using Azure Key Vault secrets, use the `@Microsoft.KeyVault(SecretUri={Security Identifier})` schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy."
         },
         {
           "title": "Option 2 - Manual Deployment of Azure Functions",
@@ -123,7 +116,7 @@
                     },
                     {
                       "title": "2. Configure the Function App",
-                      "description": "1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\t\tSentinelWorkspaceId\n\t\tSentinelWorkspaceKey\n\t\tFeedlyApiKey\n\t\tFeedlyStreamIds\n\t\tDaysToBackfill\n\t\tSentinelLogAnalyticsUri (optional)\n> - Use SentinelLogAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<WorkspaceID>.ods.opinsights.azure.us`.\n3. Once all application settings have been entered, click **Save**."
+                      "description": "1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **New application setting**.\n3. Add each of the following application settings individually, with their respective values (case-sensitive):\n\t\t- `DataCollectionEndpoint`: Will be populated automatically after DCE creation\n\t\t- `DcrImmutableId`: Will be populated automatically after DCR creation\n\t\t- `DcrStreamName`: `feedly_indicators_CL`\n\t\t- `FeedlyApiKey`: Your Feedly API token\n\t\t- `FeedlyStreamIds`: Comma-separated Feedly stream IDs\n\t\t- `DaysToBackfill`: Number of days to backfill (e.g., 7)\n\n**Note**: The Function App uses managed identity for authentication to Azure Monitor, so no Azure AD credentials are needed.\n\n>**Note**: Use Azure Key Vault references for sensitive values: `@Microsoft.KeyVault(SecretUri={Security Identifier})`\n\n4. Once all application settings have been entered, click **Save**."
                     }
           ]
         }

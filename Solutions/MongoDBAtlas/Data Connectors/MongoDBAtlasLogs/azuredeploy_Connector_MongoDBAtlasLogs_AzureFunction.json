@@ -2,18 +2,11 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "useExistingWorkspace": {
-            "type": "string" 
-        },
         "LogAnalyticsWorkspaceResourceID": {
             "type": "string",
-            "defaultValue": "/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx",
             "metadata": {
                 "description": "Azure Resource ID (NOT THE WORKSPACE ID) of the existing Log Analytics Workspace where you would like the MongoDB Atlas data and optional Function App Application Insights data to reside. This can be found by clicking the \"JSON View\" link within the Overview page of the Log Analytics workspace resource. The format is: \"/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx\""
             }
-        },
-        "newWorkspaceName": {
-            "type": "string", "defaultValue": "" 
         },
         "ConnectorSchedule": {
             "type": "string",
@@ -31,7 +24,7 @@
         "MongoDbClusterId": {
             "type": "string",
             "metadata": {
-                "description": "The MongoDB Atlas Cluster Id to which you will connect."
+                "description": "The list of MongoDB Atlas Cluster Id's to which you will connect."
             }
         },
         "MongoDbClientId": {
@@ -106,93 +99,6 @@
         "DataCollectionRuleName": "[format('dcr-mdba-{0}', uniqueString(resourceGroup().id))]"
     },
     "resources": [
-        {
-            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
-            "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2022-09-01",
-            "name": "provisionWorkspace",
-            "properties": {
-                "expressionEvaluationOptions": {
-                    "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                    "LogAnalyticsWorkspaceResourceId": {
-                        "value": "[parameters('LogAnalyticsWorkspaceResourceID')]"
-                    },
-                    "useExistingWorkspace": {
-                        "value": "[parameters('useExistingWorkspace')]"
-                    },
-                    "newWorkspaceName": {
-                        "value": "[parameters('newWorkspaceName')]" 
-                    },
-                    "location": {
-                        "value": "[variables('location')]" 
-                    }
-                },
-                "template": {
-                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "useExistingWorkspace": {
-                            "type": "string" 
-                        },
-                        "LogAnalyticsWorkspaceResourceId": {
-                            "type": "string",
-                            "metadata": {
-                                "description": "Azure Resource Id of the Log Analytics Workspace where you like the data and optional Function App Application Insights data to reside. The format is: \"/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx\""
-                            }
-                        },
-                        "newWorkspaceName": {
-                            "type": "string",
-                            "defaultValue": "" 
-                        },
-                        "location": {
-                            "type": "string",
-                            "defaultValue": ""
-                        }
-                    },
-                    "variables": {
-                        "workspaceName": "[if(equals(parameters('useExistingWorkspace'),'yes'), last(split(parameters('LogAnalyticsWorkspaceResourceId'), '/')), parameters('newWorkspaceName'))]"
-                    },
-                    "resources": [
-                        {
-                            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
-                            "type": "Microsoft.OperationalInsights/workspaces",
-                            "apiVersion": "2025-02-01",
-                            "name": "[variables('workspaceName')]",
-                            "location": "[parameters('location')]",
-                            "properties": {
-                                "sku": {
-                                "name": "PerGB2018"
-                                },
-                                "retentionInDays": 30,
-                                "publicNetworkAccessForIngestion": "Enabled",
-                                "publicNetworkAccessForQuery": "Enabled"
-                            }
-                        }
-                    ],
-                    "outputs": {
-                        "workspaceName": {
-                            "type": "string",
-                            "value": "[variables('workspaceName')]"
-                        },
-                        "workspaceSubscription": {
-                            "type": "string",
-                            "value": "[split(resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), '/')[2]]"
-                        },
-                        "workspaceResourceGroup": {
-                            "type": "string",
-                            "value": "[split(resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), '/')[4]]"
-                        },
-                        "workspaceResourceId": {
-                            "type": "string",
-                            "value": "[if(equals(parameters('useExistingWorkspace'),'no'), resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), parameters('LogAnalyticsWorkspaceResourceId'))]"
-                        }
-                    }
-                }
-            }
-        },
         {
             "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
             "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
@@ -276,53 +182,12 @@
             ]
         },
         {
-            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
-            "type": "Microsoft.Authorization/roleAssignments",
-            "apiVersion": "2022-04-01",
-            "name": "[guid(resourceGroup().id, variables('FunctionAppName'), 'Reader', deployment().name)]",
-            "dependsOn": [
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
-            ],
-            "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')]",
-                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2018-11-30').principalId]",
-                "principalType": "ServicePrincipal",
-                "scope": "[resourceGroup().id]"
-            }
-        },
-        {
-            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
-            "type": "Microsoft.Resources/deploymentScripts",
-            "apiVersion": "2020-10-01",
-            "name": "waitForWorkspaceActive",
-            "location": "[resourceGroup().location]",
-            "kind": "AzurePowerShell",
-            "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'provisionWorkspace')]",
-                "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, variables('FunctionAppName'), 'Reader', deployment().name))]"
-            ],
-            "identity": {
-                "type": "userAssigned",
-                "userAssignedIdentities": {
-                    "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]": {}
-                }
-            },
-            "properties": {
-                "azPowerShellVersion": "9.0",
-                "timeout": "PT10M",
-                "retentionInterval": "P1D",
-                "scriptContent": "param([string]$workspaceId, [string]$rgName, [string]$wsName)\nWrite-Output ('Waiting for workspace ' + $workspaceId + ' to become active...')\n$end = (Get-Date).AddMinutes(8)\ndo {\n    try {\n        $ws = Get-AzOperationalInsightsWorkspace -ResourceGroupName $rgName -Name $wsName -ErrorAction Stop\n        if ($ws.ProvisioningState -eq 'Succeeded') {\n            Write-Output 'Workspace is active.'\n            exit 0\n        } else {\n            Write-Output ('Provisioning state: ' + $($ws.ProvisioningState) + '. Retrying...')\n        }\n    } catch {\n        Write-Output 'Workspace not found yet. Retrying...'\n    }\n    Start-Sleep -Seconds 15\n} while ((Get-Date) -lt $end)\nthrow 'Timeout waiting for workspace to become active'",
-                "arguments": "[format('-workspaceId \"{0}\" -rgName \"{1}\" -wsName \"{2}\"', reference('provisionWorkspace').outputs.workspaceResourceId.value, reference('provisionWorkspace').outputs.workspaceResourceGroup.value, reference('provisionWorkspace').outputs.workspaceName.value)]"
-            }
-        },
-        {
             "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2022-09-01",
             "name": "createCustomTables",
             "dependsOn": [
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]",
-                "[resourceId('Microsoft.Resources/deploymentScripts', 'waitForWorkspaceActive')]"
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
             ],
             "properties": {
                 "expressionEvaluationOptions": {
@@ -334,7 +199,7 @@
                         "value": "[variables('location')]"
                     },
                     "LogAnalyticsWorkspaceResourceId": {
-                        "value": "[reference(resourceId('Microsoft.Resources/deployments', 'provisionWorkspace'), '2022-09-01').outputs.workspaceResourceId.value]"
+                        "value": "[parameters('LogAnalyticsWorkspaceResourceID')]"
                     },
                     "DataCollectionEndpointName": {
                         "value": "[variables('DataCollectionEndpointName')]"
@@ -417,6 +282,13 @@
                                                 "isDefaultDisplay": false,
                                                 "isHidden": false,
                                                 "description": "The time at which the data was generated."
+                                            },
+                                            {
+                                                "name": "clusterId",
+                                                "type": "string",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "The MongoDB cluster that is associated with this entry."
                                             },
                                             {
                                                 "name": "severity",
@@ -541,6 +413,10 @@
                                                 "type": "datetime"
                                             },
                                             {
+                                                "name": "clusterId",
+                                                "type": "string"
+                                            },
+                                            {
                                                 "name": "severity",
                                                 "type": "string"
                                             },
@@ -635,11 +511,8 @@
             "properties": {
                 "Application_Type": "web",
                 "Request_Source": "rest",
-                "WorkspaceResourceId": "[reference(resourceId('Microsoft.Resources/deployments', 'provisionWorkspace'), '2022-09-01').outputs.workspaceResourceId.value]"
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'provisionWorkspace')]"
-            ]
+                "WorkspaceResourceId": "[parameters('LogAnalyticsWorkspaceResourceID')]"
+            }
         },
         {
             "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
