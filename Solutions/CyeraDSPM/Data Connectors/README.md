@@ -6,7 +6,7 @@ This folder contains the Azure function time trigger code for CyeraDSPM-Microsof
 ## Folders
 
 1. `CyeraDSPM_CCP/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies. 
-2. `CyeraDSPM_BICEP/` - This contains the Azure function source code along with sample data.
+2. `CyeraDSPM_Functions/` - This contains the Azure function source code along with sample data.
 
 
 ## Installing for the users
