@@ -91,7 +91,10 @@ class MessageFactory:
                 reason = details.get("reason", "")
                 if reason == "WF_Category":
                     key = "security_event_message.{engine}.{reason}.{action}"
-                    category = str(details["categories"]).split(",")[0]
+                    if "categories" in details:
+                        category = str(details["categories"]).split(",")[0]
+                    else:
+                        category = "Unknown"
                     return self._format_msg(
                         engine,
                         key,

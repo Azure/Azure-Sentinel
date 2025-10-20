@@ -15,6 +15,7 @@ class WithSecureClient:
         engine,
         engine_group,
         rest_client,
+        max_events_count,
     ):
         self._client_id = client_id
         self._client_secret = client_secret
@@ -23,6 +24,7 @@ class WithSecureClient:
         self._engine = engine
         self._engine_group = engine_group
         self.rest = rest_client
+        self.max_events_count = max_events_count
 
     def get_events_after(self, from_date):
         token = self._authenticate()
@@ -58,7 +60,11 @@ class WithSecureClient:
             return res_body["access_token"]
         else:
             log.info("Response=" + response.text)
-            log.info("Transaction-id=" + response.headers.get("X-Transaction"))
+            transaction_id = response.headers.get("X-Transaction")
+            if transaction_id is None:
+                log.info("Transaction-id not found in the response headers")
+            else:
+                log.info("Transaction-id=" + transaction_id)
             raise Exception("Authentication failed")
 
     def _get_events_after(self, auth_token, from_date, org_id=None):
@@ -66,13 +72,16 @@ class WithSecureClient:
         fetch_page = True
         log.info(f"Reading events created after {from_date}")
         all_events = []
-        while fetch_page:
+        while fetch_page and len(all_events) < self.max_events_count:
             page = self._get_events_page(auth_token, from_date, org_id, next_page)
             next_page = page.get("nextAnchor")
 
             fetch_page = next_page is not None
             for event in page["items"]:
                 all_events.append(SecurityEvent(**event))
+                if len(all_events) >= self.max_events_count:
+                    fetch_page = False
+                    break
 
         return all_events
 
@@ -95,7 +104,7 @@ class WithSecureClient:
             engine_param_value = "epp,edr,ecp"
 
         data = {
-            "limit": 20,
+            "limit": 100,
             "persistenceTimestampStart": from_date,
             "order": "asc",
             engine_param: engine_param_value,
