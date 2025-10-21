@@ -1,28 +1,26 @@
 {
   "$schema": "https://raw.githubusercontent.com/Microsoft/Application-Insights-Workbooks/master/schema/workbook.json",
   "version": "Notebook/1.0",
-  "fromTemplateId": "plc-event-logging-template",
-  "fallbackResourceIds": [
-    "Azure Monitor/Workbooks/Community/PLCEventLoggingWorkbook"
-  ],
+  "itemType": 1,
+  "displayName": "PLC Event Logging Workbook",
+  "category": "Sentinel",
   "parameters": [
     {
-      "id": "workspaceName",
+      "id": "workspace",
+      "name": "workspace",
       "type": 1,
-      "label": "Workspace Name",
+      "label": "Workspace",
       "defaultValue": "{Log Analytics Workspace Name}",
-      "typeSettings": {
-        "resourceType": "microsoft.operationalinsights/workspaces"
-      }
+      "typeSettings": { "resourceType": "microsoft.operationalinsights/workspaces" }
     },
-	{
+    {
       "id": "TimeRange",
+      "name": "TimeRange",
       "type": 4,
       "label": "Time Range",
-      "defaultValue": "30d",
+      "defaultValue": "P7D",
       "typeSettings": {
         "selectableValues": [
-          { "duration": "PT5M", "label": "Last 5 minutes" },
           { "duration": "PT1H", "label": "Last hour" },
           { "duration": "P1D", "label": "Last 24 hours" },
           { "duration": "P7D", "label": "Last 7 days" },
@@ -35,69 +33,87 @@
     {
       "type": 1,
       "content": {
-        "json": "## SentinelEventLoggingWorkbook\n---\nThe workbook is used to represent the event information gathered in Pathlock Cloud application. It shows the data in tabular as well as graphical format. "
+        "json": "# PLC Event Logging Overview\n\nThis workbook displays PLC event logs for trend and severity analysis."
       },
-      "name": "text - 2"
+      "name": "intro"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "PLCEventLogging_CL\r\n| where TimeGenerated >= datetime('{TimeRange:start}') and TimeGenerated <= datetime('{TimeRange:end}')\r\n| summarize EventCount = count() by EventType, SystemName\r\n| order by EventType asc, EventCount desc",
-        "size": 1,
+        "query": "PLCEventLogging_CL | where TimeGenerated >= ago({TimeRange}) | summarize Events = count() by bin(TimeGenerated, 1h) | render timechart",
+        "title": "Event Trend Over Time",
+        "noDataMessage": "No PLC Events Found",
         "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "barchart",
-		"timeContext": {
-          "durationMs": 2592000000
-        }
+        "resourceType": "microsoft.operationalinsights/workspaces"
       },
-      "name": "query - 2"
+      "name": "eventTrend"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "PLCEventLogging_CL\r\n| where TimeGenerated >= datetime('{TimeRange:start}') and TimeGenerated <= datetime('{TimeRange:end}')\r\n| take 100",
-        "size": 1,
-        "timeContext": {
-          "durationMs": 2592000000
-        },
+        "query": "PLCEventLogging_CL | where TimeGenerated >= ago({TimeRange}) | summarize Events = count() by SystemName_s, Level_s | order by SystemName_s asc, Events desc",
+        "title": "Events by System and Severity",
+        "noDataMessage": "No PLC Events Found",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "gridSettings": {
-          "formatters": [
-            {
-              "columnMatch": "Type",
-              "formatter": 5
-            },
-            {
-              "columnMatch": "TenantId",
-              "formatter": 5
-            },
-            {
-              "columnMatch": "_ResourceId",
-              "formatter": 5
-            }
+          "rowLimit": 100,
+          "columns": [
+            { "width": "150px", "name": "SystemName_s", "displayName": "System Name" },
+            { "width": "100px", "name": "Level_s", "displayName": "Severity" },
+            { "width": "70px", "name": "Events", "displayName": "Count" }
           ]
         }
       },
-      "name": "query - 4"
+      "name": "eventsBySystemSeverity"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "PLCEventLogging_CL\r\n| where TimeGenerated >= datetime('{TimeRange:start}') and TimeGenerated <= datetime('{TimeRange:end}')\r\n| summarize EventCount = count() by Severity, EventType\r\n| order by Severity asc, EventCount desc",
-        "size": 0,
-        "timeContext": {
-          "durationMs": 2592000000
-        },
+        "query": "PLCEventLogging_CL | where TimeGenerated >= ago({TimeRange}) | summarize Events = count() by Level_s | render barchart",
+        "title": "Event Count by Severity",
+        "noDataMessage": "No PLC Events Found",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "eventsBySeverity"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PLCEventLogging_CL | where TimeGenerated >= ago({TimeRange}) | summarize Events = count() by DeviceId_s | top 10 by Events | render piechart",
+        "title": "Top 10 Source Devices",
+        "noDataMessage": "No PLC Events Found",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "topDevices"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PLCEventLogging_CL | where TimeGenerated >= ago({TimeRange}) | project TimeGenerated, DeviceId_s, Level_s, Message_s, RawData_s | sort by TimeGenerated desc | take 50",
+        "title": "Latest Raw Events",
+        "noDataMessage": "No PLC Events Found",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "unstackedbar"
+        "gridSettings": {
+          "rowLimit": 50,
+          "columns": [
+            { "name": "TimeGenerated", "displayName": "Time" },
+            { "name": "DeviceId_s", "displayName": "Device ID" },
+            { "name": "Level_s", "displayName": "Level" },
+            { "name": "Message_s", "displayName": "Message" },
+            { "name": "RawData_s", "displayName": "Raw Data" }
+          ]
+        }
       },
-      "name": "query - 3"
+      "name": "rawEvents"
     }
   ]
 }
