@@ -922,7 +922,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             }
             # log the title to the console            
             $title = $ccpItem.title ?? $solutionName
-            $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $title data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            $connectorDescriptionText = "This Solution installs the data connector for $title. You can get $title data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
 
             $baseDataConnectorTextElement = [PSCustomObject] @{
                 name    = "dataconnectors$global:connectorCounter-text";

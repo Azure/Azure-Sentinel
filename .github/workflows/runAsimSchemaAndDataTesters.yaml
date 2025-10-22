@@ -1,19 +1,9 @@
 # Each pull request that updates ASIM parsers triggers the script.
 # The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
-# 
-# PERFORMANCE OPTIMIZATIONS:
-# - Uses sparse checkout to only download Parsers/, .script/tests/asimParsersTest/, and Sample Data/ASIM/ directories
-# - Uses shallow fetch with --depth=1 to minimize bandwidth and storage
-# - Prefers local script and sample data files from PR over downloading from remote URLs
-# - Relies on GitHub's native merge conflict detection instead of custom validation
-# 
-# FORK PR SUPPORT:
-# - Runs full Azure testing for both internal and fork PRs
-# - No longer skips Azure-dependent steps for fork contributions
-# - Provides complete validation coverage for all contributions
+
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, edited, reopened, synchronize]
     branches:
       - master
@@ -67,6 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - name: Checkout trusted base (master) - sparse
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
@@ -146,6 +137,23 @@ jobs:
             sanitized/Sample Data
           if-no-files-found: error
           retention-days: 3
+      - name: Add ASIM label to fork PR
+        if: github.event.pull_request.head.repo.fork == true
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['ASIM']
+              });
+              console.log('Successfully added ASIM label to fork PR');
+            } catch (error) {
+              console.log(`Warning: Could not add ASIM label: ${error.message}`);
+              // Don't fail the workflow if label doesn't exist or if there are permission issues
+            }
 
   Run-ASim-TemplateValidation:
     name: Run ASIM Template Validation tests
@@ -421,41 +429,3 @@ jobs:
           init_git_if_needed
           
           python "$filePath"
-
-  # Completion job that always runs to ensure workflow shows as completed
-  workflow-completion:
-    name: Workflow Completion
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [Run-ASim-TemplateValidation, Run-ASim-Sample-Data-Ingest, Run-ASim-Schema-Data-tests, Run-ASim-Parser-Filtering-Tests]
-    steps:
-      - name: Check workflow status
-        run: |
-          echo "Workflow completion status check:"
-          echo "✅ Template Validation: ${{ needs.Run-ASim-TemplateValidation.result }}"
-          echo "✅ Sample Data Ingestion: ${{ needs.Run-ASim-Sample-Data-Ingest.result }}"
-          echo "✅ Schema Data Tests: ${{ needs.Run-ASim-Schema-Data-tests.result }}"
-          echo "✅ Filtering Tests: ${{ needs.Run-ASim-Parser-Filtering-Tests.result }}"
-          
-          # Check if any critical jobs failed
-          if [[ "${{ needs.Run-ASim-TemplateValidation.result }}" == "failure" ]]; then
-            echo "❌ Template validation failed"
-            exit 1
-          fi
-          
-          if [[ "${{ needs.Run-ASim-Sample-Data-Ingest.result }}" == "failure" ]]; then
-            echo "❌ Sample data ingestion failed"
-            exit 1
-          fi
-          
-          if [[ "${{ needs.Run-ASim-Schema-Data-tests.result }}" == "failure" ]]; then
-            echo "❌ Schema data tests failed"
-            exit 1
-          fi
-          
-          if [[ "${{ needs.Run-ASim-Parser-Filtering-Tests.result }}" == "failure" ]]; then
-            echo "❌ Parser filtering tests failed"
-            exit 1
-          fi
-          
-          echo "🎉 All workflow jobs completed successfully!"
