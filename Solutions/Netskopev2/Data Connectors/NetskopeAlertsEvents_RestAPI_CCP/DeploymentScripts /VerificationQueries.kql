@@ -1,0 +1,332 @@
+// Netskope Multiple Instance Deployment - Verification Queries
+// Use these KQL queries to verify successful deployment and data ingestion
+
+//============================================================================
+// 1. DEPLOYMENT VERIFICATION QUERIES
+//============================================================================
+
+// Check if Data Collection Rules (DCRs) were created successfully
+// This query verifies that all 21 DEV DCRs exist
+Resources
+| where type == "microsoft.insights/datacollectionrules"
+| where resourceGroup == "YOUR_RESOURCE_GROUP_NAME"  // Replace with your resource group
+| where name startswith "dcr-DEV-NetskopeAlertsEvents"
+| project name, location, resourceGroup
+| sort by name asc
+
+// Check if Data Collection Endpoints (DCEs) were created successfully  
+Resources
+| where type == "microsoft.insights/datacollectionendpoints"
+| where resourceGroup == "YOUR_RESOURCE_GROUP_NAME"  // Replace with your resource group
+| where name startswith "dce-DEV-NetskopeAlertsEvents"
+| project name, location, resourceGroup
+| sort by name asc
+
+// Count total DEV resources created (should be 42 - 21 DCEs + 21 DCRs)
+Resources
+| where type in ("microsoft.insights/datacollectionrules", "microsoft.insights/datacollectionendpoints")
+| where resourceGroup == "YOUR_RESOURCE_GROUP_NAME"  // Replace with your resource group
+| where name contains "DEV-NetskopeAlertsEvents"
+| summarize TotalDevResources = count() by type
+| extend ResourceType = case(
+    type == "microsoft.insights/datacollectionrules", "Data Collection Rules (DCRs)",
+    type == "microsoft.insights/datacollectionendpoints", "Data Collection Endpoints (DCEs)",
+    type
+)
+| project ResourceType, TotalDevResources
+
+//============================================================================
+// 2. DATA INGESTION VERIFICATION QUERIES
+//============================================================================
+
+// Verify data is flowing from both PROD and DEV environments
+// Check Application Events (replace with your actual table if different)
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(24h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| summarize EventCount = count(), 
+           FirstEvent = min(TimeGenerated),
+           LastEvent = max(TimeGenerated) 
+    by Environment
+| order by EventCount desc
+
+// Monitor data ingestion rates by environment (last 4 hours)
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(4h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| summarize EventCount = count() by Environment, bin(TimeGenerated, 15m)
+| render timechart 
+
+// Check all Netskope tables for environment distribution
+union Netskope*_CL
+| where TimeGenerated > ago(1h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| extend TableName = split(Type, "_")[0]
+| summarize EventCount = count() by TableName, Environment
+| sort by TableName, Environment
+
+//============================================================================
+// 3. POLICY NAME PREFIX VALIDATION
+//============================================================================
+
+// Verify policy name prefixes are working correctly
+// Check for events without proper prefixes (these may need attention)
+union Netskope*_CL
+| where TimeGenerated > ago(1h)
+| where not(PolicyName startswith "PROD-" or PolicyName startswith "DEV-")
+| extend TableName = split(Type, "_")[0]
+| summarize UnprefixedEvents = count(), 
+           SamplePolicyNames = make_set(PolicyName, 10)
+    by TableName
+| where UnprefixedEvents > 0
+
+// Show distribution of policy name prefixes across all tables
+union Netskope*_CL
+| where TimeGenerated > ago(1h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Other"
+)
+| extend TableName = split(Type, "_")[0]
+| summarize EventCount = count() by TableName, Environment
+| evaluate pivot(Environment)
+
+//============================================================================
+// 4. SPECIFIC EVENT TYPE VERIFICATION
+//============================================================================
+
+// Application Events - Environment separation check
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| summarize count() by Environment, Activity
+| sort by Environment, count_ desc
+
+// Audit Events - Environment separation check  
+NetskopeAuditEvents_CL
+| where TimeGenerated > ago(1h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| summarize count() by Environment, AuditType
+| sort by Environment, count_ desc
+
+// DLP Alerts - Environment separation check
+NetskopeDLPAlertsEvents_CL
+| where TimeGenerated > ago(1h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| summarize count() by Environment, Severity
+| sort by Environment, count_ desc
+
+//============================================================================
+// 5. DATA QUALITY VALIDATION
+//============================================================================
+
+// Check for duplicate events between PROD and DEV
+// This query identifies potential duplicate events (same timestamp, user, activity)
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| summarize Environments = make_set(Environment), 
+           EventCount = count()
+    by TimeGenerated, User, Activity
+| where EventCount > 1 and array_length(Environments) > 1
+| project TimeGenerated, User, Activity, Environments, EventCount
+| sort by TimeGenerated desc
+
+// Monitor schema consistency between environments
+// Check if field presence is consistent across PROD and DEV
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| extend HasUser = isnotempty(User),
+         HasActivity = isnotempty(Activity),
+         HasSeverity = isnotempty(Severity)
+| summarize 
+    TotalEvents = count(),
+    EventsWithUser = countif(HasUser),
+    EventsWithActivity = countif(HasActivity),
+    EventsWithSeverity = countif(HasSeverity)
+    by Environment
+| extend 
+    UserFieldPercentage = round(EventsWithUser * 100.0 / TotalEvents, 2),
+    ActivityFieldPercentage = round(EventsWithActivity * 100.0 / TotalEvents, 2),
+    SeverityFieldPercentage = round(EventsWithSeverity * 100.0 / TotalEvents, 2)
+
+//============================================================================
+// 6. PERFORMANCE MONITORING
+//============================================================================
+
+// Monitor ingestion latency by environment
+union Netskope*_CL
+| where TimeGenerated > ago(1h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| extend TableName = split(Type, "_")[0]
+| extend IngestionDelay = datetime_diff('second', ingestion_time(), TimeGenerated)
+| summarize 
+    AvgDelaySeconds = avg(IngestionDelay),
+    MaxDelaySeconds = max(IngestionDelay),
+    EventCount = count()
+    by Environment, TableName
+| sort by AvgDelaySeconds desc
+
+// Check for any ingestion errors or gaps
+union Netskope*_CL
+| where TimeGenerated > ago(4h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| summarize EventCount = count() by Environment, bin(TimeGenerated, 10m)
+| sort by TimeGenerated desc
+| extend TimeSinceLastEvent = datetime_diff('minute', now(), TimeGenerated)
+| where TimeSinceLastEvent > 20  // Flag gaps longer than 20 minutes
+
+//============================================================================
+// 7. ANALYTICS RULE TESTING
+//============================================================================
+
+// Test environment-specific filtering for analytics rules
+// Example: High-risk application access in PROD environment only
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)
+| where PolicyName startswith "PROD-"  // PROD environment filter
+| where RiskLevel == "High" or Risk_Score > 70
+| project TimeGenerated, User, Application, RiskLevel, Risk_Score, PolicyName
+| sort by TimeGenerated desc
+
+// Example: Monitor DEV environment for unusual activity patterns
+NetskopeApplicationEvents_CL
+| where TimeGenerated > ago(1h)  
+| where PolicyName startswith "DEV-"   // DEV environment filter
+| summarize UniqueUsers = dcount(User),
+           UniqueApps = dcount(Application),
+           TotalEvents = count()
+    by bin(TimeGenerated, 5m)
+| where UniqueUsers > 10 or TotalEvents > 100  // Adjust thresholds as needed
+
+//============================================================================
+// 8. DASHBOARD QUERIES
+//============================================================================
+
+// Environment Overview Dashboard Query
+union Netskope*_CL
+| where TimeGenerated > ago(24h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| extend TableName = split(Type, "_")[0]
+| summarize 
+    EventCount = count(),
+    UniqueUsers = dcount(User),
+    FirstEvent = min(TimeGenerated),
+    LastEvent = max(TimeGenerated)
+    by Environment, TableName
+| sort by Environment, EventCount desc
+
+// Top Users by Environment
+union Netskope*_CL
+| where TimeGenerated > ago(24h)
+| extend Environment = case(
+    PolicyName startswith "PROD-", "Production",
+    PolicyName startswith "DEV-", "Development", 
+    "Unknown"
+)
+| summarize EventCount = count() by Environment, User
+| sort by Environment, EventCount desc
+| take 50
+
+//============================================================================
+// 9. TROUBLESHOOTING QUERIES  
+//============================================================================
+
+// Find events with missing policy names
+union Netskope*_CL
+| where TimeGenerated > ago(1h)
+| where isempty(PolicyName) or PolicyName == ""
+| extend TableName = split(Type, "_")[0]
+| summarize EventsWithoutPolicy = count() by TableName
+| where EventsWithoutPolicy > 0
+
+// Check for unexpected policy name patterns
+union Netskope*_CL
+| where TimeGenerated > ago(1h)
+| where not(PolicyName startswith "PROD-" or PolicyName startswith "DEV-")
+| where isnotempty(PolicyName)
+| summarize UnexpectedPolicies = make_set(PolicyName, 20), 
+           EventCount = count()
+| where EventCount > 0
+
+// Monitor for schema changes or parsing errors
+union Netskope*_CL
+| where TimeGenerated > ago(1h)
+| extend ParseErrors = column_ifexists("_ResourceId", ""),
+         RawDataLength = strlen(column_ifexists("RawData", ""))
+| where isnotempty(ParseErrors) or RawDataLength > 50000
+| extend TableName = split(Type, "_")[0]
+| summarize PotentialIssues = count() by TableName
+| where PotentialIssues > 0
+
+//============================================================================
+// USAGE NOTES:
+//============================================================================
+/*
+1. Replace "YOUR_RESOURCE_GROUP_NAME" with your actual resource group name in queries 1-3
+
+2. Adjust time ranges in "ago()" functions based on your data volume:
+   - High volume: ago(1h) or ago(30m) 
+   - Low volume: ago(24h) or ago(7d)
+
+3. Policy name prefixes can be customized:
+   - Change "PROD-" and "DEV-" to match your actual prefixes
+   - Add additional environments if needed (e.g., "TEST-", "STAGING-")
+
+4. For automated monitoring, save these queries as:
+   - Alert rules for missing data or errors
+   - Scheduled searches for regular validation
+   - Dashboard tiles for operational visibility
+
+5. Run verification queries after:
+   - Initial deployment
+   - Netskope configuration changes  
+   - Schema updates or connector modifications
+   - Suspected data ingestion issues
+*/
