@@ -1,5 +1,11 @@
 # Each pull request that updates ASIM parsers triggers the script.
 # The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
+# 
+# SECURITY MEASURES:
+# - Uses pull_request_target to enable secret access for fork PRs while maintaining security
+# - Always uses trusted scripts from master branch (never executes scripts from PR)
+# - Sanitizes PR content by filtering only safe file types (.yaml, .yml, .json for parsers; .json, .csv, .txt, .log for sample data)
+# - Performs strict file type validation and symlink detection
 
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
@@ -33,6 +39,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # Pinned commit SHA for security - update when scripts need to be updated
+  TRUSTED_SCRIPTS_COMMIT: "66717a187e"  # Latest commit from asim-github-workflow branch with script improvements. One this branch is merged into master then use master branch commit id.
   VERIFY_TEMPLATE_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py
   INGEST_SAMPLE_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py
   RUN_TESTERS_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/runAsimTesters.ps1
@@ -81,48 +89,71 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             Parsers/
-            .script/tests/asimParsersTest/
             Sample Data/ASIM/
           sparse-checkout-cone-mode: false
       - name: Copy parser assets (sanitized)
         run: |
           mkdir -p sanitized
-          # Since we already have sparse checkout, we can copy more efficiently
-          rsync -a --prune-empty-dirs --include '*/' --include '*.yaml' --include '*.yml' --include '*.json' --exclude '*' pr-code/Parsers/ sanitized/Parsers/ || true
-          # Fallback to full copy if selective copy produced nothing (to preserve behavior)
-          if [ ! -d sanitized/Parsers ] || [ "$(find sanitized/Parsers -type f | wc -l)" -eq 0 ]; then
-            echo "Selective copy empty; copying entire Parsers directory." >&2
-            rsync -a pr-code/Parsers/ sanitized/Parsers/
+          # Only copy safe file types from PR parsers (strict filtering for security)
+          if [ -d "pr-code/Parsers" ]; then
+            echo "Copying parser files from PR with strict filtering..."
+            rsync -a --prune-empty-dirs --include '*/' --include '*.yaml' --include '*.yml' --include '*.json' --exclude '*' pr-code/Parsers/ sanitized/Parsers/ || true
+            
+            # Verify we got some files, but don't fall back to unfiltered copy for security
+            file_count=$(find sanitized/Parsers -type f 2>/dev/null | wc -l)
+            if [ "$file_count" -eq 0 ]; then
+              echo "Warning: No parser files found matching safe file types (.yaml, .yml, .json)"
+              echo "This may indicate the PR contains only non-parser files or uses different extensions"
+            else
+              echo "Successfully copied $file_count parser files"
+            fi
           fi
           
-          # Copy script files from PR if they exist (prefer PR version over master)
-          if [ -d "pr-code/.script/tests/asimParsersTest" ]; then
-            echo "Copying test scripts from PR..."
-            mkdir -p sanitized/.script/tests/asimParsersTest
-            rsync -a pr-code/.script/tests/asimParsersTest/ sanitized/.script/tests/asimParsersTest/
-          elif [ -d ".script/tests/asimParsersTest" ]; then
-            echo "Copying test scripts from master..."
+          # Always use trusted scripts from master (never from PR for security)
+          if [ -d ".script/tests/asimParsersTest" ]; then
+            echo "Copying trusted test scripts from master..."
             mkdir -p sanitized/.script/tests/asimParsersTest
             rsync -a .script/tests/asimParsersTest/ sanitized/.script/tests/asimParsersTest/
           fi
           
-          # Copy sample data files from PR if they exist (prefer PR version over master)
+          # Copy sample data files with strict filtering and validation (only safe file types)
           if [ -d "pr-code/Sample Data/ASIM" ]; then
-            echo "Copying ASIM sample data from PR..."
+            echo "Copying ASIM sample data from PR with security validation..."
             mkdir -p "sanitized/Sample Data"
-            rsync -a "pr-code/Sample Data/ASIM/" "sanitized/Sample Data/ASIM/"
+            # Only copy safe file types: .json, .csv, .txt, .log (no executables or scripts)
+            rsync -a --prune-empty-dirs --include '*/' --include '*.json' --include '*.csv' --include '*.txt' --include '*.log' --exclude '*' "pr-code/Sample Data/ASIM/" "sanitized/Sample Data/ASIM/" || true
+            
+            # Additional security check: scan for potentially dangerous content
+            if find "sanitized/Sample Data" -type f -name "*.json" -exec grep -l "<script\|javascript:\|eval(\|exec(" {} \; 2>/dev/null | head -1 | grep -q .; then
+              echo "ERROR: Potentially malicious content detected in sample data files" >&2
+              exit 1
+            fi
           elif [ -d "Sample Data/ASIM" ]; then
             echo "Copying ASIM sample data from master..."
             mkdir -p "sanitized/Sample Data"
             rsync -a "Sample Data/ASIM/" "sanitized/Sample Data/ASIM/"
           fi
           
-          # Detect symlinks (fail if any to avoid traversal attacks)
-          if find sanitized/Parsers -type l | grep -q '.'; then
-            echo 'Symlinks detected in Parsers directory. Aborting for safety.' >&2
-            find sanitized/Parsers -type l -print >&2
+          # Detect symlinks in all sanitized content (fail if any to avoid traversal attacks)
+          if find sanitized -type l 2>/dev/null | grep -q '.'; then
+            echo 'Symlinks detected in sanitized content. Aborting for safety.' >&2
+            find sanitized -type l -print 2>/dev/null >&2
             exit 1
           fi
+          
+          # Additional security check: ensure no executable files
+          if find sanitized -type f -executable 2>/dev/null | grep -q '.'; then
+            echo 'Executable files detected in sanitized content. Aborting for safety.' >&2
+            find sanitized -type f -executable -print 2>/dev/null >&2
+            exit 1
+          fi
+          
+          # Strict file validation: remove any files that don't match allowed extensions
+          echo "Performing strict file validation..."
+          # Allow only: .yaml, .yml, .json (parsers), .csv, .txt, .log (sample data), .py/.ps1 (trusted scripts)
+          find sanitized -type f ! \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" -o -name "*.csv" -o -name "*.txt" -o -name "*.log" -o -name "*.py" -o -name "*.ps1" \) -print
+          find sanitized -type f ! \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" -o -name "*.csv" -o -name "*.txt" -o -name "*.log" -o -name "*.py" -o -name "*.ps1" \) -delete
+          echo "File validation completed."
           # Display space savings
           echo "Space usage summary:"
           echo "PR checkout size: $(du -sh pr-code 2>/dev/null | cut -f1)"
@@ -189,16 +220,12 @@ jobs:
         run: |
           filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
           
-          # Check if we have a local version from the PR (preferred)
-          if [ -f "$filePath" ]; then
-            echo "Using local script version from PR: $filePath"
-          else
-            # Fall back to downloading from master
-            url="$VERIFY_TEMPLATE_SCRIPT"
-            mkdir -p .script/tests/asimParsersTest
-            echo "No local script found, downloading from master: $url"
-            curl -sSL -o "$filePath" "$url"
-          fi
+          # Always use trusted script from pinned commit (security requirement)
+          commit_sha="$TRUSTED_SCRIPTS_COMMIT"
+          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/${commit_sha}/.script/tests/asimParsersTest/VerifyASimParserTemplate.py"
+          mkdir -p .script/tests/asimParsersTest
+          echo "Downloading trusted script from pinned commit ${commit_sha}: $url"
+          curl -sSL -o "$filePath" "$url"
           
           # Initialize git using common function
           eval "$INIT_GIT_FUNC"
@@ -265,16 +292,12 @@ jobs:
         run: |
           filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
           
-          # Check if we have a local version from the PR (preferred)
-          if [ -f "$filePath" ]; then
-            echo "Using local script version from PR: $filePath"
-          else
-            # Fall back to downloading from master
-            url="$INGEST_SAMPLE_SCRIPT" 
-            mkdir -p .script/tests/asimParsersTest
-            echo "No local script found, downloading from master: $url"
-            curl -sSL -o "$filePath" "$url"
-          fi
+          # Always use trusted script from pinned commit (security requirement)
+          commit_sha="$TRUSTED_SCRIPTS_COMMIT"
+          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/${commit_sha}/.script/tests/asimParsersTest/ingestASimSampleData.py"
+          mkdir -p .script/tests/asimParsersTest
+          echo "Downloading trusted script from pinned commit ${commit_sha}: $url"
+          curl -sSL -o "$filePath" "$url"
           chmod +x "$filePath"
           
           # Get changed parser files and set environment variable
@@ -339,28 +362,19 @@ jobs:
                 $env:PR_CHANGED_PARSER_FILES = ""
             }
             
-            # Check for local runAsimTesters.ps1 script first
+            # Always use trusted PowerShell scripts from pinned commit (security requirement)
+            $commitSha = "$env:TRUSTED_SCRIPTS_COMMIT"
             $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
-            if (Test-Path $filePath) {
-              Write-Host "Using local script version from PR: $filePath"
-            } else {
-              # Fall back to downloading from master
-              $url = "$env:RUN_TESTERS_SCRIPT"
-              Write-Host "No local script found, downloading from master: $url"
-              New-Item -ItemType Directory -Force -Path (Split-Path $filePath) | Out-Null
-              Invoke-WebRequest -Uri $url -OutFile $filePath
-            }
+            $url = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/runAsimTesters.ps1"
+            Write-Host "Downloading trusted runAsimTesters script from pinned commit $commitSha : $url"
+            New-Item -ItemType Directory -Force -Path (Split-Path $filePath) | Out-Null
+            Invoke-WebRequest -Uri $url -OutFile $filePath
             
-            # Check for local convertYamlToObject.ps1 script first
+            # Download trusted convertYamlToObject.ps1 script from pinned commit
             $filePath_convert_yaml = ".script/tests/asimParsersTest/convertYamlToObject.ps1"
-            if (Test-Path $filePath_convert_yaml) {
-              Write-Host "Using local convertYaml script version from PR: $filePath_convert_yaml"
-            } else {
-              # Fall back to downloading from master
-              $url_convert_yaml = "$env:CONVERT_YAML_SCRIPT"
-              Write-Host "No local convertYaml script found, downloading from master: $url_convert_yaml"
-              Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml
-            }
+            $url_convert_yaml = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/convertYamlToObject.ps1"
+            Write-Host "Downloading trusted convertYaml script from pinned commit $commitSha : $url_convert_yaml"
+            Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml
             
             & $filePath
           azPSVersion: "latest"
@@ -406,16 +420,12 @@ jobs:
         run: |
           filePath=".script/tests/asimParsersTest/ASimFilteringTest.py"
           
-          # Check if we have a local version from the PR (preferred)
-          if [ -f "$filePath" ]; then
-            echo "Using local script version from PR: $filePath"
-          else
-            # Fall back to downloading from master
-            url="$FILTERING_TEST_SCRIPT"
-            mkdir -p .script/tests/asimParsersTest
-            echo "No local script found, downloading from master: $url"
-            curl -sSL -o "$filePath" "$url"
-          fi
+          # Always use trusted script from pinned commit (security requirement)
+          commit_sha="$TRUSTED_SCRIPTS_COMMIT"
+          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/${commit_sha}/.script/tests/asimParsersTest/ASimFilteringTest.py"
+          mkdir -p .script/tests/asimParsersTest
+          echo "Downloading trusted script from pinned commit ${commit_sha}: $url"
+          curl -sSL -o "$filePath" "$url"
           
           # Get changed parser files and set environment variable
           changed_parser_files=$(curl -s -H "Accept: application/vnd.github.v3+json" \
