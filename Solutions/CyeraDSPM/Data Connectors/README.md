@@ -5,7 +5,7 @@
 This folder contains the Azure function time trigger code for CyeraDSPM-Microsoft Sentinel connector. The connector will run periodically and ingest the CyeraDSPM data into the Microsoft Sentinel logs custom table `CyeraDSPM_CL`. 
 ## Folders
 
-1. `CyeraDSPM_CCP/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies. 
+1. `CyeraDSPM_CCF/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies. 
 2. `CyeraDSPM_Functions/` - This contains the Azure function source code along with sample data.
 
 
