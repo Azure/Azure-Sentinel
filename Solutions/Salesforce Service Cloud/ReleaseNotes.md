@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.6       | 17-10-2025                     | Updated KQL transformation logic to map USER_NAME to the UserEmail column instead of USER_EMAIL.|
 | 3.0.5       | 20-08-2025                     | Moving Salesforce Service cloud **CCF Data Connector** to GA.		|
 | 3.0.4       | 11-07-2025                     | Salesforce **Workbook** updated with new ThreatIntelIndicators.	|
 | 3.0.3       | 03-07-2025                     | Added Preview tag to CCF Connector title.<br/>Deprecated Function app Connector.		|

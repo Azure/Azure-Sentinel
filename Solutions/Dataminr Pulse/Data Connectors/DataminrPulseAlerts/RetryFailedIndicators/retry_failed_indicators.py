@@ -8,7 +8,7 @@ from ..shared_code import consts
 from ..shared_code.state_manager import StateManager
 from ..shared_code.logger import applogger
 from .sentinel import MicrosoftSentinel
-from .post_to_log_analytics import post_data
+from .post_to_log_analytics import send_data_to_sentinel
 from azure.storage.fileshare import ShareDirectoryClient
 from azure.core.exceptions import ResourceNotFoundError
 from datetime import datetime, timezone, timedelta
@@ -262,8 +262,8 @@ async def get_failed_indicators_and_retry():
 
             result = await post_failed_indicators(failed_indicators)
             if result["failure_count"] > 0:
-                post_data(
-                    body=json.dumps(result["failed_indicators"]),
+                send_data_to_sentinel(
+                    body=result["failed_indicators"],
                     log_type=consts.FAILED_INDICATORS_TABLE_NAME,
                 )
                 applogger.info(
