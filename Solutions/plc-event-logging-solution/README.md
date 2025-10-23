@@ -4,7 +4,7 @@
 This document is intended for Pathlock Cloud customers. It provides detailed instructions for installing and using the Sentinel Connector. By following the steps outlined here, you can seamlessly ingest Pathlock Cloud event logs into Microsoft Sentinel, enabling advanced analysis and threat detection.
 
 ## Overview
-This solution provides a comprehensive framework for collecting, analyzing, and visualizing event logs from Pathlock Cloud Application. It ingests PLC event data into a custom log table in Microsoft Sentinel, enabling security teams to monitor application activity and detect security threats and anomalies..
+This solution provides a comprehensive framework for collecting, analyzing, and visualizing event logs from Pathlock Cloud Application. It ingests PLC event data into a custom log table in Microsoft Sentinel, enabling security teams to monitor application activity and detect security threats and anomalies.
 
 ## Key Features
 - **Custom Log Ingestion**: Ingests PLC event data into a custom log table in Microsoft Sentinel using a dedicated Data Collection Endpoint (DCE) and Data Collection Rule (DCR).
