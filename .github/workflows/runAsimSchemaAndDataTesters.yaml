@@ -3,6 +3,9 @@
 # 
 # SECURITY MEASURES:
 # - Uses pull_request_target to enable secret access for fork PRs while maintaining security
+# - FORK PR APPROVAL: External fork PRs require "safe to test" label from maintainer (GitHub Security Lab recommendation)
+# - RACE CONDITION PROTECTION: Detects commits pushed after label approval and requires re-approval
+# - INTERNAL PR AUTO-APPROVAL: PRs from same repository proceed without manual approval
 # - SECURE CHECKOUT: Only downloads data files (Parsers/, Sample Data/) via sparse-checkout
 # - CODE ISOLATION: Never executes scripts from PR - all scripts downloaded from pinned commits
 # - Always uses trusted scripts from pinned commit SHA (never executes scripts from PR)
@@ -15,7 +18,7 @@ name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 
 on:
   pull_request_target:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, edited, reopened, synchronize, labeled]
     branches:
       - master
       - asim-github-workflow
@@ -72,8 +75,160 @@ env:
     }
 
 jobs:
+  # Security gate: Fork PRs require manual approval via "safe to test" label
+  # Internal PRs (same repo) can proceed without labels
+  security-gate:
+    name: Security approval gate for fork PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    outputs:
+      approved: ${{ steps.check-approval.outputs.approved }}
+    steps:
+      - name: Check if PR needs approval
+        id: check-approval
+        run: |
+          # Check if this is a fork PR
+          if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+            echo "Fork PR detected - checking for approval label and commit safety..."
+            
+            # Check if "safe to test" label is present
+            labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+            if echo "$labels" | grep -q "safe to test"; then
+              echo "✅ Fork PR has 'safe to test' label - checking for race condition..."
+              
+              # SECURITY: Check for race condition - commits after label approval
+              # Get when the "safe to test" label was added
+              echo "Checking label timeline for race condition detection..."
+              label_created=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/timeline" \
+                | jq -r '.[] | select(.event == "labeled" and .label.name == "safe to test") | .created_at' \
+                | head -1)
+              
+              if [ -n "$label_created" ]; then
+                echo "Label 'safe to test' was added at: $label_created"
+                
+                # Get the latest commit timestamp
+                latest_commit_date="${{ github.event.pull_request.head.repo.pushed_at }}"
+                echo "Latest commit in PR was pushed at: $latest_commit_date"
+                
+                # Convert to epoch time for comparison
+                label_epoch=$(date -d "$label_created" +%s 2>/dev/null || echo "0")
+                commit_epoch=$(date -d "$latest_commit_date" +%s 2>/dev/null || echo "0")
+                
+                # Allow 60 second grace period for GitHub timestamp variations
+                grace_period=60
+                commit_epoch_with_grace=$((commit_epoch + grace_period))
+                
+                if [ "$commit_epoch_with_grace" -gt "$label_epoch" ]; then
+                  echo "⚠️  SECURITY ALERT: Commits may have been pushed after label approval!"
+                  echo "Label added: $label_created (epoch: $label_epoch)"
+                  echo "Latest commit: $latest_commit_date (epoch: $commit_epoch)"
+                  echo "❌ For security, this requires re-approval. Please:"
+                  echo "1. Review the latest commits carefully"
+                  echo "2. Remove and re-add the 'safe to test' label if commits are safe"
+                  echo "approved=false" >> $GITHUB_OUTPUT
+                  echo "needs_reapproval=true" >> $GITHUB_OUTPUT
+                  exit 1
+                else
+                  echo "✅ No commits detected after label approval - safe to proceed"
+                  echo "approved=true" >> $GITHUB_OUTPUT
+                fi
+              else
+                echo "⚠️  Could not determine when label was added - manual review recommended"
+                echo "For maximum security, please remove and re-add the 'safe to test' label"
+                echo "approved=false" >> $GITHUB_OUTPUT
+                echo "needs_reapproval=true" >> $GITHUB_OUTPUT
+                exit 1
+              fi
+            else
+              echo "❌ Fork PR requires 'safe to test' label from a maintainer"
+              echo "Fork PRs require manual approval for security. A maintainer must add the 'safe to test' label."
+              echo "approved=false" >> $GITHUB_OUTPUT
+              echo "needs_approval=true" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          else
+            echo "✅ Internal PR from same repository - auto-approved"
+            echo "approved=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Comment on fork PR for approval guidance
+        if: github.event.pull_request.head.repo.fork == true && failure()
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            // Check if we already have a guidance comment to avoid spam
+            const existingComment = comments.find(comment => 
+              comment.body.includes('🔒 **Security Approval Required**') && 
+              comment.user.type === 'Bot'
+            );
+            
+            let commentBody = '';
+            
+            // Check what type of approval is needed based on the step outputs
+            if ('${{ steps.check-approval.outputs.needs_reapproval }}' === 'true') {
+              commentBody = `🔒 **Security Re-approval Required**
+            
+            ⚠️ **Race condition detected**: New commits were pushed after the \`safe to test\` label was added.
+            
+            **For security, a maintainer must:**
+            1. 📝 Review the latest commits carefully for any security concerns
+            2. 🏷️ Remove the \`safe to test\` label
+            3. 🏷️ Re-add the \`safe to test\` label if the new commits are safe
+            
+            This ensures that all commits have been properly reviewed before testing with repository secrets.
+            
+            ---
+            *This is an automated security check to prevent malicious code execution. Learn more about [GitHub Security Lab recommendations](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/).*`;
+            } else {
+              commentBody = `🔒 **Security Approval Required**
+            
+            This fork PR requires manual approval before automated testing can run.
+            
+            **For security, a maintainer must:**
+            1. 📝 Review the code changes carefully
+            2. 🏷️ Add the \`safe to test\` label if the changes are safe to execute
+            
+            This protects against malicious code execution in fork contributions.
+            
+            ---
+            *This is an automated security check to prevent malicious code execution. Learn more about [GitHub Security Lab recommendations](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/).*`;
+            }
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: commentBody
+              });
+              console.log('Updated existing security guidance comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+              console.log('Created new security guidance comment');
+            }
+
   prepare-parsers:
     name: Prepare sanitized parser content
+    needs: security-gate
+    if: needs.security-gate.outputs.approved == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35  # Security: Prevent resource exhaustion
     permissions:
