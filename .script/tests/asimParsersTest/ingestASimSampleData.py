@@ -63,6 +63,7 @@ def read_github_yaml(url):
         response = requests.get(url)
     except Exception as e:
         print(f"::error::An error occurred while trying to get content of YAML file located at {url}: {e}")
+        return None
     return yaml.safe_load(response.text) if response.status_code == 200 else None
 
 def read_local_yaml(file_path):
