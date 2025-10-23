@@ -3,9 +3,10 @@
 # 
 # SECURITY MEASURES:
 # - Uses pull_request_target to enable secret access for fork PRs while maintaining security
-# - Always uses trusted scripts from master branch (never executes scripts from PR)
+# - Always uses trusted scripts from pinned commit SHA (never executes scripts from PR)
 # - Sanitizes PR content by filtering only safe file types (.yaml, .yml, .json for parsers; .json, .csv, .txt, .log for sample data)
-# - Performs strict file type validation and symlink detection
+# - Performs strict file type validation, symlink detection, and executable file prevention
+# - Scans sample data for potentially malicious content patterns
 
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
@@ -40,12 +41,7 @@ concurrency:
 
 env:
   # Pinned commit SHA for security - update when scripts need to be updated
-  TRUSTED_SCRIPTS_COMMIT: "66717a187e"  # Latest commit from asim-github-workflow branch with script improvements. One this branch is merged into master then use master branch commit id.
-  VERIFY_TEMPLATE_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py
-  INGEST_SAMPLE_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py
-  RUN_TESTERS_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/runAsimTesters.ps1
-  CONVERT_YAML_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/convertYamlToObject.ps1
-  FILTERING_TEST_SCRIPT: https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ASimFilteringTest.py
+  TRUSTED_SCRIPTS_COMMIT: "66717a187e"  # Latest commit from asim-github-workflow branch with script improvements. Once this branch is merged into master then use master branch commit id.
   # Common git initialization function
   INIT_GIT_FUNC: |
     init_git_if_needed() {
@@ -67,19 +63,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Checkout trusted base (master) - sparse
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
-        with:
-          ref: master
-          repository: Azure/Azure-Sentinel
-          persist-credentials: false
-          fetch-depth: 1
-          sparse-checkout: |
-            Parsers/
-            .script/tests/asimParsersTest/
-            Sample Data/ASIM/
-          sparse-checkout-cone-mode: false
-      - name: Checkout PR head into pr-code (isolated) - sparse
+      - name: Checkout PR head into isolated directory - sparse
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
           path: pr-code
@@ -109,12 +93,7 @@ jobs:
             fi
           fi
           
-          # Always use trusted scripts from master (never from PR for security)
-          if [ -d ".script/tests/asimParsersTest" ]; then
-            echo "Copying trusted test scripts from master..."
-            mkdir -p sanitized/.script/tests/asimParsersTest
-            rsync -a .script/tests/asimParsersTest/ sanitized/.script/tests/asimParsersTest/
-          fi
+          # Trusted scripts will be downloaded from pinned commit URLs in each job (never from PR for security)
           
           # Copy sample data files with strict filtering and validation (only safe file types)
           if [ -d "pr-code/Sample Data/ASIM" ]; then
@@ -128,10 +107,7 @@ jobs:
               echo "ERROR: Potentially malicious content detected in sample data files" >&2
               exit 1
             fi
-          elif [ -d "Sample Data/ASIM" ]; then
-            echo "Copying ASIM sample data from master..."
-            mkdir -p "sanitized/Sample Data"
-            rsync -a "Sample Data/ASIM/" "sanitized/Sample Data/ASIM/"
+          # No fallback to master sample data since we only process PR changes in isolated environment
           fi
           
           # Detect symlinks in all sanitized content (fail if any to avoid traversal attacks)
@@ -164,7 +140,6 @@ jobs:
           name: sanitized-parsers
           path: |
             sanitized/Parsers
-            sanitized/.script/tests/asimParsersTest
             sanitized/Sample Data
           if-no-files-found: error
           retention-days: 3
@@ -337,7 +312,7 @@ jobs:
         uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709
         with:
           inlineScript: |
-            # Initialize git repository if scripts expect git context (simplified)
+            # Initialize git repository if scripts expect git context
             if (-not (Test-Path ".git")) {
               git init | Out-Null
               git config user.name "GitHub Actions" | Out-Null
@@ -346,12 +321,9 @@ jobs:
               git commit -m "Initial commit with parser files" | Out-Null
             }
             
-            # Get changed parser files and set environment variable for PowerShell
-            $prNumber = "${{ github.event.pull_request.number }}"
-            $repo = "${{ github.repository }}"
-            $apiUrl = "https://api.github.com/repos/$repo/pulls/$prNumber/files"
-            
+            # Set changed parser files environment variable for PowerShell
             try {
+                $apiUrl = "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files"
                 $response = Invoke-RestMethod -Uri $apiUrl -Headers @{ "Accept" = "application/vnd.github.v3+json" }
                 $changedParserFiles = $response | Where-Object { $_.filename -like "Parsers/*.yaml" } | Select-Object -ExpandProperty filename
                 $env:PR_CHANGED_PARSER_FILES = $changedParserFiles -join ","
@@ -362,21 +334,25 @@ jobs:
                 $env:PR_CHANGED_PARSER_FILES = ""
             }
             
-            # Always use trusted PowerShell scripts from pinned commit (security requirement)
+            # Download and run trusted PowerShell scripts from pinned commit
             $commitSha = "$env:TRUSTED_SCRIPTS_COMMIT"
-            $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
-            $url = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/runAsimTesters.ps1"
-            Write-Host "Downloading trusted runAsimTesters script from pinned commit $commitSha : $url"
-            New-Item -ItemType Directory -Force -Path (Split-Path $filePath) | Out-Null
-            Invoke-WebRequest -Uri $url -OutFile $filePath
+            $scriptDir = ".script/tests/asimParsersTest"
+            New-Item -ItemType Directory -Force -Path $scriptDir | Out-Null
             
-            # Download trusted convertYamlToObject.ps1 script from pinned commit
-            $filePath_convert_yaml = ".script/tests/asimParsersTest/convertYamlToObject.ps1"
-            $url_convert_yaml = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/convertYamlToObject.ps1"
-            Write-Host "Downloading trusted convertYaml script from pinned commit $commitSha : $url_convert_yaml"
-            Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml
+            # Download runAsimTesters.ps1
+            $runTestersPath = "$scriptDir/runAsimTesters.ps1"
+            $runTestersUrl = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/runAsimTesters.ps1"
+            Write-Host "Downloading runAsimTesters script from pinned commit $commitSha"
+            Invoke-WebRequest -Uri $runTestersUrl -OutFile $runTestersPath
             
-            & $filePath
+            # Download convertYamlToObject.ps1
+            $convertYamlPath = "$scriptDir/convertYamlToObject.ps1"
+            $convertYamlUrl = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/convertYamlToObject.ps1"
+            Write-Host "Downloading convertYaml script from pinned commit $commitSha"
+            Invoke-WebRequest -Uri $convertYamlUrl -OutFile $convertYamlPath
+            
+            # Execute the main test script
+            & $runTestersPath
           azPSVersion: "latest"
 
   Run-ASim-Parser-Filtering-Tests:
