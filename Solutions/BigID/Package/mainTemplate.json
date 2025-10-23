@@ -544,11 +544,13 @@
                 },
                 "dataType": "BigIDDSPMCatalog_CL",
                 "auth": {
-                  "type": "APIKey",
-                  "ApiKey": "[[parameters('bigidToken')]",
-                  "ApiKeyName": "Authorization",
-                  "ApiKeyIdentifier": "",
-                  "isApiKeyInPostPayload": false
+                  "type": "JwtToken",
+                  "UserToken": "[[parameters('bigidToken')]",
+                  "UserTokenPrepend": "",
+                  "TokenEndpoint": "[[concat('https://',parameters('bigidFqdn'),'/api/v1/refresh-access-token')]",
+                  "TokenEndpointHttpMethod": "GET",
+                  "NoAccessTokenPrepend": true,
+                  "JwtTokenJsonPath": "$.systemToken"
                 },
                 "request": {
                   "apiEndpoint": "[[concat('https://',parameters('bigidFqdn'),'/api/v1/actionable-insights/all-cases')]",
@@ -559,7 +561,7 @@
                   "timeoutInSeconds": 10,
                   "headers": {
                     "Accept": "application/json",
-                    "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector"
+                    "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector (all-cases)"
                   }
                 },
                 "response": {
@@ -580,16 +582,42 @@
                   "stepType": "Nested",
                   "nextSteps": [
                     {
-                      "stepId": "fetchObjectsDetails",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project dataSourceName = res.dataSourceName, policyName = res.policyName"
-                    },
-                    {
                       "stepId": "fetchDataSourceDetails",
-                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project dataSourceName = res.dataSourceName"
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project dataSourceName = res.dataSourceName, policyName = res.policyName"
                     }
                   ]
                 },
                 "stepCollectorConfigs": {
+                  "fetchDataSourceDetails": {
+                    "shouldJoinNestedData": true,
+                    "joinedDataStepName": "datasource",
+                    "stepInfo": {
+                      "stepType": "Nested",
+                      "nextSteps": [
+                        {
+                          "stepId": "fetchObjectsDetails",
+                          "stepPlaceholdersParsingKql": "source"
+                        }
+                      ]
+                    },
+                    "request": {
+                      "httpMethod": "GET",
+                      "apiEndpoint": "[[concat('https://',parameters('bigidFqdn'),'/api/v1/ds_connections/$dataSourceName$')]",
+                      "queryParameters": {
+                        "withoutCredentialValue": "true"
+                      },
+                      "headers": {
+                        "Accept": "application/json",
+                        "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector (datasources)"
+                      }
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$.ds_connection"
+                      ],
+                      "format": "json"
+                    }
+                  },
                   "fetchObjectsDetails": {
                     "shouldJoinNestedData": true,
                     "joinedDataStepName": "affectedObjects",
@@ -603,33 +631,12 @@
                       },
                       "headers": {
                         "Accept": "application/json",
-                        "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector"
+                        "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector (data-catalog)"
                       }
                     },
                     "response": {
                       "eventsJsonPaths": [
                         "$.results"
-                      ],
-                      "format": "json"
-                    }
-                  },
-                  "fetchDataSourceDetails": {
-                    "shouldJoinNestedData": true,
-                    "joinedDataStepName": "datasource",
-                    "request": {
-                      "httpMethod": "GET",
-                      "apiEndpoint": "[[concat('https://',parameters('bigidFqdn'),'/api/v1/ds_connections/$dataSourceName$')]",
-                      "queryParameters": {
-                        "withoutCredentialValue": "true"
-                      },
-                      "headers": {
-                        "Accept": "application/json",
-                        "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector"
-                      }
-                    },
-                    "response": {
-                      "eventsJsonPaths": [
-                        "$.ds_connection"
                       ],
                       "format": "json"
                     }
