@@ -9,7 +9,7 @@ $ManagedIdentity = "" # Enter the Name or GUID of the Managed Identity on the Lo
 
 # Begin Script
 Connect-MgGraph -ContextScope Process -Scopes 'Application.ReadWrite.All' | Out-Null
-Write-Host "Connected to Graph"
+Write-Host "Connected to Graph" -ForegroundColor Green
 
 # Prompt for the details of the managed identity from the logic app if not already provided
 if ($ManagedIdentity -eq "") {
@@ -54,7 +54,7 @@ If ($MI) {
     Try { New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $MI.Id -PrincipalId $MI.Id -ResourceId $GraphSPN.Id -AppRoleId $AppRole.Id -ErrorAction Stop | Out-Null } Catch {}
 
     Write-Host ""
-    Write-Host "Complete. Disconnecting from Graph."
+    Write-Host "Complete. Disconnecting from Graph." -ForegroundColor Green
 
     Disconnect-MgGraph | Out-Null
 
