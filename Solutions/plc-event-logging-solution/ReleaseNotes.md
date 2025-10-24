@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 10-23-2025                     | **Data Connector** This solution provides a comprehensive framework for collecting, analyzing, and visualizing event logs from Pathlock Cloud Application. It ingests PLC event data into a custom log table in Microsoft Sentinel, enabling security teams to monitor application activity and detect security threats and anomalies API
