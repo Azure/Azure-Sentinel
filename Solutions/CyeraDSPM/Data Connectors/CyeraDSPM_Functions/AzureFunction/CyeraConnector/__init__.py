@@ -11,10 +11,10 @@
 #   CYERA_SECRET=...
 #   DCE_INGEST=https://<dce-name>.<region>-1.ingest.monitor.azure.com
 #   DCR_IMMUTABLE_ID=dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-#   STREAM_ASSETS=Custom-CyeraAssetsV2
-#   STREAM_IDENTITIES=Custom-CyeraIdentitiesV2
-#   STREAM_ISSUES=Custom-CyeraIssuesV2
-#   STREAM_CLASSIFICATIONS=Custom-CyeraClassificationsV2
+#   STREAM_ASSETS=Custom-CyeraAssets
+#   STREAM_IDENTITIES=Custom-CyeraIdentities
+#   STREAM_ISSUES=Custom-CyeraIssues
+#   STREAM_CLASSIFICATIONS=Custom-CyeraClassifications
 #   ENABLE_ASSETS=true/false
 #   ENABLE_IDENTITIES=true/false
 #   ENABLE_ISSUES=true/false
@@ -109,10 +109,10 @@ SEND_BATCH_SIZE = _env_int("SEND_BATCH_SIZE", 200)
 SEND_BYTES_MAX = _env_int("SEND_BYTES_MAX", 900_000)  # ~ under 1MB
 
 # Streams (DCR stream names; NOT the _CL table names)
-STREAM_ASSETS = os.getenv("STREAM_ASSETS", "Custom-CyeraAssetsV2")
-STREAM_IDENTITIES = os.getenv("STREAM_IDENTITIES", "Custom-CyeraIdentitiesV2")
-STREAM_ISSUES = os.getenv("STREAM_ISSUES", "Custom-CyeraIssuesV2")
-STREAM_CLASSIFICATIONS = os.getenv("STREAM_CLASSIFICATIONS", "Custom-CyeraClassificationsV2")
+STREAM_ASSETS = os.getenv("STREAM_ASSETS", "Custom-CyeraAssets")
+STREAM_IDENTITIES = os.getenv("STREAM_IDENTITIES", "Custom-CyeraIdentities")
+STREAM_ISSUES = os.getenv("STREAM_ISSUES", "Custom-CyeraIssues")
+STREAM_CLASSIFICATIONS = os.getenv("STREAM_CLASSIFICATIONS", "Custom-CyeraClassifications")
 
 # v1.6.1: configurable assets delta key & dry-run
 ASSETS_DELTA_PARAM = os.getenv("ASSETS_DELTA_PARAM", "lastModifiedTimeGte").strip()
