@@ -262,39 +262,26 @@ def handle_test_failure(parser_file_path, error_message=None):
 def main():
     # Get modified ASIM Parser files along with their status
     current_directory = os.path.dirname(os.path.abspath(__file__))
-    
-    # Check if we're in GitHub Actions environment and have changed files from the workflow
-    if os.environ.get('GITHUB_ACTIONS') == 'true':
-        changed_files_env = os.environ.get('PR_CHANGED_PARSER_FILES', '')
-        if changed_files_env:
-            modified_yaml_files = [f.strip() for f in changed_files_env.split(',') if f.strip()]
-            print(f"Found {len(modified_yaml_files)} changed parser files from PR for filtering tests:")
-            for file in modified_yaml_files:
-                print(f"  - {file}")
-        else:
-            print("No parser files changed in this PR - skipping filtering tests.")
-            return
-    else:
-        # Original logic for local development
-        # Add upstream remote if not already present
-        git_remote_command = "git remote"
-        remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
-        if 'upstream' not in remote_result.stdout.split():
-            git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
-            subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
-        # Fetch from upstream
-        git_fetch_upstream_command = "git fetch upstream"
-        subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
 
-        GetModifiedFiles = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
-        try:
-            modified_files = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"::error::An error occurred while executing the command: {e}")
-            sys.stdout.flush()  # Explicitly flush stdout
-        
-        # Get only YAML files
-        modified_yaml_files = [line for line in modified_files.stdout.splitlines() if line.endswith('.yaml')]
+    # Add upstream remote if not already present
+    git_remote_command = "git remote"
+    remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
+    if 'upstream' not in remote_result.stdout.split():
+        git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
+        subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    # Fetch from upstream
+    git_fetch_upstream_command = "git fetch upstream"
+    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+
+    GetModifiedFiles = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
+    try:
+        modified_files = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"::error::An error occurred while executing the command: {e}")
+        sys.stdout.flush()  # Explicitly flush stdout
+    
+    # Get only YAML files
+    modified_yaml_files = [line for line in modified_files.stdout.splitlines() if line.endswith('.yaml')]
     print(f"{YELLOW}Following files has been detected as modified:{RESET}")
     sys.stdout.flush()  # Explicitly flush stdout
     for file in modified_yaml_files:
