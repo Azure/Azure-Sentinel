@@ -92,8 +92,16 @@ jobs:
               echo "🏷️  Most recent 'safe to test' label timestamp: $label_created"
               
               if [ -n "$label_created" ]; then
-                # Get the latest commit timestamp
-                latest_commit_date="${{ github.event.pull_request.head.repo.pushed_at }}"
+                # Get the latest commit timestamp from the PR head commit
+                # Use the actual commit timestamp, not repo.pushed_at which can be misleading
+                latest_commit_date="${{ github.event.pull_request.head.sha }}"
+                
+                # Fetch the commit details to get accurate timestamp
+                echo "📊 Fetching commit details for SHA: ${latest_commit_date:0:7}..."
+                commit_response=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/$repo/commits/$latest_commit_date")
+                
+                latest_commit_date=$(echo "$commit_response" | jq -r '.commit.committer.date' 2>/dev/null)
                 echo "📌 Latest commit timestamp: $latest_commit_date"
                 echo ""
                 
@@ -180,6 +188,10 @@ jobs:
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
         with:
           script: |
+            console.log('📝 Comment step triggered');
+            console.log('needs_approval: ${{ steps.check-approval.outputs.needs_approval }}');
+            console.log('needs_reapproval: ${{ steps.check-approval.outputs.needs_reapproval }}');
+            
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -196,6 +208,7 @@ jobs:
             
             // Check what type of approval is needed based on the step outputs
             if ('${{ steps.check-approval.outputs.needs_reapproval }}' === 'true') {
+              console.log('✅ Re-approval needed - posting re-approval message');
               commentBody = `🔒 **Security Re-approval Required**
             
             ⚠️ **Race condition detected**: New commits were pushed after the \`safe to test\` label was added.
@@ -226,22 +239,24 @@ jobs:
             
             if (existingComment) {
               // Update existing comment
+              console.log('📝 Updating existing comment (ID: ' + existingComment.id + ')');
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: existingComment.id,
                 body: commentBody
               });
-              console.log('Updated existing security guidance comment');
+              console.log('✅ Updated existing security guidance comment');
             } else {
               // Create new comment
+              console.log('📝 Creating new comment');
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
                 body: commentBody
               });
-              console.log('Created new security guidance comment');
+              console.log('✅ Created new security guidance comment');
             }
 
   Run-ASim-TemplateValidation:
