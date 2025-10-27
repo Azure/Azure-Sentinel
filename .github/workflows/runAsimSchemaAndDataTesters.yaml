@@ -93,11 +93,31 @@ jobs:
                 | tail -1)
               
               if [ -n "$label_created" ] && [ "$label_created" != "null" ]; then
-                # Get latest commit timestamp
-                latest_commit_date="${{ github.event.pull_request.head.repo.pushed_at }}"
+                # Get the actual commit timestamp from the PR head commit
+                pr_head_sha="${{ github.event.pull_request.head.sha }}"
+                
+                log_info "Getting commit details for SHA: ${pr_head_sha:0:7}..."
+                if ! commit_response=$(curl -s -f -H "Authorization: token $GITHUB_TOKEN" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/$repo/commits/$pr_head_sha"); then
+                  log_error "Failed to fetch commit details from GitHub API"
+                  echo "approved=false" >> $GITHUB_OUTPUT
+                  echo "needs_reapproval=true" >> $GITHUB_OUTPUT
+                  exit 1
+                fi
+                
+                # Get the commit author date (when the commit was actually created)
+                latest_commit_date=$(echo "$commit_response" | jq -r '.commit.author.date' 2>/dev/null)
+                
+                if [ -z "$latest_commit_date" ] || [ "$latest_commit_date" = "null" ]; then
+                  log_error "Could not extract commit timestamp from API response"
+                  echo "approved=false" >> $GITHUB_OUTPUT
+                  echo "needs_reapproval=true" >> $GITHUB_OUTPUT
+                  exit 1
+                fi
                 
                 log_info "Label timestamp: $label_created"
-                log_info "Commit timestamp: $latest_commit_date"
+                log_info "Commit timestamp: $latest_commit_date (author date)"
                 
                 # Convert to epoch for comparison
                 if ! label_epoch=$(date -d "$label_created" +%s 2>/dev/null); then
