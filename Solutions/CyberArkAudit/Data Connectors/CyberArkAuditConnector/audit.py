@@ -1,3 +1,4 @@
+import base64
 import datetime
 import json
 import logging
@@ -99,12 +100,12 @@ def _call_audit_api(route: str, body: dict) -> dict:
     url = f'{api_base_url}/api/audits/stream/{route}'
     try:
         response = requests.post(url=url, headers=header, data=json.dumps(body))
-        if response.status_code == 200:
+        if 200 <= response.status_code <= 299:
             res_content = response.json()
         elif response.status_code in [400, 401, 403]:
             logging.error(f'Error {response.status_code} {response.text}')
-        elif response.status_code == 500:
-            logging.error(f'Error {response.status_code}')
+        else:
+            logging.error(f'Error HTTP {response.status_code} when calling {url}')
     except Exception as err:
         logging.error(f'Something went wrong {err}')
     return res_content
@@ -113,7 +114,13 @@ def _call_audit_api(route: str, body: dict) -> dict:
 def get_query_data() -> dict:
     cursor_data = storage.load(file_name=QUERY_FILE_NAME)
     if cursor_data:
-        logging.info(f"Fetched stored cursor cursorRef: {cursor_data['cursorRef']}")
+        currentPosition='unknown'
+        try:
+            cursorRef = json.loads(base64.b64decode(cursor_data['cursorRef']))
+            currentPosition=cursorRef['currentPosition'][0]
+        except Exception as err:
+            logging.warning(f'Failed to decode cursorRef: {err}')
+        logging.info(f"Fetched stored cursor cursorRef: {cursor_data['cursorRef']}, currentPosition: {currentPosition}")
         return cursor_data
     if os.environ.get('cursorRef'):
         cursor_data['cursor'] = os.environ.get('cursorRef')
