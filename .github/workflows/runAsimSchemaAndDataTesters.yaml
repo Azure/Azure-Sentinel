@@ -1,21 +1,6 @@
 # Each pull request that updates ASIM parsers triggers the script.
 # The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
-# 
-# SECURITY MEASURES:
-# - Uses pull_request_target to enable secret access for fork PRs while maintaining security
-# - FORK PR APPROVAL: External fork PRs require "safe to test" label from maintainer (GitHub Security Lab recommendation)
-# - RACE CONDITION PROTECTION: Detects commits pushed after label approval and requires re-approval
-# - INTERNAL PR AUTO-APPROVAL: PRs from same repository proceed without manual approval
-# - SECURE CHECKOUT: Only downloads data files (Parsers/, Sample Data/) via sparse-checkout
-# - CODE ISOLATION: Never executes scripts from PR - all scripts downloaded from pinned commits
-# - Always uses trusted scripts from pinned commit SHA (never executes scripts from PR)
-# - Sanitizes PR content by filtering only safe file types (.yaml, .yml, .json for parsers; .json, .csv, .txt, .log for sample data)
-# - Performs strict file type validation, symlink detection, and executable file prevention
-# - Scans sample data for potentially malicious content patterns
-# - CREDENTIAL ISOLATION: persist-credentials: false prevents PR access to repository credentials
-
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
-
 on:
   pull_request_target:
     types: [opened, edited, reopened, synchronize, labeled]
@@ -38,43 +23,15 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Explicitly restrict default permissions (security best practice)
 permissions:
+  id-token: write
   contents: read
-  # Explicitly deny other permissions for security
-  actions: none
-  checks: none
-  deployments: none
-  issues: none
-  packages: none
-  pages: none
-  pull-requests: none
-  repository-projects: none
-  security-events: none
-  statuses: none
-  # id-token only granted in specific jobs that need Azure login
 
 concurrency:
   group: asim-tests-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
-env:
-  # Pinned commit SHA for security - update when scripts need to be updated
-  TRUSTED_SCRIPTS_COMMIT: "66717a187e"  # Latest commit from asim-github-workflow branch with script improvements. Once this branch is merged into master then use master branch commit id.
-  # Common git initialization function
-  INIT_GIT_FUNC: |
-    init_git_if_needed() {
-      if [ ! -d ".git" ]; then
-        echo "Initializing git repository for script compatibility..."
-        git init
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-        git add .
-        git commit -m "Initial commit with parser files"
-      fi
-    }
-
-jobs:
+jobs: 
   # Security gate: Fork PRs require manual approval via "safe to test" label
   # Internal PRs (same repo) can proceed without labels
   security-gate:
@@ -225,362 +182,211 @@ jobs:
               console.log('Created new security guidance comment');
             }
 
-  prepare-parsers:
-    name: Prepare sanitized parser content
+  Run-ASim-TemplateValidation:
+    name: Run ASim Template Validation tests
     needs: security-gate
     if: needs.security-gate.outputs.approved == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 35  # Security: Prevent resource exhaustion
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      # SECURITY: This checkout is safe because:
-      # 1. Only data files are checked out (sparse-checkout: Parsers/, Sample Data/ASIM/)
-      # 2. No code from PR is ever executed - all scripts come from pinned commits
-      # 3. Content is sanitized through strict file filtering (rsync patterns)
-      # 4. Multiple security validations prevent malicious content execution
-      # 5. persist-credentials: false prevents credential access
-      # codeql[github/untrusted-checkout] - Safe: Only data files checked out, no code execution from PR
-      - name: Checkout PR head into isolated directory - sparse
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
         with:
-          path: pr-code
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          persist-credentials: false
-          fetch-depth: 1
-          sparse-checkout: |
-            Parsers/
-            Sample Data/ASIM/
-          sparse-checkout-cone-mode: false
-      # SECURITY: Explicitly unset GitHub token to prevent accidental usage in scripts
-      - name: Clear GitHub token
+            ref: ${{github.event.pull_request.head.ref}}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
+            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      - name: Setup git config
         run: |
-          unset GITHUB_TOKEN
-          echo "GITHUB_TOKEN has been cleared for security"
-      - name: Copy parser assets (sanitized)
-        env:
-          # Ensure no GitHub token is available during content processing
-          GITHUB_TOKEN: ""
+              git config --local user.name "github-actions[bot]"
+              git config --local user.email "<>"
+      - name: Merge master into pull request branch
         run: |
-          mkdir -p sanitized
-          # Only copy safe file types from PR parsers (strict filtering for security)
-          if [ -d "pr-code/Parsers" ]; then
-            echo "Copying parser files from PR with strict filtering..."
-            rsync -a --prune-empty-dirs --include '*/' --include '*.yaml' --include '*.yml' --include '*.json' --exclude '*' pr-code/Parsers/ sanitized/Parsers/ || true
-            
-            # Verify we got some files, but don't fall back to unfiltered copy for security
-            file_count=$(find sanitized/Parsers -type f 2>/dev/null | wc -l)
-            if [ "$file_count" -eq 0 ]; then
-              echo "Warning: No parser files found matching safe file types (.yaml, .yml, .json)"
-              echo "This may indicate the PR contains only non-parser files or uses different extensions"
-            else
-              echo "Successfully copied $file_count parser files"
-            fi
-          fi
-          
-          # Trusted scripts will be downloaded from pinned commit URLs in each job (never from PR for security)
-          
-          # Copy sample data files with strict filtering and validation (only safe file types)
-          if [ -d "pr-code/Sample Data/ASIM" ]; then
-            echo "Copying ASIM sample data from PR with security validation..."
-            mkdir -p "sanitized/Sample Data"
-            # Only copy safe file types: .json, .csv, .txt, .log (no executables or scripts)
-            rsync -a --prune-empty-dirs --include '*/' --include '*.json' --include '*.csv' --include '*.txt' --include '*.log' --exclude '*' "pr-code/Sample Data/ASIM/" "sanitized/Sample Data/ASIM/" || true
-            
-            # Additional security check: scan for potentially dangerous content
-            if find "sanitized/Sample Data" -type f -name "*.json" -exec grep -l "<script\|javascript:\|eval(\|exec(" {} \; 2>/dev/null | head -1 | grep -q .; then
-              echo "ERROR: Potentially malicious content detected in sample data files" >&2
-              exit 1
-            fi
-          # No fallback to master sample data since we only process PR changes in isolated environment
-          fi
-          
-          # Detect symlinks in all sanitized content (fail if any to avoid traversal attacks)
-          if find sanitized -type l 2>/dev/null | grep -q '.'; then
-            echo 'Symlinks detected in sanitized content. Aborting for safety.' >&2
-            find sanitized -type l -print 2>/dev/null >&2
-            exit 1
-          fi
-          
-          # Additional security check: ensure no executable files
-          if find sanitized -type f -executable 2>/dev/null | grep -q '.'; then
-            echo 'Executable files detected in sanitized content. Aborting for safety.' >&2
-            find sanitized -type f -executable -print 2>/dev/null >&2
-            exit 1
-          fi
-      - name: Upload sanitized artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: sanitized-parsers
-          path: |
-            sanitized/Parsers
-            sanitized/Sample Data
-          if-no-files-found: error
-          retention-days: 3
-      - name: Add ASIM label to fork PR
-        if: github.event.pull_request.head.repo.fork == true
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
-        with:
-          script: |
-            try {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                labels: ['ASIM']
-              });
-              console.log('Successfully added ASIM label to fork PR');
-            } catch (error) {
-              console.log(`Warning: Could not add ASIM label: ${error.message}`);
-              // Don't fail the workflow if label doesn't exist or if there are permission issues
-            }
-
-  Run-ASim-TemplateValidation:
-    name: Run ASIM Template Validation tests
-    needs: prepare-parsers
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # Explicitly deny write permissions
-      actions: none
-      checks: none
-      deployments: none
-      issues: none
-      packages: none
-      pages: none
-      pull-requests: none
-      repository-projects: none
-      security-events: none
-      statuses: none
-    steps:
-      - name: Download sanitized parsers
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-        with:
-          name: sanitized-parsers
-          path: .
-      - name: Write dependency manifest
-        run: |
-          printf "requests\nPyYAML\ntabulate\n" > deps-template.txt
-      - name: Restore pip cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('deps-template.txt') }}
-          restore-keys: |
-            pip-${{ runner.os }}-
+              git merge origin/master
+              Conflicts=$(git ls-files -u | wc -l)
+              if [ "$Conflicts" -gt 0 ] ; then
+                echo "There is a merge conflict. Aborting"
+                git merge --abort
+                exit 1
+              fi
       - name: Set up Python
-        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        uses: actions/setup-python@v2
         with:
           python-version: '3.x'
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install requests PyYAML tabulate
+              python -m pip install --upgrade pip
+              pip install requests
+              pip install PyYAML
+              pip install tabulate
       - name: Run ASim parsers template validations python script
         run: |
-          filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
-          
-          # Always use trusted script from pinned commit (security requirement)
-          commit_sha="$TRUSTED_SCRIPTS_COMMIT"
-          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/${commit_sha}/.script/tests/asimParsersTest/VerifyASimParserTemplate.py"
-          mkdir -p .script/tests/asimParsersTest
-          echo "Downloading trusted script from pinned commit ${commit_sha}: $url"
-          curl -sSL -o "$filePath" "$url"
-          
-          # Initialize git using common function
-          eval "$INIT_GIT_FUNC"
-          init_git_if_needed
-          
-          # Get the list of changed files in this PR (only parser files)
-          echo "Getting changed files from PR..."
-          changed_parser_files=$(curl -s -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
-            | jq -r '.[] | select(.filename | startswith("Parsers/") and endswith(".yaml")) | .filename' \
-            | tr '\n' ',' | sed 's/,$//')
-          
-          if [ -n "$changed_parser_files" ]; then
-            echo "Changed parser files: $changed_parser_files"
-            export PR_CHANGED_PARSER_FILES="$changed_parser_files"
-          else
-            echo "No parser files changed in this PR"
-            export PR_CHANGED_PARSER_FILES=""
-          fi
-          
-          # Set environment variable to help the script work with our setup
-          export GITHUB_WORKSPACE="${PWD}"
-          
-          python "$filePath"
-
+              filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
+              url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py" 
+              # Check if file exists and delete if it does
+              if [ -f "$filePath" ]; then
+                rm -f "$filePath"
+              fi
+              # Download the file
+              echo "Downloading script from the master: $url"
+              curl -o "$filePath" "$url"
+              # Execute the script
+              python "$filePath" 
   Run-ASim-Sample-Data-Ingest:
-    needs: [prepare-parsers, Run-ASim-TemplateValidation]
+    needs: Run-ASim-TemplateValidation
     name: Run ASim Sample Data Ingestion
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - name: Download sanitized parsers
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      - name: Checkout pull request branch
+        uses: actions/checkout@v4
         with:
-          name: sanitized-parsers
-          path: .
-      - name: Write dependency manifest
+            ref: ${{github.event.pull_request.head.ref}}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
+            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      - name: Setup git config
         run: |
-          printf "azure-identity\nrequests\nPyYAML\nazure-monitor-ingestion\nazure-core\n" > deps-ingest.txt
-      - name: Restore pip cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('deps-ingest.txt') }}
-          restore-keys: |
-            pip-${{ runner.os }}-
+              git config --local user.name "github-actions[bot]"
+              git config --local user.email "<>"
+      - name: Merge master into pull request branch
+        run: |
+              git merge origin/master
+              Conflicts=$(git ls-files -u | wc -l)
+              if [ "$Conflicts" -gt 0 ] ; then
+                echo "There is a merge conflict. Aborting"
+                git merge --abort
+                exit 1
+              fi
       - name: Set up Python
-        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install azure-identity requests PyYAML azure-monitor-ingestion azure-core
+              python -m pip install --upgrade pip
+              pip install azure-identity
+              pip install requests
+              pip install PyYAML
+              pip install azure-monitor-ingestion
+              pip install azure-core
       - name: Login to Azure Public Cloud
-        uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
       - name: Asim Sample Log Ingestion
+        id: Ingestlogs
         run: |
-          filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
-          
-          # Always use trusted script from pinned commit (security requirement)
-          commit_sha="$TRUSTED_SCRIPTS_COMMIT"
-          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/${commit_sha}/.script/tests/asimParsersTest/ingestASimSampleData.py"
-          mkdir -p .script/tests/asimParsersTest
-          echo "Downloading trusted script from pinned commit ${commit_sha}: $url"
-          curl -sSL -o "$filePath" "$url"
-          chmod +x "$filePath"
-          
-          # Get changed parser files and set environment variable
-          changed_parser_files=$(curl -s -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
-            | jq -r '.[] | select(.filename | startswith("Parsers/") and endswith(".yaml")) | .filename' \
-            | tr '\n' ',' | sed 's/,$//')
-          export PR_CHANGED_PARSER_FILES="$changed_parser_files"
-          
-          # Initialize git using common function
-          eval "$INIT_GIT_FUNC"
-          init_git_if_needed
-          
-          python "$filePath" "${{ github.event.pull_request.number }}"
-
+              filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
+              url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py" 
+              # Check if file exists and delete if it does
+              if [ -f "$filePath" ]; then
+                rm -f "$filePath"
+              fi
+              # Download the file
+              echo "Downloading script from the master: $url"
+              curl -o "$filePath" "$url"
+              chmod +x "$filePath"
+              # Execute the script
+              python "$filePath" "${{ github.event.pull_request.number }}"
   Run-ASim-Schema-Data-tests:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Schema and Data tests
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - name: Download sanitized parsers
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
         with:
-          name: sanitized-parsers
-          path: .
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          persist-credentials: false
+          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      
       - name: Login to Azure Public Cloud with AzPowershell
-        uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           enable-AzPSSession: true
           allow-no-subscriptions: true
+
+      - name: Setup git config
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
+
+      - name: Merge master into pull request branch
+        run: |
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
       - name: Run ASIM Schema and Data tests PowerShell script
-        uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709
+        uses: azure/powershell@v2
         with:
           inlineScript: |
-            # Initialize git repository if scripts expect git context
-            if (-not (Test-Path ".git")) {
-              git init | Out-Null
-              git config user.name "GitHub Actions" | Out-Null
-              git config user.email "actions@github.com" | Out-Null
-              git add . | Out-Null
-              git commit -m "Initial commit with parser files" | Out-Null
+            $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
+            $url = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/runAsimTesters.ps1"
+            # Check if file exists and delete if it does
+            if (Test-Path $filePath) {
+              Remove-Item $filePath -Force
             }
-            
-            # Set changed parser files environment variable for PowerShell
-            try {
-                $apiUrl = "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files"
-                $response = Invoke-RestMethod -Uri $apiUrl -Headers @{ "Accept" = "application/vnd.github.v3+json" }
-                $changedParserFiles = $response | Where-Object { $_.filename -like "Parsers/*.yaml" } | Select-Object -ExpandProperty filename
-                $env:PR_CHANGED_PARSER_FILES = $changedParserFiles -join ","
-                Write-Host "Changed parser files: $($env:PR_CHANGED_PARSER_FILES)"
+            # Download the runAsimTesters file
+            Write-Host "Downloading script from the master: $url"
+            Invoke-WebRequest -Uri $url -OutFile $filePath
+            # download the convertYamlToObject.ps1 script form master
+            $filePath_convert_yaml = ".script/tests/asimParsersTest/convertYamlToObject.ps1"
+            $url_convert_yaml = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/convertYamlToObject.ps1"
+            # Check if file exists and delete if it does
+            if (Test-Path $filePath_convert_yaml) {
+              Remove-Item $filePath_convert_yaml -Force
             }
-            catch {
-                Write-Host "Warning: Could not get changed files from API: $_"
-                $env:PR_CHANGED_PARSER_FILES = ""
-            }
-            
-            # Download and run trusted PowerShell scripts from pinned commit
-            $commitSha = "$env:TRUSTED_SCRIPTS_COMMIT"
-            $scriptDir = ".script/tests/asimParsersTest"
-            New-Item -ItemType Directory -Force -Path $scriptDir | Out-Null
-            
-            # Download runAsimTesters.ps1
-            $runTestersPath = "$scriptDir/runAsimTesters.ps1"
-            $runTestersUrl = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/runAsimTesters.ps1"
-            Write-Host "Downloading runAsimTesters script from pinned commit $commitSha"
-            Invoke-WebRequest -Uri $runTestersUrl -OutFile $runTestersPath
-            
-            # Download convertYamlToObject.ps1
-            $convertYamlPath = "$scriptDir/convertYamlToObject.ps1"
-            $convertYamlUrl = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/convertYamlToObject.ps1"
-            Write-Host "Downloading convertYaml script from pinned commit $commitSha"
-            Invoke-WebRequest -Uri $convertYamlUrl -OutFile $convertYamlPath
-            
-            # Download ExclusionListForASimTests.csv (required by the test scripts)
-            $exclusionListPath = "$scriptDir/ExclusionListForASimTests.csv"
-            $exclusionListUrl = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/$commitSha/.script/tests/asimParsersTest/ExclusionListForASimTests.csv"
-            Write-Host "Downloading ExclusionListForASimTests.csv from pinned commit $commitSha"
-            Invoke-WebRequest -Uri $exclusionListUrl -OutFile $exclusionListPath
-            
-            # Execute the main test script
-            & $runTestersPath
+            # Download the convertYamlToObject file
+            Write-Host "Downloading script from the master: $url_convert_yaml"
+            Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml 
+            # Execute the script
+            & $filePath
           azPSVersion: "latest"
-
   Run-ASim-Parser-Filtering-Tests:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Parser Filtering tests
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - name: Download sanitized parsers
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
         with:
-          name: sanitized-parsers
-          path: .
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      - name: Setup git config
+        run: |
+              git config --local user.name "github-actions[bot]"
+              git config --local user.email "<>"
+      - name: Merge master into pull request branch
+        run: |
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
       - name: Setup Python
-        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        uses: actions/setup-python@v2
         with:
           python-version: '3.x'
-      - name: Write dependency manifest
-        run: |
-          printf "PyYAML\nazure-identity\nazure-monitor-query\n" > deps-filter.txt
-      - name: Restore pip cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('deps-filter.txt') }}
-          restore-keys: |
-            pip-${{ runner.os }}-
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install PyYAML azure-identity azure-monitor-query
+              python -m pip install --upgrade pip
+              pip install PyYAML
+              pip install azure-identity
+              pip install azure-monitor-query
       - name: Login to Azure Public Cloud
-        uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -588,23 +394,13 @@ jobs:
       - name: Run ASim parsers filtering tests python script
         run: |
           filePath=".script/tests/asimParsersTest/ASimFilteringTest.py"
-          
-          # Always use trusted script from pinned commit (security requirement)
-          commit_sha="$TRUSTED_SCRIPTS_COMMIT"
-          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/${commit_sha}/.script/tests/asimParsersTest/ASimFilteringTest.py"
-          mkdir -p .script/tests/asimParsersTest
-          echo "Downloading trusted script from pinned commit ${commit_sha}: $url"
-          curl -sSL -o "$filePath" "$url"
-          
-          # Get changed parser files and set environment variable
-          changed_parser_files=$(curl -s -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
-            | jq -r '.[] | select(.filename | startswith("Parsers/") and endswith(".yaml")) | .filename' \
-            | tr '\n' ',' | sed 's/,$//')
-          export PR_CHANGED_PARSER_FILES="$changed_parser_files"
-          
-          # Initialize git using common function
-          eval "$INIT_GIT_FUNC"
-          init_git_if_needed
-          
+          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ASimFilteringTest.py"
+          # Check if file exists and delete if it does
+          if [ -f "$filePath" ]; then
+            rm -f "$filePath"
+          fi
+          # Download the file
+          echo "Downloading script from the master: $url"
+          curl -o "$filePath" "$url"
+          # Execute the script
           python "$filePath"

@@ -20,20 +20,6 @@ from azure.core.exceptions import HttpResponseError
 import time
 
 def get_modified_files(current_directory):
-    # Check if we're in GitHub Actions environment and have changed files from the workflow
-    if os.environ.get('GITHUB_ACTIONS') == 'true':
-        changed_files_env = os.environ.get('PR_CHANGED_PARSER_FILES', '')
-        if changed_files_env:
-            changed_files = [f.strip() for f in changed_files_env.split(',') if f.strip()]
-            print(f"Found {len(changed_files)} changed parser files from PR for ingestion:")
-            for file in changed_files:
-                print(f"  - {file}")
-            return changed_files
-        else:
-            print("No parser files changed in this PR - skipping sample data ingestion.")
-            return []
-    
-    # Original logic for local development
     # Add upstream remote if not already present
     git_remote_command = "git remote"
     remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
@@ -63,21 +49,7 @@ def read_github_yaml(url):
         response = requests.get(url)
     except Exception as e:
         print(f"::error::An error occurred while trying to get content of YAML file located at {url}: {e}")
-        return None
-    return yaml.safe_load(response.text) if response.status_code == 200 else None
-
-def read_local_yaml(file_path):
-    """Read YAML content from a local file."""
-    try:
-        if os.path.exists(file_path):
-            with open(file_path, 'r', encoding='utf-8') as file:
-                return yaml.safe_load(file)
-        else:
-            print(f"::error::Local file not found: {file_path}")
-            return None
-    except Exception as e:
-        print(f"::error::An error occurred while reading local YAML file {file_path}: {e}")
-        return None    
+    return yaml.safe_load(response.text) if response.status_code == 200 else None    
 
 def filter_yaml_files(modified_files):
     # Take only the YAML files
@@ -347,18 +319,12 @@ dcr_directory=[]
 
 lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics']
 reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG","_ResourceId_s"]
-guid_columns = []
 
 SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
 current_directory = os.path.dirname(os.path.abspath(__file__))
 modified_files = get_modified_files(current_directory)
 
 parser_yaml_files = filter_yaml_files(modified_files)
-
-# Check if no parser files were changed
-if not parser_yaml_files:
-    print("No ASIM parser files were changed in this PR - skipping sample data ingestion.")
-    sys.exit(0)
 
 commit_number = get_current_commit_number()
 prnumber = sys.argv[1]
@@ -374,19 +340,9 @@ for file in parser_yaml_files:
         print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")
-    
-    # Get workspace root directory
-    workspace_root = os.environ.get('GITHUB_WORKSPACE', os.path.abspath(os.path.join(current_directory, '../../..')))
-    
-    # Use local file path instead of URL
-    asim_parser_path = os.path.join(workspace_root, file)
-    print(f"Reading Asim Parser file from : {asim_parser_path}")
-    asim_parser = read_local_yaml(asim_parser_path)
-    
-    if asim_parser is None:
-        print(f"::error::Parser file not found: {asim_parser_path}")
-        continue
-        
+    asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
+    print(f"Reading Asim Parser file from : {asim_parser_url}")
+    asim_parser = read_github_yaml(asim_parser_url)
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
     schema = normalization.get('Schema')
@@ -394,28 +350,16 @@ for file in parser_yaml_files:
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
     SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
-    
-    # Check for local sample data file first
-    local_sample_path = os.path.join(workspace_root, 'Sample Data', 'ASIM', SampleDataFile)
-    
-    if os.path.exists(local_sample_path):
-        print(f"Sample data log file reading from local: {local_sample_path}")
-        with open(local_sample_path, 'rb') as file:
-            content = file.read()
+    sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
+    SampleDataUrl = sample_data_url+SampleDataFile
+    print(f"Sample data log file reading from url: {SampleDataUrl}")
+    response = requests.get(SampleDataUrl)
+    if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
-            file.write(content)
+            file.write(response.content)
     else:
-        # Fallback to remote URL
-        sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
-        SampleDataUrl = sample_data_url+SampleDataFile
-        print(f"Sample data log file reading from url: {SampleDataUrl}")
-        response = requests.get(SampleDataUrl)
-        if response.status_code == 200:
-            with open('tempfile.csv', 'wb') as file:
-                file.write(response.content)
-        else:
-            print(f"::error::An error occurred while trying to get content of Sample Data file located at {SampleDataUrl}: {response.text}")
-            continue           
+        print(f"::error::An error occurred while trying to get content of Sample Data file located at {SampleDataUrl}: {response.text}")
+        continue           
     data_result,table_name = convert_data_csv_to_json('tempfile.csv')   
     print(f"Table Name : {table_name}")
     log_ingestion_supported,table_type=check_for_custom_table(table_name)
@@ -423,28 +367,14 @@ for file in parser_yaml_files:
     if log_ingestion_supported == True and table_type =="custom_log":
         flag=0 #flag value is used to check if DCR is created for the table or not
         schema_file_name = f"{table_name}_Schema.csv"
-        
-        # Check for local schema file first
-        local_schema_path = os.path.join(workspace_root, 'Sample Data', 'ASIM', schema_file_name)
-        
-        if os.path.exists(local_schema_path):
-            print(f"Schema file reading from local: {local_schema_path}")
-            with open(local_schema_path, 'rb') as file:
-                content = file.read()
+        schemaUrl = sample_data_url+schema_file_name
+        response = requests.get(schemaUrl)
+        if response.status_code == 200:
             with open('tempfile.csv', 'wb') as file:
-                file.write(content)
+                file.write(response.content)
         else:
-            # Fallback to remote URL
-            sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
-            schemaUrl = sample_data_url+schema_file_name
-            print(f"Schema file reading from url: {schemaUrl}")
-            response = requests.get(schemaUrl)
-            if response.status_code == 200:
-                with open('tempfile.csv', 'wb') as file:
-                    file.write(response.content)
-            else:
-                print(f"::error::An error occurred while trying to get content of Schema file located at {schemaUrl}: {response.text}")
-                continue        
+            print(f"::error::An error occurred while trying to get content of Schema file located at {schemaUrl}: {response.text}")
+            continue        
         schema_result = convert_schema_csv_to_json('tempfile.csv')
         data_result = convert_data_type(schema_result, data_result)
         # conversion of datatype is needed for boolean and string values because during testing it has been observed that 
