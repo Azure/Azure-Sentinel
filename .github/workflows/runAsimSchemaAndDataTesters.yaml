@@ -87,17 +87,37 @@ jobs:
                 exit 1
               fi
               
-              # Get the most recent "safe to test" label timestamp
-              # We need to check if the label is currently present and get the latest addition
-              label_created=$(echo "$timeline_response" \
-                | jq -r '
-                  # Get all label events for "safe to test" with timestamps
-                  [.[] | select(.label.name == "safe to test" and (.event == "labeled" or .event == "unlabeled")) | {event: .event, created_at: .created_at}] 
-                  # Sort by timestamp to get chronological order
-                  | sort_by(.created_at) 
-                  # Get the last event to see if label is currently applied
-                  | if length > 0 and .[-1].event == "labeled" then .[-1].created_at else empty end
-                ' 2>/dev/null)
+              # Debug: Show all "safe to test" label events
+              echo "$timeline_response" | jq -r '
+                .[] | select(
+                  (.event == "labeled" and .label.name == "safe to test") or 
+                  (.event == "unlabeled" and .label.name == "safe to test")
+                ) | "DEBUG: \(.event) event at \(.created_at)"
+              ' 2>/dev/null | while read -r line; do
+                log_info "$line"
+              done
+              
+              # Alternative approach: Get current labels and then find the latest label addition in timeline
+              log_info "Checking current PR labels..."
+              current_labels_response=$(curl -s -f -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/$repo/issues/$pr_number")
+              
+              # Check if "safe to test" label is currently present
+              has_safe_label=$(echo "$current_labels_response" | jq -r '
+                .labels[] | select(.name == "safe to test") | .name
+              ' 2>/dev/null)
+              
+              if [ "$has_safe_label" = "safe to test" ]; then
+                log_info "Label 'safe to test' is currently present - finding latest addition time"
+                
+                # Now get the most recent labeled event for this label from timeline
+                label_created=$(echo "$timeline_response" \
+                  | jq -r '[.[] | select(.event == "labeled" and .label.name == "safe to test")] | sort_by(.created_at) | .[-1].created_at' 2>/dev/null)
+              else
+                log_info "Label 'safe to test' is not currently present"
+                label_created=""
+              fi
               
               if [ -n "$label_created" ] && [ "$label_created" != "null" ]; then
                 log_info "Found most recent 'safe to test' label addition"
