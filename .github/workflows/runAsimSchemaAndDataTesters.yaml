@@ -88,11 +88,19 @@ jobs:
               fi
               
               # Get the most recent "safe to test" label timestamp
+              # We need to check if the label is currently present and get the latest addition
               label_created=$(echo "$timeline_response" \
-                | jq -r '.[] | select(.event == "labeled" and .label.name == "safe to test") | .created_at' 2>/dev/null \
-                | tail -1)
+                | jq -r '
+                  # Get all label events for "safe to test" with timestamps
+                  [.[] | select(.label.name == "safe to test" and (.event == "labeled" or .event == "unlabeled")) | {event: .event, created_at: .created_at}] 
+                  # Sort by timestamp to get chronological order
+                  | sort_by(.created_at) 
+                  # Get the last event to see if label is currently applied
+                  | if length > 0 and .[-1].event == "labeled" then .[-1].created_at else empty end
+                ' 2>/dev/null)
               
               if [ -n "$label_created" ] && [ "$label_created" != "null" ]; then
+                log_info "Found most recent 'safe to test' label addition"
                 # Get the actual commit timestamp from the PR head commit
                 pr_head_sha="${{ github.event.pull_request.head.sha }}"
                 
@@ -146,7 +154,22 @@ jobs:
                   echo "approved=true" >> $GITHUB_OUTPUT
                 fi
               else
-                log_error "Could not determine label timestamp"
+                log_error "Could not determine label timestamp or label not currently present"
+                log_info "Checking if 'safe to test' label exists in current labels..."
+                
+                # Additional check: verify if label exists in current PR labels
+                current_labels=$(curl -s -f -H "Authorization: token $GITHUB_TOKEN" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/$repo/issues/$pr_number" \
+                  | jq -r '.labels[]?.name' 2>/dev/null || echo "")
+                
+                if echo "$current_labels" | grep -q "safe to test"; then
+                  log_warning "Label exists but timeline parsing failed - this may indicate a race condition"
+                  log_info "Current labels: $(echo "$current_labels" | tr '\n' ', ' | sed 's/,$//')"
+                else
+                  log_info "Label not found in current PR labels"
+                fi
+                
                 echo "approved=false" >> $GITHUB_OUTPUT
                 echo "needs_reapproval=true" >> $GITHUB_OUTPUT
                 exit 1
