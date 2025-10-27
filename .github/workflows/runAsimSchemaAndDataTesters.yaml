@@ -66,10 +66,25 @@ jobs:
             log_info "Available labels: $labels"
             
             if echo "$labels" | grep -q "safe to test"; then
-              log_success "'safe to test' label found - approval granted"
-              echo "approved=true" >> $GITHUB_OUTPUT
-              echo "needs_approval=false" >> $GITHUB_OUTPUT
-              echo "comment_needed=false" >> $GITHUB_OUTPUT
+              log_success "'safe to test' label found - checking if re-approval needed"
+              
+              # Check if this workflow was triggered by new commits (synchronize event)
+              trigger_event="${{ github.event.action }}"
+              log_info "Workflow triggered by: $trigger_event"
+              
+              if [ "$trigger_event" = "synchronize" ]; then
+                log_info "New commits detected on fork PR with existing 'safe to test' label"
+                log_info "Maintainer must remove and re-add the 'safe to test' label for security"
+                echo "approved=false" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=true" >> $GITHUB_OUTPUT
+                exit 1
+              else
+                log_success "Label approval granted (no new commits)"
+                echo "approved=true" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=false" >> $GITHUB_OUTPUT
+              fi
             else
               log_info "'safe to test' label not found - approval required"
               echo "approved=false" >> $GITHUB_OUTPUT
@@ -83,16 +98,11 @@ jobs:
             echo "needs_approval=false" >> $GITHUB_OUTPUT
             echo "comment_needed=false" >> $GITHUB_OUTPUT
           fi
-          
-          # Display final result
-          final_approved=$(grep "^approved=" $GITHUB_OUTPUT | cut -d'=' -f2)
-          log_info "Final decision: approved=$final_approved"
       
       - name: Comment on fork PR for approval guidance
         if: |
           always() && 
           github.event.pull_request.head.repo.fork == true && 
-          steps.check-approval.conclusion == 'failure' &&
           steps.check-approval.outputs.comment_needed == 'true'
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
         with:
@@ -116,12 +126,17 @@ jobs:
               // Look for existing security guidance comments
               const botComments = comments.filter(comment => 
                 comment.user.login === 'github-actions[bot]' &&
-                comment.body.includes('🔒 **Security Approval Required**')
+                (comment.body.includes('🔒 **Security Approval Required**') ||
+                 comment.body.includes('🔒 **Security Re-approval Required**'))
               );
               
               // Create approval message
               const timestamp = new Date().toISOString();
-              const commentBody = `🔒 **Security Approval Required**
+              
+              let commentBody;
+              if ('${{ steps.check-approval.outputs.needs_approval }}' === 'true') {
+                // Initial approval scenario
+                commentBody = `🔒 **Security Approval Required**
               
               This fork PR requires manual approval before automated testing can run.
               
@@ -134,6 +149,23 @@ jobs:
               ---
               *🤖 Automated security check • Created: ${timestamp}*  
               *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
+              } else {
+                // Re-approval scenario (new commits with existing label)
+                commentBody = `🔒 **Security Re-approval Required**
+              
+              ⚠️ **New commits detected**: This fork PR has been updated with new commits while the \`safe to test\` label was present.
+              
+              **For security, a maintainer must:**
+              1. 📝 Review the latest commits carefully for any security concerns
+              2. 🏷️ Remove the \`safe to test\` label
+              3. 🏷️ Re-add the \`safe to test\` label if the new commits are safe
+              
+              This simple process ensures that all commits have been properly reviewed before testing with repository secrets.
+              
+              ---
+              *🤖 Automated security check • Updated: ${timestamp}*  
+              *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
+              }
               
               // Handle comment creation/update logic
               if (botComments.length > 0) {
