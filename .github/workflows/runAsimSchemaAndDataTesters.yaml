@@ -47,14 +47,10 @@ jobs:
     steps:
       - name: Check if PR needs approval
         id: check-approval
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Function to log with consistent formatting
           log_info() { echo "ℹ️  $1"; }
           log_success() { echo "✅ $1"; }
-          log_warning() { echo "⚠️  $1"; }
-          log_error() { echo "❌ $1"; }
           
           log_info "Starting PR approval check..."
           
@@ -70,139 +66,22 @@ jobs:
             log_info "Available labels: $labels"
             
             if echo "$labels" | grep -q "safe to test"; then
-              log_success "'safe to test' label found - checking for race conditions"
-              
-              # Get PR details for race condition check
-              pr_number="${{ github.event.pull_request.number }}"
-              repo="${{ github.repository }}"
-              
-              # Fetch timeline with authentication and error handling
-              log_info "Fetching timeline for PR #$pr_number..."
-              if ! timeline_response=$(curl -s -f -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/$repo/issues/$pr_number/timeline"); then
-                log_error "Failed to fetch PR timeline from GitHub API"
-                echo "approved=false" >> $GITHUB_OUTPUT
-                echo "needs_reapproval=true" >> $GITHUB_OUTPUT
-                exit 1
-              fi
-              
-              # Debug: Show all "safe to test" label events
-              echo "$timeline_response" | jq -r '
-                .[] | select(
-                  (.event == "labeled" and .label.name == "safe to test") or 
-                  (.event == "unlabeled" and .label.name == "safe to test")
-                ) | "DEBUG: \(.event) event at \(.created_at)"
-              ' 2>/dev/null | while read -r line; do
-                log_info "$line"
-              done
-              
-              # Alternative approach: Get current labels and then find the latest label addition in timeline
-              log_info "Checking current PR labels..."
-              current_labels_response=$(curl -s -f -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/$repo/issues/$pr_number")
-              
-              # Check if "safe to test" label is currently present
-              has_safe_label=$(echo "$current_labels_response" | jq -r '
-                .labels[] | select(.name == "safe to test") | .name
-              ' 2>/dev/null)
-              
-              if [ "$has_safe_label" = "safe to test" ]; then
-                log_info "Label 'safe to test' is currently present - finding latest addition time"
-                
-                # Now get the most recent labeled event for this label from timeline
-                label_created=$(echo "$timeline_response" \
-                  | jq -r '[.[] | select(.event == "labeled" and .label.name == "safe to test")] | sort_by(.created_at) | .[-1].created_at' 2>/dev/null)
-              else
-                log_info "Label 'safe to test' is not currently present"
-                label_created=""
-              fi
-              
-              if [ -n "$label_created" ] && [ "$label_created" != "null" ]; then
-                log_info "Found most recent 'safe to test' label addition"
-                # Get the actual commit timestamp from the PR head commit
-                pr_head_sha="${{ github.event.pull_request.head.sha }}"
-                
-                log_info "Getting commit details for SHA: ${pr_head_sha:0:7}..."
-                if ! commit_response=$(curl -s -f -H "Authorization: token $GITHUB_TOKEN" \
-                  -H "Accept: application/vnd.github.v3+json" \
-                  "https://api.github.com/repos/$repo/commits/$pr_head_sha"); then
-                  log_error "Failed to fetch commit details from GitHub API"
-                  echo "approved=false" >> $GITHUB_OUTPUT
-                  echo "needs_reapproval=true" >> $GITHUB_OUTPUT
-                  exit 1
-                fi
-                
-                # Get the commit author date (when the commit was actually created)
-                latest_commit_date=$(echo "$commit_response" | jq -r '.commit.author.date' 2>/dev/null)
-                
-                if [ -z "$latest_commit_date" ] || [ "$latest_commit_date" = "null" ]; then
-                  log_error "Could not extract commit timestamp from API response"
-                  echo "approved=false" >> $GITHUB_OUTPUT
-                  echo "needs_reapproval=true" >> $GITHUB_OUTPUT
-                  exit 1
-                fi
-                
-                log_info "Label timestamp: $label_created"
-                log_info "Commit timestamp: $latest_commit_date (author date)"
-                
-                # Convert to epoch for comparison
-                if ! label_epoch=$(date -d "$label_created" +%s 2>/dev/null); then
-                  log_error "Failed to parse label timestamp: $label_created"
-                  echo "approved=false" >> $GITHUB_OUTPUT
-                  echo "needs_reapproval=true" >> $GITHUB_OUTPUT
-                  exit 1
-                fi
-                
-                if ! commit_epoch=$(date -d "$latest_commit_date" +%s 2>/dev/null); then
-                  log_error "Failed to parse commit timestamp: $latest_commit_date"
-                  echo "approved=false" >> $GITHUB_OUTPUT
-                  echo "needs_reapproval=true" >> $GITHUB_OUTPUT
-                  exit 1
-                fi
-                
-                # Race condition check: commits after label
-                if [ "$commit_epoch" -gt "$label_epoch" ]; then
-                  log_warning "RACE CONDITION: Commits pushed after label approval"
-                  log_warning "Re-approval required for security"
-                  echo "approved=false" >> $GITHUB_OUTPUT
-                  echo "needs_reapproval=true" >> $GITHUB_OUTPUT
-                  exit 1
-                else
-                  log_success "Race condition check passed - safe to proceed"
-                  echo "approved=true" >> $GITHUB_OUTPUT
-                fi
-              else
-                log_error "Could not determine label timestamp or label not currently present"
-                log_info "Checking if 'safe to test' label exists in current labels..."
-                
-                # Additional check: verify if label exists in current PR labels
-                current_labels=$(curl -s -f -H "Authorization: token $GITHUB_TOKEN" \
-                  -H "Accept: application/vnd.github.v3+json" \
-                  "https://api.github.com/repos/$repo/issues/$pr_number" \
-                  | jq -r '.labels[]?.name' 2>/dev/null || echo "")
-                
-                if echo "$current_labels" | grep -q "safe to test"; then
-                  log_warning "Label exists but timeline parsing failed - this may indicate a race condition"
-                  log_info "Current labels: $(echo "$current_labels" | tr '\n' ', ' | sed 's/,$//')"
-                else
-                  log_info "Label not found in current PR labels"
-                fi
-                
-                echo "approved=false" >> $GITHUB_OUTPUT
-                echo "needs_reapproval=true" >> $GITHUB_OUTPUT
-                exit 1
-              fi
+              log_success "'safe to test' label found - approval granted"
+              echo "approved=true" >> $GITHUB_OUTPUT
+              echo "needs_approval=false" >> $GITHUB_OUTPUT
+              echo "comment_needed=false" >> $GITHUB_OUTPUT
             else
               log_info "'safe to test' label not found - approval required"
               echo "approved=false" >> $GITHUB_OUTPUT
               echo "needs_approval=true" >> $GITHUB_OUTPUT
+              echo "comment_needed=true" >> $GITHUB_OUTPUT
               exit 1
             fi
           else
             log_success "Internal PR - auto-approved"
             echo "approved=true" >> $GITHUB_OUTPUT
+            echo "needs_approval=false" >> $GITHUB_OUTPUT
+            echo "comment_needed=false" >> $GITHUB_OUTPUT
           fi
           
           # Display final result
@@ -214,8 +93,7 @@ jobs:
           always() && 
           github.event.pull_request.head.repo.fork == true && 
           steps.check-approval.conclusion == 'failure' &&
-          (steps.check-approval.outputs.needs_approval == 'true' || 
-           steps.check-approval.outputs.needs_reapproval == 'true')
+          steps.check-approval.outputs.comment_needed == 'true'
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
         with:
           script: |
@@ -226,8 +104,6 @@ jobs:
             };
             
             log('info', 'Comment step triggered for fork PR approval guidance');
-            log('info', `needs_approval: ${{ steps.check-approval.outputs.needs_approval }}`);
-            log('info', `needs_reapproval: ${{ steps.check-approval.outputs.needs_reapproval }}`);
             
             try {
               // Fetch existing comments
@@ -237,37 +113,15 @@ jobs:
                 issue_number: context.issue.number,
               });
               
-              // Look for existing security guidance comments (more robust detection)
+              // Look for existing security guidance comments
               const botComments = comments.filter(comment => 
                 comment.user.login === 'github-actions[bot]' &&
-                (comment.body.includes('🔒 **Security Approval Required**') ||
-                 comment.body.includes('🔒 **Security Re-approval Required**'))
+                comment.body.includes('🔒 **Security Approval Required**')
               );
               
-              // Determine approval type and create appropriate message
-              const needsReapproval = '${{ steps.check-approval.outputs.needs_reapproval }}' === 'true';
+              // Create approval message
               const timestamp = new Date().toISOString();
-              
-              let commentBody;
-              if (needsReapproval) {
-                log('info', 'Re-approval scenario detected');
-                commentBody = `🔒 **Security Re-approval Required**
-              
-              ⚠️ **Race condition detected**: New commits were pushed after the \`safe to test\` label was added.
-              
-              **For security, a maintainer must:**
-              1. 📝 Review the latest commits carefully for any security concerns
-              2. 🏷️ Remove the \`safe to test\` label
-              3. 🏷️ Re-add the \`safe to test\` label if the new commits are safe
-              
-              This ensures that all commits have been properly reviewed before testing with repository secrets.
-              
-              ---
-              *🤖 Automated security check • Updated: ${timestamp}*  
-              *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
-              } else {
-                log('info', 'Initial approval scenario detected');
-                commentBody = `🔒 **Security Approval Required**
+              const commentBody = `🔒 **Security Approval Required**
               
               This fork PR requires manual approval before automated testing can run.
               
@@ -275,12 +129,11 @@ jobs:
               1. 📝 Review the code changes carefully
               2. 🏷️ Add the \`safe to test\` label if the changes are safe to execute
               
-              This protects against malicious code execution in fork contributions.
+              **Note**: If new commits are added later, simply remove and re-add the \`safe to test\` label.
               
               ---
               *🤖 Automated security check • Created: ${timestamp}*  
               *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
-              }
               
               // Handle comment creation/update logic
               if (botComments.length > 0) {
