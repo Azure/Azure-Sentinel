@@ -48,39 +48,76 @@ jobs:
       - name: Check if PR needs approval
         id: check-approval
         run: |
+          echo "=========================================="
+          echo "Starting PR approval check..."
+          echo "=========================================="
+          
           # Check if this is a fork PR
-          if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
-            echo "Fork PR detected - checking for approval label and commit safety..."
+          is_fork="${{ github.event.pull_request.head.repo.fork }}"
+          echo "🔍 Is this a fork PR? $is_fork"
+          
+          if [ "$is_fork" = "true" ]; then
+            echo "📌 FORK PR DETECTED - Proceeding with security checks"
             
             # Check if "safe to test" label is present
             labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+            echo "📝 Available labels: $labels"
+            
             if echo "$labels" | grep -q "safe to test"; then
-              echo "✅ Fork PR has 'safe to test' label - checking for race condition..."
+              echo "✅ 'safe to test' label FOUND - Checking for race conditions..."
               
               # SECURITY: Check for race condition - commits after label approval
               # Get when the "safe to test" label was added (most recent time)
-              echo "Checking label timeline for race condition detection..."
-              label_created=$(curl -s -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/timeline" \
+              echo ""
+              echo "🔐 RACE CONDITION CHECK:"
+              echo "---"
+              
+              pr_number="${{ github.event.pull_request.number }}"
+              repo="${{ github.repository }}"
+              echo "📊 Fetching timeline for PR #$pr_number in $repo..."
+              
+              timeline_response=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/$repo/issues/$pr_number/timeline")
+              
+              echo "📥 Timeline API response received (showing labeled events):"
+              echo "$timeline_response" | jq '.[] | select(.event == "labeled" and .label.name == "safe to test") | {event, created_at}' || echo "   No labeled events found"
+              echo ""
+              
+              label_created=$(echo "$timeline_response" \
                 | jq -r '.[] | select(.event == "labeled" and .label.name == "safe to test") | .created_at' \
                 | tail -1)
               
+              echo "🏷️  Most recent 'safe to test' label timestamp: $label_created"
+              
               if [ -n "$label_created" ]; then
-                echo "Label 'safe to test' was added at: $label_created"
-                
                 # Get the latest commit timestamp
                 latest_commit_date="${{ github.event.pull_request.head.repo.pushed_at }}"
-                echo "Latest commit in PR was pushed at: $latest_commit_date"
+                echo "📌 Latest commit timestamp: $latest_commit_date"
+                echo ""
                 
                 # Convert to epoch time for comparison
+                echo "⏱️  Converting timestamps to epoch (seconds since 1970-01-01):"
                 label_epoch=$(date -d "$label_created" +%s 2>/dev/null || echo "0")
                 commit_epoch=$(date -d "$latest_commit_date" +%s 2>/dev/null || echo "0")
+                
+                echo "   Label timestamp: $label_created → epoch: $label_epoch"
+                echo "   Latest commit: $latest_commit_date → epoch: $commit_epoch"
+                echo ""
                 
                 # Allow 60 second grace period for GitHub timestamp variations
                 grace_period=60
                 commit_epoch_with_grace=$((commit_epoch + grace_period))
                 
+                echo "⏳ Grace period: $grace_period seconds"
+                echo "   Commit epoch with grace: $commit_epoch_with_grace"
+                echo "   Label epoch: $label_epoch"
+                echo ""
+                
                 if [ "$commit_epoch_with_grace" -gt "$label_epoch" ]; then
+                  echo "❌ RACE CONDITION DETECTED!"
+                  echo "   ⚠️  New commits were pushed AFTER the label was approved"
+                  echo "   Difference: $((commit_epoch_with_grace - label_epoch)) seconds"
+                  echo ""
                   echo "⚠️  SECURITY ALERT: Commits may have been pushed after label approval!"
                   echo "Label added: $label_created (epoch: $label_epoch)"
                   echo "Latest commit: $latest_commit_date (epoch: $commit_epoch)"
@@ -91,10 +128,13 @@ jobs:
                   echo "needs_reapproval=true" >> $GITHUB_OUTPUT
                   exit 1
                 else
-                  echo "✅ No commits detected after label approval - safe to proceed"
+                  echo "✅ RACE CONDITION CHECK PASSED!"
+                  echo "   No new commits detected after label approval"
+                  echo "   Safe to proceed with testing"
                   echo "approved=true" >> $GITHUB_OUTPUT
                 fi
               else
+                echo "❌ ERROR: Could not determine label timestamp"
                 echo "⚠️  Could not determine when label was added - manual review recommended"
                 echo "For maximum security, please remove and re-add the 'safe to test' label"
                 echo "approved=false" >> $GITHUB_OUTPUT
@@ -102,15 +142,21 @@ jobs:
                 exit 1
               fi
             else
-              echo "❌ Fork PR requires 'safe to test' label from a maintainer"
-              echo "Fork PRs require manual approval for security. A maintainer must add the 'safe to test' label."
+              echo "❌ 'safe to test' label NOT FOUND"
+              echo "Fork PR requires manual approval from a maintainer"
               echo "approved=false" >> $GITHUB_OUTPUT
               echo "needs_approval=true" >> $GITHUB_OUTPUT
             fi
           else
-            echo "✅ Internal PR from same repository - auto-approved"
+            echo "✅ INTERNAL PR DETECTED (not a fork)"
+            echo "Internal PRs are auto-approved - skipping security checks"
             echo "approved=true" >> $GITHUB_OUTPUT
           fi
+          
+          echo ""
+          echo "=========================================="
+          echo "Approval check complete"
+          echo "=========================================="
       
       - name: Comment on fork PR for approval guidance
         if: github.event.pull_request.head.repo.fork == true && failure()
