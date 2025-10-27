@@ -188,11 +188,11 @@ $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Micro
 $standardStreamMapping += @{ Key = 'SENTINEL_GOOGLEWORKSPACEREPORTS'; Value = 'Microsoft-GoogleWorkspaceReports' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSSecurityHubFindings' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver' }
-$standardStreamMapping += @{ Key = 'CROWDSTRIKE_VULNERABILITIES'; Value = 'Microsoft-CrowdStrikeVulnerabilities' }
-$standardStreamMapping += @{ Key = 'CROWDSTRIKE_ALERTS'; Value = 'Microsoft-CrowdStrikeAlerts' }
-$standardStreamMapping += @{ Key = 'CROWDSTRIKE_INCIDENTS'; Value = 'Microsoft-CrowdStrikeIncidents' }
-$standardStreamMapping += @{ Key = 'CROWDSTRIKE_DETECTIONS'; Value = 'Microsoft-CrowdStrikeDetections' }
-$standardStreamMapping += @{ Key = 'CROWDSTRIKE_HOSTS'; Value = 'Microsoft-CrowdStrikeHosts' }
+$standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEVULNERABILITIES'; Value = 'Microsoft-SentinelCrowdStrikeVulnerabilities' }
+$standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEALERTS'; Value = 'Microsoft-SentinelCrowdStrikeAlerts' }
+$standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEINCIDENTS'; Value = 'Microsoft-SentinelCrowdStrikeIncidents' }
+$standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEDETECTIONS'; Value = 'Microsoft-SentinelCrowdStrikeDetections' }
+$standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEHOSTS'; Value = 'Microsoft-SentinelCrowdStrikeHosts' }
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_VPC_FLOW_LOGS'; Value = 'Microsoft-GCPVPCFlow' }
 $standardStreamMapping += @{ Key = 'SENTINEL_GCP_CDN_LOGS'; Value = 'Microsoft-GCPCDN'}
 $standardStreamMapping += @{ Key = 'SENTINEL_GCPRESOURCEMANAGER'; Value = 'Microsoft-GCPResourceManager'}
