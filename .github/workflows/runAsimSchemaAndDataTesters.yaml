@@ -93,16 +93,36 @@ jobs:
               
               if [ -n "$label_created" ]; then
                 # Get the latest commit timestamp from the PR head commit
-                # Use the actual commit timestamp, not repo.pushed_at which can be misleading
-                latest_commit_date="${{ github.event.pull_request.head.sha }}"
+                # Use the actual commit timestamp from the PR details
+                pr_head_sha="${{ github.event.pull_request.head.sha }}"
                 
-                # Fetch the commit details to get accurate timestamp
-                echo "📊 Fetching commit details for SHA: ${latest_commit_date:0:7}..."
+                # Fetch the PR details to get the head commit timestamp
+                echo "📊 Fetching PR details to get latest commit..."
+                pr_response=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/$repo/pulls/$pr_number")
+                
+                latest_commit_date=$(echo "$pr_response" | jq -r '.head.repo.pushed_at' 2>/dev/null)
+                head_sha=$(echo "$pr_response" | jq -r '.head.sha' 2>/dev/null)
+                
+                echo "   PR Head SHA: ${head_sha:0:7}"
+                echo "   PR pushed_at: $latest_commit_date"
+                echo ""
+                
+                # Additional validation: fetch the actual commit to double-check the timestamp
+                echo "📊 Fetching commit details for SHA: ${head_sha:0:7}..."
                 commit_response=$(curl -s -H "Accept: application/vnd.github.v3+json" \
-                  "https://api.github.com/repos/$repo/commits/$latest_commit_date")
+                  "https://api.github.com/repos/$repo/commits/$head_sha")
                 
-                latest_commit_date=$(echo "$commit_response" | jq -r '.commit.committer.date' 2>/dev/null)
-                echo "📌 Latest commit timestamp: $latest_commit_date"
+                commit_author_date=$(echo "$commit_response" | jq -r '.commit.author.date' 2>/dev/null)
+                commit_committer_date=$(echo "$commit_response" | jq -r '.commit.committer.date' 2>/dev/null)
+                
+                echo "   Commit author date: $commit_author_date"
+                echo "   Commit committer date: $commit_committer_date"
+                echo ""
+                
+                # Use author date as it represents when the commit was created
+                latest_commit_date="$commit_author_date"
+                echo "📌 Latest commit timestamp (using author date): $latest_commit_date"
                 echo ""
                 
                 # Convert to epoch time for comparison
