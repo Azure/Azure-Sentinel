@@ -1,7 +1,7 @@
 id: b1832f60-6c3d-4722-a0a5-3d564ee61a63
 name: TI map Domain entity to Web Session Events (ASIM Web Session schema)
 description: |
-  'This rule identifies Web Sessions for which the target URL hostname is a known IoC. <br><br>This rule uses the [Advanced Security Information Model (ASIM)](https:/aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'
+  'This rule identifies Web Sessions for which the target URL hostname is a known IoC. This rule uses the [Advanced Security Information Model (ASIM)](https:/aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: SquidProxy
@@ -13,6 +13,9 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
   - connectorId: MicrosoftDefenderThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
@@ -21,18 +24,20 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1071
 query: |
     let HAS_ANY_MAX = 10000;
     let dt_lookBack = 1h;
     let ioc_lookBack = 14d;
     //Create a list of TLDs in our threat feed for later validation
     let DOMAIN_TI=ThreatIntelligenceIndicator
-    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true
     // Picking up only IOC's that contain the entities we want
-    | where isnotempty(DomainName);
+    | where isnotempty(DomainName)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now();
     let DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) 
       | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));
     DOMAIN_TI
@@ -68,5 +73,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: A web request from {{SrcIpAddr}} to hostname  {{domain}} matched an IoC
   alertDescriptionFormat: A client with address {{SrcIpAddr}} requested the URL {{Url}}, whose hostname is a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.
-version: 1.0.4
+version: 1.0.6
 kind: Scheduled

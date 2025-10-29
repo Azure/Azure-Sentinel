@@ -1,0 +1,75 @@
+id: 666fef96-1bb8-4abf-ad72-e5cb49561381
+kind: Scheduled
+name: Dataverse - Login from IP in the block list
+description: Identifies Dataverse sign-in activity from IPv4 addresses which are on
+  a predefined block list. Blocked network ranges are maintained in the NetworkAddresses
+  watchlist template.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+  - T1078
+query: |
+  // Use static IP address or CIDR list specified in the
+  // NetworkAddresses watchlist (from watchlist template)
+  // with tag "BlockDataverse"
+  let query_frequency = 1h;
+  let blocked_networks = MSBizAppsNetworkAddresses()
+      | where Tags has "BlockDataverse"
+      | summarize by IPSubnet;
+  let watchlist_entries_count = toscalar (blocked_networks
+      | summarize count());
+  DataverseActivity
+  | where watchlist_entries_count > 0
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message == "UserSignIn" and isnotempty(ClientIp)
+  | summarize FirstEvent = arg_min(TimeGenerated, *) by UserId, ClientIp, InstanceUrl
+  | evaluate ipv4_lookup(blocked_networks, ClientIp, IPSubnet)
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      FirstEvent,
+      UserId,
+      ClientIp,
+      Message,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Login from IP in the block list at {{InstanceUrl}} '
+  alertDescriptionFormat: Sign-in activity by {{UserId}} in {{InstanceUrl}} was detected
+    from an IP {{ClientIp}} on the block list.
+version: 3.2.0

@@ -1,0 +1,790 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Infoblox-Data-Connector-Trigger-Sync",
+        "description": "Playbook to sync timer trigger of all Infoblox data connectors.",
+        "prerequisites": ["Users must have a below Microsoft credentials:",
+        "1.Tenant ID",
+        "2.Client ID",
+        "3.Client Secret", 
+        "4.Resource Group Name",
+        "5.Subscription ID"],
+        "postDeployment": ["Run the playbook to sync timer trigger of all Infoblox data connectors."],
+        "entities": [],
+        "tags": [
+            "Infoblox",
+            "Sync",
+            "Timer",
+            "Trigger"
+        ],
+        "lastUpdateTime": "2024-07-19T16:15:48.355Z",
+        "support": {
+            "tier": "Community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Infoblox"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Infoblox-Data-Connector-Trigger-Sync",
+            "type": "string",
+            "metadata": {
+                "description": "Enter the playbook name"
+            }
+        },
+        "Tenant ID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the Azure Tenant ID"
+            }
+        },
+        "Client ID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the Azure Client ID"
+            }
+        },
+        "Client Secret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter the Azure Client Secret"
+            }
+        },
+        "Resource Group Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the Azure Resource Group Name in which your Infoblox data connectors are available"
+            }
+        },
+        "Subscription ID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the Azure Subscription ID in which your Infoblox data connectors are available, make sure that the subscription id is as per the Azure portal at all places"
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {}
+                        }
+                    },
+                    "actions": {
+                        "For_each_app": {
+                            "foreach": "@body('Get_all_Infoblox_Function_apps')",
+                            "actions": {
+                                "Sync_timer_trigger_request": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Parse_Auth_token')?['access_token']} "
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://@{variables('Manage')}.azure.com/subscriptions/@{variables('Subscription Id')}/resourceGroups/@{variables('Resource Group Name')}/providers/Microsoft.Web/sites/@{items('For_each_app')?['name']}/syncfunctiontriggers?api-version=2022-03-01"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_all_Infoblox_Function_apps": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Auth_token": {
+                            "runAfter": {
+                                "Initialize_Management_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": "client_id=@{variables('Client Id')}&\nclient_secret=@{variables('Client Secret')}&\ngrant_type=client_credentials&\nscope=https://@{variables('Manage')}.azure.com/.default",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "method": "POST",
+                                "uri": "https://login.@{variables('MicrosoftOnline')}.com/@{variables('Tenant Id')}/oauth2/v2.0/token"
+                            }
+                        },
+                        "Get_all_Infoblox_Function_apps": {
+                            "runAfter": {
+                                "Get_all_running_function_app": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Get_all_running_function_app')",
+                                "where": "@or(startsWith(item()?['name'], 'Curr'), startsWith(item()?['name'], 'Hist'),startsWith(item()?['name'], 'Jparsehist'),startsWith(item()?['name'], 'Jparsecurr'),startsWith(item()?['name'], 'indhist'),startsWith(item()?['name'], 'indcurr'),startsWith(item()?['name'], 'dossierlook'))"
+                            }
+                        },
+                        "Get_all_running_function_app": {
+                            "runAfter": {
+                                "Parse_function_app_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Parse_function_app_list')?['value']",
+                                "where": "@equals(item()?['properties']?['state'], 'Running')"
+                            }
+                        },
+                        "Get_function_app_list": {
+                            "runAfter": {
+                                "Parse_Auth_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "Bearer @{body('Parse_Auth_token')?['access_token']} "
+                                },
+                                "method": "GET",
+                                "uri": "https://@{variables('Manage')}.azure.com/subscriptions/@{variables('Subscription Id')}/resourceGroups/@{variables('Resource Group Name')}/providers/Microsoft.Web/sites?api-version=2022-03-01"
+                            }
+                        },
+                        "Initialize_Client_Id": {
+                            "runAfter": {
+                                "Initialize_Tenant_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Client Id",
+                                        "type": "string",
+                                        "value": "[trim(parameters('Client ID'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Client_Secret": {
+                            "runAfter": {
+                                "Initialize_Client_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Client Secret",
+                                        "type": "string",
+                                        "value": "[trim(parameters('Client Secret'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Management_variable": {
+                            "runAfter": {
+                                "Initialize_Microsoftonline_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Manage",
+                                        "type": "string",
+                                        "value": "management"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Microsoftonline_variable": {
+                            "runAfter": {
+                                "Subscription_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "MicrosoftOnline",
+                                        "type": "string",
+                                        "value": "microsoftonline"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Resource_Group": {
+                            "runAfter": {
+                                "Initialize_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Resource Group Name",
+                                        "type": "string",
+                                        "value": "[trim(parameters('Resource Group Name'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Tenant_Id": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Tenant Id",
+                                        "type": "string",
+                                        "value": "[trim(parameters('Tenant ID'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Auth_token": {
+                            "runAfter": {
+                                "Get_Auth_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Auth_token')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "ext_expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_function_app_list": {
+                            "runAfter": {
+                                "Get_function_app_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_function_app_list')",
+                                "schema": {
+                                    "properties": {
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "identity": {
+                                                        "properties": {
+                                                            "principalId": {
+                                                                "type": "string"
+                                                            },
+                                                            "tenantId": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "kind": {
+                                                        "type": "string"
+                                                    },
+                                                    "location": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "properties": {
+                                                        "properties": {
+                                                            "adminEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "afdEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "availabilityState": {
+                                                                "type": "string"
+                                                            },
+                                                            "buildVersion": {},
+                                                            "cers": {},
+                                                            "clientAffinityEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "clientCertEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "clientCertExclusionPaths": {},
+                                                            "clientCertMode": {
+                                                                "type": "string"
+                                                            },
+                                                            "cloningInfo": {},
+                                                            "computeMode": {},
+                                                            "containerAllocationSubnet": {},
+                                                            "containerSize": {
+                                                                "type": "integer"
+                                                            },
+                                                            "contentAvailabilityState": {
+                                                                "type": "string"
+                                                            },
+                                                            "csrs": {
+                                                                "type": "array"
+                                                            },
+                                                            "customDomainVerificationId": {
+                                                                "type": "string"
+                                                            },
+                                                            "dailyMemoryTimeQuota": {
+                                                                "type": "integer"
+                                                            },
+                                                            "daprConfig": {},
+                                                            "defaultHostName": {
+                                                                "type": "string"
+                                                            },
+                                                            "defaultHostNameScope": {
+                                                                "type": "string"
+                                                            },
+                                                            "deploymentId": {
+                                                                "type": "string"
+                                                            },
+                                                            "dnsConfiguration": {
+                                                                "properties": {},
+                                                                "type": "object"
+                                                            },
+                                                            "domainVerificationIdentifiers": {},
+                                                            "eligibleLogCategories": {
+                                                                "type": "string"
+                                                            },
+                                                            "enabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "enabledHostNames": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "endToEndEncryptionEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "ftpUsername": {
+                                                                "type": "string"
+                                                            },
+                                                            "ftpsHostName": {
+                                                                "type": "string"
+                                                            },
+                                                            "functionExecutionUnitsCache": {},
+                                                            "functionsRuntimeAdminIsolationEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "geoDistributions": {},
+                                                            "homeStamp": {
+                                                                "type": "string"
+                                                            },
+                                                            "hostNameSslStates": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "certificateResourceId": {},
+                                                                        "hostType": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "ipBasedSslResult": {},
+                                                                        "ipBasedSslState": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "sslState": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "thumbprint": {},
+                                                                        "toUpdate": {},
+                                                                        "toUpdateIpBasedSsl": {},
+                                                                        "virtualIP": {},
+                                                                        "virtualIPv6": {}
+                                                                    },
+                                                                    "required": [
+                                                                        "name",
+                                                                        "sslState",
+                                                                        "ipBasedSslResult",
+                                                                        "virtualIP",
+                                                                        "virtualIPv6",
+                                                                        "thumbprint",
+                                                                        "certificateResourceId",
+                                                                        "toUpdate",
+                                                                        "toUpdateIpBasedSsl",
+                                                                        "ipBasedSslState",
+                                                                        "hostType"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "hostNames": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "hostNamesDisabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "hostingEnvironment": {},
+                                                            "hostingEnvironmentId": {},
+                                                            "hostingEnvironmentProfile": {},
+                                                            "httpsOnly": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "hyperV": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "inFlightFeatures": {},
+                                                            "inProgressOperationId": {},
+                                                            "inboundIpAddress": {
+                                                                "type": "string"
+                                                            },
+                                                            "ipMode": {
+                                                                "type": "string"
+                                                            },
+                                                            "isXenon": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "keyVaultReferenceIdentity": {
+                                                                "type": "string"
+                                                            },
+                                                            "kind": {
+                                                                "type": "string"
+                                                            },
+                                                            "lastModifiedTimeUtc": {
+                                                                "type": "string"
+                                                            },
+                                                            "managedEnvironmentId": {},
+                                                            "maxNumberOfWorkers": {},
+                                                            "migrationState": {},
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "outboundIpAddresses": {
+                                                                "type": "string"
+                                                            },
+                                                            "owner": {},
+                                                            "possibleInboundIpAddresses": {
+                                                                "type": "string"
+                                                            },
+                                                            "possibleOutboundIpAddresses": {
+                                                                "type": "string"
+                                                            },
+                                                            "privateEndpointConnections": {},
+                                                            "privateLinkIdentifiers": {},
+                                                            "publicNetworkAccess": {},
+                                                            "redundancyMode": {
+                                                                "type": "string"
+                                                            },
+                                                            "repositorySiteName": {
+                                                                "type": "string"
+                                                            },
+                                                            "reserved": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "resourceConfig": {},
+                                                            "resourceGroup": {
+                                                                "type": "string"
+                                                            },
+                                                            "runtimeAvailabilityState": {
+                                                                "type": "string"
+                                                            },
+                                                            "scmSiteAlsoStopped": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "secretsCollection": {
+                                                                "type": "array"
+                                                            },
+                                                            "selfLink": {
+                                                                "type": "string"
+                                                            },
+                                                            "serverFarm": {},
+                                                            "serverFarmId": {
+                                                                "type": "string"
+                                                            },
+                                                            "siteConfig": {
+                                                                "properties": {
+                                                                    "acrUseManagedIdentityCreds": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "acrUserManagedIdentityID": {},
+                                                                    "alwaysOn": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "antivirusScanEnabled": {},
+                                                                    "apiDefinition": {},
+                                                                    "apiManagementConfig": {},
+                                                                    "appCommandLine": {},
+                                                                    "appSettings": {},
+                                                                    "autoHealEnabled": {},
+                                                                    "autoHealRules": {},
+                                                                    "autoSwapSlotName": {},
+                                                                    "azureMonitorLogCategories": {},
+                                                                    "azureStorageAccounts": {},
+                                                                    "connectionStrings": {},
+                                                                    "cors": {},
+                                                                    "customAppPoolIdentityAdminState": {},
+                                                                    "customAppPoolIdentityTenantState": {},
+                                                                    "defaultDocuments": {},
+                                                                    "detailedErrorLoggingEnabled": {},
+                                                                    "documentRoot": {},
+                                                                    "elasticWebAppScaleLimit": {},
+                                                                    "experiments": {},
+                                                                    "fileChangeAuditEnabled": {},
+                                                                    "ftpsState": {},
+                                                                    "functionAppScaleLimit": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "functionsRuntimeScaleMonitoringEnabled": {},
+                                                                    "handlerMappings": {},
+                                                                    "healthCheckPath": {},
+                                                                    "http20Enabled": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "http20ProxyFlag": {},
+                                                                    "httpLoggingEnabled": {},
+                                                                    "ipSecurityRestrictions": {},
+                                                                    "ipSecurityRestrictionsDefaultAction": {},
+                                                                    "javaContainer": {},
+                                                                    "javaContainerVersion": {},
+                                                                    "javaVersion": {},
+                                                                    "keyVaultReferenceIdentity": {},
+                                                                    "limits": {},
+                                                                    "linuxFxVersion": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "loadBalancing": {},
+                                                                    "localMySqlEnabled": {},
+                                                                    "logsDirectorySizeLimit": {},
+                                                                    "machineKey": {},
+                                                                    "managedPipelineMode": {},
+                                                                    "managedServiceIdentityId": {},
+                                                                    "metadata": {},
+                                                                    "minTlsCipherSuite": {},
+                                                                    "minTlsVersion": {},
+                                                                    "minimumElasticInstanceCount": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "netFrameworkVersion": {},
+                                                                    "nodeVersion": {},
+                                                                    "numberOfWorkers": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "phpVersion": {},
+                                                                    "powerShellVersion": {},
+                                                                    "preWarmedInstanceCount": {},
+                                                                    "publicNetworkAccess": {},
+                                                                    "publishingPassword": {},
+                                                                    "publishingUsername": {},
+                                                                    "push": {},
+                                                                    "pythonVersion": {},
+                                                                    "remoteDebuggingEnabled": {},
+                                                                    "remoteDebuggingVersion": {},
+                                                                    "requestTracingEnabled": {},
+                                                                    "routingRules": {},
+                                                                    "runtimeADUser": {},
+                                                                    "runtimeADUserPassword": {},
+                                                                    "scmIpSecurityRestrictions": {},
+                                                                    "scmIpSecurityRestrictionsDefaultAction": {},
+                                                                    "scmIpSecurityRestrictionsUseMain": {},
+                                                                    "scmMinTlsVersion": {},
+                                                                    "scmType": {},
+                                                                    "sitePort": {},
+                                                                    "sitePrivateLinkHostEnabled": {},
+                                                                    "storageType": {},
+                                                                    "supportedTlsCipherSuites": {},
+                                                                    "tracingOptions": {},
+                                                                    "use32BitWorkerProcess": {},
+                                                                    "virtualApplications": {},
+                                                                    "vnetName": {},
+                                                                    "vnetPrivatePortsCount": {},
+                                                                    "vnetRouteAllEnabled": {},
+                                                                    "webSocketsEnabled": {},
+                                                                    "websiteTimeZone": {},
+                                                                    "winAuthAdminState": {},
+                                                                    "winAuthTenantState": {},
+                                                                    "windowsConfiguredStacks": {},
+                                                                    "windowsFxVersion": {},
+                                                                    "xManagedServiceIdentityId": {}
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "siteDisabledReason": {
+                                                                "type": "integer"
+                                                            },
+                                                            "siteMode": {},
+                                                            "siteProperties": {
+                                                                "properties": {
+                                                                    "appSettings": {},
+                                                                    "metadata": {},
+                                                                    "properties": {
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "value": {
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "name",
+                                                                                "value"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "sku": {
+                                                                "type": "string"
+                                                            },
+                                                            "slotName": {},
+                                                            "slotSwapStatus": {},
+                                                            "sshEnabled": {},
+                                                            "sslCertificates": {},
+                                                            "state": {
+                                                                "type": "string"
+                                                            },
+                                                            "storageAccountRequired": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "storageRecoveryDefaultState": {
+                                                                "type": "string"
+                                                            },
+                                                            "suspendedTill": {},
+                                                            "tags": {},
+                                                            "targetBuildVersion": {},
+                                                            "targetSwapSlot": {},
+                                                            "trafficManagerHostNames": {},
+                                                            "usageState": {
+                                                                "type": "string"
+                                                            },
+                                                            "useContainerLocalhostBindings": {},
+                                                            "virtualNetworkSubnetId": {},
+                                                            "vnetBackupRestoreEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "vnetContentShareEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "vnetImagePullEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "vnetRouteAllEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "webSpace": {
+                                                                "type": "string"
+                                                            },
+                                                            "workloadProfileName": {}
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "tags": {
+                                                        "properties": {
+                                                            "Jira": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "name",
+                                                    "type",
+                                                    "kind",
+                                                    "location",
+                                                    "properties"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Subscription_Id": {
+                            "runAfter": {
+                                "Initialize_Resource_Group": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Subscription Id",
+                                        "type": "string",
+                                        "value": "[trim(parameters('Subscription ID'))]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Infoblox-Data-Connector-Trigger-Sync",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": []
+        }
+    ]
+}

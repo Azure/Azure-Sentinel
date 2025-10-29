@@ -159,9 +159,10 @@ function Get-AuthToken{
             [string]$TenantGUID
         )
     # Create app of type Web app / API in Azure AD, generate a Client Secret, and update the client id and client secret here
-    $loginURL = "$env:loginEndpoint"
+    if ([string]::IsNullOrEmpty($loginURL)){$loginURL = "https://login.microsoftonline.com"}
     # Get the tenant GUID from Properties | Directory ID under the Azure Active Directory section
-    $resource = "https://$env:managementApi"
+    
+    $resource = "https://$managementApi"
     # auth
     $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID;client_secret=$ClientSecret}
     $oauth = Invoke-RestMethod -Method Post -Uri $loginURL/$tenantdomain/oauth2/token?api-version=1.0 -Body $body
@@ -185,7 +186,7 @@ function Get-O365Data{
     $contentTypes = $env:contentTypes.split(",")
     #Loop for each content Type like Audit.General
     foreach($contentType in $contentTypes){
-        $listAvailableContentUri = "https://$env:managementApi/api/v1.0/$tenantGUID/activity/feed/subscriptions/content?contentType=$contentType&PublisherIdentifier=$env:publisher&startTime=$startTime&endTime=$endTime"
+        $listAvailableContentUri = "https://$managementApi/api/v1.0/$tenantGUID/activity/feed/subscriptions/content?contentType=$contentType&PublisherIdentifier=$env:publisher&startTime=$startTime&endTime=$endTime"
         do {
             #List Available Content
             $contentResult = Invoke-RestMethod -Method GET -Headers $headerParams -Uri $listAvailableContentUri
@@ -249,7 +250,22 @@ if (-Not [string]::IsNullOrEmpty($LAURI)){
 		Exit
 	}
 }
-
+$LoginURL = $env:loginEndpoint
+if (-Not [string]::IsNullOrEmpty($LoginURL)){
+	if($LoginURL.Trim() -notin @("https://login.microsoftonline.us/","https://login.partner.microsoftonline.cn/","https://login.microsoftonline.com/"))
+	{
+		Write-Error -Message "MCASActivity-SecurityEvents: Invalid Login Endpoint Uri." -ErrorAction Stop
+		Exit
+	}
+}
+$managementApi = $env:managementApi
+if (-Not [string]::IsNullOrEmpty($managementApi)){
+	if($managementApi.Trim() -notin @("manage.office.com","manage-gcc.office.com","manage.office365.us","manage.protection.apps.mil"))
+	{
+		Write-Error -Message "MCASActivity-SecurityEvents: Invalid Management API Endpoint." -ErrorAction Stop
+		Exit
+	}
+} else {$managementApi = "manage.office.com"}
 
 #add last run time to blob file to ensure no missed packages
 $endTime = $currentUTCtime | Get-Date -Format yyyy-MM-ddTHH:mm:ss

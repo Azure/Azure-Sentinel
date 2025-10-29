@@ -1,9 +1,9 @@
 Parser:
-  Title: File Event ASIM parser for M365 Defender for Endpoint 
-  Version: '0.2'
-  LastUpdated: Jan 8 2023
+  Title: File Event ASIM filtering parser for Microsoft 365 Defender for Endpoint 
+  Version: '0.2.1'
+  LastUpdated: Oct 26 2023
 Product:
-  Name: 'M365 Defender for EndPoint'
+  Name: 'Microsoft 365 Defender for EndPoint'
 Normalization:
   Schema: FileEvent
   Version: '0.2.1'
@@ -15,115 +15,193 @@ References:
 - Title: Microsoft 365 Defender DeviceFileEvents
   Link: https://docs.microsoft.commicrosoft-365/security/defender/advanced-hunting-devicefileevents-table?view=o365-worldwide
 Description: This ASIM parser supports normalizing M365 Defender, stored in the DeviceFileEvents table, for Endpoint events to the ASIM file activity schema.
-ParserName: vimFileEventM365D
+ParserName: vimFileEventMicrosoft365D
+EquivalentBuiltInParser: _Im_FileEvent_Microsoft365D
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
   let protocols = dynamic(['smb']);
-  let parser=(disabled:bool=false){
-    let remote_events = 
-        DeviceFileEvents
-        | where not(disabled)
-        | where isnotempty(RequestAccountName)
-        | project-rename    
-            SrcIpAddr = RequestSourceIP,
-            ActorUserSid = RequestAccountSid,
-            TargetUserSid = InitiatingProcessAccountSid,
-            TargetUserAadId = InitiatingProcessAccountObjectId,
-            TargetUserUpn = InitiatingProcessAccountUpn
-        | extend
-            ActorWindowsUsername = strcat(RequestAccountDomain,'\\', RequestAccountName),
-            TargetWindowsUsername = strcat(InitiatingProcessAccountDomain,'\\', InitiatingProcessAccountName),
-            ActorUserUpn = "",
-            ActorUserAadId = ""
-        | extend
-            ActorUserType = _ASIM_GetWindowsUserType(ActorWindowsUsername, ActorUserSid),
-            TargetUserType = _ASIM_GetWindowsUserType(TargetWindowsUsername, TargetUserSid)
-        | extend
-            SrcPortNumber = toint(RequestSourcePort),
-            TargetUsername = coalesce(TargetUserUpn, TargetWindowsUsername),
-            TargetUsernameType = iff(isempty(TargetUserUpn), 'Windows', 'UPN'),
-            TargetUserId = coalesce(TargetUserAadId, TargetUserSid), 
-            TargetUserIdType = iff(isempty(TargetUserSid),'AADID','SID'),
-            IpAddr = SrcIpAddr,
-            Src = SrcIpAddr
-    ;
-    let local_events = 
-       DeviceFileEvents
-        | where not(disabled)
-        | where isempty(RequestAccountName)    
-        | project-rename
-            ActorUserSid = InitiatingProcessAccountSid,
-            ActorUserAadId = InitiatingProcessAccountObjectId,
-            ActorUserUpn = InitiatingProcessAccountUpn
-        | extend 
-            ActorWindowsUsername = strcat(InitiatingProcessAccountDomain,'\\', InitiatingProcessAccountName) 
-        | extend
-            ActorUserType = _ASIM_GetWindowsUserType(ActorWindowsUsername, ActorUserSid)
-        | project-away RequestAccountSid, RequestSourceIP
-    ;
-    union 
-        remote_events
-        , 
-        local_events
-    | project-rename
-       EventType = ActionType,
-       DvcId = DeviceId,
-       TargetFileMD5 = MD5,
-       TargetFileSHA1 = SHA1,
-       TargetFileSHA256 = SHA256,
-       ActingProcessCommandLine = InitiatingProcessCommandLine,
-       ActingProcessName =InitiatingProcessFolderPath,
-       ActingProcessMD5 = InitiatingProcessMD5,
-       ActingProcessSHA1 = InitiatingProcessSHA1,
-       ActingProcessSHA256 = InitiatingProcessSHA256,
-       ActingProcessParentFileName = InitiatingProcessParentFileName,
-       ActingProcessCreationTime = InitiatingProcessCreationTime,
-       ActingProcessParentCreationTime = InitiatingProcessParentCreationTime,
-       TargetFileName = FileName,
-       SrcFileName = PreviousFileName
-    | extend
-       DvcOs = iff(FolderPath startswith "/", "Linux", "Windows"),
-      TargetFileSize = tolong(FileSize)
-    | extend
-       EventCount = int(1),
-       EventOriginalUid = tostring(ReportId),
-       ActingProcessId = tostring(InitiatingProcessId),
-       EventStartTime = Timestamp, 
-       EventEndTime= Timestamp,
-       EventResult = 'Success',
-       EventProduct = 'M365 Defender for Endpoint',
-       EventSchema = 'FileEvent',
-       EventVendor = 'Microsoft',
-       EventSeverity = 'Informational',
-       EventSchemaVersion = '0.2.1',
-       DvcIdType = "MDEid",
-       ActorUsername = coalesce(ActorUserUpn, ActorWindowsUsername),
-       ActorUsernameType = iff(isempty(ActorUserUpn), 'Windows', 'UPN'),
-       ActorUserId = coalesce(ActorUserAadId, ActorUserSid), 
-       ActorUserIdType = iff(isempty(ActorUserSid),'AADID','SID'),
-       TargetFilePath = strcat(FolderPath, iff(DvcOs == "Linux", "/", "\\"), TargetFileName),
-       TargetFilePathType = iff(DvcOs == "Linux", "Unix", "Windows Local"),
-       SrcFilePath = strcat(PreviousFolderPath, iff(DvcOs == "Linux", "/", "\\"), SrcFileName),
-       SrcFilePathType = iff(DvcOs == "Linux", "Unix", "Windows Local"),
-       Hash=coalesce(TargetFileSHA256, TargetFileSHA1, TargetFileMD5),
-       NetworkApplicationProtocol = iff (RequestProtocol in (protocols), toupper(RequestProtocol), "")
-     | invoke _ASIM_ResolveDvcFQDN ('DeviceName')
-     | project-away DeviceName
-     | extend
-         HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(TargetFileSHA256, TargetFileSHA1, TargetFileMD5),Hash)])     
-     //  ****** Aliases
-     | extend 
-        User = ActorUsername,
-        Dvc = coalesce(DvcFQDN, DvcHostname),
-        FilePath = TargetFilePath,
-        Process = ActingProcessName,
-        CommandLine = ActingProcessCommandLine,
-        DvcMDEid = DvcId,
-        FileName = TargetFileName
-    | project-away MachineGroup, ReportId, SourceSystem, Initiating*, Timestamp, TenantId, Request*, PreviousFolderPath, FolderPath, AppGuardContainerId
-    | project-away ShareName, IsAzureInfoProtectionApplied, FileOrigin*, Sensitivity*
-    };
-    parser (disabled = disabled)
+  let parser=(
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      eventtype_in: dynamic=dynamic([]),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      actorusername_has_any: dynamic=dynamic([]),
+      targetfilepath_has_any: dynamic=dynamic([]),
+      srcfilepath_has_any: dynamic=dynamic([]),
+      hashes_has_any: dynamic=dynamic([]),
+      dvchostname_has_any: dynamic=dynamic([]),
+      disabled: bool=false
+      ) {
+      let remote_events = 
+          DeviceFileEvents
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | where isnotempty(RequestAccountName)
+          | where ((array_length(eventtype_in) == 0 or ActionType in~ (eventtype_in))) and
+              ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(RequestSourceIP, srcipaddr_has_any_prefix))) and 
+              ((array_length(actorusername_has_any) == 0) or (RequestAccountName has_any (actorusername_has_any)) or (RequestAccountDomain has_any (actorusername_has_any)) or (strcat(RequestAccountDomain, '\\', RequestAccountName) has_any (actorusername_has_any))) and
+              ((array_length(targetfilepath_has_any) == 0) or (FileName has_any (targetfilepath_has_any)) or (FolderPath has_any (targetfilepath_has_any)) or (strcat(FolderPath, iff(FolderPath startswith "/", "/", "\\"), FileName) has_any (targetfilepath_has_any))) and 
+              ((array_length(srcfilepath_has_any) == 0) or (PreviousFileName has_any (srcfilepath_has_any)) or (PreviousFolderPath has_any (srcfilepath_has_any)) or (strcat(FolderPath, iff(PreviousFolderPath startswith "/", "/", "\\"), PreviousFileName) has_any (srcfilepath_has_any))) and
+              ((array_length(hashes_has_any) == 0) or (SHA256 in (hashes_has_any)) or (SHA1 in (hashes_has_any)) or (MD5 in (hashes_has_any))) and 
+              (array_length(dvchostname_has_any) == 0 or DeviceName has_any (dvchostname_has_any))
+          | project-rename    
+              SrcIpAddr = RequestSourceIP,
+              ActorUserSid = RequestAccountSid,
+              TargetUserSid = InitiatingProcessAccountSid,
+              TargetUserAadId = InitiatingProcessAccountObjectId,
+              TargetUserUpn = InitiatingProcessAccountUpn
+          | extend
+              ActorWindowsUsername = strcat(RequestAccountDomain, '\\', RequestAccountName),
+              TargetWindowsUsername = strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName),
+              ActorUserUpn = "",
+              ActorUserAadId = ""
+          | extend
+              ActorUserType = _ASIM_GetWindowsUserType(ActorWindowsUsername, ActorUserSid),
+              TargetUserType = _ASIM_GetWindowsUserType(TargetWindowsUsername, TargetUserSid)
+          | extend
+              SrcPortNumber = toint(RequestSourcePort),
+              TargetUsername = coalesce(TargetUserUpn, TargetWindowsUsername),
+              TargetUsernameType = iff(isempty(TargetUserUpn), 'Windows', 'UPN'),
+              TargetUserId = coalesce(TargetUserAadId, TargetUserSid), 
+              TargetUserIdType = iff(isempty(TargetUserSid), 'AADID', 'SID'),
+              IpAddr = SrcIpAddr,
+              Src = SrcIpAddr
+      ;
+      let local_events = 
+          DeviceFileEvents
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | where isempty(RequestAccountName)
+          | where ((array_length(eventtype_in) == 0 or ActionType in~ (eventtype_in))) and
+              ((array_length(srcipaddr_has_any_prefix) == 0)) and 
+              ((array_length(actorusername_has_any) == 0) or (InitiatingProcessAccountDomain has_any (actorusername_has_any)) or (InitiatingProcessAccountName has_any (actorusername_has_any)) or (strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName) has_any (actorusername_has_any)) or (InitiatingProcessAccountUpn has_any (actorusername_has_any))) and
+              ((array_length(targetfilepath_has_any) == 0) or (FileName has_any (targetfilepath_has_any)) or (FolderPath has_any (targetfilepath_has_any)) or (strcat(FolderPath, iff(FolderPath startswith "/", "/", "\\"), FileName) has_any (targetfilepath_has_any))) and 
+              ((array_length(srcfilepath_has_any) == 0) or (PreviousFileName has_any (srcfilepath_has_any)) or (PreviousFolderPath has_any (srcfilepath_has_any)) or (strcat(FolderPath, iff(PreviousFolderPath startswith "/", "/", "\\"), PreviousFileName) has_any (srcfilepath_has_any))) and
+              ((array_length(hashes_has_any) == 0) or (SHA256 in (hashes_has_any)) or (SHA1 in (hashes_has_any)) or (MD5 in (hashes_has_any))) and 
+              (array_length(dvchostname_has_any) == 0 or DeviceName has_any (dvchostname_has_any))  
+          | project-rename
+              ActorUserSid = InitiatingProcessAccountSid,
+              ActorUserAadId = InitiatingProcessAccountObjectId,
+              ActorUserUpn = InitiatingProcessAccountUpn
+          | extend 
+              ActorWindowsUsername = strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName) 
+          | extend
+              ActorUserType = _ASIM_GetWindowsUserType(ActorWindowsUsername, ActorUserSid)
+          | project-away RequestAccountSid, RequestSourceIP
+      ;
+      union 
+          remote_events
+          , 
+          local_events
+      | project-rename
+          EventType = ActionType,
+          DvcId = DeviceId,
+          TargetFileMD5 = MD5,
+          TargetFileSHA1 = SHA1,
+          TargetFileSHA256 = SHA256,
+          ActingProcessCommandLine = InitiatingProcessCommandLine,
+          ActingProcessName =InitiatingProcessFolderPath,
+          ActingProcessMD5 = InitiatingProcessMD5,
+          ActingProcessSHA1 = InitiatingProcessSHA1,
+          ActingProcessSHA256 = InitiatingProcessSHA256,
+          ActingProcessParentFileName = InitiatingProcessParentFileName,
+          ActingProcessCreationTime = InitiatingProcessCreationTime,
+          ActingProcessParentCreationTime = InitiatingProcessParentCreationTime,
+          TargetFileName = FileName,
+          SrcFileName = PreviousFileName
+      | extend
+          DvcOs = iff(FolderPath startswith "/", "Linux", "Windows"),
+          TargetFileSize = tolong(FileSize)
+      | extend
+          EventCount = int(1),
+          EventOriginalUid = tostring(ReportId),
+          ActingProcessId = tostring(InitiatingProcessId),
+          EventStartTime = Timestamp, 
+          EventEndTime= Timestamp,
+          EventResult = 'Success',
+          EventProduct = 'M365 Defender for Endpoint',
+          EventSchema = 'FileEvent',
+          EventVendor = 'Microsoft',
+          EventSeverity = 'Informational',
+          EventSchemaVersion = '0.2.1',
+          DvcIdType = "MDEid",
+          ActorUsername = coalesce(ActorUserUpn, ActorWindowsUsername),
+          ActorUsernameType = iff(isempty(ActorUserUpn), 'Windows', 'UPN'),
+          ActorUserId = coalesce(ActorUserAadId, ActorUserSid), 
+          ActorUserIdType = iff(isempty(ActorUserSid), 'AADID', 'SID'),
+          TargetFilePath = strcat(FolderPath, iff(DvcOs == "Linux", "/", "\\"), TargetFileName),
+          TargetFilePathType = iff(DvcOs == "Linux", "Unix", "Windows Local"),
+          SrcFilePath = strcat(PreviousFolderPath, iff(DvcOs == "Linux", "/", "\\"), SrcFileName),
+          SrcFilePathType = iff(DvcOs == "Linux", "Unix", "Windows Local"),
+          Hash=coalesce(TargetFileSHA256, TargetFileSHA1, TargetFileMD5),
+          NetworkApplicationProtocol = iff (RequestProtocol in (protocols), toupper(RequestProtocol), "")
+      | invoke _ASIM_ResolveDvcFQDN ('DeviceName')
+      | project-away DeviceName
+      | extend
+          HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(TargetFileSHA256, TargetFileSHA1, TargetFileMD5), Hash)])     
+      //  ****** Aliases
+      | extend 
+          User = ActorUsername,
+          Dvc = coalesce(DvcFQDN, DvcHostname),
+          FilePath = TargetFilePath,
+          Process = ActingProcessName,
+          CommandLine = ActingProcessCommandLine,
+          DvcMDEid = DvcId,
+          FileName = TargetFileName
+      | project-away
+          MachineGroup,
+          ReportId,
+          SourceSystem,
+          Initiating*,
+          Timestamp,
+          TenantId,
+          Request*,
+          PreviousFolderPath,
+          FolderPath,
+          AppGuardContainerId
+      | project-away ShareName, IsAzureInfoProtectionApplied, FileOrigin*, Sensitivity*
+  };
+  parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      eventtype_in=eventtype_in,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      actorusername_has_any=actorusername_has_any,
+      targetfilepath_has_any=targetfilepath_has_any,
+      srcfilepath_has_any=srcfilepath_has_any,
+      hashes_has_any=hashes_has_any,
+      dvchostname_has_any=dvchostname_has_any,
+      disabled=disabled
+  )

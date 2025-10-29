@@ -1,0 +1,217 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-IAM-Entra-ID-Master-Playbook", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel incident with account and/or IP entities. It will run two playbooks, revoking the sessions of the related Microsoft Entra Id user account and adding the it to a named locations list.",
+        "prerequisites": "AS-IP-Blocklist-HTTP and AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP playbooks must first be deployed. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-IAM-Entra-ID-Master-Playbook",
+        "lastUpdateTime": "2023-11-10T12:03:07Z",
+        "entities": ["Account", "IP"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Microsoft Entra ID"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue":"AS-IAM-Entra-ID-Master-Playbook",
+            "type": "string"
+        },
+        "FirstNestedPlaybook": {
+            "defaultValue":"AS-IP-Blocklist-HTTP",
+            "type": "string",
+            "metadata" : {
+                "description" : "Change if a different name than AS-IP-Blocklist-HTTP was used during deployment"
+            }
+        },
+        "SecondNestedPlaybook": {
+            "defaultValue":"AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP",
+            "type": "string",
+            "metadata" : {
+                "description" : "Change if a different name than AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP was used during deployment"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "AS-IP-Blocklist-HTTP": {
+                            "runAfter": {
+                                "Select_-_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Workflow",
+                            "inputs": {
+                                "body": "@body('Select_-_IPs')",
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('FirstNestedPlaybook'))]"
+                                    }
+                                }
+                            }
+                        },
+                        "AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP": {
+                            "runAfter": {
+                                "Select_-_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Workflow",
+                            "inputs": {
+                                "body": "@body('Select_-_Accounts')",
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('SecondNestedPlaybook'))]"
+                                    }
+                                }
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Select_-_Accounts": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                                "select": {
+                                    "IncidentID": "@triggerBody()?['object']?['id']",
+                                    "aadUserId": "@item()?['aadUserId']",
+                                    "accountName": "@item()?['accountName']",
+                                    "upnSuffix": "@item()?['upnSuffix']"
+                                }
+                            }
+                        },
+                        "Select_-_IPs": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@body('Entities_-_Get_IPs')?['IPs']",
+                                "select": {
+                                    "IncidentID": "@triggerBody()?['object']?['id']",
+                                    "Type": "@item()?['Type']",
+                                    "address": "@item()?['address']",
+                                    "friendlyName": "@item()?['friendlyName']"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

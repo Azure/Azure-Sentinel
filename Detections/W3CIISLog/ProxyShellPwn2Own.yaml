@@ -1,10 +1,8 @@
 id: 968358d6-6af8-49bb-aaa4-187b3067fb95
 name: Exchange SSRF Autodiscover ProxyShell - Detection
 description: |
-  'This query looks for suspicious request patterns to Exchange servers that fit patterns recently
-  blogged about by PeterJson. This exploitation chain utilises an SSRF vulnerability in Exchange
-  which eventually allows the attacker to execute arbitrary Powershell on the server. In the example
-  powershell can be used to write an email to disk with an encoded attachment containing a shell.
+  'This query looks for suspicious request patterns to Exchange servers that fit patterns recently blogged about by PeterJson. This exploitation chain utilises an SSRF vulnerability in Exchange which eventually allows the attacker to execute arbitrary Powershell on the server.
+  In the example powershell can be used to write an email to disk with an encoded attachment containing a shell.
   Reference: https://peterjson.medium.com/reproducing-the-proxyshell-pwn2own-exploit-49743a4ea9a1'
 severity: High
 requiredDataConnectors:
@@ -30,25 +28,31 @@ query: |
   or (csUriQuery has_any("/mapi/", "powershell"))
   or (csUriQuery contains "@" and csUriQuery matches regex @"\.[a-zA-Z]{2,4}?(?:[a-zA-Z]{2,4}\/)")
   or (csUriQuery contains ":" and csUriQuery matches regex @"\:[0-9]{2,4}\/")
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = cIP, AccountCustomEntity = csUserName, ResourceCustomEntity = _ResourceId, FileCustomEntity = FileUri
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(csUserName, "@")[0]), AccountUPNSuffix = tostring(split(csUserName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: csUserName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix  
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: cIP
   - entityType: AzureResource
     fieldMappings:
       - identifier: ResourceId
-        columnName: ResourceCustomEntity
-version: 1.0.1
+        columnName: _ResourceId
+version: 1.0.3
 kind: Scheduled
 metadata:
     source:

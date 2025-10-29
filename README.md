@@ -16,7 +16,7 @@ We value your feedback. Here are some channels to help surface your questions or
 5. General feedback on community and contribution process - File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
 
 
-# Contributing
+# Contribution guidelines
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
@@ -31,7 +31,7 @@ Brand new or update to a contribution via these methods:
     * Browse to the folder you want to upload your file to
     * Choose Upload Files and browse to your file. 
     * You will be required to create your own branch and then submit the Pull Request for review.
-* Use [GitHub Desktop](https://help.github.com/en/desktop/getting-started-with-github-desktop) or [Visual Studio](https://visualstudio.microsoft.com/vs/) or [VSCode](https://code.visualstudio.com/?wt.mc_id=DX_841432)
+* Use [GitHub Desktop](https://docs.github.com/en/desktop/overview/getting-started-with-github-desktop) or [Visual Studio](https://visualstudio.microsoft.com/vs/) or [VSCode](https://code.visualstudio.com/?wt.mc_id=DX_841432)
     * [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo)  
     * [Clone the repo](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository)
     * [Create your own branch](https://help.github.com/en/desktop/contributing-to-projects/creating-a-branch-for-your-work)
@@ -103,7 +103,7 @@ In order to run the KQL validation before submitting Pull Request in you local m
 Example of output (in Ubuntu):
 ```
 Welcome to .NET Core 3.1!
----------------------
+----------------------
 SDK Version: 3.1.403
 
 Telemetry
@@ -154,4 +154,10 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
-For information on what you can contribute and further details, refer to the ["get started"](https://github.com/Azure/Azure-Sentinel/wiki#get-started) section on the project's [wiki](https://aka.ms/threathunters)."`
+<Azure-Sentinel
+["get started"](https://github.com/Azure/Azure-Sentinel/wiki#get-started)
+                ["wiki"](https://aka.ms/threathunters).
+For information on what you can contribute and further details, refer to the 
+                ["get started"](https://github.com/Azure/Azure-Sentinel/wiki#get-started) 
+                ["wiki"](https://aka.ms/threathunters)"'. 
+> master

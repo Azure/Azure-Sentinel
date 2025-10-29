@@ -1,0 +1,39 @@
+id: b7dc801e-1e79-48bb-91e8-2229a8e6d40b
+name: Remote Desktop Network Brute force (ASIM Network Session schema)
+description: |
+  'This detection identifies RDP application network traffic and filters any source/destination pair generating more than 25 events hard threshold.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  // Start of the query and  Filter events that resulted in failure
+  _Im_NetworkSession(eventresult="Failure")
+  // Filter out private source IP addresses and focus on specific destination port (3389)
+  // Also, ensure that the source and destination IP addresses are not the same
+  | where not(ipv4_is_private(SrcIpAddr)) and tostring(DstPortNumber) has_any ("3389") and SrcIpAddr != DstIpAddr
+  // Summarize the data by source and destination IP addresses, destination port number, network protocol, and event result
+  // Also, bin the time generated in 5-minute intervals
+  // Calculate the minimum and maximum time generated, the sum of event counts, and a set of up to 10 event vendors
+  | summarize Starttime= min(TimeGenerated),EndTime= max(TimeGenerated),TargettedIPs=dcount(DstIpAddr),Eventscount=sum(EventCount),EventVendors=make_set(EventVendor,10) by SrcIpAddr,DstPortNumber,EventResult, bin(TimeGenerated, 5m)
+  // Filter the summarized data to include only those with an event count of 25 or more
+  | where Eventscount >= 25
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

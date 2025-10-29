@@ -21,26 +21,28 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1071
 query: |
   let dt_lookBack = 1h;  // Define the time range to look back for syslog data (1 hour)
   let ioc_lookBack = 14d;  // Define the time range to look back for threat intelligence indicators (14 days)
   // Create a list of top-level domains (TLDs) from the threat feed for later validation
   let list_tlds = ThreatIntelligenceIndicator
+    | where isnotempty(DomainName)
     | where TimeGenerated > ago(ioc_lookBack)
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
     | where Active == true and ExpirationDateTime > now()
-    | where isnotempty(DomainName)
     | extend parts = split(DomainName, '.')
     | extend tld = parts[(array_length(parts)-1)]
     | summarize count() by tostring(tld)
     | summarize make_list(tld);
   // Fetch the latest active domain indicators from the threat intelligence data within the specified time range
   let Domain_Indicators = ThreatIntelligenceIndicator
+    | where isnotempty(DomainName)
     | where TimeGenerated >= ago(ioc_lookBack)
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
     | where Active == true and ExpirationDateTime > now()
-    | where isnotempty(DomainName)
     | extend TI_DomainEntity = DomainName;
   // Join the threat intelligence indicators with syslog data on matching domain entities
   Domain_Indicators
@@ -71,6 +73,8 @@ query: |
 entityMappings:
   - entityType: Host
     fieldMappings:
+      - identifier: FullName
+        columnName: Computer
       - identifier: HostName
         columnName: HostName
       - identifier: DnsDomain
@@ -83,5 +87,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.4.0
+version: 1.4.3
 kind: Scheduled

@@ -52,10 +52,10 @@ You can choose to deploy the whole package: connector + all three playbook templ
 
 ## Authentication
 This connector supports Service Principal authentication type.
-### Azure Active Directory Service principal
+### Microsoft Entra ID Service principal
 To use your own application with the Microsoft Sentinel connector, perform the following steps:
 
-1. Register the application with Azure AD and create a service principal. [Learn how](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal).
+1. Register the application with Microsoft Entra ID and create a service principal. [Learn how](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal).
 
 1. Get credentials (for future authentication).
 
@@ -73,7 +73,7 @@ To use your own application with the Microsoft Sentinel connector, perform the f
 
     - Select the role you wish to assign to the application: **Contributor** role.
 
-    - Find the required application and save. By default, Azure AD applications aren't displayed in the available options. To find your application, search for the name and select it.
+    - Find the required application and save. By default, Microsoft Entra ID applications aren't displayed in the available options. To find your application, search for the name and select it.
 
 1. Authenticate
 
@@ -87,7 +87,7 @@ To use your own application with the Microsoft Sentinel connector, perform the f
 <a name="prerequisites">
 
 ### Prerequisites for using and deploying Custom Connector
-1. Register an AAD app and capture the ClientID, SecretKey and TenantID
+1. Register an Microsoft Entra ID app and capture the ClientID, SecretKey and TenantID
 2. Playbook templates leverage VirusTotal for IP enrichment. To use this VirusTotal capabilities,generate a Virus Total API key. Refer this link [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)
 
 <a name="deployment">

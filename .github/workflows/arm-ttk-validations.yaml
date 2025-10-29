@@ -1,6 +1,14 @@
 name: Arm-ttk Validations
 
-on: [pull_request]
+on:
+  pull_request:
+    paths:
+      - 'Solutions/**/mainTemplate.json'
+      - 'Solutions/**/createUiDefinition.json'
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   run-arm-ttk:
@@ -10,75 +18,33 @@ jobs:
       mainTemplateChanged: ${{ steps.step1.outputs.mainTemplateChanged }}
       createUiChanged: ${{ steps.step1.outputs.createUiChanged }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
       - shell: pwsh
         id: step1
         name: Identify Changes in PR
         run: |
-          $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
-          Write-Host "List of files in PR: $diff"
-          
-          $hasmainTemplateChanged = $false
-          $hasCreateUiDefinitionTemplateChanged = $false
-          
-          $isChangeInSolutionsFolder = [bool]($diff | Where-Object {$_ -like 'Solutions/*'})
-          if (!$isChangeInSolutionsFolder)
-          {
-            Write-Host "Skipping as change is not in Solutions folder!"
-            exit 0
+          try {
+            Set-PSRepository PSGallery -InstallationPolicy Trusted
+            Install-Module powershell-yaml -Force
+            ./.script/package-automation/arm-ttk-tests.ps1
+          }
+          catch {
+            Write-Error "Failed to run ARM-TTK tests: $_"
+            exit 1
           }
 
-          $requiredFiles = @("mainTemplate.json", "createUiDefinition.json")
-          $filteredFiles = $diff | Where-Object {$_ -match ($requiredFiles -Join "|")}
-          Write-Host "Filtered Files $filteredFiles"
-
-          if ($filteredFiles.Count -gt 0)
-          {
-            $mainTemplateValue = $filteredFiles -match "mainTemplate.json" 
-            $createUiValue = $filteredFiles -match "createUiDefinition.json"
-
-            if ($mainTemplateValue)
-            {
-              $hasmainTemplateChanged = $true
-            }
-
-            if ($createUiValue)
-            {
-              $hasCreateUiDefinitionTemplateChanged = $true
-            }
-            
-            if ($filteredFiles.Count -eq 1)
-            {
-              $packageIndex = $filteredFiles.IndexOf("/Package")
-              $sName = $filteredFiles.SubString(10, $packageIndex - 10)
-            }
-            else
-            {
-              $packageIndex = $filteredFiles[0].IndexOf("/Package")
-              $sName = $filteredFiles[0].SubString(10, $packageIndex - 10)
-            }
-            Write-Host "SolutionName: $sName"
-          }
-
-          Write-Output "::set-output name=solutionName::$sName"
-          Write-Output "::set-output name=mainTemplateChanged::$hasmainTemplateChanged"
-          Write-Output "::set-output name=createUiChanged::$hasCreateUiDefinitionTemplateChanged"
-
-      - uses: docker/build-push-action@v2
+      - uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
         id: publishGithubPackage
         name: Run ARM-TTK
-        if: ${{ success() && steps.step1.outcome == 'success' && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.mainTemplateChanged == 'true' || steps.step1.outputs.createUiChanged == 'true') }}
-        env: 
-          SolutionName: ${{ steps.step1.outputs.solutionName }}
-          mainTemplateChanged: ${{ steps.step1.outputs.mainTemplateChanged }}
-          createUiChanged: ${{ steps.step1.outputs.createUiChanged }}
+        if: ${{ success() && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.mainTemplateChanged == 'true' || steps.step1.outputs.createUiChanged == 'true') }}
         with:
           context: .
           file: ./.github/actions/Dockerfile
           push: false
+          provenance: false
           build-args: |
-            SolutionName
-            mainTemplateChanged
-            createUiChanged
+            SolutionName=${{ steps.step1.outputs.solutionName }}
+            mainTemplateChanged=${{ steps.step1.outputs.mainTemplateChanged }}
+            createUiChanged=${{ steps.step1.outputs.createUiChanged }}

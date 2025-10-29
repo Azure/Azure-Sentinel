@@ -1,0 +1,37 @@
+id: 4dd31bd5-11a3-4b9c-a7c5-4927ab4f2a77
+name: Stopping multiple processes using taskkill
+description: |
+  This query checks for attempts to stop at least 10 separate processes using the taskkill.exe utility. This is a common technique used by ransomware to stop security products and other processes.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  // Find attempts to stop processes using taskkill.exe
+  DeviceProcessEvents
+  | where FileName =~ "taskkill.exe" 
+  | summarize taskKillCount = dcount(ProcessCommandLine), TaskKillList = make_set(ProcessCommandLine, 10000) by DeviceId, DeviceName, bin(TimeGenerated, 2m)
+  | where taskKillCount > 10
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:  
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.0
+kind: Scheduled

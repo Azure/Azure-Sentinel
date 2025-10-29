@@ -20,7 +20,7 @@ For more information, see:
 This template deploys the following parsers:
 
 * Source agnostic parsers:
-  * imProcess - Process events from all normalized process events sources
+  * imProcessEvent - Process events from all normalized process events sources
   * imProcessCreate - Process creation events from all normalized process events sources
   * imProcessTerminate - Process termination events from all normalized process events sources
   * vimProcessEmpty - Empty ASim Process table

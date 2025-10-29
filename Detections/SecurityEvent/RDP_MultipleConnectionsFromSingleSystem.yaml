@@ -1,7 +1,7 @@
 id: 78422ef2-62bf-48ca-9bab-72c69818a425
 name: Multiple RDP connections from Single System
 description: |
-  'Identifies when an RDP connection is made to multiple systems and above the normal for the previous 7 days.
+  'Identifies when an RDP connection is made to multiple systems and above the normal connection count for the previous 7 days.
   Connections from the same system with the same account within the same day.
   RDP connections are indicated by the EventID 4624 with LogonType = 10'
 severity: Low
@@ -31,8 +31,8 @@ query: |
   (SecurityEvent
   | where TimeGenerated >= ago(endtime)
   | where EventID == 4624 and LogonType == 10
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ComputerCountToday = dcount(Computer), ComputerSet = makeset(Computer), ProcessSet = makeset(ProcessName)
-  by Account, IpAddress, AccountType, Activity, LogonTypeName),
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ComputerCountToday = dcount(Computer), ComputerSet = makeset(Computer), ProcessSet = makeset(ProcessName)
+  by Account = tolower(Account), IpAddress, AccountType, Activity, LogonTypeName),
   (WindowsEvent
   | where TimeGenerated >= ago(endtime)
   | where EventID == 4624
@@ -45,8 +45,8 @@ query: |
   | extend AccountType=case(Account endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
   | extend Activity="4624 - An account was successfully logged on."
   | extend LogonTypeName="10 - RemoteInteractive"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ComputerCountToday = dcount(Computer), ComputerSet = makeset(Computer), ProcessSet = makeset(ProcessName)
-  by Account, IpAddress, AccountType, Activity, LogonTypeName)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ComputerCountToday = dcount(Computer), ComputerSet = makeset(Computer), ProcessSet = makeset(ProcessName)
+  by Account = tolower(Account), IpAddress, AccountType, Activity, LogonTypeName)
   )
   | join kind=inner (
   (union isfuzzy=true
@@ -68,24 +68,28 @@ query: |
   | extend Ratio = iff(isempty(ComputerCountPrev7Days), toreal(ComputerCountToday), ComputerCountToday / (ComputerCountPrev7Days * 1.0))
   // Where the ratio of today to previous 7 days is more than double.
   | where Ratio > threshold
-  | project StartTimeUtc, EndTimeUtc, Account, IpAddress, ComputerSet, ComputerCountToday, ComputerCountPrev7Days, Ratio, AccountType, Activity, LogonTypeName, ProcessSet
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, IPCustomEntity = IpAddress
+  | project StartTime, EndTime, Account, IpAddress, ComputerSet, ComputerCountToday, ComputerCountPrev7Days, Ratio, AccountType, Activity, LogonTypeName, ProcessSet
+  | extend AccountName = tostring(split(Account, @"\")[1]), AccountNTDomain = tostring(split(Account, @"\")[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.2.3
+        columnName: IpAddress
+version: 1.2.6
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Shain
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

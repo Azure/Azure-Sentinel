@@ -23,6 +23,11 @@ variable "organization-id" {
   description = "Organization id"
 }
 
+resource "google_project_service" "enable-logging-api" {
+  service = "logging.googleapis.com"
+  project = data.google_project.project.project_id
+}
+
 resource "google_pubsub_topic" "sentinel-topic" {
   count = "${var.topic-name != "sentinel-topic" ? 0 : 1}"
   name = var.topic-name
@@ -37,6 +42,7 @@ resource "google_pubsub_subscription" "sentinel-subscription" {
 }
 
 resource "google_logging_project_sink" "sentinel-sink" {
+  project = data.google_project.project.project_id
   count = var.organization-id == "" ? 1 : 0
   name = "audit-logs-sentinel-sink"
   destination = "pubsub.googleapis.com/projects/${data.google_project.project.project_id}/topics/${var.topic-name}"

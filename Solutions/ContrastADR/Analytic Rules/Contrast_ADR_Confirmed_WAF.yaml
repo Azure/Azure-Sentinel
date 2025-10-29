@@ -1,0 +1,47 @@
+id: 93641436-afb3-4921-8828-ceab0d15aaab
+name: Contrast ADR - WAF Alert Correlation
+description: |
+  'Correlates Contrast ADR security alerts with WAF logs to identify confirmed attack attempts that were either exploited or blocked. This rule helps security teams prioritize incidents by focusing on attacks that have been validated by application security monitoring.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ContrastADR
+    dataTypes:
+      - ContrastADR_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1211
+  - T1008
+query: |
+  ContrastADR_CL
+  | where result_s =~ "exploited" or result_s =~ "blocked"
+  | project-rename ip_s=SourceIP
+  //please add you WAF table in place of ContrastWAFLogs_CL and WAF tables source IP or target IP column's inplace of ip_s and uncomment the queries below
+  //| join kind=inner (ContrastWAFLogs_CL | where TimeGenerated >= ago(5m)) on ip_s
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+alertDetailsOverride:
+  alertDisplayNameFormat: 'WAF Alert Confirmed {{result_s}}  by Contrast ADR on {{request_headers_referer_s}}  endpoint of {{application_name_s}} '
+  alertDescriptionFormat: 'WAF Alert Confirmed {{result_s}}  by Contrast ADR on {{request_headers_referer_s}}  endpoint of {{application_name_s}} '
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: Selected
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+kind: Scheduled
+version: 1.0.0

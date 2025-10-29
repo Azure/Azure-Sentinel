@@ -25,35 +25,54 @@ query: |
     | where TimeGenerated between(ago(14d)..ago(1d))
     | where OperationName has "conditional access policy"
     | where Result =~ "success"
-    | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | summarize by userPrincipalName);
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | summarize by InitiatingUserPrincipalName);
     AuditLogs
     | where TimeGenerated > ago(1d)
     | where OperationName has "conditional access policy"
     | where Result =~ "success"
-    | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppId = tostring(InitiatedBy.app.appId)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
     | extend CAPolicyName = tostring(TargetResources[0].displayName)
-    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
-    | where userPrincipalName !in (known_users)
+    | where InitiatingUserPrincipalName !in (known_users)
     | extend NewPolicyValues = TargetResources[0].modifiedProperties[0].newValue
     | extend OldPolicyValues = TargetResources[0].modifiedProperties[0].oldValue
-    | project-reorder TimeGenerated, OperationName, CAPolicyName, userPrincipalName, ipAddress, NewPolicyValues, OldPolicyValues
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, OperationName, CAPolicyName, InitiatingAppId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, NewPolicyValues, OldPolicyValues
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: userPrincipalName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ipAddress
-version: 1.0.2
+        columnName: InitiatingIPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: InitiatingAppId
+      - identifier: Name
+        columnName: InitiatingAppName
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

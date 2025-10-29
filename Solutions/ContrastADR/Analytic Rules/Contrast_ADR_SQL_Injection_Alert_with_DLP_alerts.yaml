@@ -1,0 +1,67 @@
+id: 1aac7737-d52f-483d-b225-6a27c1b29a9e
+name: Contrast ADR - DLP SQL Injection Correlation
+description: |
+  'Detects successful SQL injection attacks identified by Contrast ADR and correlates them with WAF/DLP logs. This rule identifies critical database security breaches that have bypassed initial defenses and may result in data exfiltration or unauthorized database access.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: ContrastADR
+    dataTypes:
+      - ContrastADR_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+  - Collection
+  - Exfiltration
+  - CommandAndControl
+  - Reconnaissance
+  - CredentialAccess
+  - LateralMovement
+  - Discovery 
+relevantTechniques:
+  - T1190
+  - T1552
+  - T1005
+  - T1041
+  - T1008
+  - T1590
+  - T1571
+  - T1528
+  - T1021
+  - T1046
+query: |
+  ContrastADR_CL
+  | where result_s =~ "EXPLOITED" and rule_s =~ "SQL-INJECTION"
+  | project-rename hostname_s = host_hostname_s
+  //please add your DLP logs table in place of ContrastWAFLogs_CL and hostname colomun in place of hostname_s below and uncomment the queries below
+  //| join kind= inner (ContrastWAFLogs_CL | where TimeGenerated >= ago(5m)) on hostname_s
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: host_hostname_s
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Confirmed active SQL Injection by Contrast ADR on {{request_headers_referer_s}}  endpoint of {{application_name_s}} '
+  alertDescriptionFormat: 'Confirmed active SQL Injection by Contrast ADR on {{request_headers_referer_s}}  endpoint of {{application_name_s}} '
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT30M
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+kind: Scheduled
+version: 1.0.0

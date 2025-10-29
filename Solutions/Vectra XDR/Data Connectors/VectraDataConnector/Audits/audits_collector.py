@@ -12,9 +12,13 @@ class AuditsCollector(BaseCollector):
 
     def __init__(self, applogger, function_name, client_id, client_secret) -> None:
         """Initialize instance variable for class."""
+        self.access_token_key = "access-token-audit"
+        self.refresh_token_key = "refresh-token-audit"
+        self.access_token_expiry = "expires_in_audit"
+        self.refresh_token_expiry = "refresh_expires_in_audit"
         super(AuditsCollector, self).__init__(applogger, function_name, client_id, client_secret)
-        self.audits_table_name = AUDITS_TABLE_NAME
         self.state = StateManager(connection_string=self.connection_string, file_path="audits")
+        self.audits_table_name = AUDITS_TABLE_NAME
 
     def get_audit_data_and_ingest_into_sentinel(self):
         """To call get checkpoint and 'pull and push the data' method."""

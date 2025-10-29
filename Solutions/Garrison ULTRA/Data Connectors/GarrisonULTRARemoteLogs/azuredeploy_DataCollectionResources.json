@@ -1,0 +1,189 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace-name": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Name of Log Analytics workspace in which to deploy resources"
+      }
+    },
+    "workspace-region": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Region of Log Analytics workspace in which to deploy resources (e.g. 'uksouth')"
+      }
+    }
+  },
+  "variables": {
+    "workspaceName": "[parameters('workspace-name')]",
+    "workspaceRegion": "[parameters('workspace-region')]",
+    "tableName": "Garrison_ULTRARemoteLogs_CL",
+    "dcrName": "gurl-dcr"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(variables('workspaceName'), '/', variables('tableName'))]",
+      "location": "[variables('workspaceRegion')]",
+      "properties": {
+        "plan": "Analytics",
+        "retentionInDays": "-1",
+        "schema": {
+          "name": "[variables('tableName')]",
+          "description": "Custom table for storing Garrison ULTRA Remote Logs",
+          "displayName": "Garrison ULTRA Remote Logs",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime",
+              "description": "Mandatory LA table field"
+            },
+            {
+              "name": "deviceEventClassId",
+              "type": "int",
+              "description": "The integer identifier of the event name"
+            },
+            {
+              "name": "name",
+              "type": "string",
+              "description": "The name of the event"
+            },
+            {
+              "name": "start",
+              "type": "long",
+              "description": "The start time of the event - milliseconds since epoch"
+            },
+            {
+              "name": "request",
+              "type": "string",
+              "description": "The URL of the page (for page visits) or resource (for background requests)"
+            },
+            {
+              "name": "requestContext",
+              "type": "string",
+              "description": "The URL of the page originating the request - for background HTTP requests"
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "description": "The reason given for blocking a request - for blocked events"
+            },
+            {
+              "name": "dhost",
+              "type": "string",
+              "description": "The hostname of the site visited - for site visits"
+            },
+            {
+              "name": "devicePayloadId",
+              "type": "string",
+              "description": "A unique ID for each event"
+            },
+            {
+              "name": "suid",
+              "type": "string",
+              "description": "The user ID associated with the event"
+            },
+            {
+              "name": "suser",
+              "type": "string",
+              "description": "The username associated with the event"
+            }
+          ]
+        },
+        "totalRetentionInDays": "-1"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "name": "[variables('dcrName')]",
+      "location": "[variables('workspaceRegion')]",
+      "apiVersion": "2023-03-11",
+      "kind": "Direct",
+      "properties": {
+        "streamDeclarations": {
+          "Custom-GarrisonULTRARemoteLogs": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "deviceEventClassId",
+                "type": "int"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              },
+              {
+                "name": "start",
+                "type": "long"
+              },
+              {
+                "name": "request",
+                "type": "string"
+              },
+              {
+                "name": "requestContext",
+                "type": "string"
+              },
+              {
+                "name": "reason",
+                "type": "string"
+              },
+              {
+                "name": "dhost",
+                "type": "string"
+              },
+              {
+                "name": "devicePayloadId",
+                "type": "string"
+              },
+              {
+                "name": "suid",
+                "type": "string"
+              },
+              {
+                "name": "suser",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]",
+              "name": "workspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-GarrisonULTRARemoteLogs"
+            ],
+            "destinations": [
+              "workspace"
+            ],
+            "outputStream": "[concat('Custom-', variables('tableName'))]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "dataCollectionRuleImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))).immutableId]"
+    },
+    "dataCollectionRuleLogsIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))).endpoints.logsIngestion]"
+    }
+  }
+}

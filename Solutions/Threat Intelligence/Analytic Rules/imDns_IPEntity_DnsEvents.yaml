@@ -1,8 +1,7 @@
 id: 67775878-7f8b-4380-ac54-115e1e828901
 name: TI map IP entity to DNS Events (ASIM DNS schema)
 description: |
-  'This rule identifies DNS requests for which response IP address is a known IoC. <br><br>
-  This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema.'
+  'This rule identifies DNS requests for which response IP address is a known IoC. This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
@@ -38,13 +37,14 @@ requiredDataConnectors:
   - connectorId: Corelight
     dataTypes: 
       - Corelight_CL
-
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1071
 tags:
   - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/ThreatIntelligenceIndicator/IPEntity_DnsEvents.yaml
     version: 1.0.0
@@ -55,12 +55,11 @@ query: |
   let ioc_lookBack = 14d;
   let IP_TI = 
   ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
+  | where TimeGenerated >= ago(ioc_lookBack)
   | extend IoC = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,"NO_IP")
   | where IoC != "NO_IP"
-  ;
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now();
   IP_TI
   | join kind=innerunique // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   (
@@ -73,7 +72,6 @@ query: |
   on IoC
   | where imDns_mintime < ExpirationDateTime
   | project imDns_mintime, imDns_maxtime, Description, ActivityGroupNames, IndicatorId, ThreatType, LatestIndicatorTime, ExpirationDateTime, ConfidenceScore, SrcIpAddr, IoC, Dvc, EventVendor, EventProduct, DnsQuery, DnsResponseName
-
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -87,7 +85,6 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SrcIpAddr
-
 customDetails:
   LatestIndicatorTime: LatestIndicatorTime
   Description: Description
@@ -99,10 +96,8 @@ customDetails:
   DNSRequestTime: imDns_mintime
   SourceIPAddress: SrcIpAddr
   DnsQuery: DnsQuery
-
 alertDetailsOverride:
   alertDisplayNameFormat: The response {{IoC}} to DNS query matched an IoC 
   alertDescriptionFormat: The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.
-
-version: 1.2.2
+version: 1.2.4
 kind: Scheduled

@@ -83,8 +83,12 @@ class ImpervaFilesHandler:
                 past_file = state.get()
                 if past_file is not None:
                     logging.info("The last file point is: {}".format(past_file))
-                    index = self.files_array.index(past_file)
-                    files_arr = self.files_array[index + 1:]
+                    try:
+                        index = self.files_array.index(past_file)
+                        files_arr = self.files_array[index + 1:]
+                    except Exception as err:
+                        logging.info("Last point file detection error: {}. So Processing all the files from index file".format(err))
+                        files_arr = self.files_array
                 else:
                     files_arr = self.files_array
                 logging.info("There are {} files in the list index file.".format(len(files_arr)))
@@ -150,7 +154,7 @@ class ImpervaFilesHandler:
             self.sentinel.post_data(json.dumps(chunk), len(chunk), file_name)
     
     def parse_cef(self,cef_raw):
-        rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
+        rx = r'([^=\s\|]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
         parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
         header_array = cef_raw.split('|')
         parsed_cef["Device Version"]=header_array[3]
@@ -161,12 +165,17 @@ class ImpervaFilesHandler:
             if val.startswith('"') and val.endswith('"'):
                 val = val[1:-1]
             parsed_cef[key]=val
-        cs_array = ['cs1','cs2','cs3','cs4','cs5','cs6','cs7','cs8']
+        cs_array = ['cs1','cs2','cs3','cs4','cs5','cs6','cs7','cs8','cs9']
         for elem in cs_array:
-            if parsed_cef[elem] is not None:
-                parsed_cef[(parsed_cef[f'{elem}Label']).replace(" ", "")] = parsed_cef[elem]
-                parsed_cef.pop(f'{elem}Label')
-                parsed_cef.pop(elem)
+            try:
+                if parsed_cef[elem] is not None:
+                    parsed_cef[(parsed_cef[f'{elem}Label']).replace(
+                        " ", "")] = parsed_cef[elem]
+                    parsed_cef.pop(f'{elem}Label')
+                    parsed_cef.pop(elem)
+            except Exception as err:
+# As per the documentation availability of this field (cs6 and cs6 label) in your logs depends on your account plan. If your plan does not include Advanced Client Classification, the field name and value are not included in the logs. For more details, contact your Imperva Sales Representative.
+                pass
 
         if 'start' in parsed_cef.keys() and parsed_cef['start'] is not None and parsed_cef['start']!="":
             try:

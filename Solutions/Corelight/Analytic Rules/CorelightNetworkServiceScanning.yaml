@@ -7,7 +7,10 @@ status: Available
 requiredDataConnectors:
   - connectorId: Corelight
     dataTypes:
-      - Corelight
+      - Corelight_v2_conn
+      - Corelight_v2_conn_red
+      - corelight_conn
+      - corelight_conn_red
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -18,19 +21,17 @@ relevantTechniques:
   - T1566
 query: |
   let threshold = 25;
-  Corelight
-  | where EventType =~ 'conn'
-  | where ZeekConnLocalSrc == 'True'
-  | where ZeekConnLocalDst == 'True'
-  | where NetworkConnectionState in~ ('S0', 'REJ')
-  | where NetworkConnectionHistory !contains 'D'
-  | summarize count() by SrcIpAddr, DstPort, bin(TimeGenerated, 1m)
+  union corelight_conn, corelight_conn_red
+  | where local_resp == true
+  | where local_orig == true
+  | where conn_state in~ ('S0', 'REJ')
+  | where history !contains 'D'
+  | summarize count() by id_orig_h, id_resp_p, bin(TimeGenerated, 1m)
   | where count_ > threshold
-  | extend IPCustomEntity = SrcIpAddr
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: id_orig_h
+version: 2.1.0
 kind: Scheduled

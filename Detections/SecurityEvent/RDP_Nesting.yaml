@@ -1,9 +1,8 @@
 id: 69a45b05-71f5-45ca-8944-2e038747fb39
 name: RDP Nesting
 description: |
-  'Identifies when an RDP connection is made to a first system and then an RDP connection is made from the first system
-  to another system with the same account within the 60 minutes. Additionally, if historically daily
-  RDP connections are indicated by the logged EventID 4624 with LogonType = 10'
+  'Query detects potential lateral movement within a network by identifying when an RDP connection (EventID 4624, LogonType 10) is made to an initial system, followed by a subsequent RDP connection from that system to another, using the same account within a 60-minute window.
+   To reduce false positives, it excludes scenarios where the same account has made 5 or more connections to the same set of computers in the previous 7 days. This approach focuses on highlighting unusual RDP behaviour that suggests lateral movement, which is often associated with attacker tactics during a network breach.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -25,99 +24,177 @@ relevantTechniques:
   - T1021
 query: |
   let endtime = 1d;
-  let starttime = 8d;
-  // The threshold below excludes matching on RDP connection computer counts of 5 or more by a given account and IP in a given day.  Change the threshold as needed.
-  let threshold = 5;
+  // Function to resolve hostname to IP address using DNS logs or a lookup table (example syntax)
+  let rdpConnections =
   (union isfuzzy=true
-  (SecurityEvent
+  (
+  SecurityEvent
   | where TimeGenerated >= ago(endtime)
   | where EventID == 4624 and LogonType == 10
   // Labeling the first RDP connection time, computer and ip
-  | extend FirstHop = TimeGenerated, FirstComputer = toupper(Computer), FirstIPAddress = IpAddress, Account = tolower(Account)
+  | extend
+  FirstHop = bin(TimeGenerated, 1m),
+  FirstComputer = toupper(Computer),
+  FirstRemoteIPAddress = IpAddress,
+  Account = tolower(Account)
   ),
-  ( WindowsEvent
+  (
+  WindowsEvent
   | where TimeGenerated >= ago(endtime)
   | where EventID == 4624 and EventData has ("10")
   | extend LogonType = tostring(EventData.LogonType)
-  | where  LogonType == 10  // Labeling the first RDP connection time, computer and ip
-  | extend Account = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
+  | where LogonType == 10 // Labeling the first RDP connection time, computer and ip
+  | extend Account = strcat(tostring(EventData.TargetDomainName), "", tostring(EventData.TargetUserName))
   | extend IpAddress = tostring(EventData.IpAddress)
-  | extend FirstHop = TimeGenerated, FirstComputer = toupper(Computer), FirstIPAddress = IpAddress, Account = tolower(Account)
+  | extend
+  FirstHop = bin(TimeGenerated, 1m),
+  FirstComputer = toupper(Computer),
+  FirstRemoteIPAddress = IpAddress,
+  Account = tolower(Account)
   ))
   | join kind=inner (
   (union isfuzzy=true
-  (SecurityEvent
+  (
+  SecurityEvent
   | where TimeGenerated >= ago(endtime)
   | where EventID == 4624 and LogonType == 10
   // Labeling the second RDP connection time, computer and ip
-  | extend SecondHop = TimeGenerated, SecondComputer = toupper(Computer), SecondIPAddress = IpAddress, Account = tolower(Account)
+  | extend
+  SecondHop = bin(TimeGenerated, 1m),
+  SecondComputer = toupper(Computer),
+  SecondRemoteIPAddress = IpAddress,
+  Account = tolower(Account)
   ),
-  (WindowsEvent
+  (
+  WindowsEvent
   | where TimeGenerated >= ago(endtime)
   | where EventID == 4624 and EventData has ("10")
   | extend LogonType = toint(EventData.LogonType)
-  | where  LogonType == 10   // Labeling the second RDP connection time, computer and ip
-  | extend Account = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
+  | where LogonType == 10 // Labeling the second RDP connection time, computer and ip
+  | extend Account = strcat(tostring(EventData.TargetDomainName), "", tostring(EventData.TargetUserName))
   | extend IpAddress = tostring(EventData.IpAddress)
-  | extend SecondHop = TimeGenerated, SecondComputer = toupper(Computer), SecondIPAddress = IpAddress, Account = tolower(Account)
+  | extend
+  SecondHop = bin(TimeGenerated, 1m),
+  SecondComputer = toupper(Computer),
+  SecondRemoteIPAddress = IpAddress,
+  Account = tolower(Account)
   ))
-  ) on Account
-  // Make sure that the first connection is after the second connection --> SecondHop > FirstHop
-  // Then identify only RDP to another computer from within the first RDP connection by only choosing matches where the Computer names do not match --> FirstComputer != SecondComputer
-  // Then make sure the IPAddresses do not match by excluding connections from the same computers with first hop RDP connections to multiple computers --> FirstIPAddress != SecondIPAddress
-  | where FirstComputer != SecondComputer and FirstIPAddress != SecondIPAddress and SecondHop > FirstHop
-  // where the second hop occurs within 30 minutes of the first hop
-  | where SecondHop <= FirstHop+30m
-  | distinct Account, FirstHop, FirstComputer, FirstIPAddress, SecondHop, SecondComputer, SecondIPAddress, AccountType, Activity, LogonTypeName, ProcessName
-  // use left anti to exclude anything from the previous 7 days where the Account and IP has connected 5 or more computers.
-  | join kind=leftanti (
-  (union isfuzzy=true
-  (SecurityEvent
-  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)
-  | where EventID == 4624 and LogonType == 10
-  | summarize makeset(Computer), ComputerCount = dcount(Computer) by bin(TimeGenerated, 1d), Account = tolower(Account), IpAddress
-  // Connection count to computer by same account and IP to exclude counts of 5 or more on a given day
-  | where ComputerCount >= threshold
-  | mvexpand set_Computer
-  | extend Computer = toupper(set_Computer)
-  ),
-  (WindowsEvent
-  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)
-  | where EventID == 4624 and EventData has ("10")
-  | extend LogonType = tostring(EventData.LogonType)
-  | where  LogonType == 10
-  | extend Account = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
-  | extend IpAddress = tostring(EventData.IpAddress)
-  | summarize makeset(Computer), ComputerCount = dcount(Computer) by bin(TimeGenerated, 1d), Account = tolower(Account), IpAddress
-  // Connection count to computer by same account and IP to exclude counts of 5 or more on a given day
-  | where ComputerCount >= threshold
-  | mvexpand set_Computer
-  | extend Computer = toupper(set_Computer)
-  ))
-  ) on Account, $left.SecondComputer == $right.Computer, $left.SecondIPAddress == $right.IpAddress
-  | summarize FirstHopFirstSeen = min(FirstHop), FirstHopLastSeen = max(FirstHop) by Account, FirstComputer, FirstIPAddress, SecondHop, SecondComputer,
-  SecondIPAddress, AccountType, Activity, LogonTypeName, ProcessName
-  | extend timestamp = FirstHopFirstSeen, AccountCustomEntity = Account, HostCustomEntity = FirstComputer, IPCustomEntity = FirstIPAddress
+  )
+  on Account
+  | distinct
+  Account,
+  FirstHop,
+  FirstComputer,
+  FirstRemoteIPAddress,
+  SecondHop,
+  SecondComputer,
+  SecondRemoteIPAddress,
+  AccountType,
+  Activity,
+  LogonTypeName,
+  ProcessName;
+  // Resolve hostnames to IP addresses device network Ip's
+  let listOfFirstComputer = rdpConnections | distinct FirstComputer;
+  let listOfSecondComputer = rdpConnections | distinct SecondComputer;
+  let resolvedIPs =
+  DeviceNetworkInfo
+  | where TimeGenerated >= ago(endtime)
+  | where isnotempty(ConnectedNetworks) and NetworkAdapterStatus == "Up"
+  | extend ClientIP = tostring(parse_json(IPAddresses[0]).IPAddress)
+  | where isnotempty(ClientIP)
+  | where DeviceName in~ (listOfFirstComputer) or DeviceName in~ (listOfSecondComputer)
+  | summarize arg_max(TimeGenerated, ClientIP) by Computer= DeviceName
+  | project Computer=toupper(Computer), ResolvedIP = ClientIP;
+  // Join resolved IPs with the RDP connections
+  rdpConnections
+  | join kind=inner (resolvedIPs) on $left.FirstComputer == $right.Computer
+  | join kind=inner (resolvedIPs) on $left.SecondComputer == $right.Computer
+  // | where ResolvedIP != ResolvedIP1
+  | distinct
+  Account,
+  FirstHop,
+  FirstComputer,
+  FirstComputerIP = ResolvedIP,
+  FirstRemoteIPAddress,
+  SecondHop,
+  SecondComputer,
+  SecondComputerIP = ResolvedIP1,
+  SecondRemoteIPAddress,
+  AccountType,
+  Activity,
+  LogonTypeName,
+  ProcessName
+  // Ensure the first connection is before the second connection
+  // Identify only RDP to another computer from within the first RDP connection by only choosing matches where the Computer names do not match
+  // Ensure the IPAddresses do not match by excluding connections from the same computers with first hop RDP connections to multiple computers
+  | where FirstComputer != SecondComputer
+  and FirstRemoteIPAddress != SecondRemoteIPAddress
+  and SecondHop > FirstHop
+  // Ensure the second hop occurs within 30 minutes of the first hop
+  | where SecondHop <= FirstHop + 30m
+  | where SecondRemoteIPAddress == FirstComputerIP
+  | summarize FirstHopFirstSeen = min(FirstHop), FirstHopLastSeen = max(FirstHop)
+  by
+  Account,
+  FirstComputer,
+  FirstComputerIP,
+  FirstRemoteIPAddress,
+  SecondHop,
+  SecondComputer,
+  SecondComputerIP,
+  SecondRemoteIPAddress,
+  AccountType,
+  Activity,
+  LogonTypeName,
+  ProcessName
+  | extend
+  AccountName = tostring(split(Account, @"")[1]),
+  AccountNTDomain = tostring(split(Account, @"")[0])
+  | extend
+  HostName1 = tostring(split(FirstComputer, ".")[0]),
+  DomainIndex = toint(indexof(FirstComputer, '.'))
+  | extend HostNameDomain1 = iff(DomainIndex != -1, substring(FirstComputer, DomainIndex + 1), FirstComputer)
+  | extend
+  HostName2 = tostring(split(SecondComputer, ".")[0]),
+  DomainIndex = toint(indexof(SecondComputer, '.'))
+  | extend HostNameDomain2 = iff(DomainIndex != -1, substring(SecondComputer, DomainIndex + 1), SecondComputer)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: FirstComputer
+      - identifier: HostName
+        columnName: HostName1
+      - identifier: NTDomain
+        columnName: HostNameDomain1
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: SecondComputer
+      - identifier: HostName
+        columnName: HostName2
+      - identifier: NTDomain
+        columnName: HostNameDomain2
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.2.3
+        columnName: FirstIPAddress
+version: 1.2.8
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Shain
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

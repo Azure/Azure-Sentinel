@@ -1,0 +1,32 @@
+id: b1f8aac2-766d-47ec-8787-84bc7692ff77
+name: Regsvr32 Rundll32 Image Loads Abnormal Extension
+description: |
+  This query is looking for regsvr32.exe or rundll32.exe loading DLL images with other extensions than .dll.
+description-detailed: |
+  This query is looking for regsvr32.exe or rundll32.exe loading DLL images with other extensions than .dll.
+  Joins the data to public network events.
+  References:
+  https://threathunt.blog/running-live-malware-for-threat-hunting-purposes/
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceNetworkEvents
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1218.010
+  - T1218.011
+query: |
+  DeviceImageLoadEvents 
+  | where TimeGenerated > ago(1d)
+  | where InitiatingProcessFileName has_any ("rundll32.exe","regsvr32.exe")
+  | where FileName !endswith ".dll"
+  | join (
+  DeviceNetworkEvents
+  | where TimeGenerated > ago(30d)
+  | where InitiatingProcessFileName has_any ("rundll32.exe","regsvr32.exe")
+  | where RemoteIPType == "Public"
+  ) on InitiatingProcessFileName, InitiatingProcessId, InitiatingProcessCreationTime, InitiatingProcessCommandLine
+  | project TimeGenerated, DeviceName, FileName, FolderPath, SHA1, InitiatingProcessFileName, InitiatingProcessCommandLine, RemoteIP, RemoteUrl, RemotePort, InitiatingProcessParentFileName
+version: 1.0.0

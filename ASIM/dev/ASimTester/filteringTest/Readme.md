@@ -54,7 +54,7 @@ For example: To test the parser file `C:\parsers\vimDnsMicrosoftOMSfict.yaml` , 
 
   
 
-python ASimFilteringTest.py C:\parsers\vimDnsMicrosoftOMSfict.yaml 123-456 99
+python ASimFilteringTest.py 123-456 C:\parsers\vimDnsMicrosoftOMSfict.yaml 99
 
   
 

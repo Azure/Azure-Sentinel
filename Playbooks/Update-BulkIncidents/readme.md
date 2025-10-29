@@ -9,7 +9,7 @@ This Logic App will act as listener, you can pass json object to a HTTP Endpoint
 
 **Additional Post Install Notes:**
 
-The Logic App requires the SecurityIncident Table preview
+The Logic App requires the SecurityIncident Table preview, check the Global Paramaters in the editor view of Logic App sometimes paramter SentinelResourceGroup has a prefix of a space causing errors, remove prrefix space from string.
 
 **Usage Notes**
 
@@ -22,6 +22,8 @@ To obtain your Logic App URI to make POST calls to, go to the Logic App designer
 You can use Postman, PowerShell, or your favorite shell to send a JSON body to the Logic App Endpoint. Below are some PowerShell code examples of usage.
 
 At this time the Logic App can only bulk update the Status of Azure Sentinel Incidents.
+
+When finished disable/delete Logic App until next use.
 
 ```
 <#
@@ -42,6 +44,13 @@ $uri = "https://prod-38.eastus.logic.azure.com:443/workflows/r794bb6/triggers/re
 
 # Header should be JSON
 $header = @{'Content-Type' = 'application/json'}
+
+# See $json examples below
+$json =
+
+# Execute and Invoke Web Request to Logic App
+Invoke-WebRequest -Uri $uri -Method POST -Body $json -Headers $header
+
 ```
 
 ```
@@ -69,3 +78,4 @@ $json = @"
 }
 "@
 ```
+

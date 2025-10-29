@@ -1,0 +1,72 @@
+id: 8722489a-d6f1-4b66-98e9-e3dfda902019
+name: MITRE - Suspicious Events
+description: |
+  This hunting query looks for several different MITRE techniques, grouped by risk level. A weighting is applied to each risk level and a total score calculated per machine. Techniques can be added/removed as required.
+description-detailed: |
+  The query looks for several different MITRE techniques, grouped by risk level.
+  A weighting is applied to each risk level and a total score calculated per machine.
+  Techniques can be added/removed as required.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+query: |
+  let weights = dynamic({"Low":1, "Medium":3, "High":5}); //Assign weights to the risk levels
+  //Low risk events
+  let lowRiskEvents =
+      DeviceProcessEvents 
+      | where
+          (FileName =~ "powershell.exe" and ProcessCommandLine has "-command") //T1086 PowerShell
+          or
+          (FileName =~ "powershell.exe" and ProcessCommandLine contains "-nop") //T1086 PowerShell
+          or
+          (FileName =~ "schtasks.exe" and ProcessCommandLine has "create") //T1053 Scheduled Task
+          or
+          (FileName =~ "installutil.exe") //T1118 InstallUtil
+          or
+          (FileName =~ "msbuild.exe") //T1127 Trusted Developer Utilities
+          or
+          (FileName =~ "nbtstat.exe") //T1016 System Network Configuration Discovery
+          or
+          (FileName == "mshta.exe") //T1170 Mshta
+          or
+          (FileName =~ "netsh.exe") //T1089 Disabling Security Tools, T1063 Security Software Discovery
+          or
+          (FileName == "net.exe" and ProcessCommandLine has " start ") //T1007 System Service Discovery
+      | extend Weight = toint((weights["Low"]));
+  //Medium risk events
+  let mediumRiskEvents =
+      DeviceProcessEvents 
+      | where
+          (FileName =~ "regsvcs.exe") //T1121 Regsvcs/Regasm
+          or
+          (FileName =~ "arp.exe" and ProcessCommandLine has "-a") //T1016 System Network Configuration Discovery
+          or
+          (FileName =~ "ipconfig.exe" and ProcessCommandLine has "all") //T1016 System Network Configuration Discovery
+          or
+          (FileName startswith "psexe") //T1035 Service Execution
+          or
+          (FileName == "net.exe" and ProcessCommandLine has " share ") //T1135 Network Share Discovery
+          or
+          (FileName =~ "netsh.exe" and ProcessCommandLine has "interface show") //T1016 System Network Configuration Discovery
+      | extend Weight = toint((weights["Medium"]));
+  //Higher risk events
+  let highRiskEvents =
+      DeviceProcessEvents 
+      | where
+          (FileName =~ "net.exe" and ProcessCommandLine has "config") //T1016 System Network Configuration Discovery
+          or
+          (FileName =~ "net.exe" and ProcessCommandLine has "time") //T1124 System Time Discovery
+          or 
+          (FileName =~ "w32tm.exe" and ProcessCommandLine has "/tz") //T1124 System Time Discovery
+          or
+          (FileName == "cmstp.exe") //T1191 CMSTP
+          or
+          (FileName =~ "netsh.exe" and (ProcessCommandLine has "portproxy" or ProcessCommandLine has "p")) //T1090 Connection Proxy
+      | extend Weight = toint((weights["High"]));
+  union kind=outer lowRiskEvents, mediumRiskEvents, highRiskEvents
+  | project TimeGenerated, DeviceName, FileName, ProcessCommandLine, InitiatingProcessCommandLine, Weight
+  | summarize Start_Time=min(TimeGenerated), End_Time=max(TimeGenerated), Weight_Sum=sum(Weight), Processes=make_set(FileName, 100000), Commands=make_set(ProcessCommandLine, 100000) by DeviceName
+  | where Weight_Sum > 30
+  | sort by Weight_Sum desc
+version: 1.0.0

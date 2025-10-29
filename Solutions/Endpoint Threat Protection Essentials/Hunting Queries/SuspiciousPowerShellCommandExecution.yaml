@@ -1,0 +1,57 @@
+id: 8f424a4c-0487-45a3-92b8-00a7a8745b69
+name: Suspicious Powershell Commandlet Execution 
+description: |
+  This query searches for suspicious PowerShell commandlet executions, often used by Threat Actors to move laterally, escalate privileges, or exfiltrate data.
+description-detailed: |
+  This query searches for suspicious PowerShell commandlet executions. Threat actors often use PowerShell to execute commands and scripts to move laterally, escalate privileges, and exfiltrate data.
+severity: Medium
+status: Available 
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059
+query: |
+  // Adjust the list of suspicious commandlets as needed
+  let SuspiciousPowerShellCommandList = dynamic(["Get-ADDefaultDomainPasswordPolicy",
+    "Get-ADUser",
+    "Get-ADComputer",
+    "System.Security.Principal.WindowsIdentity]::GetCurrent()",
+    "Get-LocalUser",
+    "Get-NetTcpConnection",
+    "Get-WmiObject"
+    ]);
+  DeviceEvents
+  | where ActionType == "PowerShellCommand"
+  | extend Commandlet = tostring(parse_json(AdditionalFields).Command)
+  | where Commandlet has_any (SuspiciousPowerShellCommandList)
+  | project TimeGenerated, DeviceName, LocalIP, InitiatingProcessAccountUpn, InitiatingProcessId, InitiatingProcessFileName, InitiatingProcessFolderPath, InitiatingProcessCommandLine
+  | extend Username = tostring(split(InitiatingProcessAccountUpn, '@')[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@')[1])
+  | extend DvcHostname = tostring(split(DeviceName, '.')[0]), DvcDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DvcHostname
+      - identifier: DnsDomain
+        columnName: DvcDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: LocalIP
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Username
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: InitiatingProcessId
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+version: 1.0.0
