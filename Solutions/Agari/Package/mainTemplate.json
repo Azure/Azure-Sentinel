@@ -1,0 +1,539 @@
+{ 
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Agari",
+    "comments": "Solution template for Agari"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "agari.Agari_MSS",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "Agari",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Agari",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Agari data connector with template",
+        "displayName": "Agari template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Agari data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Agari Phishing Defense and Brand Protection(using Azure Function)",
+                  "publisher": "Agari",
+                  "descriptionMarkdown": "This connector uses a Agari REST API connection to push data into Azure Sentinel Log Analytics.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "agari_bpalerts_log_CL",
+                      "baseQuery": "agari_bpalerts_log_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "agari_apdpolicy_log_CL",
+                      "baseQuery": "agari_apdpolicy_log_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "agari_apdtc_log_CL",
+                      "baseQuery": "agari_apdtc_log_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Summary by Attack Type",
+                      "query": "agari_apdtc_log_CL\n            | summarize Count=count() by attack_types_s"
+                    },
+                    {
+                      "description": "Summary of Policy Hits",
+                      "query": "agari_apdpolicy_log_CL\n            | summarize Count=count() by alert_definition_name_s"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "agari_bpalerts_log_CL",
+                      "lastDataReceivedQuery": "agari_bpalerts_log_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "agari_apdtc_log_CL",
+                      "lastDataReceivedQuery": "agari_apdtc_log_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "agari_apdpolicy_log_CL",
+                      "lastDataReceivedQuery": "agari_apdpolicy_log_CL\n            | summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "agari_bpalerts_log_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "agari_apdtc_log_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                        "agari_apdpolicy_log_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Agari Phishing Defense, Phishing Response or Brand Protection API Client ID and Secret",
+                        "description": "Ensure you have your Client ID and Secret keys. Instructions can be found on the [Agari Developers Site](https://developers.agari.com/agari-platform/docs/quick-start)."
+                      },
+                      {
+                        "name": "(Optional) Microsoft Security Graph API",
+                        "description": "The Agari Function App has the ability to share threat intelleigence with Sentinel via the Security Graph API. To use this feature, you will need to enable the [Sentinel Threat Intelligence Platforms connector](https://docs.microsoft.com/azure/sentinel/connect-threat-intelligence) as well as register an application in Azure Active Directory. "
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to the Agari APIs to pull its logs into Azure Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": "\n1. Log into any Agari product (Client ID and Secret are the same for all applications) \n2. Click on your username in the upper right and select **Settings**\n3. Click on the **Generate API Secret** link to generate an API client_id and client_secret (the link will read **Regenerate API Secret** if you have already generated an API client ID/secret previously)\n4. Copy both the client_id and client_secret that are generated",
+                      "title": "STEP 1 - Get your Agari API credentials"
+                    },
+                    {
+                      "description": "Follow the instrcutions found on article [Connect Azure Sentinel to your threat intelligence platform](https://docs.microsoft.com/azure/sentinel/connect-threat-intelligence#connect-azure-sentinel-to-your-threat-intelligence-platform). Once the application is created you will need to record the Tenant ID, Client ID and Client Secret.",
+                      "title": "STEP 2 - (Optional) Enable the Security Graph API"
+                    },
+                    {
+                      "description": "\n>**IMPORTANT:** Before deploying the Agari Connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Agari API credentials from the previous step.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "STEP 3 - Deploy the connector and the associated Azure Function"
+                    },
+                    {
+                      "title": "Choose a deployement option"
+                    },
+                    {
+                      "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-agari-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **Agari Client ID**, **Agari Client Secret**, select `True` or `False` for the products you subscribe to, and if you wish to share IoCs with Sentinel, select `True` For **Enable Security Graph Sharing**, and enter the required IDs from the Azure Application.\n> - The Function App will request data from the Agari APIs every 5 minutes, corresponding to the Funciton App Timer.\n> - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n6. **NOTE:** Due to the use of Environment Variables to store log access times, the App requires 1 additonal manual step. In the Function App, select the Function App Name and select Click on **Identity** and for System assigned Identity, click on **Azure role assignments** and **Add Role assignment**. Select **Subscription** as the scope, select your subscription and set the Role to **Contributor**. Click on **Save**.",
+                      "title": "Option 1: Deploy using the Azure Resource Manager (ARM) Template"
+                    },
+                    {
+                      "description": "**1. Create a Function App**\n\n1.  From the Azure Portal, navigate to [Function App](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp), and select **+ Add**.\n2. In the **Basics** tab, ensure Runtime stack is set to **Powershell Core**. \n3. In the **Hosting** tab, ensure the **Consumption (Serverless)** plan type is selected.\n4. Make other preferrable configuration changes, if needed, then click **Create**.",
+                      "title": "Option 2: Manual Deployment of Azure Functions"
+                    },
+                    {
+                      "description": "**2. Import Function App Code**\n\n1. In the newly created Function App, select **Functions** on the left pane and click **+ Add**.\n2. Click on **Code + Test** on the left pane. \n3. Copy the [Function App Code](https://aka.ms/sentinel-agari-functionapp) and paste into the Function App `run.ps1` editor.\n3. Click **Save**."
+                    },
+                    {
+                      "description": "**3. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following eight to twelve (8-12) application settings individually, with their respective string values (case-sensitive): \n\t\tclientID\n\t\tclientSecret\n\t\tworkspaceID\n\t\tworkspaceKey\n\t\tenableBrandProtectionAPI\n\t\tenablePhishingResponseAPI\n\t\tenablePhishingDefenseAPI\n\t\tresGroup\n\t\tfunctionName\n\t\tsubId\n\t\tenableSecurityGraphSharing\n\t\t<--- Required if enableSecurityGraphSharing is set to true --->\n\t\tGraphTenantId\n\t\tGraphClientId\n\t\tGraphClientSecret\n\t\tlogAnalyticsUri (optional)\n> - Enter your Agari ClientID and Secret in 'clientId' and 'clientSecret'\n> - Enter 'true' or 'false' for 'enablePhishingDefense', 'enableBrandProtection', 'enablePhishingResponse' as per your product subscriptions.\n> - Enter your Resource Group name in resGroup, the name of the Function (from previous step) in functionName and your Subscription ID in subId.\n> - Enter 'true' or 'false' for 'enableSecurtyGraphAPI'. If you are enabling the Security Graph, the 'GraphTenantId','GraphClientId', and 'GraphClientSecret' is required.\n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n"
+                    },
+                    {
+                      "description": "**4. Set Permissions for the App**\n\n1. In the Function App, select the Function App Name and select Click on **Identity** and for System assigned Identity, set the status to On. \n\n2. Next, click on **Azure role assignments** and **Add Role assignment**. Select **Subscription** as the scope, select your subscription and set the Role to **Contributor**. Click on **Save**."
+                    },
+                    {
+                      "description": "**5. Complete Setup.**\n\n1. Once all application settings have been entered, click **Save**. Note that it will take some time to have the required dependencies download, so you may see some inital failure messages."
+                    }
+                  ],
+                  "metadata": {
+                    "id": "152fa8d4-b84b-4370-8317-b63ed52f9fe3",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Agari"
+                    },
+                    "support": {
+                      "name": "Agari",
+                      "link": "https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Agari",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Agari"
+                },
+                "support": {
+                  "name": "Agari",
+                  "tier": "Partner",
+                  "link": "https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Agari",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Agari"
+        },
+        "support": {
+          "name": "Agari",
+          "tier": "Partner",
+          "link": "https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Agari Phishing Defense and Brand Protection(using Azure Function)",
+          "publisher": "Agari",
+          "descriptionMarkdown": "This connector uses a Agari REST API connection to push data into Azure Sentinel Log Analytics.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "agari_bpalerts_log_CL",
+              "baseQuery": "agari_bpalerts_log_CL"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "agari_apdpolicy_log_CL",
+              "baseQuery": "agari_apdpolicy_log_CL"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "agari_apdtc_log_CL",
+              "baseQuery": "agari_apdtc_log_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "agari_bpalerts_log_CL",
+              "lastDataReceivedQuery": "agari_bpalerts_log_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "agari_apdtc_log_CL",
+              "lastDataReceivedQuery": "agari_apdtc_log_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "agari_apdpolicy_log_CL",
+              "lastDataReceivedQuery": "agari_apdpolicy_log_CL\n            | summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "agari_bpalerts_log_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                "agari_apdtc_log_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)",
+                "agari_apdpolicy_log_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Summary by Attack Type",
+              "query": "agari_apdtc_log_CL\n            | summarize Count=count() by attack_types_s"
+            },
+            {
+              "description": "Summary of Policy Hits",
+              "query": "agari_apdpolicy_log_CL\n            | summarize Count=count() by alert_definition_name_s"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Agari Phishing Defense, Phishing Response or Brand Protection API Client ID and Secret",
+                "description": "Ensure you have your Client ID and Secret keys. Instructions can be found on the [Agari Developers Site](https://developers.agari.com/agari-platform/docs/quick-start)."
+              },
+              {
+                "name": "(Optional) Microsoft Security Graph API",
+                "description": "The Agari Function App has the ability to share threat intelleigence with Sentinel via the Security Graph API. To use this feature, you will need to enable the [Sentinel Threat Intelligence Platforms connector](https://docs.microsoft.com/azure/sentinel/connect-threat-intelligence) as well as register an application in Azure Active Directory. "
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to the Agari APIs to pull its logs into Azure Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": "\n1. Log into any Agari product (Client ID and Secret are the same for all applications) \n2. Click on your username in the upper right and select **Settings**\n3. Click on the **Generate API Secret** link to generate an API client_id and client_secret (the link will read **Regenerate API Secret** if you have already generated an API client ID/secret previously)\n4. Copy both the client_id and client_secret that are generated",
+              "title": "STEP 1 - Get your Agari API credentials"
+            },
+            {
+              "description": "Follow the instrcutions found on article [Connect Azure Sentinel to your threat intelligence platform](https://docs.microsoft.com/azure/sentinel/connect-threat-intelligence#connect-azure-sentinel-to-your-threat-intelligence-platform). Once the application is created you will need to record the Tenant ID, Client ID and Client Secret.",
+              "title": "STEP 2 - (Optional) Enable the Security Graph API"
+            },
+            {
+              "description": "\n>**IMPORTANT:** Before deploying the Agari Connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Agari API credentials from the previous step.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "STEP 3 - Deploy the connector and the associated Azure Function"
+            },
+            {
+              "title": "Choose a deployement option"
+            },
+            {
+              "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-agari-azuredeploy) \n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **Agari Client ID**, **Agari Client Secret**, select `True` or `False` for the products you subscribe to, and if you wish to share IoCs with Sentinel, select `True` For **Enable Security Graph Sharing**, and enter the required IDs from the Azure Application.\n> - The Function App will request data from the Agari APIs every 5 minutes, corresponding to the Funciton App Timer.\n> - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n6. **NOTE:** Due to the use of Environment Variables to store log access times, the App requires 1 additonal manual step. In the Function App, select the Function App Name and select Click on **Identity** and for System assigned Identity, click on **Azure role assignments** and **Add Role assignment**. Select **Subscription** as the scope, select your subscription and set the Role to **Contributor**. Click on **Save**.",
+              "title": "Option 1: Deploy using the Azure Resource Manager (ARM) Template"
+            },
+            {
+              "description": "**1. Create a Function App**\n\n1.  From the Azure Portal, navigate to [Function App](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp), and select **+ Add**.\n2. In the **Basics** tab, ensure Runtime stack is set to **Powershell Core**. \n3. In the **Hosting** tab, ensure the **Consumption (Serverless)** plan type is selected.\n4. Make other preferrable configuration changes, if needed, then click **Create**.",
+              "title": "Option 2: Manual Deployment of Azure Functions"
+            },
+            {
+              "description": "**2. Import Function App Code**\n\n1. In the newly created Function App, select **Functions** on the left pane and click **+ Add**.\n2. Click on **Code + Test** on the left pane. \n3. Copy the [Function App Code](https://aka.ms/sentinel-agari-functionapp) and paste into the Function App `run.ps1` editor.\n3. Click **Save**."
+            },
+            {
+              "description": "**3. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following eight to twelve (8-12) application settings individually, with their respective string values (case-sensitive): \n\t\tclientID\n\t\tclientSecret\n\t\tworkspaceID\n\t\tworkspaceKey\n\t\tenableBrandProtectionAPI\n\t\tenablePhishingResponseAPI\n\t\tenablePhishingDefenseAPI\n\t\tresGroup\n\t\tfunctionName\n\t\tsubId\n\t\tenableSecurityGraphSharing\n\t\t<--- Required if enableSecurityGraphSharing is set to true --->\n\t\tGraphTenantId\n\t\tGraphClientId\n\t\tGraphClientSecret\n\t\tlogAnalyticsUri (optional)\n> - Enter your Agari ClientID and Secret in 'clientId' and 'clientSecret'\n> - Enter 'true' or 'false' for 'enablePhishingDefense', 'enableBrandProtection', 'enablePhishingResponse' as per your product subscriptions.\n> - Enter your Resource Group name in resGroup, the name of the Function (from previous step) in functionName and your Subscription ID in subId.\n> - Enter 'true' or 'false' for 'enableSecurtyGraphAPI'. If you are enabling the Security Graph, the 'GraphTenantId','GraphClientId', and 'GraphClientSecret' is required.\n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n"
+            },
+            {
+              "description": "**4. Set Permissions for the App**\n\n1. In the Function App, select the Function App Name and select Click on **Identity** and for System assigned Identity, set the status to On. \n\n2. Next, click on **Azure role assignments** and **Add Role assignment**. Select **Subscription** as the scope, select your subscription and set the Role to **Contributor**. Click on **Save**."
+            },
+            {
+              "description": "**5. Complete Setup.**\n\n1. Once all application settings have been entered, click **Save**. Note that it will take some time to have the required dependencies download, so you may see some inital failure messages."
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Agari",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Agari"
+        },
+        "support": {
+          "name": "Agari",
+          "tier": "Partner",
+          "link": "https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-02",
+        "providers": [
+          "Agari"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

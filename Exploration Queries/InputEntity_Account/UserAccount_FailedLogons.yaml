@@ -1,0 +1,54 @@
+Id: 84375346-c3f0-4926-ae48-a156010c67e3
+DisplayName: User account failed logons
+Description: Host the user failed to log on to during the time of or recently after compromise (set time range to +-1h when running the query)
+InputEntityType: Account
+InputFields:
+  - Name
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 1h
+QueryPeriodAfter: 1h
+DataSources:
+  - SecurityEvent
+  - imAuthentication
+Tactics:
+  - Discovery
+  - LateralMovement
+query: |
+  let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+  let Legacy = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+  | join kind=inner
+  (SecurityEvent
+  | extend v_Account_Name = case(
+  v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+  v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+  v_Account_Name
+  )
+  | where EventID == 4625
+  | where AccountType =~ 'User'
+  | where tolower(Account) has tolower(v_Account_Name)
+  | extend info = pack('EventID', EventID, 'Account', Account, 'LogonTypeName', LogonTypeName, 'SubStatus', SubStatus, 'AccountType', AccountType, 'WorkstationName', WorkstationName, 'IpAddress', IpAddress)
+  | summarize min(TimeGenerated), max(TimeGenerated), Host_Aux_info = makeset(info) by Computer, SourceComputerId, _ResourceId
+  | project min_TimeGenerated, max_TimeGenerated, Computer, Host_Aux_info, Host_OMSAgentID=SourceComputerId, Host_AzureID=_ResourceId
+  | project-rename Host_UnstructuredName=Computer, Host_Aux_StartTime=min_TimeGenerated, Host_Aux_EndTime=max_TimeGenerated
+  | top 10 by Host_Aux_StartTime asc nulls last | extend exists=int(1)) on exists
+  | project-away exists, exists1 
+  };
+   let Normalized = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+  | join kind=inner (imAuthentication(targetusername_has=v_Account_Name)
+  | where EventProduct !in ("AAD", "CloudTrail")
+  | where EventResult =~ "Failure"
+  | where isnotempty(Dvc)
+  | extend info = pack('ActionType' , EventType, 'Account', User, 'LogonTypeName', EventSubType, 'WorkstationName', Dvc, 'IpAddress', column_ifexists("SrcDvcIpAddr", "Unknown"))
+  | extend Host_AzureID = column_ifexists("_ResourceId", "None")
+  | extend Host_OMSAgentID = column_ifexists("SourceComputerId", "")
+  | extend SourceComputerId = column_ifexists("TargetDvcId", "")
+  | extend HostName = column_ifexists("TargetDvcHostname", Dvc)
+  | summarize min(TimeGenerated), max(TimeGenerated), Host_Aux_info = make_set(info, Maxsize=1000) by HostName, Host_OMSAgentID, Host_AzureID
+  | project min_TimeGenerated, max_TimeGenerated, HostName, Host_Aux_info, Host_OMSAgentID, Host_AzureID
+  | project-rename Host_UnstructuredName=HostName, Host_Aux_StartTime=min_TimeGenerated, Host_Aux_EndTime=max_TimeGenerated
+  | top 10 by Host_Aux_StartTime asc nulls last | extend exists=int(1)) on exists | project-away exists, exists1 };
+  // change <Name> value below
+  union isfuzzy=true Legacy('<Name>'), Normalized('<Name>')

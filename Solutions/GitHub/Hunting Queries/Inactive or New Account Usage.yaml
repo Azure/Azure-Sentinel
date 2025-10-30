@@ -1,0 +1,45 @@
+id: b8508e24-47a6-4f8e-9066-3cc937197e7f
+name: GitHub Inactive or New Account Access or Usage
+description: |
+  'This hunting query identifies Accounts that are new or inactive and have accessed or used GitHub that may be a sign of compromise.'
+requiredDataConnectors: []
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let LearningPeriod = 7d;
+  let EndLearningTime = starttime - LearningPeriod;
+  let GitHubActorLogin = (GitHubAuditData
+  | where Actor != "");
+  let GitHubUser = (GitHubAuditData
+  | where ImpactedUser != "");
+  let GitHubNewActorLogin = (GitHubActorLogin
+  | where TimeGenerated between (EndLearningTime .. starttime)
+  | summarize makeset(Actor)
+  | extend Dummy = 1
+  | join kind=innerunique (
+    GitHubActorLogin
+    | where TimeGenerated between (starttime .. endtime)
+    | distinct Actor
+    | extend Dummy = 1
+  ) on Dummy
+  | project-away Dummy
+  | where set_Actor  !contains Actor);
+  let GitHubNewUser = ( GitHubUser
+  | where TimeGenerated between (EndLearningTime .. starttime)
+  | summarize makeset(ImpactedUser)
+  | extend Dummy = 1
+  | join kind=innerunique (
+    GitHubUser
+    | where TimeGenerated between (starttime .. endtime)
+    | distinct ImpactedUser
+    | extend Dummy = 1
+  ) on Dummy
+  | project-away Dummy
+  | where set_ImpactedUser !contains ImpactedUser);
+  union GitHubNewActorLogin, GitHubNewUser
+

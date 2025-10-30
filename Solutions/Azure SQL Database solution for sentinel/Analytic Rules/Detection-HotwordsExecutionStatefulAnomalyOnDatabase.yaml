@@ -1,0 +1,93 @@
+id: 3367fd5e-44b3-4746-a9a5-dc15c8202490
+name: Execution attempts stateful anomaly on database
+description: |
+  'This query detects batches of distinct SQL queries that execute (or attempt to) commands that could indicate potential security issues - such as attempts to execute shell commands (e.g. for running illegitimate code).'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureSql
+    dataTypes:
+      - AzureDiagnostics
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - SQL
+query: |
+    let monitoredStatementsThreshold = 1;           // Minimal number of monitored statements in the slice to trigger an anomaly.
+    let trainingSlicesThreshold = 5;                // The maximal amount of slices with monitored statements in the training window before anomaly detection is throttled.
+    let timeSliceSize = 1h;                         // The size of the single timeSlice for individual aggregation.
+    let detectionWindow = 1h;                       // The size of the recent detection window for detecting anomalies.  
+    let trainingWindow = detectionWindow + 14d;     // The size of the training window before the detection window for learning the normal state.
+    let hotwords = pack_array('xp_cmdshell', 'ps.exe', 'powershell', 'cmd.exe', 'msiexec', '<script>'); // List of monitored hot words.
+    let processedData = materialize (
+        AzureDiagnostics
+        | where TimeGenerated >= ago(trainingWindow)
+        | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
+        | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
+                  ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
+                  IsSuccess = succeeded_s, AffectedRows = affected_rows_d,
+                  ResponseRows = response_rows_d, Statement = statement_s,
+                  Error = case( additional_information_s has 'error_code', toint(extract("<error_code>([0-9.]+)", 1, additional_information_s))
+                        , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+)", 1, additional_information_s))
+                        , 0),
+                  State = case( additional_information_s has 'error_state', toint(extract("<error_state>([0-9.]+)", 1, additional_information_s))
+                        , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+), Level ([0-9.]+)", 2, additional_information_s))
+                        , 0),
+                  AdditionalInfo = additional_information_s, timeSlice = floor(TimeGenerated, timeSliceSize)
+        | extend hasHotword = iff(Statement has_any (hotwords), 1, 0)
+        | summarize countEvents = count(), countStatements = dcount(Statement)
+            , countStatementsWithHotwords = dcountif(Statement, hasHotword == 1)
+            , countFailedStatementsWithHotwords = dcountif(Statement, (hasHotword == 1) and (Error > 0))
+            , countSuccessfulStatementsWithHotwords = dcountif(Statement, ((hasHotword == 1)) and (Error == 0))
+            , anyMonitoredStatement = anyif(Statement, (hasHotword == 1))
+            , anySuccessfulMonitoredStatement = anyif(Statement, (hasHotword == 1) and (Error == 0))
+            , anyInfo = anyif(AdditionalInfo, hasHotword == 1)
+            , hotWord = anyif(extract(strcat_array(hotwords, '|'), 0, tolower(Statement)), hasHotword == 1)
+            by Database, ClientIp, ApplicationName, PrincipalName, timeSlice,HostName,ResourceId    
+        | extend WindowType = case( timeSlice >= ago(detectionWindow), 'detection',
+                                               (ago(trainingWindow) <= timeSlice and timeSlice < ago(detectionWindow)), 'training', 'other')
+        | where WindowType in ('detection', 'training'));
+    let trainingSet =
+        processedData
+        | where WindowType == 'training'
+        | summarize countSlicesWithHotwords = dcountif(timeSlice, countStatementsWithHotwords >= monitoredStatementsThreshold)
+            by Database;
+    processedData
+    | where WindowType == 'detection' 
+    | join kind = inner (trainingSet) on Database
+    | extend IsHotwordAnomalyOnStatement = iff(((countStatementsWithHotwords >= monitoredStatementsThreshold) and (countSlicesWithHotwords <= trainingSlicesThreshold)), true, false)
+        , anomalyScore = round(countStatementsWithHotwords/monitoredStatementsThreshold, 0)
+    | where IsHotwordAnomalyOnStatement == 'true'
+    | sort by countSuccessfulStatementsWithHotwords desc,  anomalyScore desc, timeSlice desc
+    | extend Name = tostring(split(PrincipalName,'@',0)[0]), UPNSuffix = tostring(split(PrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ApplicationName
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.1.1
+kind: Scheduled

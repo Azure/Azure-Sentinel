@@ -1,0 +1,40 @@
+Id: 160c7513-f704-46b7-adf9-d9c4176a44a3
+DisplayName: Hosts triggering Microsoft Defender Application Control
+Description: Locates Hosts where the Account triggered Microsoft Defender Application Control
+InputEntityType: Account
+InputFields:
+  - Name + UPNSuffix
+  - Sid
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 12h
+QueryPeriodAfter: 12h
+DataSources:
+  - DeviceEvents
+Tactics:
+  - Persistence
+  - Execution
+
+query: |
+  let AppControlEvents=(v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_Sid:string){
+  let p_Account_UPN = iff(isnotempty(v_Account_Name) and isnotempty(v_Account_UPNSuffix), strcat(v_Account_Name,'@',v_Account_UPNSuffix), "");
+  let AppControls=datatable(ActionType:string, Description:string, FriendlyActivityName:string)
+   ["AppControlAppInstallationAudited", "Application control detected the installation of an untrusted app.","Untrusted app installed"
+    ,"AppControlAppInstallationBlocked", "Application control blocked the installation of an untrusted app.",  "Untrusted app installation blocked"
+    ,"AppControlCodeIntegrityDriverRevoked", "Application control found a driver with a revoked certificate.", "Driver with revoked certificate detected"
+    ,"AppControlCodeIntegrityImageRevoked", "Application control found an executable file with a revoked certificate.", "Executable with revoked certificate detected"
+    ,"AppControlExecutableAudited","Application control detected the use of an untrusted executable.","Untrusted executable used"
+    ,"AppControlExecutableClocked","Application control blocked the use of an untrusted executable.","Untrusted executable blocked"
+    ,"AppControlScriptAudited", "Application control detected the use of an untrusted script.", "Untrusted script detected"
+    ,"AppControlScriptBlocked", "Application control blocked the use of an untrusted script.", "Untrusted script blocked" ];
+  DeviceEvents
+  | where ActionType in (AppControls)  
+  | where isnotempty(p_Account_UPN) and p_Account_UPN =~ InitiatingProcessAccountUpn 
+      or
+          isnotempty(v_Account_Sid) and v_Account_Sid =~ InitiatingProcessAccountSid
+  | project Host_UnstructuredName = DeviceName
+  | summarize Host_Aux_AppConCount=count() by Host_UnstructuredName
+  | top 10 by Host_Aux_AppConCount desc nulls last
+  };
+  AppControlEvents('<Name>','<UPNSuffix>','<Sid>')
+

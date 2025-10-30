@@ -1,0 +1,81 @@
+id: 094b3c0a-1f63-42f7-9535-c8c7b7198328
+kind: Scheduled
+name: Dataverse - New user agent type that was not used with Office 365
+description: Identifies users accessing Dynamics with a User Agent that has not been
+  seen in any Office 365 workloads in the last 14 days.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let query_lookback = 14d;
+  let query_frequency = 1h;
+  let known_useragents = dynamic([
+      // Enter known user agents to exclude.
+      // example:
+      // "Agent1", "Agent2", "Agent3"
+      ]);
+  DataverseActivity
+  | where TimeGenerated > ago(query_frequency)
+  | where not (UserId has_any ("@onmicrosoft.com", "@microsoft.com", "Unknown"))
+  | where isnotempty(UserAgent)
+  | where UserAgent !in~ (known_useragents)
+  | where UserAgent !hasprefix "azure-logic-apps" and UserAgent !hasprefix "PowerApps"
+  | join kind = leftanti (
+      OfficeActivity
+      | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+      | where isnotempty(UserAgent)
+      | summarize by UserAgent)
+      on UserAgent
+  // Exclude user agents with a render agent to reduce noise.
+  | join kind = leftanti(
+      DataverseActivity
+      | where TimeGenerated > ago(query_frequency)
+      | where UserAgent has_any ("Gecko", "WebKit", "Presto", "Trident", "EdgeHTML", "Blink"))
+      on UserAgent
+  | summarize
+      FirstSeen = min(TimeGenerated),
+      LatestIP = arg_max(ClientIp, TimeGenerated)
+      by UserAgent, UserId, InstanceUrl
+  | extend
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1]),
+      CloudAppId = int(32780)
+  | project
+      FirstSeen,
+      UserId,
+      UserAgent,
+      LatestIP,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: LatestIP
+version: 3.2.0

@@ -1,0 +1,234 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Service_EndPoint": {
+      "defaultValue": "https://{yourfortinetDomain}",
+      "type": "string",
+      "metadata": {
+        "description": "enter the Fortinet endpoint (ex: https://{yourfortinetDomain})"
+      }
+    },
+    "Secret Identifier of Keyvalut": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Enter secret identifier of Key Vault."
+      }
+    },
+    "Fortinet_ResponseOnIP_playbook": {
+      "defaultValue": "Fortinet-FortiGate-ResponseOnIP",
+      "type": "string",
+      "metadata": {
+        "description": "PlayBook Name"
+      }
+    },
+    "Fortinet_ResponseOnUrl_playbook": {
+      "defaultValue": "Fortinet_ResponseOnUrl_playbook",
+      "type": "string",
+      "metadata": {
+        "description": "PlayBook Name"
+      }
+    },
+    "Fortinet_EnrichIP_playbook": {
+      "defaultValue": "Fortinet_EnrichIP_playbook",
+      "type": "string",
+      "metadata": {
+        "description": "PlayBook Name"
+      }
+    },
+    "Teams GroupId": {
+      "defaultValue": "TeamgroupId",
+      "type": "string",
+      "metadata": {
+        "description": "GroupId of the Team channel"
+      }
+    },
+    "Teams ChannelId": {
+      "defaultValue": "TeamChannelId",
+      "type": "string",
+      "metadata": {
+        "description": "Team ChannelId"
+      }
+    },
+    "Sentinel IP Block Group": {
+      "defaultValue": "AddressGroup",
+      "type": "string",
+      "metadata": {
+        "description": "Sentinel IP Block Group"
+      }
+    },
+    "Sentinel URL Block Group": {
+      "defaultValue": "AddressGroup",
+      "type": "string",
+      "metadata": {
+        "description": "Sentinel URL Block Group"
+      }
+    },
+    "User Identifier Name": {
+      "defaultValue": "fortinetuseridentity",
+      "type": "String",
+      "metadata": {
+        "description": "User Identifier"
+      }
+    },
+    "Function App Name": {
+      "defaultValue": "",
+      "type": "String",
+      "metadata": {
+        "description": "Function app Name which is unique and should not contain special symbole"
+      }
+    }
+  },
+  "variables": {
+    "UserIdentifier": "[parameters('User Identifier Name')]"
+  },
+  "resources": [
+    {
+      "name": "Fortinet_Customconnector_Uri",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2018-05-01",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Fortinet-FortiGate/CustomConnector/azuredeploy.json"
+        },
+        "parameters": {
+          "service_EndPoint": {
+            "value": "[parameters('Service_EndPoint')]"
+          }
+        }
+      }
+    },
+    {
+      "name": "Fortinet_FunctionApp_URI",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2018-05-01",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Fortinet-FortiGate/FunctionApp/azuredeploy.json"
+        },
+        "parameters": {
+          "Function App Name": {
+            "Value": "[parameters('Function App Name')]"
+          },
+          "Secret Identifier of Keyvalut": {
+            "Value": "[parameters('Secret Identifier of Keyvalut')]"
+          },
+          "service_EndPoint": {
+            "Value": "[parameters('Service_EndPoint')]"
+          },
+          "UserIdentifier": {
+            "Value": "[variables('UserIdentifier')]"
+          }
+
+        }
+      }
+    },
+    {
+      "name": "Fortinet-TakeIPActionFromTeams_Uri",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Fortinet_FunctionApp_URI')]",
+        "[resourceId('Microsoft.Resources/deployments', 'Fortinet_Customconnector_Uri')]"
+      ],
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2018-05-01",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Fortinet-FortiGate/Playbooks/Fortinet_ResponseOnIP/azuredeploy.json"
+        },
+        "parameters": {
+          "Playbook Name": {
+            "Value": "[parameters('Fortinet_ResponseOnIP_playbook')]"
+          },
+          "Teams GroupId": {
+            "Value": "[parameters('Teams GroupId')]"
+          },
+          "Teams ChannelId": {
+            "Value": "[parameters('Teams ChannelId')]"
+          },
+          "Address group": {
+            "Value": "[parameters('Sentinel IP Block Group')]"
+          },
+          "Function app Name": {
+            "Value": "[parameters('Function App Name')]"
+          },
+          "User Identifier Name": {
+            "Value": "[variables('UserIdentifier')]"
+          }
+
+        }
+      }
+    },
+    {
+      "name": "Fortinet-TakeURLActionFromTeams_Uri",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Fortinet_FunctionApp_URI')]",
+        "[resourceId('Microsoft.Resources/deployments', 'Fortinet_Customconnector_Uri')]"
+      ],
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2018-05-01",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Fortinet-FortiGate/Playbooks/Fortinet_ResponseOnURL/azuredeploy.json"
+        },
+        "parameters": {
+          "playbook Name": {
+            "Value": "[parameters('Fortinet_ResponseOnUrl_playbook')]"
+          },
+          "Teams GroupId": {
+            "Value": "[parameters('Teams GroupId')]"
+
+          },
+          "Teams ChannelId": {
+            "Value": "[parameters('Teams ChannelId')]"
+          },
+          "Address Group": {
+            "Value": "[parameters('Sentinel URL Block Group')]"
+          },
+          "Function app Name": {
+            "Value": "[parameters('Function App Name')]"
+          },
+          "User Identifier Name": {
+            "Value": "[variables('UserIdentifier')]"
+          }
+
+        }
+      }
+    },
+    {
+      "name": "Fortinet-EnrichonIPUri",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Fortinet_FunctionApp_URI')]",
+        "[resourceId('Microsoft.Resources/deployments', 'Fortinet_Customconnector_Uri')]"
+      ],
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2018-05-01",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Fortinet-FortiGate/Playbooks/Fortinet_IncidentEnrichment/azuredeploy.json"
+        },
+        "parameters": {
+          "playbook Name": {
+            "Value": "[parameters('Fortinet_EnrichIP_playbook')]"
+          },
+          "Address Group": {
+            "Value": "[parameters('Sentinel URL Block Group')]"
+          },
+          "Function app Name": {
+            "Value": "[parameters('Function App Name')]"
+          },
+          "User Identifier Name": {
+            "Value": "[variables('UserIdentifier')]"
+          }
+
+        }
+      }
+    }
+  ]
+} 
+

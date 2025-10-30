@@ -1,0 +1,53 @@
+id: 1ad620f0-fee4-4bb7-a2b3-62af7f18332b
+name: Invited Guest User but not redeemed Invite for longer period.
+description: |
+  'This query will look for events where guest user was invited but has not accepted/redeemed invite for unusually longer period. 
+   Any invites not redeemed for longer period of time can be misused and pose risk if suspiciously redeemed in other ways'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+tags:
+  - GuestorExternalIdentities
+query: |
+  let lookback = 14d;
+  let invitethreshold = 5d;
+  // Collect external user invitations
+  let ExtUserInvites = AuditLogs
+  | where TimeGenerated > ago(lookback)
+  | where Category =~ "UserManagement"
+  | where OperationName =~ "Invite external user"
+  | extend TargetUPN = tostring(TargetResources[0].["userPrincipalName"])
+  | extend InviteInitiator = tostring(InitiatedBy.["user"].["userPrincipalName"]) , IPAddress = tostring(InitiatedBy.["user"].["ipAddress"])
+  | where isnotempty(InviteInitiator)
+  | extend InviteTime = TimeGenerated;
+  // Collect redeem events
+  let ExtUserRedeem = AuditLogs
+  | where TimeGenerated > ago(lookback)
+  | where Category =~ "UserManagement"
+  | where OperationName =~ "Redeem external user invite"
+  | where Result =~ "success"
+  | extend InviteInitiator = tostring(InitiatedBy.["user"].["userPrincipalName"])
+  | extend Target = tostring(TargetResources[0].["userPrincipalName"])
+  | extend TargetUPN = tostring(extract(@"UPN\:\s(.+)\,\sEmail",1,Target))
+  | where isnotempty(Target);
+  // Find invites who have not been redeemed since long time.
+  ExtUserInvites
+  | join kind=leftanti ( ExtUserRedeem ) on TargetUPN
+  | where InviteTime > ago(invitethreshold)
+  | project TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InviteInitiator
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0 

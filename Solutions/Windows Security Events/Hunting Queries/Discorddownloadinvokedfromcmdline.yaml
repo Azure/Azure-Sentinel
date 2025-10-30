@@ -1,0 +1,45 @@
+id: e7dd442a-0af8-48eb-8358-9e91f4911849
+name: Discord download invoked from cmd line
+description: |
+  'This hunting query looks for hosts that have attempted to interact with the Discord CDN. This activity is not normally invoked from the command line and could indicate C2, exfiltration, or malware delivery activity.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1204
+  - T1102
+  - T1567
+query: |
+    SecurityEvent
+    | where EventID == 4688
+    | where Process has_any ("powershell.exe", "powershell_ise.exe", "cmd.exe") or CommandLine has "powershell"
+    | where CommandLine has_any ("cdn.discordapp.com", "moc.ppadrocsid.ndc")
+    | project-reorder TimeGenerated, Computer, Account, Process, CommandLine
+    | extend NTDomain = tostring(split(Account,'\\',0)[0]), Name = tostring(split(Account,'\\',1)[0])
+    | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+    | extend Account_0_Name = Name
+    | extend Account_0_NTDomain = NTDomain
+    | extend Host_0_HostName = HostName
+    | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 2.0.1

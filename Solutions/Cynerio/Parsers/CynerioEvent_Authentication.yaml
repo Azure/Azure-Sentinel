@@ -1,0 +1,50 @@
+id: fcd546b8-7f59-45d6-bcc8-2f705f97f5c6
+Function:
+  Title: Parser for CynerioEvent_Authentication
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: CynerioEvent_Authentication
+FunctionAlias: CynerioEvent_Authentication
+FunctionQuery: |
+    let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [
+        'Low', 'Informational',
+        'Medium', 'Low',
+        'High', 'Medium',
+        'Critical', 'High'
+      ];
+    
+      let Passwords = CynerioEvent_CL
+        | where title_s == 'Default Password' or title_s == 'Weak Password'
+        | extend EventOriginalSeverity = severity_s
+        | lookup SeverityLookup on EventOriginalSeverity
+        | extend
+            Type = 'CynerioEvent_CL',
+            EventStartTime = unixtime_seconds_todatetime(timestamp_d),
+            EventEndTime = unixtime_seconds_todatetime(timestamp_d),
+            EventOriginalUid = uid_s,
+            EventType = 'Logon',
+            EventOriginalType = 'IDS',
+            EventOriginalSubType = title_s,
+            EventMessage = details_s,
+            DvcIdType = 'Cynerio',
+            Dvc = tostring(asset_id_g),
+            DvcId = tostring(asset_id_g),
+            AdditonalFields = pack("AssetType", asset_type_s),
+            DvcIpAddr = asset_ip_s,
+            EventProduct = 'Cynerio',
+            EventCount = int(1),
+            EventResult = 'NA',
+            EventVendor = 'Cynerio',
+            EventSchema = 'Authentication',
+            EventSchemaVersion = '0.1.3',
+            SrcIpAddr = client_ip_s,
+            IpAddr = client_ip_s,
+            TargetIpAddr = dst_ip_s,
+            TargetPortNumber = toint(port_d),
+            LogonProtocol = service_s
+        | parse EventMessage with * "User Name: " ActorUserName "," *
+        | project-away
+            *_d, *_s, *_g;
+    
+      Passwords

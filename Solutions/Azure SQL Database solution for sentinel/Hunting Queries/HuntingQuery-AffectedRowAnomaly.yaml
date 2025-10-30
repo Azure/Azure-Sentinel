@@ -1,0 +1,66 @@
+id: 724c7010-0afe-4d46-95ab-32f6737e658b
+name: Anomalous Query Execution Time
+description: |
+  'This hunting query will detect SQL queries that have affected an unusual number of rows for the given user and application combination.
+  It will calculate the prevalence for each row count impacted to find instances where a large number of rows is anomalously affected.
+  This hunting query is designed to detect SQL mass-deletion and mass-read events.'
+requiredDataConnectors:
+  - connectorId: AzureSql
+    dataTypes:
+      - AzureDiagnostics
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - SQL
+query: |
+  let timeRange = 14d;
+  let threshold = 1; //Less than this % will be displayed
+  //Count the total number of queries a user+client has accesses
+  //How frequently the query averages data for an average execution time
+  let timeSliceSize = 1h;
+  let processedData = materialize (
+      AzureDiagnostics
+      | where TimeGenerated > ago(timeRange)
+      | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
+      | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
+      ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
+      IsSuccess = succeeded_s, DurationMs = duration_milliseconds_d, AffectedRows = affected_rows_d,
+      ResponseRows = response_rows_d, Statement = statement_s,
+      Error = case( additional_information_s has 'error_code', toint(extract("<error_code>([0-9.]+)", 1, additional_information_s))
+                        , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+)", 1, additional_information_s))
+                        , 0),
+      State = case( additional_information_s has 'error_state', toint(extract("<error_state>([0-9.]+)", 1, additional_information_s))
+                        , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+), Level ([0-9.]+)", 2, additional_information_s))
+                        , 0),
+      AdditionalInfo = additional_information_s, timeSlice = floor(TimeGenerated, timeSliceSize));
+  let totals = processedData
+  | summarize count() by PrincipalName, ApplicationName
+  | extend joinKey = strcat(PrincipalName, ApplicationName)
+  | project joinKey, count_;
+  processedData
+  //Count the total number of times each number of rows was accessed
+  | summarize count() by AffectedRows, PrincipalName, ApplicationName
+  | extend joinKey = strcat(PrincipalName, ApplicationName)
+  | join kind=leftouter (
+    totals
+  ) on joinKey
+  | extend prevalence = round(toreal(count_) / toreal(count_1) * 100, 2)
+  | where prevalence <= threshold
+  | extend Name = tostring(split(PrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(PrincipalName, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend CloudApplication_0_Name = ApplicationName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ApplicationName
+version: 1.0.1

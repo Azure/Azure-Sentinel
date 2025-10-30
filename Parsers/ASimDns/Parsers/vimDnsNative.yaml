@@ -1,0 +1,104 @@
+Parser:
+  Title: DNS activity ASIM filtering parser for Microsoft Sentinel native DNS table
+  Version: '0.6.1'
+  LastUpdated: March 01 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing the native Microsoft Sentinel DNS table (ASimDnsActivityLogs) to the ASIM DNS activity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
+ParserName: vimDnsNative
+EquivalentBuiltInParser: _Im_Dns_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+
+ParserQuery: |
+  let parser=
+  (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr:string='*',
+    domain_has_any:dynamic=dynamic([]),
+    responsecodename:string='*', 
+    response_has_ipv4:string='*',
+    response_has_any_prefix:dynamic=dynamic([]),
+    eventtype:string='Query',
+    disabled:bool=false
+  )
+  {
+    ASimDnsActivityLogs  | where not(disabled)
+    //  -- Pre-parsing filtering:
+    | where
+        (response_has_ipv4=='*') and (array_length(response_has_any_prefix) == 0) // -- Check that unsupported filters are set to default
+        and (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and (srcipaddr=='*' or SrcIpAddr==srcipaddr)
+        and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))
+        and (responsecodename=='*' or EventResultDetails == responsecodename)
+        and (eventtype == "*" or eventtype == EventType or (eventtype == "lookup" and EventType == "Query")) // -- Support "lookup" as value for backward compatibility
+    // --
+    | project-rename
+        EventUid = _ItemId
+    | extend
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        Dvc = coalesce (Dvc, DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId, strcat (EventVendor,'/', EventProduct)),
+        Dst = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),
+        Src = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+        EventSchema = "Dns"
+    // -- Type fixes
+    | extend
+        ThreatConfidence = toint(ThreatConfidence),
+        ThreatFirstReportedTime = todatetime(ThreatFirstReportedTime),
+        ThreatIsActive = tobool(ThreatIsActive),
+        ThreatLastReportedTime = todatetime(ThreatLastReportedTime),
+        ThreatOriginalRiskLevel = tostring(ThreatOriginalRiskLevel),
+        ThreatRiskLevel = toint(ThreatRiskLevel)
+    //  -- Aliases here
+    | extend
+        DnsResponseCodeName=EventResultDetails,
+        Domain=DnsQuery,
+        IpAddr=SrcIpAddr,
+        SessionId=DnsSessionId,
+        Duration = DnsNetworkDuration,
+        Process = SrcProcessName,
+        User = SrcUsername,
+        Hostname = SrcHostname,
+        DvcScopeId = coalesce(DvcScopeId,_SubscriptionId)
+      | project-away
+          TenantId, SourceSystem, _ResourceId, _SubscriptionId
+  };
+  parser (starttime=starttime, endtime=endtime, srcipaddr=srcipaddr, domain_has_any=domain_has_any, responsecodename=responsecodename, response_has_ipv4=response_has_ipv4, response_has_any_prefix=response_has_any_prefix, eventtype=eventtype, disabled=disabled)

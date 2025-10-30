@@ -1,0 +1,38 @@
+id: bda5a2bd-979b-4828-a91f-27c2a5048f7f
+name: ProofpointPOD - Multiple archived attachments to the same recipient
+description: |
+  'Detects when multiple emails where sent to the same recipient with large archived attachments.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_message_CL
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+query: |
+  let lbtime = 30m;
+  let msgthreshold = 3;
+  let compressedTypes = dynamic(['zip', 'rar', 'tar', 'x-7z-compressed']);
+  ProofpointPOD
+  | where TimeGenerated > ago(lbtime)
+  | where EventType == 'message'
+  | where NetworkDirection == 'outbound'
+  | extend attachedMimeType = todynamic(MsgParts)[0]['detectedMime']
+  | where attachedMimeType has_any (compressedTypes)
+  | summarize count(), make_set(attachedMimeType) by SrcUserUpn, DstUserUpn
+  | where count_ > msgthreshold
+  | extend AccountCustomEntity = SrcUserUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.2
+kind: Scheduled

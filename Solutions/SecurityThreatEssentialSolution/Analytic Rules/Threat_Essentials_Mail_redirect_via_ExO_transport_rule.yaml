@@ -1,0 +1,63 @@
+id: d7c575b2-84f5-48cb-92c5-70d7e8246284
+name: Threat Essentials - Mail redirect via ExO transport rule
+description: |
+  'Identifies when Exchange Online transport rule configured to forward emails.
+  This could be an adversary mailbox configured to collect mail from multiple user accounts.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+  OfficeActivity
+  | where OfficeWorkload == "Exchange"
+  | where Operation in~ ("New-TransportRule", "Set-TransportRule")
+  | extend p = parse_json(Parameters)
+  | extend RuleName = case(
+    Operation =~ "Set-TransportRule", tostring(OfficeObjectId),
+    Operation =~ "New-TransportRule", tostring(p[1].Value),
+    "Unknown"
+    )
+  | mvexpand p
+  | where (p.Name =~ "BlindCopyTo" or p.Name =~ "RedirectMessageTo") and isnotempty(p.Value)
+  | extend RedirectTo = p.Value
+  | extend ClientIPOnly = case(
+    ClientIP has "." and ClientIP has ":", tostring(split(ClientIP,":")[0]),
+    ClientIP has "." and ClientIP has "-", tostring(split(ClientIP,"-")[0]),
+    ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+    ClientIP
+    )
+  | extend Port = case(
+    ClientIP has "." and ClientIP has ":", (split(ClientIP,":")[1]),
+    ClientIP has "." and ClientIP has "-", (split(ClientIP,"-")[1]),
+    ClientIP has "[" and ClientIP has ":", tostring(split(ClientIP,"]:")[1]),
+    ClientIP has "[" and ClientIP has "-", tostring(split(ClientIP,"]-")[1]),
+    ClientIP
+    )
+  | extend ClientIP = ClientIPOnly
+  | project TimeGenerated, RedirectTo, ClientIP, Port, UserId, Operation, RuleName
+  | extend Name=split(UserId, "@")[0], UPNSuffix=split(UserId, "@")[1]
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.2
+kind: Scheduled

@@ -1,0 +1,774 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Fetch IP Details From Entrust",
+        "description": "This playbook provides the IP details in comments section of triggered incident so that SOC analysts can directly take corrective measure to stop the attack from unknown/compromised entity",
+        "prerequisites": [
+            "1. User should be having an active subscription of product to open the product documentation.",
+            "2. For Json API keys , Kindly login to entrust Identity as a service portal",
+            "3. Then click on left burger icon and Go to Applications under Resources",
+            "4. click on + Button and search for Administration API",
+            "5. Configure that and at the end save the Json object of API keys",
+            "6. Make a note of Entrust application id and hostname",
+            "7. Store the Shared Secret Key in keyvault Secrets."
+        ],
+        "postDeployment": [ "1. During deployment you need to provide your Entrust application id ,Entrust secret key name, host endpoint and Key vault name." ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2023-02-28T00:00:00.000Z",
+        "entities": [ "IP" ],
+        "tags": [ "Enrichment", "Notification", "MFA", "Entrust", "Identity" ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Entrust-EnrichIncidentWithIPDetails",
+            "type": "string"
+        },
+        "Entrust App ID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Entrust App ID"
+            }
+        },
+        "Keyvault name": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Enter the key vault name where Entrust secret key is stored"
+            }
+        },
+        "Entrust Secret Key Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Entrust Secret Key Name"
+            }
+        },
+        "Host End Point": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Host End Point(hostname)"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Entrust App ID": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Entrust App ID')]"
+                        },
+                        "Entrust Secret Key Name": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Entrust Secret Key Name')]"
+                        },
+                        "Host End Point": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Host End Point')]"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_checking_if_IP's_are_provided_or_not": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_2": {
+                                    "runAfter": {
+                                        "Create_HTML_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>IP Authentication events for last 24 hours :<br>\n@{body('Create_HTML_table')}&nbsp;</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Create_HTML_table": {
+                                    "runAfter": {
+                                        "For_each_-_IP_got_from_incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "format": "HTML",
+                                        "from": "@variables('ip_enrich')"
+                                    }
+                                },
+                                "For_each_-_IP_got_from_incident": {
+                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                                    "actions": {
+                                        "Condition_-_To_check_if_provided_IP_has_any_activity_in_last_24_hours": {
+                                            "actions": {
+                                                "For_each_-_appending_IP_details": {
+                                                    "foreach": "@body('Parse_JSON_-_Get_IP_details_from_audit_events')?['results']",
+                                                    "actions": {
+                                                        "Append_to_array_variable_-_append_IP_details_to_variable": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "ip_enrich",
+                                                                "value": {
+                                                                    "Login Method": "@items('For_each_-_appending_IP_details')?['token']",
+                                                                    "eventCategory": "@items('For_each_-_appending_IP_details')?['eventCategory']",
+                                                                    "eventOutcome": "@items('For_each_-_appending_IP_details')?['eventOutcome']",
+                                                                    "eventType": "@items('For_each_-_appending_IP_details')?['eventType']",
+                                                                    "eventtime": "@items('For_each_-_appending_IP_details')?['eventTime']",
+                                                                    "sourceIp": "@items('For_each_-_appending_IP_details')?['sourceIp']",
+                                                                    "subjectName": "@items('For_each_-_appending_IP_details')?['subjectName']",
+                                                                    "subjectType": "@items('For_each_-_appending_IP_details')?['subjectType']"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_-_Get_IP_details_from_audit_events": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Append_to_array_variable": {
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "ip_enrich",
+                                                            "value": {
+                                                                "Login Method": "Null",
+                                                                "eventCategory": "No login/authentication activity",
+                                                                "eventOutcome": "",
+                                                                "eventType": "Null",
+                                                                "eventtime": "Null",
+                                                                "sourceIp": "@items('For_each_-_IP_got_from_incident')?['Address']",
+                                                                "subjectName": "Null",
+                                                                "subjectType": "Null"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('Parse_JSON_-_Get_IP_details_from_audit_events')?['results'])",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_Get_IP_details_from_audit_events": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "type": "Raw",
+                                                    "value": "@body('Parse_JSON_-_generate_login_token')?['authToken']"
+                                                },
+                                                "body": {
+                                                    "limit": 100,
+                                                    "orderByAttribute": {
+                                                        "ascending": false,
+                                                        "name": "eventTime"
+                                                    },
+                                                    "searchByAttributes": [
+                                                        {
+                                                            "name": "sourceIp",
+                                                            "operator": "EQUALS",
+                                                            "value": "@items('For_each_-_IP_got_from_incident')?['Address']"
+                                                        },
+                                                        {
+                                                            "name": "eventTime",
+                                                            "operator": "GREATER_THAN_OR_EQUAL",
+                                                            "value": "@formatDateTime(subtractFromTime(utcNow(), 24, 'Hour'), 'yyyy-MM-ddTHH:mm:ss')"
+                                                        }
+                                                    ]
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://@{parameters('Host End Point')}/api/web/v2/reports/auditeventspaged"
+                                            }
+                                        },
+                                        "Parse_JSON_-_Get_IP_details_from_audit_events": {
+                                            "runAfter": {
+                                                "HTTP_-_Get_IP_details_from_audit_events": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_-_Get_IP_details_from_audit_events')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "paging": {
+                                                            "properties": {
+                                                                "limit": {
+                                                                    "type": [
+                                                                        "integer",
+                                                                        "null"
+                                                                    ]
+                                                                },
+                                                                "nextCursor": {
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
+                                                                },
+                                                                "prevCursor": {
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
+                                                                }
+                                                            },
+                                                            "type": [
+                                                                "object",
+                                                                "null"
+                                                            ]
+                                                        },
+                                                        "results": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "accountId": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "auditDetails": {
+                                                                        "properties": {
+                                                                            "entityAttributes": {
+                                                                                "items": {
+                                                                                    "properties": {
+                                                                                        "name": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "value": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "name",
+                                                                                        "value"
+                                                                                    ],
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "type": [
+                                                                                    "array",
+                                                                                    "null"
+                                                                                ]
+                                                                            },
+                                                                            "messageTokens": {
+                                                                                "items": {
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "type": [
+                                                                                    "array",
+                                                                                    "null"
+                                                                                ]
+                                                                            },
+                                                                            "modifiedEntityAttributes": {
+                                                                                "items": {
+                                                                                    "properties": {
+                                                                                        "name": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "newValue": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "oldValue": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "name",
+                                                                                        "newValue",
+                                                                                        "oldValue"
+                                                                                    ],
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "type": [
+                                                                                    "array",
+                                                                                    "null"
+                                                                                ]
+                                                                            }
+                                                                        },
+                                                                        "type": [
+                                                                            "object",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "entityAction": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "entityId": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "entityName": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "entityType": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "eventCategory": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "eventOutcome": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "eventTime": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "eventType": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "eventVersion": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "id": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "message": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "requiredPermission": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "resourceId": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "resourceName": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "serviceProviderAdminRoleId": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "serviceProviderAdminRoleName": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "sourceIp": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "subject": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "subjectName": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "subjectType": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "subscriberAdminRoleId": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "subscriberAdminRoleName": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "token": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "accountId",
+                                                                    "auditDetails",
+                                                                    "entityAction",
+                                                                    "entityId",
+                                                                    "entityName",
+                                                                    "entityType",
+                                                                    "eventCategory",
+                                                                    "eventOutcome",
+                                                                    "eventTime",
+                                                                    "eventType",
+                                                                    "eventVersion",
+                                                                    "id",
+                                                                    "message",
+                                                                    "requiredPermission",
+                                                                    "resourceId",
+                                                                    "resourceName",
+                                                                    "serviceProviderAdminRoleId",
+                                                                    "serviceProviderAdminRoleName",
+                                                                    "sourceIp",
+                                                                    "subject",
+                                                                    "subjectName",
+                                                                    "subjectType",
+                                                                    "subscriberAdminRoleId",
+                                                                    "subscriberAdminRoleName",
+                                                                    "token"
+                                                                ],
+                                                                "type": [
+                                                                    "object",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "type": [
+                                                                "array",
+                                                                "null"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "type": [
+                                                        "object",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_generate_login_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_comment_to_incident_(V3)": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p>IP entity didn't mapped properly in analytic rule or None IP provided</p>"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_variable_-_collect_IP_enriched_details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent(parameters('Entrust Secret Key Name'))}/value"
+                            }
+                        },
+                        "HTTP_-_generate_login_token": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "applicationId": "@parameters('Entrust App ID')",
+                                    "enableWebSession": false,
+                                    "sharedSecret": "@body('Get_secret')?['value']"
+                                },
+                                "method": "POST",
+                                "uri": "https://@{parameters('Host End Point')}/api/web/v1/adminapi/authenticate"
+                            }
+                        },
+                        "Initialize_variable_-_collect_IP_enriched_details": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip_enrich",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_generate_login_token": {
+                            "runAfter": {
+                                "HTTP_-_generate_login_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_generate_login_token')",
+                                "schema": {
+                                    "properties": {
+                                        "authToken": {
+                                            "type": "string"
+                                        },
+                                        "creationTime": {
+                                            "type": "string"
+                                        },
+                                        "expirationTime": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Entrust-EnrichIncidentWithIPDetails",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/Connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'keyvault')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('keyvault name')]"
+                },
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "nonSecretParameterValues": {
+                    "vaultName": "[parameters('keyvault name')]"
+                }
+
+            }
+        }
+    ]
+}

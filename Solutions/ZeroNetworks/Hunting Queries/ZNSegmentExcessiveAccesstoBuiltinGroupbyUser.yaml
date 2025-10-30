@@ -1,0 +1,39 @@
+id: 0e68d210-a8ec-4e13-9f46-61011c020b87
+name: Zero Networks Segment - Excessive access to a built-in group by user
+description: |
+  'A rule was created which granted a user access to a large, built-in, group of assets.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ZeroNetworksSegmentAuditFunction
+    dataTypes:
+      - ZNSegmentAudit_CL
+  - connectorId: ZeroNetworksSegmentAuditNativePoller
+    dataTypes:
+      - ZNSegmentAuditNativePoller_CL
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1210
+  - T1570
+  - T0866
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  ZNSegmentAudit
+  | where TimeGenerated > ago(endtime-starttime)
+  | where AuditTypeId  in (9,12,20,22,23,24)
+  | where DestinationEntityId startswith "b:"
+  | summarize affectedEntities=make_set(DestinationEntityId) by PerformedByName
+  | extend numOfTargetEntities=array_length(affectedEntities)
+  | order by numOfTargetEntities desc
+  | extend Account_0_Name = PerformedByName
+  | extend Host_0_NetBiosName = affectedEntities
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: PerformedByName
+  - entityType: Host
+    fieldMappings:
+      - identifier: NetBiosName
+        columnName: AffectedEntities

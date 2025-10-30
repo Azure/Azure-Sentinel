@@ -1,0 +1,1212 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"functionAppName": {
+			"type": "string"
+		},
+		"location": {
+			"type": "string",
+			"defaultValue": "[resourceGroup().location]"
+		},
+		"storageAccountName": {
+			"type": "string"
+		},
+		"sentinelWorkspace": {
+			"type": "object"
+		},
+		"appInsightsWorkspaceResourceId": {
+			"type": "string"
+		},
+		"roleAssignmentDcr": {
+			"type": "bool",
+			"defaultValue": false
+		},
+		"roleAssignmentKv": {
+			"type": "bool",
+			"defaultValue": false
+		},
+		"tagsByResource": {
+			"type": "object",
+			"defaultValue": {}
+		},
+		"financeOperationsApiHost": {
+			"type": "string"
+		},
+		"instanceName": {
+			"type": "string"
+		},
+		"secretValue": {
+			"type": "securestring"
+		},
+		"keyVault": {
+			"type": "object"
+		},
+		"identity": {
+			"type": "object"
+		},
+		"logsDisabled": {
+			"type": "bool"
+		},
+		"dataDisabled": {
+			"type": "bool"
+		}
+	},
+	"variables": {
+		"storageSuffix": "[environment().suffixes.storage]",
+		"serverFarmName": "[concat('serverfarm_', parameters('functionAppName'))]",
+		"appInsightsLogName": "[concat(parameters('functionAppName'),'Logs')]",
+		"clv2TableNameLogs": "FinanceOperationsActivity_CL",
+		"clv2TableNameUsers": "FinanceOperationsUsers_CL",
+		"clv2TableNameRoles": "FinanceOperationsRoles_CL",
+		"clv2TableNameUserRoles": "FinanceOperationsUserRoles_CL",
+		"dataCollectionEndpointName": "Microsoft-Sentinel-FinanceOperations-DCE",
+		"dataCollectionRuleName": "Microsoft-Sentinel-FinanceOperations-DCR",
+		"dCRStreamNameLogs": "[concat('Custom-', variables('clv2TableNameLogs'))]",
+		"dCRStreamNameUsers": "[concat('Custom-', variables('clv2TableNameUsers'))]",
+		"dCRStreamNameRoles": "[concat('Custom-', variables('clv2TableNameRoles'))]",
+		"dCRStreamNameUserRoles": "[concat('Custom-', variables('clv2TableNameUserRoles'))]",
+		"monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+		"keyVaultSecretUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
+		"dynamics365TableDeploymentName": "Dynamics365TableDeployment"
+	},
+	"resources": [
+		{
+			"condition": "[and(equals(parameters('identity').useManagedIdentity, false()), equals(parameters('keyVault').useExistingKeyVault, false()))]",
+			"type": "Microsoft.KeyVault/vaults",
+			"apiVersion": "2023-02-01",
+			"name": "[parameters('keyVault').keyVaultName]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.KeyVault/vaults'), parameters('tagsByResource')['Microsoft.KeyVault/vaults'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+			],
+			"properties": {
+				"tenantId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.tenantId]",
+				"enableRbacAuthorization": true,
+				"enableSoftDelete": true,
+				"softDeleteRetentionInDays": 90,
+				"enabledForDeployment": false,
+				"enabledForDiskEncryption": false,
+				"enabledForTemplateDeployment": false,
+				"sku": {
+					"name": "standard",
+					"family": "A"
+				},
+				"networkAcls": {
+					"defaultAction": "Allow",
+					"bypass": "AzureServices"
+				}
+			}
+		},
+		{
+			"condition": "[and(equals(parameters('identity').useManagedIdentity, false()), equals(parameters('keyVault').useExistingKeyVault, false()))]",
+			"type": "Microsoft.KeyVault/vaults/secrets",
+			"apiVersion": "2023-02-01",
+			"name": "[format('{0}/{1}', parameters('keyVault').keyVaultName, parameters('keyVault').secretName)]",
+			"properties": {
+				"value": "[parameters('secretValue')]"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.KeyVault/vaults', parameters('keyVault').keyVaultName)]"
+			]
+		},
+		{
+			"name": "[variables('dynamics365TableDeploymentName')]",
+			"type": "Microsoft.Resources/deployments",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Resources/deployments'), parameters('tagsByResource')['Microsoft.Resources/deployments'], json('{}')) ]",
+			"apiVersion": "2022-09-01",
+			"resourceGroup": "[parameters('sentinelWorkspace').resourceGroup]",
+			"properties": {
+				"mode": "Incremental",
+				"template": {
+					"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+					"contentVersion": "1.0.0.0",
+					"variables": {},
+					"resources": [
+						{
+							"type": "Microsoft.OperationalInsights/workspaces/tables",
+							"apiVersion": "2021-12-01-preview",
+							"name": "[concat(parameters('sentinelWorkspace').name, '/', variables('clv2TableNameLogs'))]",
+							"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.OperationalInsights/workspaces/tables'), parameters('tagsByResource')['Microsoft.OperationalInsights/workspaces/tables'], json('{}')) ]",
+							"properties": {
+								"schema": {
+									"name": "[variables('clv2TableNameLogs')]",
+									"columns": [
+										{
+											"name": "TimeGenerated",
+											"type": "datetime"
+										},
+										{
+											"name": "InstanceName",
+											"type": "string"
+										},
+										{
+											"name": "LogCreatedDateTime",
+											"type": "datetime"
+										},
+										{
+											"name": "LogType",
+											"type": "string"
+										},
+										{
+											"name": "TableName",
+											"type": "string"
+										},
+										{
+											"name": "Username",
+											"type": "string"
+										},
+										{
+											"name": "Description",
+											"type": "string"
+										},
+										{
+											"name": "Data",
+											"type": "dynamic"
+										},
+										{
+											"name": "FormattedData",
+											"type": "dynamic"
+										},
+										{
+											"name": "LogCreatedBy",
+											"type": "string"
+										},
+										{
+											"name": "LogCreatedTransactionId",
+											"type": "string"
+										},
+										{
+											"name": "LogDataAreaId",
+											"type": "string"
+										},
+										{
+											"name": "LogPartition",
+											"type": "long"
+										},
+										{
+											"name": "LogRecId",
+											"type": "long"
+										},
+										{
+											"name": "SequenceNumber",
+											"type": "int"
+										},
+										{
+											"name": "TableIdNumber",
+											"type": "int"
+										},
+										{
+											"name": "TableRecId",
+											"type": "long"
+										},
+										{
+											"name": "TableRecVersion",
+											"type": "int"
+										}
+									]
+								}
+							}
+						},
+						{
+							"type": "Microsoft.OperationalInsights/workspaces/tables",
+							"apiVersion": "2021-12-01-preview",
+							"name": "[concat(parameters('sentinelWorkspace').name, '/', variables('clv2TableNameUsers'))]",
+							"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.OperationalInsights/workspaces/tables'), parameters('tagsByResource')['Microsoft.OperationalInsights/workspaces/tables'], json('{}')) ]",
+							"properties": {
+								"schema": {
+									"name": "[variables('clv2TableNameUsers')]",
+									"columns": [
+										{
+											"name": "TimeGenerated",
+											"type": "datetime"
+										},
+										{
+											"name": "InstanceName",
+											"type": "string"
+										},
+										{
+											"name": "AccountType",
+											"type": "string"
+										},
+										{
+											"name": "NetworkAlias",
+											"type": "string"
+										},
+										{
+											"name": "AutoLogOff",
+											"type": "int"
+										},
+										{
+											"name": "AutomaticUrlUpdate",
+											"type": "string"
+										},
+										{
+											"name": "Company",
+											"type": "string"
+										},
+										{
+											"name": "DefaultCountryRegion",
+											"type": "string"
+										},
+										{
+											"name": "Density",
+											"type": "string"
+										},
+										{
+											"name": "DocumentHandlingActive",
+											"type": "string"
+										},
+										{
+											"name": "Email",
+											"type": "string"
+										},
+										{
+											"name": "EmailProviderID",
+											"type": "string"
+										},
+										{
+											"name": "Enabled",
+											"type": "boolean"
+										},
+										{
+											"name": "EventPollFrequency",
+											"type": "int"
+										},
+										{
+											"name": "EventPopUpDisplayWhen",
+											"type": "string"
+										},
+										{
+											"name": "EventPopUpLinkDestination",
+											"type": "string"
+										},
+										{
+											"name": "EventPopUps",
+											"type": "string"
+										},
+										{
+											"name": "EventWorkflowShowPopup",
+											"type": "string"
+										},
+										{
+											"name": "EventWorkflowTasksInActionCenter",
+											"type": "string"
+										},
+										{
+											"name": "ExternalUser",
+											"type": "boolean"
+										},
+										{
+											"name": "GlobalExcelExportFilePath",
+											"type": "string"
+										},
+										{
+											"name": "GlobalExcelExportMode",
+											"type": "int"
+										},
+										{
+											"name": "GlobalListPageLinkMode",
+											"type": "int"
+										},
+										{
+											"name": "Helplanguage",
+											"type": "string"
+										},
+										{
+											"name": "HomePageRefreshDuration",
+											"type": "int"
+										},
+										{
+											"name": "Language",
+											"type": "string"
+										},
+										{
+											"name": "MarkEmptyLinks",
+											"type": "string"
+										},
+										{
+											"name": "NetworkDomain",
+											"type": "string"
+										},
+										{
+											"name": "PersonName",
+											"type": "string"
+										},
+										{
+											"name": "PreferredCalendar",
+											"type": "string"
+										},
+										{
+											"name": "PreferredLocale",
+											"type": "string"
+										},
+										{
+											"name": "PreferredTimeZone",
+											"type": "string"
+										},
+										{
+											"name": "SendAlertAsEmailMessage",
+											"type": "string"
+										},
+										{
+											"name": "SendNotificationsInEmail",
+											"type": "string"
+										},
+										{
+											"name": "ShowAttachmentStatus",
+											"type": "string"
+										},
+										{
+											"name": "SqmEnabled",
+											"type": "string"
+										},
+										{
+											"name": "SqmGUID",
+											"type": "string"
+										},
+										{
+											"name": "StartPage",
+											"type": "string"
+										},
+										{
+											"name": "Theme",
+											"type": "string"
+										},
+										{
+											"name": "UserId",
+											"type": "string"
+										},
+										{
+											"name": "UserInfo_defaultPartition",
+											"type": "boolean"
+										},
+										{
+											"name": "UserInfo_language",
+											"type": "string"
+										},
+										{
+											"name": "UserDisplayName",
+											"type": "string"
+										},
+										{
+											"name": "WorkflowLineItemNotificationFormat",
+											"type": "string"
+										}
+									]
+								}
+							}
+						},
+						{
+							"type": "Microsoft.OperationalInsights/workspaces/tables",
+							"apiVersion": "2021-12-01-preview",
+							"name": "[concat(parameters('sentinelWorkspace').name, '/', variables('clv2TableNameRoles'))]",
+							"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.OperationalInsights/workspaces/tables'), parameters('tagsByResource')['Microsoft.OperationalInsights/workspaces/tables'], json('{}')) ]",
+							"properties": {
+								"schema": {
+									"name": "[variables('clv2TableNameRoles')]",
+									"columns": [
+										{
+											"name": "TimeGenerated",
+											"type": "datetime"
+										},
+										{
+											"name": "InstanceName",
+											"type": "string"
+										},
+										{
+											"name": "SecurityRoleIdentifier",
+											"type": "string"
+										},
+										{
+											"name": "ContextString",
+											"type": "string"
+										},
+										{
+											"name": "AccessToSensitiveData",
+											"type": "boolean"
+										},
+										{
+											"name": "Description",
+											"type": "string"
+										},
+										{
+											"name": "SecurityRoleName",
+											"type": "string"
+										},
+										{
+											"name": "UserLicenseType",
+											"type": "string"
+										},
+										{
+											"name": "RoleId",
+											"type": "int"
+										}
+									]
+								}
+							}
+						},
+						{
+							"type": "Microsoft.OperationalInsights/workspaces/tables",
+							"apiVersion": "2021-12-01-preview",
+							"name": "[concat(parameters('sentinelWorkspace').name, '/', variables('clv2TableNameUserRoles'))]",
+							"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.OperationalInsights/workspaces/tables'), parameters('tagsByResource')['Microsoft.OperationalInsights/workspaces/tables'], json('{}')) ]",
+							"properties": {
+								"schema": {
+									"name": "[variables('clv2TableNameUserRoles')]",
+									"columns": [
+										{
+											"name": "TimeGenerated",
+											"type": "datetime"
+										},
+										{
+											"name": "InstanceName",
+											"type": "string"
+										},
+										{
+											"name": "UserId",
+											"type": "string"
+										},
+										{
+											"name": "SecurityRoleIdentifier",
+											"type": "string"
+										},
+										{
+											"name": "AssignmentStatus",
+											"type": "string"
+										},
+										{
+											"name": "AssignmentMode",
+											"type": "string"
+										},
+										{
+											"name": "SecurityRoleName",
+											"type": "string"
+										},
+										{
+											"name": "UserLicenseType",
+											"type": "string"
+										}
+									]
+								}
+							}
+						}
+					],
+					"outputs": {}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Insights/components",
+			"apiVersion": "2020-02-02",
+			"name": "[variables('appInsightsLogName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/components'), parameters('tagsByResource')['Microsoft.Insights/components'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"kind": "web",
+			"properties": {
+				"Application_Type": "web",
+				"ApplicationId": "[parameters('functionAppName')]",
+				"WorkspaceResourceId": "[parameters('appInsightsWorkspaceResourceId')]"
+			}
+		},
+		{
+			"type": "Microsoft.Web/serverfarms",
+			"apiVersion": "2022-03-01",
+			"name": "[variables('serverFarmName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Web/serverfarms'), parameters('tagsByResource')['Microsoft.Web/serverfarms'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"sku": {
+				"name": "Y1",
+				"tier": "Dynamic",
+				"size": "Y1",
+				"family": "Y",
+				"capacity": 0
+			},
+			"kind": "functionapp",
+			"properties": {
+				"perSiteScaling": false,
+				"elasticScaleEnabled": false,
+				"maximumElasticWorkerCount": 1,
+				"isSpot": false,
+				"reserved": true,
+				"isXenon": false,
+				"hyperV": false,
+				"targetWorkerCount": 0,
+				"targetWorkerSizeId": 0,
+				"zoneRedundant": false
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts",
+			"apiVersion": "2022-09-01",
+			"name": "[parameters('storageAccountName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Storage/storageAccounts'), parameters('tagsByResource')['Microsoft.Storage/storageAccounts'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"kind": "StorageV2",
+			"sku": {
+				"name": "Standard_LRS",
+				"tier": "Standard"
+			}
+		},
+		{
+			"type": "Microsoft.Web/sites",
+			"apiVersion": "2022-03-01",
+			"name": "[parameters('functionAppName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Web/sites'), parameters('tagsByResource')['Microsoft.Web/sites'], json('{}')) ]",
+			"location": "[parameters('location')]",
+			"kind": "functionapp,linux",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+				"[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+				"[resourceId('Microsoft.Insights/components', variables('appInsightsLogName'))]",
+				"[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+			],
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"properties": {
+				"httpsOnly": true,
+				"publicNetworkAccess": "Disabled",
+				"keyVaultReferenceIdentity": "SystemAssigned",
+				"serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+				"siteProperties": {
+					"properties": [
+						{
+							"name": "LinuxFxVersion",
+							"value": "Python|3.10"
+						}
+					]
+				},
+				"siteConfig": {
+					"linuxFxVersion": "Python|3.10",
+					"ftpsState": "Disabled",
+					"appSettings": [
+						{
+							"name": "AzureWebJobsStorage",
+							"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(parameters('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('storageAccountName'))), '2021-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
+						},
+						{
+							"name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+							"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(parameters('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('storageAccountName'))), '2021-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
+						},
+						{
+							"name": "WEBSITE_CONTENTSHARE",
+							"value": "[toLower(parameters('functionAppName'))]"
+						},
+						{
+							"name": "FUNCTIONS_EXTENSION_VERSION",
+							"value": "~4"
+						},
+						{
+							"name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+							"value": "[reference(resourceId('Microsoft.insights/components', variables('appInsightsLogName'))).InstrumentationKey]"
+						},
+						{
+							"name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+							"value": "[reference(resourceId('microsoft.insights/components', variables('appInsightsLogName'))).ConnectionString]"
+						},
+						{
+							"name": "FUNCTIONS_WORKER_RUNTIME",
+							"value": "python"
+						},
+						{
+							"name": "AzureWebJobs.finance_operations_logs.Disabled",
+							"value": "[parameters('logsDisabled')]"
+						},
+						{
+							"name": "AzureWebJobs.finance_operations_data.Disabled",
+							"value": "[parameters('dataDisabled')]"
+						},
+						{
+							"name": "AzureWebJobsFeatureFlags",
+							"value": "EnableWorkerIndexing",
+							"slotSetting": false
+						},
+						{
+							"name": "ODATA_API_HOST",
+							"value": "[parameters('financeOperationsApiHost')]",
+							"slotSetting": false
+						},
+						{
+							"name": "INSTANCE_NAME",
+							"value": "[parameters('instanceName')]",
+							"slotSetting": false
+						},
+						{
+							"name": "ODATA_API_TIMEOUT_SECONDS",
+							"value": "180",
+							"slotSetting": false
+						},
+						{
+							"name": "ODATA_API_MAX_PAGE_SIZE",
+							"value": "10000",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_DCE_URL",
+							"value": "[reference(variables('dataCollectionEndpointName')).logsIngestion.endpoint]",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_IMMUTABLE_ID",
+							"value": "[reference(variables('dataCollectionRuleName')).immutableId]",
+							"slotSetting": false
+						},
+						{
+							"name": "FUNCTION_SHUTDOWN_TIMEOUT_MINS",
+							"value": "5",
+							"slotSetting": false
+						},
+						{
+							"name": "TIMER_SCHEDULE_MINS",
+							"value": "10",
+							"slotSetting": false
+						},
+						{
+							"name": "MAX_LOOKBACK_DURATION_HOURS",
+							"value": "8",
+							"slotSetting": false
+						},
+						{
+							"name": "QUERY_WINDOW_OFFSET_MINS",
+							"value": "1",
+							"slotSetting": false
+						},
+						{
+							"name": "QUERY_WINDOW_CHUNK_DURATION_SEC",
+							"value": "60",
+							"slotSetting": false
+						},
+						{
+							"name": "CROSS_COMPANY_QUERY",
+							"value": "true",
+							"slotSetting": false
+						},
+						{
+							"name": "LAST_UPDATE_CONTAINER",
+							"value": "lastupdate",
+							"slotSetting": false
+						},
+						{
+							"name": "LAST_UPDATE_FILENAME_LOGS",
+							"value": "lastupdatelogs.json",
+							"slotSetting": false
+						},
+						{
+							"name": "LAST_UPDATE_FILENAME_DATA",
+							"value": "lastupdatedata.json",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_STREAM_NAME_LOGS",
+							"value": "[variables('dCRStreamNameLogs')]",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_STREAM_NAME_USERS",
+							"value": "[variables('dCRStreamNameUsers')]",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_STREAM_NAME_ROLES",
+							"value": "[variables('dCRStreamNameRoles')]",
+							"slotSetting": false
+						},
+						{
+							"name": "DCR_STREAM_NAME_USERROLES",
+							"value": "[variables('dCRStreamNameUserRoles')]",
+							"slotSetting": false
+						},
+						{
+							"name": "TIMER_SCHEDULE_LOGS",
+							"value": "0 */10 * * * *",
+							"slotSetting": false
+						},
+						{
+							"name": "TIMER_SCHEDULE_DATA",
+							"value": "0 0 2 * * *",
+							"slotSetting": false
+						},
+						{
+							"name": "CLIENT_CRED_CLIENT_ID",
+							"value": "[parameters('identity').clientId]",
+							"slotSetting": false
+						},
+						{
+							"name": "CLIENT_CRED_CLIENT_SECRET",
+							"value": "[if(equals(parameters('identity').useManagedIdentity, false()), concat('@Microsoft.KeyVault(VaultName=', parameters('keyVault').keyVaultName, ';SecretName=', parameters('keyVault').secretName, ')'), '')]",
+							"slotSetting": false
+						},
+						{
+							"name": "CLIENT_CRED_TENANT_ID",
+							"value": "[parameters('identity').tenantId]",
+							"slotSetting": false
+						},
+						{
+							"name": "FULL_SYNC_INTERVAL_DAYS",
+							"value": "7",
+							"slotSetting": false
+						},
+						{
+							"name": "WEBSITE_RUN_FROM_PACKAGE",
+							"value": "https://aka.ms/sentinel-financeoperations-functionapp-v2"
+						}
+					]
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Insights/dataCollectionRules",
+			"apiVersion": "2021-09-01-preview",
+			"name": "[variables('dataCollectionRuleName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/dataCollectionRules'), parameters('tagsByResource')['Microsoft.Insights/dataCollectionRules'], json('{}')) ]",
+			"location": "[parameters('sentinelWorkspace').location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]"
+			],
+			"properties": {
+				"dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints',variables('dataCollectionEndpointName'))]",
+				"streamDeclarations": {
+					"[variables('dCRStreamNameLogs')]": {
+						"columns": [
+							{
+								"name": "dataAreaId",
+								"type": "string"
+							},
+							{
+								"name": "LogCreatedDateTime",
+								"type": "datetime"
+							},
+							{
+								"name": "LogType",
+								"type": "string"
+							},
+							{
+								"name": "TableName",
+								"type": "string"
+							},
+							{
+								"name": "Username",
+								"type": "string"
+							},
+							{
+								"name": "Description",
+								"type": "string"
+							},
+							{
+								"name": "Data",
+								"type": "dynamic"
+							},
+							{
+								"name": "FormattedData",
+								"type": "dynamic"
+							},
+							{
+								"name": "NewData",
+								"type": "string"
+							},
+							{
+								"name": "LogCreatedBy",
+								"type": "string"
+							},
+							{
+								"name": "LogCreatedTransactionId",
+								"type": "string"
+							},
+							{
+								"name": "LogDataAreaId",
+								"type": "string"
+							},
+							{
+								"name": "LogPartition",
+								"type": "long"
+							},
+							{
+								"name": "LogRecId",
+								"type": "long"
+							},
+							{
+								"name": "SequenceNumber",
+								"type": "int"
+							},
+							{
+								"name": "TableIdNumber",
+								"type": "int"
+							},
+							{
+								"name": "TableRecId",
+								"type": "long"
+							},
+							{
+								"name": "TableRecVersion",
+								"type": "int"
+							},
+							{
+								"name": "InstanceName",
+								"type": "string"
+							}
+						]
+					},
+					"[variables('dCRStreamNameUsers')]": {
+						"columns": [
+							{
+								"name": "TimeGenerated",
+								"type": "datetime"
+							},
+							{
+								"name": "AccountType",
+								"type": "string"
+							},
+							{
+								"name": "Alias",
+								"type": "string"
+							},
+							{
+								"name": "AutoLogOff",
+								"type": "int"
+							},
+							{
+								"name": "AutomaticUrlUpdate",
+								"type": "string"
+							},
+							{
+								"name": "Company",
+								"type": "string"
+							},
+							{
+								"name": "DefaultCountryRegion",
+								"type": "string"
+							},
+							{
+								"name": "Density",
+								"type": "string"
+							},
+							{
+								"name": "DocumentHandlingActive",
+								"type": "string"
+							},
+							{
+								"name": "Email",
+								"type": "string"
+							},
+							{
+								"name": "EmailProviderID",
+								"type": "string"
+							},
+							{
+								"name": "Enabled",
+								"type": "boolean"
+							},
+							{
+								"name": "EventPollFrequency",
+								"type": "int"
+							},
+							{
+								"name": "EventPopUpDisplayWhen",
+								"type": "string"
+							},
+							{
+								"name": "EventPopUpLinkDestination",
+								"type": "string"
+							},
+							{
+								"name": "EventPopUps",
+								"type": "string"
+							},
+							{
+								"name": "EventWorkflowShowPopup",
+								"type": "string"
+							},
+							{
+								"name": "EventWorkflowTasksInActionCenter",
+								"type": "string"
+							},
+							{
+								"name": "ExternalUser",
+								"type": "boolean"
+							},
+							{
+								"name": "GlobalExcelExportFilePath",
+								"type": "string"
+							},
+							{
+								"name": "GlobalExcelExportMode",
+								"type": "int"
+							},
+							{
+								"name": "GlobalListPageLinkMode",
+								"type": "int"
+							},
+							{
+								"name": "Helplanguage",
+								"type": "string"
+							},
+							{
+								"name": "HomePageRefreshDuration",
+								"type": "int"
+							},
+							{
+								"name": "Language",
+								"type": "string"
+							},
+							{
+								"name": "MarkEmptyLinks",
+								"type": "string"
+							},
+							{
+								"name": "NetworkDomain",
+								"type": "string"
+							},
+							{
+								"name": "PersonName",
+								"type": "string"
+							},
+							{
+								"name": "PreferredCalendar",
+								"type": "string"
+							},
+							{
+								"name": "PreferredLocale",
+								"type": "string"
+							},
+							{
+								"name": "PreferredTimeZone",
+								"type": "string"
+							},
+							{
+								"name": "SendAlertAsEmailMessage",
+								"type": "string"
+							},
+							{
+								"name": "SendNotificationsInEmail",
+								"type": "string"
+							},
+							{
+								"name": "ShowAttachmentStatus",
+								"type": "string"
+							},
+							{
+								"name": "SqmEnabled",
+								"type": "string"
+							},
+							{
+								"name": "SqmGUID",
+								"type": "string"
+							},
+							{
+								"name": "StartPage",
+								"type": "string"
+							},
+							{
+								"name": "Theme",
+								"type": "string"
+							},
+							{
+								"name": "UserID",
+								"type": "string"
+							},
+							{
+								"name": "UserInfo_defaultPartition",
+								"type": "boolean"
+							},
+							{
+								"name": "UserInfo_language",
+								"type": "string"
+							},
+							{
+								"name": "UserName",
+								"type": "string"
+							},
+							{
+								"name": "WorkflowLineItemNotificationFormat",
+								"type": "string"
+							},
+							{
+								"name": "InstanceName",
+								"type": "string"
+							}
+						]
+					},
+					"[variables('dCRStreamNameRoles')]": {
+						"columns": [
+							{
+								"name": "TimeGenerated",
+								"type": "datetime"
+							},
+							{
+								"name": "SecurityRoleIdentifier",
+								"type": "string"
+							},
+							{
+								"name": "ContextString",
+								"type": "string"
+							},
+							{
+								"name": "AccessToSensitiveData",
+								"type": "boolean"
+							},
+							{
+								"name": "Description",
+								"type": "string"
+							},
+							{
+								"name": "SecurityRoleName",
+								"type": "string"
+							},
+							{
+								"name": "UserLicenseType",
+								"type": "string"
+							},
+							{
+								"name": "RoleId",
+								"type": "int"
+							},
+							{
+								"name": "InstanceName",
+								"type": "string"
+							}
+						]
+					},
+					"[variables('dCRStreamNameUserRoles')]": {
+						"columns": [
+							{
+								"name": "TimeGenerated",
+								"type": "datetime"
+							},
+							{
+								"name": "UserId",
+								"type": "string"
+							},
+							{
+								"name": "SecurityRoleIdentifier",
+								"type": "string"
+							},
+							{
+								"name": "AssignmentStatus",
+								"type": "string"
+							},
+							{
+								"name": "AssignmentMode",
+								"type": "string"
+							},
+							{
+								"name": "SecurityRoleName",
+								"type": "string"
+							},
+							{
+								"name": "UserLicenseType",
+								"type": "string"
+							},
+							{
+								"name": "InstanceName",
+								"type": "string"
+							}
+						]
+					}
+				},
+				"dataSources": {},
+				"destinations": {
+					"logAnalytics": [
+						{
+							"workspaceResourceId": "[parameters('sentinelWorkspace').id]",
+							"name": "clv2ws1"
+						}
+					]
+				},
+				"dataFlows": [
+					{
+						"streams": [
+							"[variables('dCRStreamNameLogs')]"
+						],
+						"destinations": [
+							"clv2ws1"
+						],
+						"transformKql": "source | extend TimeGenerated = now() | project-away dataAreaId,NewData\n",
+						"outputStream": "[variables('dCRStreamNameLogs')]"
+					},
+					{
+						"streams": [
+							"[variables('dCRStreamNameUsers')]"
+						],
+						"destinations": [
+							"clv2ws1"
+						],
+						"transformKql": "source | extend TimeGenerated = now() | project-rename NetworkAlias = Alias, UserId = UserID, UserDisplayName = UserName",
+						"outputStream": "[variables('dCRStreamNameUsers')]"
+					},
+					{
+						"streams": [
+							"[variables('dCRStreamNameRoles')]"
+						],
+						"destinations": [
+							"clv2ws1"
+						],
+						"transformKql": "source | extend TimeGenerated = now()",
+						"outputStream": "[variables('dCRStreamNameRoles')]"
+					},
+					{
+						"streams": [
+							"[variables('dCRStreamNameUserRoles')]"
+						],
+						"destinations": [
+							"clv2ws1"
+						],
+						"transformKql": "source | extend TimeGenerated = now()",
+						"outputStream": "[variables('dCRStreamNameUserRoles')]"
+					}
+				]
+			}
+		},
+		{
+			"type": "Microsoft.Insights/dataCollectionEndpoints",
+			"apiVersion": "2021-09-01-preview",
+			"name": "[variables('dataCollectionEndpointName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/dataCollectionEndpoints'), parameters('tagsByResource')['Microsoft.Insights/dataCollectionEndpoints'], json('{}')) ]",
+			"location": "[parameters('sentinelWorkspace').location]",
+			"dependsOn": [
+				"[variables('dynamics365TableDeploymentName')]"
+			],
+			"properties": {
+				"networkAcls": {
+					"publicNetworkAccess": "Enabled"
+				}
+			}
+		},
+		{
+			"condition": "[parameters('roleAssignmentDcr')]",
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2022-04-01",
+			"name": "[guid(parameters('functionAppName'), variables('dataCollectionRuleName'), variables('monitoringMetricsPublisherRoleId'))]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Authorization/roleAssignments'), parameters('tagsByResource')['Microsoft.Authorization/roleAssignments'], json('{}')) ]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+				"[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+			],
+			"properties": {
+				"roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', variables('monitoringMetricsPublisherRoleId') )]",
+				"principalId": "[if(equals(parameters('identity').useManagedIdentity, true()), reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.principalId, parameters('identity').objectId)]",
+				"principalType": "ServicePrincipal"
+			},
+			"scope": "[concat('Microsoft.Insights/dataCollectionRules', '/', variables('dataCollectionRuleName'))]"
+		},
+		{
+			"condition": "[parameters('roleAssignmentKv')]",
+			"type": "Microsoft.Authorization/roleAssignments",
+			"name": "[guid(parameters('functionAppName'), parameters('keyVault').keyVaultName, variables('keyVaultSecretUserRoleId'))]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Authorization/roleAssignments'), parameters('tagsByResource')['Microsoft.Authorization/roleAssignments'], json('{}')) ]",
+			"apiVersion": "2022-04-01",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+				"[resourceId('Microsoft.KeyVault/vaults', parameters('keyVault').keyVaultName)]"
+			],
+			"properties": {
+				"roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', variables('keyVaultSecretUserRoleId') )]",
+				"principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.principalId]",
+				"principalType": "ServicePrincipal"
+			},
+			"scope": "[concat('Microsoft.KeyVault/vaults', '/', parameters('keyVault').keyVaultName)]"
+		}
+	],
+	"outputs": {}
+}

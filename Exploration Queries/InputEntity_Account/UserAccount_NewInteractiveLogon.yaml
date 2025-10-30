@@ -1,0 +1,45 @@
+Id: 6d1c2ca8-8efe-4fa2-bea6-fa582c03637c
+DisplayName: User account interactive logon to new devices
+Description: Hosts a given user performed interactive logon to for the first time in the last 30 days
+InputEntityType: Account
+InputFields:
+  - Name
+  - Sid
+  - AadUserId
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 1d
+QueryPeriodAfter: 1d
+DataSources:
+  - BehaviorAnalytics
+Tactics:
+  - Collection
+  - LateralMovement
+query: |
+ 
+  let GetNewInteractiveLogonsForUser = (v_Account_Name:string, v_Account_Sid:string, v_Account_AadUserId:string)
+  {
+    BehaviorAnalytics
+    | extend v_Account_Name = case(
+        v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
+        v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+        v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+        v_Account_Name)
+    | where ActionType in ("InteractiveLogon", "RemoteInteractiveLogon") and 
+            tobool(ActivityInsights.FirstTimeUserLoggedOnToDevice) and 
+            (
+                (isnotempty(UserName) and UserName =~ v_Account_Name) or                                                  
+                (isnotempty(UsersInsights.AccountObjectID) and UsersInsights.AccountObjectID == v_Account_AadUserId) or
+                (isnotempty(UsersInsights.OnPremisesSID) and UsersInsights.OnPremisesSID =~ v_Account_Sid)
+            )
+    | extend device_info = pack('DevicesInsights', DevicesInsights, 'ActivityInsights', ActivityInsights)
+    | project Host_Aux_TimeGenerated = TimeGenerated,
+              Host_UnstructuredName = DestinationDevice,
+              Host_Aux_Insights = device_info,
+              Account_Name = UserName,
+              Account_Sid = v_Account_Sid,
+              Account_AadUserId = toguid(UsersInsights.AccountObjectID),
+              Account_Aux_Insights = UsersInsights
+    | top 10 by Host_Aux_TimeGenerated asc nulls last
+  };
+  GetNewInteractiveLogonsForUser('<Name>', '<Sid>', '<AadUserId>')

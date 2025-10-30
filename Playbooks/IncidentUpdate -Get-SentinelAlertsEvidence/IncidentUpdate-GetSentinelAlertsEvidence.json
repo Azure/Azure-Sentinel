@@ -1,0 +1,237 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments":"This playbook will collect the updates from sentinel incident evidence (aka 'Events') on a scheduled base and send them and the alerts to EventHub. 3rd party SIEM can connect to the above EventHub and save this data to farther analysis.",
+        "author": "Yaniv Shasha and Naomi Christis"
+    },
+    "parameters": {
+         "PlaybookName": {
+            "defaultValue": "IncidentUpdate-GetSentinelAlertsEvidence",
+            "type": "String"
+        },
+        "EventsNumber": {
+            "defaultValue": 10,
+            "type": "int",
+            "metadata": {
+                "description": "The maximum number of events (evidence) that you want to send to Event Hub"
+            }        
+        }
+    },
+    "variables": {
+        "AzureMonitorConnectionName": "[concat('azuremonitor-', parameters('PlaybookName'))]",
+        "AzureEventHubConnectionName": "[concat('azureeventhub-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureMonitorConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+				}
+			}
+		},
+        {
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureEventHubConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/eventhubs')]"
+				}
+			}
+		},
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureMonitorConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureEventHubConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence_(every_hour)": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence",
+                            "description": "How often this playbook should run"
+                        }
+                    },
+                    "actions": {
+                        "For_each_(alert)": {
+                            "foreach": "@body('Run_query_and_list_results_(get_alerts_added_to_incidents)')?['value']",
+                            "actions": {
+                                "Condition_(check_if_scheduled_analytic_rule)": {
+                                    "actions": {
+                                        "Run_query_and_list_results_(get_events_from_scheduled_rule)": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "set query_datetimescope_column = \"TimeGenerated\";\nset query_datetimescope_from = datetime(@{items('For_each_(alert)')?['AlertStartTimeExtendedProperty']});\nset query_datetimescope_to = datetime(@{items('For_each_(alert)')?['AlertEndTimeExtendedProperty']});\n@{items('For_each_(alert)')?['AlertQuery']}\n| top @{variables('EventsNumber')} by TimeGenerated desc ",
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuremonitor']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/queryData",
+                                                "queries": {
+                                                    "resourcegroups": "",
+                                                    "resourcename": "",
+                                                    "resourcetype": "Log Analytics Workspace",
+                                                    "subscriptions": "",
+                                                    "timerange": "@{items('For_each_(alert)')?['AlertQueryPeriod']}"
+                                                }
+                                            },
+                                            "description": "In this query we will get the events that generated the alert"
+                                        },
+                                        "Send_event_(send_information_with_events_to_eventhub)": {
+                                            "runAfter": {
+                                                "Run_query_and_list_results_(get_events_from_scheduled_rule)": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "ContentData": "@{base64(concat('\"{','\n','\"Alert Display Name\":',items('For_each_(alert)')?['AlertName'],',','\n','\"Product Name\":',items('For_each_(alert)')?['ProductName'],',','\n','\"Incident_Entities\":',items('For_each_(alert)')?['Entities'],',','\n','\"AlertsDescription\":',items('For_each_(alert)')?['AlertDescription'],',','\n','\"Severity\":',items('For_each_(alert)')?['AlertSeverity'],',','\n','\"Incident Url\":',items('For_each_(alert)')?['IncidentUrl'],',','\n','\"Incident Owner\":',items('For_each_(alert)')?['Owner'],',','\n','\"Incident Description\":',items('For_each_(alert)')?['IncidentDescription'],',','\n','\"Incident Title\":',items('For_each_(alert)')?['IncidentTitle'],',','\n','\"Incident comment\":',items('For_each_(alert)')?['IncidentComments'],',','\n','\"Alert Time\":',items('For_each_(alert)')?['AlertTime'],',','\n','\"Alert Subscription Id\":',items('For_each_(alert)')?['WorkspaceSubscriptionId'],',','\n','\"Alert type\":',items('For_each_(alert)')?['ProductComponentName'],',','\n','\"Provider Alert ID\":',items('For_each_(alert)')?['ProviderAlertID'],',','\n','\"Alert Start Time\":',items('For_each_(alert)')?['AlertStartTime'],',','\n','\"Alert End Time\":',items('For_each_(alert)')?['AlertEndTime'],',','\n','\"Events\":',body('Run_query_and_list_results_(get_events_from_scheduled_rule)')?['value'],'\n','}\"'))}"
+                                               },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['eventhub']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/@{encodeURIComponent('incidentalerteventhub')}/events"
+                                            },
+                                            "description": "Send all the information to Event Hub"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Send_event_(send_information_of_alert_and_incident_to_eventhub)": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "ContentData": "@{base64(concat('\"{','\n','\"Alert Display Name\":',items('For_each_(alert)')?['AlertName'],',','\n','\"Product Name\":',items('For_each_(alert)')?['ProductName'],',','\n','\"Incident_Entities\":',items('For_each_(alert)')?['Entities'],',','\n','\"AlertsDescription\": ',items('For_each_(alert)')?['AlertDescription'],',','\n','\"Severity\":',items('For_each_(alert)')?['AlertSeverity'],',','\n','\"Incident Url\":',items('For_each_(alert)')?['IncidentUrl'],',','\n','\"Incident Owner\":',items('For_each_(alert)')?['Owner'],',','\n','\"Incident Description\":',items('For_each_(alert)')?['IncidentDescription'],',','\n','\"Incident Title\":',items('For_each_(alert)')?['IncidentTitle'],',','\n','\"Incident comment\":',items('For_each_(alert)')?['IncidentComments'],',','\n','\"Alert Time\":',items('For_each_(alert)')?['AlertTime'],',','\n','\"Alert Subscription Id\":',items('For_each_(alert)')?['WorkspaceSubscriptionId'],',','\n','\"Alert type\":',items('For_each_(alert)')?['ProductComponentName'],',','\n','\"Provider Alert ID\":',items('For_each_(alert)')?['ProviderAlertID'],',','\n','\"Alert Start Time\":',items('For_each_(alert)')?['AlertStartTime'],',','\n','\"Alert End Time\":',items('For_each_(alert)')?['AlertEndTime'],',','\n','\"Events\":\"\",','\n','}\"'))}"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['eventhub']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/@{encodeURIComponent('incidentalerteventhub')}/events"
+                                                },
+                                                "description": "Send all the information to Event Hub"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each_(alert)')?['ProductComponentName']",
+                                                    "Scheduled Alerts"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "If the alert is generated via a schedule then we should also get the events that generated the alert. If not we can just send the information without the events to Event Hub"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_(max_number_of_events_that_triggered_alert_to_forward)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "description": "For each alert that we found via the above query we will send information to the Event Hub"
+                        },
+                        "Initialize_variable_(max_number_of_events_that_triggered_alert_to_forward)": {
+                            "runAfter": {
+                                "Run_query_and_list_results_(get_alerts_added_to_incidents)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EventsNumber",
+                                        "type": "integer",
+                                        "value": "[parameters('EventsNumber')]"
+                                    }
+                                ]
+                            },
+                            "description": "We specify the maximum number of events (which are part of the alert) that should be send to EventHub"
+                        },
+                        "Run_query_and_list_results_(get_alerts_added_to_incidents)": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "SecurityIncident\n| where LastModifiedTime >= ago(1hr) and ModifiedBy == \"Alert Grouping\" and AdditionalData.alertsCount > 1\n| extend AlertCount = AdditionalData.alertsCount\n| summarize arg_max(todecimal(AlertCount), *) by IncidentName \n| mv-expand AlertIds\n| project TimeGenerated, IncidentName, IncidentTitle=Title, SystemAlertId=tostring(AlertIds), IncidentUrl, IncidentOwner=Owner, IncidentDescription=Description, IncidentComment=Comments\n| join (\n    SecurityAlert\n    | where TimeGenerated >= ago(1h)\n    | extend QueryProperties=parse_json(ExtendedProperties)\n    | project SystemAlertId, AlertQuery=tostring(QueryProperties.Query), AlertQueryPeriod=tostring(QueryProperties.['Query Period']), \n        AlertStartTimeExtendedProperty=tostring(QueryProperties.['Query Start Time UTC']), AlertEndTimeExtendedProperty=tostring(QueryProperties.['Query End Time UTC']), AlertName, ProductName, AlertDescription=Description, AlertSeverity, AlertTime=TimeGenerated, WorkspaceSubscriptionId, ProductComponentName, ProviderAlertID=VendorOriginalId, AlertStartTime=StartTime, AlertEndTime=EndTime, Entities\n    )\n    on SystemAlertId",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitor']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "",
+                                    "resourcename": "",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "",
+                                    "timerange": "Set in query"
+                                }
+                            },
+                            "description": "This query will run against your LA workspace and will get all the alerts that were added to incidents in the last hour"
+
+                        }
+                    },
+                    "outputs": {}
+                },
+               "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitor": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "eventhub": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureEventHubConnectionName'))]",
+                                "connectionName": "[variables('AzureEventHubConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/eventhubs')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

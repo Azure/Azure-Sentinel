@@ -1,0 +1,45 @@
+id: d0a3cb7b-375e-402d-9827-adafe0ce386d
+name: Web shell file alert enrichment
+description: |
+  'Extracts MDATP Alert for a web shell being placed on the server and then enriches this event with information from W3CIISLog to idnetigy the Attacker that placed the shell'
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+query: |
+  let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);  
+  SecurityAlert   
+  | where ProviderName =~ "MDATP" 
+  | extend alertData = parse_json(Entities)  
+  | mvexpand alertData  
+  // Get only the file type from the JSON, this gives us the file name
+  | where alertData.Type =~ "file"  
+  // This can be expanded to include other script extensions 
+  | where alertData.Name has_any(scriptExtensions)
+  | extend FileName = alertData.Name 
+  | project TimeGenerated, tostring(FileName), alertData.Directory 
+  | join (  
+  W3CIISLog    
+  | where csUriStem has_any(scriptExtensions) 
+  | extend splitUriStem = split(csUriStem, "/")  
+  | extend FileName = splitUriStem[-1] 
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated) by AttackerIP=cIP, AttackerUserAgent=csUserAgent, SiteName=sSiteName, ShellLocation=csUriStem, tostring(FileName)  
+  ) on FileName 
+  | project StartTime, EndTime, AttackerIP, AttackerUserAgent, SiteName, ShellLocation
+  | extend timestamp = StartTime, IPCustomEntity = AttackerIP  
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Thomas McElroy
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

@@ -1,0 +1,248 @@
+Parser:
+  Title: Web Session ASIM filtering parser for Cisco Meraki
+  Version: '0.1'
+  LastUpdated: Jun 20 2023
+Product:
+  Name: Cisco Meraki
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Cisco Meraki Documentation
+  Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
+Description: |
+  This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Web Session normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
+ParserName: vimWebSessionCiscoMeraki
+EquivalentBuiltInParser: _Im_WebSession_CiscoMeraki
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+ let ActionLookup = datatable (action: string, DvcAction: string, EventResult: string, EventSeverity: string)  [
+    'allow', 'Allow', 'Success', 'Informational',
+    'log', 'Allow', 'Success', 'Informational',
+    'accept', 'Allow', 'Success', 'Informational',
+    'block', 'Deny', 'Failure', 'Low',
+    'deny', 'Deny', 'Failure', 'Low',
+    'quarantine', 'Deny', 'Failure', 'Low'
+    ];
+  let parser=(
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      ipaddr_has_any_prefix: dynamic=dynamic([]), 
+      url_has_any: dynamic=dynamic([]),
+      httpuseragent_has_any: dynamic=dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string='*',
+      disabled: bool=false
+      ) {
+      let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let allData = union isfuzzy=true
+              (
+              meraki_CL
+              | project-rename LogMessage =  Message
+              ),
+              (
+              Syslog
+              | where Computer in (_ASIM_GetSourceBySourceType('CiscoMeraki'))
+              | project-rename LogMessage =  SyslogMessage
+              );
+      let PreFilteredData = allData
+          | where not(disabled) and (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
+              and (LogMessage has "urls" or LogMessage has_all("security_event", "security_filtering_file_scanned")) and (array_length(eventresultdetails_in) == 0)
+          | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
+          | extend
+              Epoch = tostring(Parser[0]),
+              LogType = tostring(Parser[2]),
+              Substring = tostring(Parser[3])
+          | extend EventStartTime = unixtime_seconds_todatetime(tolong(split(Epoch, ".")[0]))
+          | where (array_length(url_has_any) == 0 or LogMessage has_any (url_has_any))
+              and (array_length(httpuseragent_has_any) == 0 or LogMessage has_any(httpuseragent_has_any))
+          | where LogType in ("security_event", "urls");
+      let SecurityEventData = PreFilteredData
+          | where LogType == "security_event"
+          | parse Substring with LogSubType: string " " temp_RestMessage: string
+          | where LogSubType == "security_filtering_file_scanned"
+          | parse-kv Substring as (disposition: string, action: string, sha256: string, name: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+          | parse Substring with * " sha256" fsha256: string " "restmessage: string
+          | extend disposition = trim('"', disposition),
+                  action = trim('"', action),
+                  sha256 = trim('"', sha256),
+                  fsha256 = trim('"', fsha256),
+                  name = trim('"', name)
+          | lookup ActionLookup on action;
+      let UrlsData = PreFilteredData
+          | where LogType == "urls"
+          | parse Substring with * "request:" request: string " " urls: string;
+      union SecurityEventData, UrlsData
+      | parse-kv Substring as (src: string, dst: string, url: string, mac: string, agent: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+      | where (array_length(httpuseragent_has_any) == 0 or agent has_any(httpuseragent_has_any))
+      | extend
+          src = trim('"', src),
+          dst = trim('"', dst),
+          url = trim('"', url),
+          urls = trim('"', urls)
+      | extend Url = coalesce(url, urls)
+      | where array_length(url_has_any) == 0 or Url has_any (url_has_any)
+      | extend EventResult=case(
+                            LogType == "urls", "Success",
+                            isempty(EventResult), "NA",
+                            EventResult                        
+                        )
+      | where (eventresult == '*' or EventResult =~ eventresult)
+      | parse src with *  "[" temp_srcip: string "]:" temp_srcport: string
+      | parse dst with *  "[" temp_dstip: string "]:" temp_dstport: string
+      | extend
+          agent= trim('"', agent),
+          mac = trim('"', mac)
+      | extend SrcIpAddr = iff(
+                          src has ".",
+                          split(src, ":")[0], 
+                          coalesce(temp_srcip, src)
+                      )
+      | extend DstIpAddr = iff(
+                          dst has ".",
+                          split(dst, ":")[0], 
+                          coalesce(temp_dstip, dst)
+                      )
+      | extend
+          temp_SrcMatch=has_any_ipv4_prefix(SrcIpAddr, src_or_any),
+          temp_DstMatch=has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix)
+      | extend ASimMatchingIpAddr=case(
+                                    array_length(src_or_any) == 0,
+                                    "-",
+                                    temp_SrcMatch and temp_DstMatch,
+                                    "Both",
+                                    temp_SrcMatch,
+                                    "SrcIpAddr",
+                                    temp_DstMatch,
+                                    "DstIpAddr",
+                                    "No match"
+                                )
+      | where ASimMatchingIpAddr != "No match"
+      | extend SrcPortNumber = toint(
+                                  iff (
+                                      src has ".",
+                                      split(src, ":")[1],
+                                      temp_srcport
+                                  )
+                              )
+      | extend DstPortNumber = toint(
+                                  iff (
+                                      dst has ".",
+                                      split(dst, ":")[1],
+                                      temp_dstport
+                                  )
+                              )
+      | extend
+          EventSeverity=case(
+                    DvcAction == "Deny" and disposition == "malicious",
+                    "Medium",
+                    DvcAction == "Allow" and disposition == "malicious",
+                    "High",
+                    isnotempty(EventSeverity), EventSeverity,
+                    "Informational"
+                )
+      | extend
+          EventType = "HTTPsession",
+          HttpUserAgent = agent,
+          HttpRequestMethod = request,
+          FileSHA256 = coalesce(sha256, fsha256),
+          FileName = name,
+          DvcMacAddr = mac,
+          EventOriginalType = LogType,
+          EventOriginalSubType = LogSubType,
+          EventUid = _ResourceId
+      | extend Device = tostring(Parser[1])
+      | invoke _ASIM_ResolveDvcFQDN('Device')
+      | extend 
+          Dst = DstIpAddr,
+          Src = SrcIpAddr,
+          Dvc = DvcHostname,
+          IpAddr = SrcIpAddr,
+          UserAgent = HttpUserAgent,
+          EventEndTime = EventStartTime
+      | extend
+          EventCount=int(1),
+          EventProduct="Meraki",
+          EventVendor="Cisco",
+          EventSchema="WebSession",
+          EventSchemaVersion="0.2.6"
+      | project-away
+          LogMessage,
+          Parser,
+          LogType,
+          LogSubType,
+          Epoch,
+          Device,
+          src,
+          dst,
+          mac,
+          url,
+          urls,
+          disposition,
+          action,
+          request,
+          name,
+          sha256,
+          fsha256,
+          agent,
+          restmessage,
+          temp*,
+          Substring,
+          TenantId,
+          SourceSystem,
+          Computer,
+          _ResourceId,
+          MG,
+          ManagementGroupName,
+          RawData,
+          EventTime,
+          Facility,
+          HostName,
+          SeverityLevel,
+          ProcessID,
+          HostIP,
+          ProcessName
+  };
+  parser(
+      starttime=starttime, 
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+      url_has_any=url_has_any,
+      httpuseragent_has_any=httpuseragent_has_any,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled
+  )

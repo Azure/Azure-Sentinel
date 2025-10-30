@@ -1,0 +1,44 @@
+id: 42831fb3-f61d-41e9-95d9-f08797479a0e
+name: Azure CloudShell Usage
+description: |
+  'This query look for users starting an Azure CloudShell session and summarizes the Azure Activity from that
+  user account during that timeframe (by default 1 hour). This can be used to help identify abuse of the CloudShell
+  to modify Azure resources.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059
+query: |
+
+   AzureActivity
+      | where ActivityStatusValue =~ "Success"
+      | where ResourceGroup has "cloud-shell-storage"
+      | where OperationNameValue =~ "Microsoft.Storage/storageAccounts/listKeys/action"
+      // Change the timekey scope below to get activity for a longer window 
+      | summarize by Caller, timekey= bin(TimeGenerated, 1h)
+      | join (AzureActivity | where TimeGenerated >= ago(1d)
+      | where OperationNameValue !~ "Microsoft.Storage/storageAccounts/listKeys/action"
+      | where isnotempty(OperationNameValue)
+       // Change the timekey scope below to get activity for a longer window 
+      | summarize make_set(OperationNameValue) by Caller, timekey=bin(TimeGenerated, 1h)) on Caller, timekey
+      | extend timestamp = timekey, AccountCustomEntity = Caller
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Other" ]

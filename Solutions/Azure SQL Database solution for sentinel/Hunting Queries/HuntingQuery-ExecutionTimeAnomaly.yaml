@@ -1,0 +1,86 @@
+id: af55d5b0-6b4a-4874-8299-9d845bf7c1fd
+name: Anomalous Query Execution Time
+description: |
+  'This hunting query will detect SQL queries that took an unusually long period of time to execute based on a calculated average execution time. The query groups based on the application and the username, making this query suitable for detecting exploitation of web applications, or other SQL backed applications with predictable behaviour.'
+requiredDataConnectors:
+  - connectorId: AzureSql
+    dataTypes:
+      - AzureDiagnostics
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - SQL
+query: |
+  let timeRange = 14d;
+  //How frequently the query averages data for an average execution time
+  let timeSliceSize = 1h;
+  //Anomaly decompose threshold, 2 by default
+  let scoreThreshold = 2;
+  let processedData = materialize (
+      AzureDiagnostics
+      | where TimeGenerated > ago(timeRange)
+      | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
+      | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
+      ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
+      IsSuccess = succeeded_s, DurationMs = duration_milliseconds_d, AffectedRows = affected_rows_d,
+      ResponseRows = response_rows_d, Statement = statement_s,
+      Error = case( additional_information_s has 'error_code', toint(extract("<error_code>([0-9.]+)", 1, additional_information_s))
+                        , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+)", 1, additional_information_s))
+                        , 0),
+      State = case( additional_information_s has 'error_state', toint(extract("<error_state>([0-9.]+)", 1, additional_information_s))
+                        , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+), Level ([0-9.]+)", 2, additional_information_s))
+                        , 0),
+      AdditionalInfo = additional_information_s, timeSlice = floor(TimeGenerated, timeSliceSize));
+  processedData
+  //Bin the data into 1h windows, taking the average of exeuction time
+  | summarize round(avg(DurationMs), 2), min(TimeGenerated), max(TimeGenerated) by PrincipalName, ApplicationName, bin(TimeGenerated, timeSliceSize), ResourceId
+  //Summarise by user and application and create list ready for anomaly detection
+  | summarize make_list(avg_DurationMs, 10000), make_list(min_TimeGenerated, 10000), make_list(max_TimeGenerated, 10000) by PrincipalName, ApplicationName, ResourceId
+  | extend series_decompose_anomalies(list_avg_DurationMs, scoreThreshold, -1, 'linefit')
+  | mv-expand TimeAnomaly=series_decompose_anomalies_list_avg_DurationMs_ad_flag, WindowStart=list_min_TimeGenerated, WindowEnd=list_max_TimeGenerated
+  | project WindowStart, WindowEnd, PrincipalName, ApplicationName, TimeAnomaly, ResourceId
+  | where TimeAnomaly == 1 
+  //Split the query here to see raw anomaly results
+  //The next section will re-join back to the SQL diagnostics data to 
+  //display the queries executed within the anomalous windows identified
+  | extend joinKey = strcat(PrincipalName, ApplicationName)
+  | join kind=leftouter (
+      processedData
+      | project ApplicationName, PrincipalName, Statement, TimeGenerated, DurationMs, ResourceId, ClientIp, HostName
+      | extend joinKey = strcat(PrincipalName, ApplicationName)
+  ) on joinKey
+  | where TimeGenerated between (todatetime(WindowStart) .. todatetime(WindowEnd))
+  | project TimeGenerated, TimeAnomaly, WindowStart, WindowEnd, PrincipalName, ApplicationName, Statement, DurationMs, ResourceId, ClientIp, HostName
+  | order by DurationMs desc
+  | extend Name = tostring(split(PrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(PrincipalName, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = ClientIp
+  | extend Host_0_Hostname = HostName
+  | extend CloudApplication_0_Name = ApplicationName
+  | extend AzureResource_0_ResourceId = ResourceId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ApplicationName
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId

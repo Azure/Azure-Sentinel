@@ -1,0 +1,217 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for Azure administrative activity
+  Version: '0.2'
+  LastUpdated: Feb 19 2023
+Product:
+  Name: Microsoft Azure
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Azure administrative activity in the AzureActivity table to the ASIM Audit Event schema.
+ParserName: vimAuditEventAzureActivity
+EquivalentBuiltInParser: _Im_AuditEvent_AzureActivity
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+
+ParserQuery: |
+  let parser=  (
+            starttime:datetime=datetime(null), 
+            endtime:datetime=datetime(null),
+            srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+            eventresult:string='*',
+            actorusername_has_any:dynamic=dynamic([]),
+            eventtype_in:dynamic=dynamic([]),
+            operation_has_any:dynamic=dynamic([]),
+            object_has_any:dynamic=dynamic([]),
+            newvalue_has_any:dynamic=dynamic([]),
+            disabled:bool = false
+    ){
+     let AzureActivityOperationLookup = datatable (op:string, EventType:string) 
+    [
+      'ACTION', 'Execute',
+      'WRITE', 'Set',
+      'DELETE', 'Delete'
+    ];
+    let AzureActivityStatusLookup = datatable (ActivityStatusValue:string, ActivitySubstatusValue:string, EventResult:string, EventResultDetails:string) 
+    [
+        "Accept","Accepted","Success","",
+        "Accept","Created","Success","",
+        "Accept","OK","Success","",
+        "Accept","","Success","",
+        "Accepted","","Success","",
+        "Active","","Success","Active",
+        "Failed","","Failure","",
+        "Failure","BadRequest","Failure","Bad Request",
+        "Failure","Conflict","Failure","Bad Request",
+        "Failure","Forbidden","Failure","Unauthorized",
+        "Failure","InternalServerError","Failure","Internal error",
+        "Failure","MethodNotAllowed","Failure","Bad Request",
+        "Failure","NotFound","Failure","Not found",
+        "Failure","Unauthorized","Failure","Unauthorized",
+        "Failure","","Failure","",
+        "In Progress","","Success","In Progress",
+        "Resolved","","Success","",
+        "Start","","Success","Start",
+        "Started","","Success","Start",
+        "Succeeded","","Success","",
+        "Success","Created","Success","",
+        "Success","NoContent","Success","",
+        "Success","OK","Success","",
+        "Success","","Success","",
+        "Updated","","Success","",
+        "Succeeded","OK","Success","",
+        "Accepted","Accepted","Success","",
+        "Accepted","OK","Success","",
+        "Failed","Forbidden","Failure","Unauthorized",
+        "Succeeded","Created","Success","",
+        "Failed","BadRequest","Failure","Bad request",
+        "Accepted","Created","Success","",
+        "Failed","Conflict","Failure","Bad request",
+        "Failed","MethodNotAllowed","Failure","Bad request",
+        "Failure","BadGateway","Failure","Bad request",
+        "Succeeded","NoContent","Success","",
+        "Failure","ServiceUnavailable","Failure","Internal error",
+        "Failure","GatewayTimeout","Failure","Internal error",
+        "Failed","NotFound","Failure","Not found",
+        "Failed","BadGateway","Failure","Bad request",
+        "Failure","UnsupportedMediaType","Failure","Bad request",
+        "Failed","Unauthorized","Failure","Unauthorized",
+        "Cancel","","Failure","Cancelled"
+    ];
+    AzureActivity 
+    | where not(disabled)
+    | where
+        (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and (array_length(newvalue_has_any) == 0)
+    | where CategoryValue == "Administrative"
+    | project-away HTTPRequest, Level, SourceSystem, EventSubmissionTimestamp, TenantId, OperationId, Hierarchy, Category, ResourceId, ResourceProvider, Resource
+    | where 
+        (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(CallerIpAddress,srcipaddr_has_any_prefix))
+        and (array_length(actorusername_has_any) == 0 or Caller has_any (actorusername_has_any))
+        and (array_length(operation_has_any) == 0 or OperationNameValue has_any (operation_has_any))
+        and (array_length(object_has_any) == 0 or Properties  has_any (object_has_any))
+    // --
+    // Calculate and filter by EventType
+    | extend op = toupper(tostring(split(OperationNameValue,"/")[-1]))
+    | lookup AzureActivityOperationLookup on op
+    | extend EventType = iff (EventType == "", "Other", EventType)
+    | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+    | project-away op
+    // --
+    // Calculate EventResult, EventResultDetails, and EventResultOriginalDetails
+    | extend
+        EventOriginalResultDetails = strcat (
+            ActivityStatusValue, 
+            iff (ActivitySubstatusValue !="", strcat(' [', ActivitySubstatusValue, ']'), "")
+        )
+    | extend 
+        ActivitySubstatusValue = iff (ActivitySubstatusValue matches regex "\\d+", "", ActivitySubstatusValue)
+    | lookup AzureActivityStatusLookup on ActivityStatusValue, ActivitySubstatusValue
+    | extend EventResult = iff(EventResult == "", "Other", EventResult)
+    | where eventresult == "*" or (EventResult == eventresult) // Not optimized
+    | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+    | project-away ActivityStatus*, ActivitySubstatus*    // 
+    | project-rename 
+        Operation = OperationNameValue,
+        SrcIpAddr = CallerIpAddress,
+        EventOriginalUid = EventDataId,
+        ActorSessionId = CorrelationId,
+        EventOriginalType = CategoryValue
+    | extend
+        EventCount = int(1),
+        EventStartTime = TimeGenerated, 
+        EventEndTime= TimeGenerated,
+        EventProduct = 'Azure',
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'AuditEvent',
+        ObjectType = "Cloud Resource",
+        TargetAppName = "Azure",
+        TargetAppType = "CSP"
+    // --
+    // Calculate Actor
+    | extend 
+        Caller = iff(Caller == "Microsoft.RecoveryServices", "", Caller)
+    | extend 
+        ActorUsernameType = iff (Caller has "@", "UPN", "")
+    | extend 
+        ActorUsername = iff (ActorUsernameType == "UPN", Caller, ""),
+        ActorUserId = iff (ActorUsernameType != "UPN", Caller, "")
+    | extend
+        ActorUserIdType = iff  (ActorUserId != "", "AADID", "")
+    | project-away Caller
+    // --
+    // Calculate Object
+    | extend 
+        entity = tostring(Properties_d.entity), 
+        resource = tostring(Properties_d.resource),
+        entity_name = tostring(Properties_d.["Entity Name"])
+    | extend Object = case ( 
+            entity != "", entity,
+            strcat ("/subscriptions/", SubscriptionId, "/resourceGroups/", ResourceGroup, "/providers/", ResourceProviderValue, "/",resource, iff (entity_name != "", strcat("/", entity_name), ""))
+        )
+    | project-away entity, resource,entity_name, _SubscriptionId, SubscriptionId, ResourceGroup, ResourceProviderValue
+    // Aliases
+    | extend AdditionalFields = pack_dictionary("Authorization", Authorization_d, "Claims", Claims_d, "Error", Properties_d.statusMessage)
+    // -- Aliases
+    | extend 
+        IpAddr = SrcIpAddr,
+        User = ActorUsername,
+        Application = TargetAppName,
+        Dst = TargetAppName,
+        Src = SrcIpAddr,
+    // -- Entity identifier explicit aliases
+        ActorUserUpn = ActorUsername,
+        ActorUserAadId = ActorUserId
+    | project-away OperationName, Properties*, Authorization*, Claims*
+    // -- Properties*
+  };
+  parser
+  (
+    starttime = starttime,
+    endtime = endtime,
+    srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+    actorusername_has_any = actorusername_has_any,
+    eventtype_in = eventtype_in,
+    eventresult = eventresult,
+    operation_has_any = operation_has_any,
+    object_has_any=object_has_any,
+    newvalue_has_any=newvalue_has_any,
+    disabled=disabled
+  )

@@ -1,0 +1,32 @@
+id: a27d5cb6-c533-4a81-9d11-d5c0ed257bc7
+name: File Copy and Execution
+description: |
+  This query identifies files that are copied to a device over SMB, then executed within a
+  specified threshold. Default is 5 seconds, but is configurable by tweaking the value for
+  ToleranceInSeconds.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+  - DeviceLogonEvents
+  - DeviceFileEvents
+  - DeviceProcessEvents
+tactics:
+- Execution
+- Persistence
+- Lateral movement
+- Impact
+query: |
+  let ToleranceInSeconds = 5;
+  DeviceNetworkEvents
+  | where LocalPort == 445 and isnotempty(RemoteIP)
+  | join kind = inner DeviceLogonEvents on DeviceId
+  | where Timestamp1 between (Timestamp .. datetime_add('second',ToleranceInSeconds,Timestamp)) and RemoteIP endswith RemoteIP1
+  | join kind=inner (
+      DeviceFileEvents
+      | where ActionType in ('FileModified','FileCreated') and (InitiatingProcessFileName =~ 'System' or InitiatingProcessFolderPath endswith "ntoskrnl.exe")
+  ) on DeviceId
+  | where Timestamp2 between (Timestamp .. datetime_add('second',ToleranceInSeconds,Timestamp))
+  | join kind=inner DeviceProcessEvents on DeviceId, FolderPath
+  | where Timestamp3 between (Timestamp .. datetime_add('second',ToleranceInSeconds,Timestamp))
+  | project Timestamp, DeviceName, RemoteIP, RemotePort, AccountDomain, AccountName, AccountSid, Protocol, LogonId, RemoteDeviceName, IsLocalAdmin, FileName, FolderPath, SHA1, SHA256, MD5, ProcessCommandLine

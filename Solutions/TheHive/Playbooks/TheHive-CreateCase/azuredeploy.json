@@ -1,0 +1,298 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "title": "The Hive - Create case",
+        "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Creates case in TheHive instance with enriched description and title.\n2. Gets Hosts, IPs entities.\n3. Creates task and bind it to case.\n4. Creates observables with hosts and IPs for created case.",
+        "prerequisites": [
+            "1. TheHive API Connector has to be deployed prior to the deployment of this playbook under the same subscription.",
+			"2. Data gateway should be deployed under the same subscription and resource group as playbooks.",
+            "3. TheHive API credentials are required. Refer to the TheHive API Connector documentation."
+        ],
+			    "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection..",
+            "1.  Click the Microsoft Sentinel connection resource",
+            "2.  Click edit API connection",
+            "3.  Click Authorize",
+            "4.  Sign in",
+			"3.  Click Save",
+            "4.  Repeat steps for other connections",
+            "**b. Configurations in Sentinel**",
+            "1. In Microsoft Sentinel, analytical rules should be configured to trigger an alert. An alert should contain source and sourceRef custom entities. [Docomentation about custom entities values](https://docs.thehive-project.org/thehive/legacy/thehive3/api/alert/)",
+            "2.  Configure the automation rules to trigger the playbook."
+        ],
+        "lastUpdateTime": "2022-08-11T12:00:00.000Z", 
+        "entities": ["host", "ip"],
+        "tags": ["Incident management"], 
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        },
+		"releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "TheHive-CreateCase",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "TheHive-CreateCase",
+            "type": "String"
+        },
+        "ConnectorName": {
+            "defaultValue": "TheHive",
+            "type": "string"
+        },
+        "onPremiseGatewayName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Provide the On-premises data gateway that will be used with The Hive connector. Data gateway should be deployed under the same subscription and resource group as playbook."
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TheHiveConnectionName": "[concat('thehive-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TheHiveConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/', parameters('ConnectorName'))]"
+                },
+                "displayName": "[variables('TheHiveConnectionName')]",
+                "parameterValues": {
+                    "username": "",
+                    "password": "",
+                    "authType": "basic",
+                    "gateway": {
+                        "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connectionGateways/',parameters('onPremiseGatewayName'))]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TheHiveConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+                "$connections": {
+                    "defaultValue": {},
+                    "type": "Object"
+                }
+            },
+            "triggers": {
+                "Microsoft_Sentinel_incident": {
+                    "type": "ApiConnectionWebhook",
+                    "inputs": {
+                        "body": {
+                            "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                        },
+                        "path": "/incident-creation"
+                    }
+                }
+            },
+            "actions": {
+                "Entities_-_Get_Hosts": {
+                    "runAfter": {
+                        "create_case": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "/entities/host"
+                    }
+                },
+                "Entities_-_Get_IPs": {
+                    "runAfter": {
+                        "create_case": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "/entities/ip"
+                    }
+                },
+                "For_each_": {
+                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                    "actions": {
+                        "create_observable_for_a_case": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "data": "@items('For_each_')?['Address']",
+                                    "dataType": "ip"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['TheHive']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/v0/case/@{encodeURIComponent(body('create_case')?['caseId'])}/artifact"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Entities_-_Get_IPs": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach"
+                },
+                "For_each_2": {
+                    "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                    "actions": {
+                        "create_observable_for_a_case_2": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "data": [
+                                        "@items('For_each_2')?['HostName']"
+                                    ],
+                                    "dataType": "hostname"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['TheHive']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/v0/case/@{encodeURIComponent(body('create_case')?['caseId'])}/artifact"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Entities_-_Get_Hosts": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach"
+                },
+                "create_case": {
+                    "runAfter": {},
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "body": {
+                            "description": "@triggerBody()?['object']?['properties']?['description']",
+                            "title": "@triggerBody()?['object']?['properties']?['title']"
+                        },
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['TheHive']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "/api/case"
+                    }
+                },
+                "create_task": {
+                    "runAfter": {
+                        "create_case": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "body": {
+                            "description": "@body('create_case')?['description']",
+                            "title": "@body('create_case')?['title']"
+                        },
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['TheHive']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "/api/case/@{encodeURIComponent(body('create_case')?['caseId'])}/task"
+                    }
+                }
+            },
+            "outputs": {}
+        },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "TheHive": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TheHiveConnectionName'))]",
+                                "connectionName": "[variables('TheHiveConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('ConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

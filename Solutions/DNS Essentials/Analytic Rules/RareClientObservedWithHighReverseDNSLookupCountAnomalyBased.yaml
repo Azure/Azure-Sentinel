@@ -1,0 +1,60 @@
+id: 0fe6bde4-b215-480c-99b4-84a96edcdbd7
+name: Rare client observed with high reverse DNS lookup count - Anomaly based (ASIM DNS Solution)
+description: |
+  'This rule makes use of the series decompose anomaly method to identify clients with high reverse DNS counts. This helps in detecting the possible initial phases of an attack, like discovery and reconnaissance. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1590
+query: |
+  let threshold = 2.5;
+  let SearchDomain = dynamic(["in-addr.arpa"]);
+  let min_t = ago(14d);
+  let max_t = now();
+  let timeframe = 1d;
+  let DNSEvents=(stime: datetime, etime: datetime) {
+    _Im_Dns(starttime=stime, endtime=etime, domain_has_any=SearchDomain)
+  };
+  DNSEvents(stime=min_t, etime=max_t)
+  | make-series QueryCount=dcount(DnsQuery) on TimeGenerated from min_t to max_t step timeframe by SrcIpAddr
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, threshold, -1, 'linefit')
+  | mv-expand anomalies, score, baseline, TimeGenerated, QueryCount
+  | extend
+    anomalies = toint(anomalies),
+    score = toint(score),
+    baseline = toint(baseline),
+    EventTime = todatetime(TimeGenerated),
+    Total = tolong(QueryCount)
+  | where EventTime >= ago(timeframe)
+  | where score >= threshold * 2
+  | join kind = inner (DNSEvents(stime=ago(timeframe), etime=max_t)
+    | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)
+    on SrcIpAddr
+  | project-away SrcIpAddr1
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  DNSQueries: DNSQueries
+  AnomalyScore: score
+  baseline: baseline
+  Total: Total
+alertDetailsOverride:
+  alertDisplayNameFormat: "[Anomaly] Rare client has been observed as making high reverse DNS lookup count  - client IP: '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "Client has been identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nReverse DNS lookup count baseline for this client: '{{baseline}}'\n\nCurrent reverse DNS lookup count by this client showing as: '{{Total}}'\n\nDNS queries requested by this client inlcude: '{{DNSQueries}}'"
+version: 1.0.2
+kind: Scheduled

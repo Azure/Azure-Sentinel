@@ -1,0 +1,607 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+"metadata": {
+        "title": "VMRay Email Attachment Analyis", 
+        "description": "Submits a attachment or set of attachment associated with an office 365 email to VMRay for Analyis.",
+        "prerequisites": "VMRay API Key.",       
+        "prerequisitesDeployTemplateFile": "../VMRay/FunctionApp/azuredeploy.json",
+        "postDeploymentSteps": ["None"],      
+        "lastUpdateTime": "2025-02-20T00:00:00.000Z", 
+        "entities": [""], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "VMRay"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "VMRay-Sandbox_Outlook_Attachment",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+		"WorkspaceName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Log Analytics Workspace name"
+            }
+        },
+		"WorkspaceID": {
+			"defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Log Analytics Workspace ID"
+            }
+        },
+        "FunctionAppName": {
+            "defaultValue": "vmrayenrich",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the FunctionApp"
+            }
+        }
+    },
+    "variables": {
+		"functionappName": "[concat(toLower(parameters('FunctionAppName')), take(uniqueString(resourceGroup().id), 3))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+		"Office365V1": "[concat('office365-', parameters('PlaybookName'))]",
+		"subscription": "[last(split(subscription().id, '/'))]",
+        "resourceGroupName": "[resourceGroup().name]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('Office365V1')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('Office365V1')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('Office365V1'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "Indicator_Expiration_In_Days": {
+                            "defaultValue": "30",
+                            "type": "String"
+                        },
+                        "$connections": {
+                            "type": "Object",
+                            "defaultValue": {}
+                        }
+                    },
+                    "triggers": {
+                        "When_a_new_email_arrives_(V3)": {
+                            "splitOn": "@triggerBody()?['value']",
+                            "type": "ApiConnectionNotification",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "fetch": {
+                                    "pathTemplate": {
+                                        "template": "/v3/Mail/OnNewEmail"
+                                    },
+                                    "method": "get",
+                                    "queries": {
+                                        "importance": "Any",
+                                        "fetchOnlyWithAttachment": true,
+                                        "includeAttachments": true,
+                                        "folderPath": "Inbox"
+                                    }
+                                },
+                                "subscribe": {
+                                    "body": {
+                                        "NotificationUrl": "@listCallbackUrl()"
+                                    },
+                                    "pathTemplate": {
+                                        "template": "/GraphMailSubscriptionPoke/$subscriptions"
+                                    },
+                                    "method": "post",
+                                    "queries": {
+                                        "importance": "Any",
+                                        "fetchOnlyWithAttachment": true,
+                                        "folderPath": "Inbox"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Submission_Status": {
+                            "runAfter": {
+                                "Submission_Object": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "submission_status",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Submission_Report": {
+                            "runAfter": {
+                                "Submission_Status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "submission_report",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Email_Body": {
+                            "runAfter": {
+                                "Submission_Report": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "email_body",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "File_Name": {
+                            "runAfter": {
+                                "Email_Body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "file_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Submission_Object": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "submissin_obj",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_Every_Attachment": {
+                            "foreach": "@triggerBody()?['attachments']",
+                            "actions": {
+                                "VMRayUploadSample": {
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "file": "@item()?['contentBytes']",
+                                            "name": "@item()?['name']",
+                                            "tags": ["outlook_attachment_logic_app_submission"]
+                                        },
+                                        "function": {
+											 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/VMRayUploadSample')]"
+                                        }
+                                    }
+                                },
+                                "Append_to_Submission_Object_to_Variable": {
+                                    "runAfter": {
+                                        "VMRayUploadSample": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "submissin_obj",
+                                        "value": {
+                                            "submission_id": "@body('VMRayUploadSample')['vmray_submission']",
+                                            "filename": "@variables('file_name')"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "File_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_Every_Submission_Object": {
+                            "foreach": "@variables('submissin_obj')",
+                            "actions": {
+                                "Set_Submission_Status_to_False": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "submission_status",
+                                        "value": false
+                                    }
+                                },
+                                "Wait_untill_submission_is_completed": {
+                                    "actions": {
+                                        "GetVMRaySubmission": {
+                                            "type": "Function",
+                                            "inputs": {
+                                                "body": {
+                                                    "submission_id": "@items('For_Every_Submission_Object')['submission_id'][0]['SubmissionID']"
+                                                },
+                                                "function": {
+													 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/GetVMRaySubmission')]"
+                                                }
+                                            }
+                                        },
+                                        "Check_If_Submission_is_finished": {
+                                            "actions": {
+                                                "GetVMRaySample": {
+                                                    "type": "Function",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "sample_id": "@body('GetVMRaySubmission')?['submission_sample_id']"
+                                                        },
+                                                        "function": {
+															 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/GetVMRaySample')]"
+                                                        }
+                                                    }
+                                                },
+                                                "Check_If_Sample_Verdict_is_Malicious_or_Suspicious": {
+                                                    "actions": {
+                                                        "Set_submission_report": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "submission_report",
+                                                                "value": [
+                                                                    {
+                                                                        "Submission ID": "@body('GetVMRaySubmission')['submission_id']",
+                                                                        "Submission Status": "@body('GetVMRaySubmission')['submission_status']",
+                                                                        "Sample ID": "@body('GetVMRaySample')['sample_id']",
+                                                                        "Sample Classifications": "@body('GetVMRaySample')['sample_classifications']",
+                                                                        "Sample Threat Names": "@body('GetVMRaySample')['sample_threat_names']",
+                                                                        "Sample Webif URL": "@body('GetVMRaySample')['sample_webif_url']",
+                                                                        "Sample Verdict": "@body('GetVMRaySample')['sample_verdict']",
+                                                                        "Sample VTI Score": "@body('GetVMRaySample')['sample_vti_score']",
+                                                                        "Sample Verdict Reason Code": "@body('GetVMRaySample')['sample_verdict_reason_code']",
+                                                                        "Sample Verdict Reason Description": "@body('GetVMRaySample')['sample_verdict_reason_description']"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        },
+                                                        "Create_HTML_table": {
+                                                            "runAfter": {
+                                                                "Set_submission_report": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Table",
+                                                            "inputs": {
+                                                                "from": "@variables('submission_report')",
+                                                                "format": "HTML"
+                                                            }
+                                                        },
+                                                        "Create_incident": {
+                                                            "runAfter": {
+                                                                "Create_HTML_table": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "body": {
+                                                                    "title": "VMRay Email Attachment Scan Submission Details for file - @{body('GetVMRaySample')['sample_filename']}",
+                                                                    "severity": "Medium",
+                                                                    "status": "New",
+                                                                    "description": "VMRay Email Attachment Scan . From:@{triggerBody()?['from']} . To: @{triggerBody()?['toRecipients']}"
+                                                                },
+                                                                "path": "[concat('/Incidents/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/workspaces/',parameters('WorkspaceName'))]"
+                                                            }
+                                                        },
+                                                        "Add_comment_to_incident_(V3)": {
+                                                            "runAfter": {
+                                                                "Create_incident": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": {
+                                                                    "incidentArmId": "@body('Create_incident')?['id']",
+                                                                    "message": "<p class=\"editor-paragraph\">VMRay Submission for File - @{items('For_Every_Submission_Object')['filename']}<br>@{body('Create_HTML_table')}</p>"
+                                                                },
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "GetVMRayIOCs": {
+                                                            "runAfter": {
+                                                                "Add_comment_to_incident_(V3)": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Function",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "sample_id": "@body('GetVMRaySample')['sample_id']",
+                                                                    "submission_id": "@body('GetVMRaySubmission')['submission_id']",
+                                                                    "sample_verdict": [
+                                                                        "malicious",
+                                                                        "suspicious"
+                                                                    ],
+                                                                    "incident_id": "@body('Create_incident')?['properties']?['incidentNumber']",
+                                                                    "valid_until": "@parameters('Indicator_Expiration_In_Days')"
+                                                                },
+                                                                "function": {
+																	 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/GetVMRayIOCs')]"
+                                                                }
+                                                            }
+                                                        },
+                                                        "Check_if_VMRay_has_any_indicators_for_the_sample": {
+                                                            "actions": {
+                                                                "Threat_Intelligence_-_Upload_Indicators_of_Compromise_(V2)_(Preview)": {
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "body": {
+                                                                            "sourcesystem": "VMRayThreatIntelligence",
+                                                                            "indicators": "@body('GetVMRayIOCs')['custom_resp']"
+                                                                        },
+                                                                        "path": "[concat('/V2/ThreatIntelligence/',parameters('WorkspaceID'),'/UploadIndicators/')]"
+																		
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "GetVMRayIOCs": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {}
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "greater": [
+                                                                            "@length(body('GetVMRayIOCs')['custom_resp'])",
+                                                                            0
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Set_email_body": {
+                                                            "runAfter": {
+                                                                "Check_if_VMRay_has_any_indicators_for_the_sample": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "email_body",
+                                                                "value": "<p class=\"editor-paragraph\">\n<table style=\"width: 100%; border-collapse: collapse; background-color: #f0f0f0;\">\n<thead>\n<tr>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Submission Status</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample ID</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Classifications</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Threat Names</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Webif URL</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample VTI Score</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict Reason Code</th>\n<th style=\"background-color: #002a46; color: white; padding: 10px; text-align: left; border: 1px solid #ddd;\">Sample Verdict Reason Description</th>\n</tr>\n</thead>\n<tbody>\n<tr style=\"background-color: #ffffff; border-bottom: 1px solid #ddd;\">\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySubmission')['submission_id']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySubmission')['submission_status']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_id']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_classifications']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_threat_names']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_webif_url']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_vti_score']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict_reason_code']}</td>\n<td style=\"padding: 10px; text-align: left; border: 1px solid #ddd;\">@{body('GetVMRaySample')['sample_verdict_reason_description']}</td>\n</tr>\n</tbody>\n</table>\n</p>\n"
+                                                            }
+                                                        },
+                                                        "Send_an_email_(V2)": {
+                                                            "runAfter": {
+                                                                "Set_email_body": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": {
+                                                                    "To": "abc@abc.com",
+                                                                    "Subject": "VMRay Email Attachment Scan for file - @{body('GetVMRaySample')['sample_filename']}",
+                                                                    "Body": "<p class=\"editor-paragraph\">@{variables('email_body')}</p>",
+                                                                    "Importance": "Normal"
+                                                                },
+                                                                "path": "/v2/Mail"
+                                                            }
+                                                        },
+                                                        "Set_Submission_Status_to_True": {
+                                                            "runAfter": {
+                                                                "Send_an_email_(V2)": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "submission_status",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "GetVMRaySample": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {}
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@body('GetVMRaySample')['sample_verdict']",
+                                                                        "clean"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "GetVMRaySubmission": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Delay_by_2_minutes": {
+                                                        "type": "Wait",
+                                                        "inputs": {
+                                                            "interval": {
+                                                                "count": 2,
+                                                                "unit": "Minute"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Set_submission_status_to_false_again": {
+                                                        "runAfter": {
+                                                            "Delay_by_2_minutes": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "submission_status",
+                                                            "value": false
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@body('GetVMRaySubmission')['submission_finished']",
+                                                            true
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_Submission_Status_to_False": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": "@equals(variables('submission_status'),true)",
+                                    "limit": {
+                                        "count": 60,
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "For_Every_Attachment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "office365": {
+                             	"connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365V1'))]",
+                              	"connectionName": "[variables('Office365V1')]",
+                              	 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

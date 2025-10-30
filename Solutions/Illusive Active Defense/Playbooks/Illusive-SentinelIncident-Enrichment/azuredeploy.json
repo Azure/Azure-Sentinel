@@ -1,0 +1,1245 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "comments": "This Logic App connector will enrich the Sentinel Incident with Illusive incidents data",
+    "author": "Illusive"
+  },
+  "parameters": {
+    "WorkspaceName": {
+      "type": "String",
+      "metadata": {
+        "description": "Name of Azure sentinel workspace"
+      }
+    },
+    "IllusiveAPIUrl": {
+      "type": "String",
+      "metadata": {
+        "description": "Authentication parameters to access Illusive API"
+      }
+    },
+    "IllusiveAPIKey": {
+      "type": "SecureString",
+      "metadata": {
+        "description": "Authentication parameters to access Illusive API"
+      }
+    },
+    "Azure-SentinelClientID": {
+      "type": "String",
+      "metadata": {
+        "description": "Authentication parameters to access Sentinel API"
+      }
+    },
+    "Azure-SentinelClientSecret": {
+      "type": "SecureString",
+      "metadata": {
+        "description": "Authentication parameters to access Sentinel API"
+      }
+    },
+    "Azure-SentinelTenantID": {
+      "type": "String",
+      "metadata": {
+        "description": "Authentication parameters to access Sentinel API"
+      }
+    }
+  },
+  "variables": {
+    "azuresentinelConnectionName": "[concat('azuresentinel-', 'IllusiveSentinelIncidentEnrichment')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('azuresentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "IllusiveSentinelIncidentEnrichmentAPIConnection",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "IllusiveSentinelIncidentEnrichment",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "Azure Client Id": {
+              "defaultValue": "[parameters('Azure-SentinelClientID')]",
+              "type": "SecureString"
+            },
+            "Azure Client Secret": {
+              "defaultValue": "[parameters('Azure-SentinelClientSecret')]",
+              "type": "SecureString"
+            },
+            "Azure Tenant Id": {
+              "defaultValue": "[parameters('Azure-SentinelTenantID')]",
+              "type": "SecureString"
+            },
+            "Illusive API Key": {
+              "defaultValue": "[parameters('IllusiveAPIKey')]",
+              "type": "SecureString"
+            },
+            "Illusive Base URL": {
+              "defaultValue": "[parameters('IllusiveAPIUrl')]",
+              "type": "SecureString"
+            },
+            "Workspace_Name": {
+              "defaultValue": "[parameters('WorkspaceName')]",
+              "type": "SecureString"
+            },
+            "ResourceGroup": {
+              "defaultValue": "[resourceGroup().id]",
+              "type": "SecureString"
+            }
+          },
+          "triggers": {
+            "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/subscribe"
+              }
+            }
+          },
+          "actions": {
+            "Check_if_Illusive_Incident_Id_exists_in_Sentinel_Incident": {
+              "actions": {
+                "Check_if_Sentinel_Incident_already_exists": {
+                  "actions": {
+                    "Check_if_Triggering_Process_Information_is_available": {
+                      "actions": {
+                        "Set_Process_Information": {
+                          "runAfter": {},
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "Process Information",
+                            "value": "Event Id:@{string(max(variables('Event Id')))}  Process Information : @{body('Get_the_Triggering_Process_Information')}"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Get_the_Triggering_Process_Information": [
+                          "Succeeded",
+                          "Failed",
+                          "Skipped",
+                          "TimedOut"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "No_Triggering_Process_Information": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "Message",
+                              "value": "No Triggering Process Information"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@outputs('Get_the_Triggering_Process_Information')['statusCode']",
+                              200
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "For_each_Event_of_an_Incident": {
+                      "foreach": "@body('Parse_Events_of_an_Illusive_Incident')",
+                      "actions": {
+                        "Append_to_array_variable": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "Event Id",
+                            "value": "@items('For_each_Event_of_an_Incident')['eventId']"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Parse_Events_of_an_Illusive_Incident": [
+                          "Succeeded",
+                          "TimedOut",
+                          "Skipped",
+                          "Failed"
+                        ]
+                      },
+                      "type": "Foreach"
+                    },
+                    "For_each_Sentinel_Incident": {
+                      "foreach": "@body('Parse_Sentinel_Incident_Details')?['value']",
+                      "actions": {
+                        "Add_Illusive_Incident_details_to_Sentinel_Incident_comment": {
+                          "runAfter": {
+                            "Check_for_Critical_Severity": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "incidentArmId": "@items('For_each_Sentinel_Incident')?['id']",
+                              "message": "<p><strong>Deception Families:</strong> &nbsp;@{variables('Deception families')}<br>\n<strong>IncidentTime UTC:</strong> @{items('For_each_Sentinel_Incident')?['properties']?['createdTimeUtc']}<br>\n<strong>RiskInsights</strong> :&nbsp;&nbsp;@{body('Parse_Illusive_Incident_Details')?['riskInsights']}<br>\n<strong>Illusive Event Id:&nbsp;</strong><strong>@{variables('Event Id')}</strong><strong><br>\n</strong><strong>@{variables('Process Information')}</strong><strong></strong></p>"
+                            },
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/Incidents/Comment"
+                          }
+                        },
+                        "Check_for_Critical_Severity": {
+                          "actions": {
+                            "Check_for_classification_for_Closed_Incidents": {
+                              "actions": {
+                                "Update_Sentinel_Incident_with_Critical_severity_and_Closed_status": {
+                                  "runAfter": {},
+                                  "type": "ApiConnection",
+                                  "inputs": {
+                                    "body": {
+                                      "classification": {
+                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity",
+                                        "ClassificationReasonText": "This incident was closed in Illusive"
+                                      },
+                                      "incidentArmId": "@items('For_each_Sentinel_Incident')?['id']",
+                                      "severity": "@variables('Severity')",
+                                      "status": "Closed",
+                                      "tagsToAdd": {
+                                        "TagsToAdd": [
+                                          {
+                                            "Tag": "Illusive Critical Incident"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "host": {
+                                      "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                      }
+                                    },
+                                    "method": "put",
+                                    "path": "/Incidents"
+                                  }
+                                }
+                              },
+                              "runAfter": {},
+                              "else": {
+                                "actions": {
+                                  "Check_if_Tag_Critical_Incident_exists": {
+                                    "actions": {
+                                      "Update_Sentinel_Incident_with_Critical_severity_and_existing_tag": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "body": {
+                                            "incidentArmId": "@items('For_each_Sentinel_Incident')?['id']",
+                                            "severity": "@variables('Severity')",
+                                            "status": "@variables('Status')"
+                                          },
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                          },
+                                          "method": "put",
+                                          "path": "/Incidents"
+                                        }
+                                      }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                      "actions": {
+                                        "Update_Sentinel_Incident_with_Critical_severity_and_no_tag": {
+                                          "runAfter": {},
+                                          "type": "ApiConnection",
+                                          "inputs": {
+                                            "body": {
+                                              "incidentArmId": "@items('For_each_Sentinel_Incident')?['id']",
+                                              "severity": "@variables('Severity')",
+                                              "status": "@variables('Status')",
+                                              "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                  {
+                                                    "Tag": "Illusive Critical Incident"
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            "host": {
+                                              "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                              }
+                                            },
+                                            "method": "put",
+                                            "path": "/Incidents"
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "expression": {
+                                      "and": [
+                                        {
+                                          "contains": [
+                                            "@variables('Labels')",
+                                            "Illusive Critical Incident"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "type": "If"
+                                  }
+                                }
+                              },
+                              "expression": {
+                                "and": [
+                                  {
+                                    "equals": [
+                                      "@variables('Status')",
+                                      "Closed"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "type": "If"
+                            }
+                          },
+                          "runAfter": {},
+                          "else": {
+                            "actions": {
+                              "Check_for_classification_for_Closed_Incidents_for_non_critical_incident": {
+                                "actions": {
+                                  "Update_Sentinel_Incident_with_Non_Critical_severity_and_Closed_status": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                      "body": {
+                                        "classification": {
+                                          "ClassificationAndReason": "TruePositive - SuspiciousActivity",
+                                          "ClassificationReasonText": "This incident was closed in Illusive"
+                                        },
+                                        "incidentArmId": "@items('For_each_Sentinel_Incident')?['id']",
+                                        "severity": "@variables('Severity')",
+                                        "status": "Closed"
+                                      },
+                                      "host": {
+                                        "connection": {
+                                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        }
+                                      },
+                                      "method": "put",
+                                      "path": "/Incidents"
+                                    }
+                                  }
+                                },
+                                "runAfter": {},
+                                "else": {
+                                  "actions": {
+                                    "Update_Sentinel_Incident_with_Severity_and_Status": {
+                                      "runAfter": {},
+                                      "type": "ApiConnection",
+                                      "inputs": {
+                                        "body": {
+                                          "incidentArmId": "@items('For_each_Sentinel_Incident')?['id']",
+                                          "severity": "@variables('Severity')",
+                                          "status": "@variables('Status')"
+                                        },
+                                        "host": {
+                                          "connection": {
+                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                          }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                      }
+                                    }
+                                  }
+                                },
+                                "expression": {
+                                  "and": [
+                                    {
+                                      "equals": [
+                                        "@variables('Status')",
+                                        "Closed"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "type": "If"
+                              }
+                            }
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "equals": [
+                                  "@toUpper(body('Parse_Illusive_Incident_Details')?['incidentSeverity'])",
+                                  "CRITICAL"
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        }
+                      },
+                      "runAfter": {
+                        "Set_Deception_families": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Foreach"
+                    },
+                    "Get_Events_of_an_Illusive_Incident": {
+                      "runAfter": {
+                        "Map_Illusive_Severity_to_Sentinel_Severity": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "headers": {
+                          "Authorization": "Basic @{parameters('Illusive API Key')}",
+                          "Content-Type": "application/json"
+                        },
+                        "method": "GET",
+                        "uri": "@{parameters('Illusive Base URL')}/api/v1/incidents/events?incident_id=@{variables('Illusive Incident Id')}"
+                      }
+                    },
+                    "Get_the_Triggering_Process_Information": {
+                      "runAfter": {
+                        "Set_Sentinel_Status": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "headers": {
+                          "Authorization": "Basic @{parameters('Illusive API Key')}",
+                          "Content-Type": "application/json"
+                        },
+                        "method": "GET",
+                        "uri": "@{parameters('Illusive Base URL')}/api/v1/forensics/triggering_process_info?event_id=@{max(variables('Event Id'))}"
+                      }
+                    },
+                    "Map_Illusive_Severity_to_Sentinel_Severity": {
+                      "runAfter": {},
+                      "cases": {
+                        "Case": {
+                          "case": "HIGH",
+                          "actions": {
+                            "Map_Severity_'High'": {
+                              "runAfter": {},
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Severity",
+                                "value": "High"
+                              }
+                            }
+                          }
+                        },
+                        "Case_2": {
+                          "case": "MEDIUM",
+                          "actions": {
+                            "Map_Severity_'Medium'": {
+                              "runAfter": {},
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Severity",
+                                "value": "Medium"
+                              }
+                            }
+                          }
+                        },
+                        "Case_3": {
+                          "case": "LOW",
+                          "actions": {
+                            "Map_Severity_'Low'": {
+                              "runAfter": {},
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Severity",
+                                "value": "Low"
+                              }
+                            }
+                          }
+                        },
+                        "Case_4": {
+                          "case": "CRITICAL",
+                          "actions": {
+                            "Map_Severity_'Critical'": {
+                              "runAfter": {},
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Severity",
+                                "value": "High"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "default": {
+                        "actions": {
+                          "Map_Other_Statuses": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "Severity",
+                              "value": "Low"
+                            }
+                          }
+                        }
+                      },
+                      "expression": "@toUpper(body('Parse_Illusive_Incident_Details')?['incidentSeverity'])",
+                      "type": "Switch"
+                    },
+                    "Parse_Events_of_an_Illusive_Incident": {
+                      "runAfter": {
+                        "Get_Events_of_an_Illusive_Incident": [
+                          "Succeeded",
+                          "Failed",
+                          "Skipped",
+                          "TimedOut"
+                        ]
+                      },
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@body('Get_Events_of_an_Illusive_Incident')",
+                        "schema": {
+                          "items": {
+                            "properties": {
+                              "eventId": {
+                                "type": "integer"
+                              },
+                              "eventTimeUTC": {
+                                "type": "string"
+                              },
+                              "hasForensics": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "hasForensics",
+                              "eventId",
+                              "eventTimeUTC"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      }
+                    },
+                    "Set_Deception_families": {
+                      "runAfter": {
+                        "Check_if_Triggering_Process_Information_is_available": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "Deception families",
+                        "value": "@{body('Parse_Illusive_Incident_Details')?['deceptionFamilies']}"
+                      }
+                    },
+                    "Set_Sentinel_Status": {
+                      "actions": {
+                        "Set_Status_'Closed'": {
+                          "runAfter": {},
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "Status",
+                            "value": "Closed"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "For_each_Event_of_an_Incident": [
+                          "Succeeded",
+                          "Failed",
+                          "Skipped",
+                          "TimedOut"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Set_Status_'Active'": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "Status",
+                              "value": "Active"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@body('Parse_Illusive_Incident_Details')?['closed']",
+                              true
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "_Incident_successfully_Updated": {
+                      "runAfter": {
+                        "For_each_Sentinel_Incident": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "Message",
+                        "value": "Illusive Incident Id @{variables('Illusive Incident Id')} has been successfully Updated"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "For_each_Sentinel_Tag": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "No_Sentinel_Incidents": {
+                        "runAfter": {},
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "Message",
+                          "value": "No Sentinel Incident present in this Alert"
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@length(body('Parse_Sentinel_Incident_Details')?['value'])",
+                            0
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Fetch_the_Illusive_Incident": {
+                  "foreach": "@body('Parse_Custom_Details')?['IllusiveIncidentId']",
+                  "actions": {
+                    "Set_Illusive_Incident_Id": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "Illusive Incident Id",
+                        "value": "@{items('Fetch_the_Illusive_Incident')}"
+                      }
+                    }
+                  },
+                  "runAfter": {},
+                  "type": "Foreach"
+                },
+                "For_each_Sentinel_Tag": {
+                  "foreach": "@body('Parse_Sentinel_Incident_Details')?['value']",
+                  "actions": {
+                    "Set_Sentinel_Tag": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "Labels",
+                        "value": "@{items('For_each_Sentinel_Tag')?['properties']?['labels']}"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Parse_Sentinel_Incident_Details": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach"
+                },
+                "Generate_the_token_for_Azure_Sentinel_Incident": {
+                  "runAfter": {
+                    "Parse_Illusive_Incident_Details": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": "grant_type=client_credentials&client_id=@{parameters('Azure Client Id')}&client_secret=@{parameters('Azure Client Secret')}&resource=https://management.azure.com",
+                    "headers": {
+                      "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    "method": "POST",
+                    "uri": "https://login.microsoftonline.com/@{parameters('Azure Tenant Id')}/oauth2/token"
+                  }
+                },
+                "Get_Illusive_Incident_Details": {
+                  "runAfter": {
+                    "Fetch_the_Illusive_Incident": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "headers": {
+                      "Authorization": "Basic @{parameters('Illusive API Key')}",
+                      "Content-Type": "application/json"
+                    },
+                    "method": "GET",
+                    "uri": "@{parameters('Illusive Base URL')}/api/v2/incidents/incident?incident_id=@{variables('Illusive Incident Id')}"
+                  }
+                },
+                "Get_Sentinel_Incident_with_the_Title": {
+                  "runAfter": {
+                    "Parse_Token_of_Azure_Sentinel": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "headers": {
+                      "Authorization": "Bearer @{body('Parse_Token_of_Azure_Sentinel')?['access_token']}",
+                      "content-type": "application/json"
+                    },
+                    "method": "GET",
+                    "uri": "https://management.azure.com@{parameters('ResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('Workspace_Name')}/providers/Microsoft.SecurityInsights/incidents?api-version=2020-01-01&$filter=properties/title eq 'Illusive Incident: @{variables('Illusive Incident Id')}'"
+                  }
+                },
+                "Parse_Illusive_Incident_Details": {
+                  "runAfter": {
+                    "Get_Illusive_Incident_Details": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Get_Illusive_Incident_Details')",
+                    "schema": {
+                      "properties": {
+                        "closed": {
+                          "type": "boolean"
+                        },
+                        "deceptionFamilies": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "flagged": {
+                          "type": "boolean"
+                        },
+                        "hasForensics": {
+                          "type": "boolean"
+                        },
+                        "incidentId": {
+                          "type": "integer"
+                        },
+                        "incidentSeverity": {
+                          "type": "string"
+                        },
+                        "incidentTimeUTC": {
+                          "type": "string"
+                        },
+                        "incidentTypes": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "lastSeenUser": {},
+                        "policyName": {
+                          "type": "string"
+                        },
+                        "riskInsights": {
+                          "properties": {
+                            "stepsToCrownJewel": {
+                              "type": "integer"
+                            },
+                            "stepsToDomainAdmin": {
+                              "type": "integer"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "sourceHostname": {
+                          "type": "string"
+                        },
+                        "sourceIp": {
+                          "type": "string"
+                        },
+                        "sourceOperatingSystem": {
+                          "type": "string"
+                        },
+                        "unread": {
+                          "type": "boolean"
+                        },
+                        "userNotes": {}
+                      },
+                      "type": "object"
+                    }
+                  }
+                },
+                "Parse_Sentinel_Incident_Details": {
+                  "runAfter": {
+                    "Get_Sentinel_Incident_with_the_Title": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Get_Sentinel_Incident_with_the_Title')",
+                    "schema": {
+                      "properties": {
+                        "value": {
+                          "items": {
+                            "properties": {
+                              "etag": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "properties": {
+                                "properties": {
+                                  "additionalData": {
+                                    "properties": {
+                                      "alertProductNames": {
+                                        "type": "array"
+                                      },
+                                      "alertsCount": {
+                                        "type": "integer"
+                                      },
+                                      "bookmarksCount": {
+                                        "type": "integer"
+                                      },
+                                      "commentsCount": {
+                                        "type": "integer"
+                                      },
+                                      "tactics": {
+                                        "type": "array"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "createdTimeUtc": {
+                                    "type": "string"
+                                  },
+                                  "description": {
+                                    "type": "string"
+                                  },
+                                  "firstActivityTimeUtc": {
+                                    "type": "string"
+                                  },
+                                  "incidentNumber": {
+                                    "type": "integer"
+                                  },
+                                  "incidentUrl": {
+                                    "type": "string"
+                                  },
+                                  "labels": {
+                                    "items": {
+                                      "properties": {
+                                        "labelName": {
+                                          "type": "string"
+                                        },
+                                        "labelType": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "labelName",
+                                        "labelType"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    "type": "array"
+                                  },
+                                  "lastActivityTimeUtc": {
+                                    "type": "string"
+                                  },
+                                  "lastModifiedTimeUtc": {
+                                    "type": "string"
+                                  },
+                                  "owner": {
+                                    "properties": {
+                                      "assignedTo": {},
+                                      "email": {},
+                                      "objectId": {},
+                                      "userPrincipalName": {}
+                                    },
+                                    "type": "object"
+                                  },
+                                  "relatedAnalyticRuleIds": {
+                                    "type": "array"
+                                  },
+                                  "severity": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "type": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "etag",
+                              "type",
+                              "properties"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  }
+                },
+                "Parse_Token_of_Azure_Sentinel": {
+                  "runAfter": {
+                    "Generate_the_token_for_Azure_Sentinel_Incident": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Generate_the_token_for_Azure_Sentinel_Incident')",
+                    "schema": {
+                      "properties": {
+                        "access_token": {
+                          "type": "string"
+                        },
+                        "expires_in": {
+                          "type": "string"
+                        },
+                        "expires_on": {
+                          "type": "string"
+                        },
+                        "ext_expires_in": {
+                          "type": "string"
+                        },
+                        "not_before": {
+                          "type": "string"
+                        },
+                        "resource": {
+                          "type": "string"
+                        },
+                        "token_type": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_Custom_Details": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Invalid_Alert": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "Message",
+                      "value": "Invalid Alert"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Parse_Custom_Details')?['IllusiveIncidentId'])",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "Incident_Enrichment_Output": {
+              "runAfter": {
+                "Check_if_Illusive_Incident_Id_exists_in_Sentinel_Incident": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@variables('Message')"
+            },
+            "Initialize_Deception_family": {
+              "runAfter": {
+                "Initialize_Illusive_Incident_Id": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Deception families",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Initialize_Events": {
+              "runAfter": {
+                "Initialize_Status": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Event Id",
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "Initialize_Illusive_Incident_Id": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Illusive Incident Id",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Initialize_Message": {
+              "runAfter": {
+                "Initialize_Sentinel_Tags": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Message",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Initialize_Process_Information": {
+              "runAfter": {
+                "Initialize_Events": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Process Information",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Initialize_Sentinel_Tags": {
+              "runAfter": {
+                "Initialize_Process_Information": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Labels",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Initialize_Severity": {
+              "runAfter": {
+                "Initialize_Deception_family": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Severity",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Initialize_Status": {
+              "runAfter": {
+                "Initialize_Severity": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Status",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Parse_Custom_Details": {
+              "runAfter": {
+                "Parse_Extended_Properties": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Parse_Extended_Properties')?['Custom Details']",
+                "schema": {
+                  "properties": {
+                    "HasForensics": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "IllusiveIncidentId": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "Parse_Extended_Properties": {
+              "runAfter": {
+                "Initialize_Message": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@triggerBody()?['ExtendedProperties']",
+                "schema": {
+                  "properties": {
+                    "Analytic Rule Ids": {
+                      "type": "string"
+                    },
+                    "Analytic Rule Name": {
+                      "type": "string"
+                    },
+                    "Custom Details": {
+                      "type": "string"
+                    },
+                    "Data Sources": {
+                      "type": "string"
+                    },
+                    "Event Grouping": {
+                      "type": "string"
+                    },
+                    "OriginalQuery": {
+                      "type": "string"
+                    },
+                    "ProcessedBySentinel": {
+                      "type": "string"
+                    },
+                    "Query": {
+                      "type": "string"
+                    },
+                    "Query End Time UTC": {
+                      "type": "string"
+                    },
+                    "Query Period": {
+                      "type": "string"
+                    },
+                    "Query Start Time UTC": {
+                      "type": "string"
+                    },
+                    "Search Query Results Overall Count": {
+                      "type": "string"
+                    },
+                    "Trigger Operator": {
+                      "type": "string"
+                    },
+                    "Trigger Threshold": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+                "connectionName": "[variables('azuresentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

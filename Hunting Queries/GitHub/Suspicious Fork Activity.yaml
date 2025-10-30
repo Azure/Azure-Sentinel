@@ -1,0 +1,38 @@
+id: 467e6a70-adc9-49b7-8cf3-f21927c71159
+name: GitHub OAuth App Restrictions Disabled
+description: |
+  'This hunting query identifies a fork activity against a repository done by a user who is not the owner of the repo nor a contributes.'
+requiredDataConnectors: []
+tactics:
+  - Exfiltration 
+relevantTechniques:
+  - T1537
+query: |
+
+   let CollaboratorsUserToRepoMapping = (
+   GitHubRepo
+   | where Action == "Collaborators"
+   | distinct Repository , Actor, Organization);
+   let UserCommitsInRepoMapping = (
+   GitHubRepo
+   | where Action == "Commits"
+   | distinct  Repository ,Actor, Organization);
+   union CollaboratorsUserToRepoMapping, UserCommitsInRepoMapping
+   | summarize ContributedToRepos = make_set(Repository) by Actor, Organization
+   | join kind=innerunique (
+   GitHubRepo
+   | where Action == "Forks"
+   | distinct Repository , Actor, Organization
+   ) on Actor, Organization
+   | project-away Actor1, Organization1
+   | where ContributedToRepos !contains Repository
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: itay6588
+    support:
+        tier: Community
+    categories:
+        domains: [ "DevOps" ]

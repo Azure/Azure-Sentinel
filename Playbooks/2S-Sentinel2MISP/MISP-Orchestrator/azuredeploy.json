@@ -1,0 +1,1038 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "2S-MISP-Orchestrator", 
+        "description": "This Playbook is designed to ingest Threat Intelligence Indicators of Compromise (IOCs) from the MISP-Forwarder Playbooks and send it in the correct form to your MISP-server. It will create a new MISP event for each incident in Defender, and add information to that event.",
+        "prerequisites": "1. MISP server URI. 2. MISP server key. ",
+        "lastUpdateTime": "2023-08-09T09:51:37Z",
+        "tags": ["Microsoft Sentinel", "ThreatIntelligenceIndicator", "MISP"], 
+        "support": {
+            "tier": "Community"
+        },
+        "author": {
+            "name": "Sopra Steria"
+        }
+    },
+"parameters": {
+"PlaybookName": {
+"defaultValue": "MISP-Orchestrator",
+"type": "string"
+},
+"MISP-Key": {
+"type": "string",
+"metadata": {
+    "description": "Enter value for MISP-Key"
+}
+},
+"MISP-Org": {
+"type": "string",
+"metadata": {
+    "description": "Enter value for MISP-Org"
+}
+},
+"MISP-URI": {
+"type": "string",
+"metadata": {
+    "description": "Enter value for MISP-URI"
+}
+}
+},
+"variables": {},
+"resources": [
+{
+"properties": {
+"provisioningState": "Succeeded",
+"state": "Disabled",
+"definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "MISP-Key": {
+            "defaultValue": "[parameters('MISP-Key')]",
+            "type": "string"
+        },
+        "MISP-Org": {
+            "defaultValue": "[parameters('MISP-Org')]",
+            "type": "string"
+        },
+        "MISP-URI": {
+            "defaultValue": "[parameters('MISP-URI')]",
+            "type": "string"
+        }
+    },
+    "triggers": {
+        "TriggerOnHTTPEntities": {
+            "type": "Request",
+            "kind": "Http",
+            "inputs": {
+            "schema": {}
+        }
+    }
+},
+"actions": {
+    "Condition_-_Check_SetEventIdFailed": {
+        "actions": {
+            "Condition_-_Check_IoC_kind": {
+                "actions": {
+                    "Add_IoC_to_existing_event_MISP_-_FileHash": {
+                    "runAfter": {},
+                    "type": "Http",
+                    "inputs": {
+                        "body": {
+                            "comment": "Filehash from DFE malware alert",
+                            "event_id": "@variables('EventId')",
+                            "type": "@toLower(string(body('Parse_Body_to_Json')['properties']['algorithm']))",
+                            "value": "@body('Parse_Body_to_Json')?['properties']?['hashValue']"
+                        },
+                        "headers": {
+                            "Accept": "application/json",
+                            "Authorization": "@variables('MISPKey')",
+                            "Content-Type": "application/json"
+                        },
+                        "method": "POST",
+                        "uri": "@{variables('MISPURI')}/attributes/add/@{variables('EventId')}"
+                    }
+                }
+            },
+        "runAfter": {},
+        "else": {
+            "actions": {
+                "Add_IoC_to_existing_event_MISP_-_FileName": {
+                "runAfter": {},
+                "type": "Http",
+                "inputs": {
+                    "body": {
+                        "comment": "Filename from DFE malware alert",
+                        "event_id": "@variables('EventId')",
+                        "type": "filename",
+                        "value": "@body('Parse_Body_to_Json')['properties']['fileName']"
+                    },
+                    "headers": {
+                        "Accept": "application/json",
+                        "Authorization": "@variables('MISPKey')",
+                        "Content-Type": "application/json"
+                    },
+                    "method": "POST",
+                    "uri": "@{variables('MISPURI')}/attributes/add/@{variables('EventId')}"
+                }
+            }
+        }
+    },
+    "expression": {
+        "and": [
+            {
+                "equals": [
+                    "@body('Parse_Body_to_Json')?['kind']",
+                    "FileHash"
+                ]
+            }
+        ]
+    },
+    "type": "If"
+}
+},
+"runAfter": {
+"Set_variable_SetEventIdFailed_False": [
+    "Succeeded",
+    "Skipped"
+],
+"Set_variable_SetEventIdFailed_True": [
+    "Succeeded",
+    "Skipped"
+]
+},
+"else": {
+"actions": {
+    "Add_attribute_-_IncidentID_internal_only": {
+        "runAfter": {
+            "Add_event_tag_MISP_-_tlp_green": [
+                "Succeeded"
+            ]
+        },
+        "type": "Http",
+        "inputs": {
+            "body": {
+                "category": "Internal reference",
+                "comment": "IncidentId from Defender for Endpoint malware alert",
+                "distribution": "0",
+                "event_id": "@{variables('EventId')}",
+                "type": "text",
+                "value": "@variables('IncidentId')"
+            },
+            "headers": {
+                "Accept": "application/json",
+                "Authorization": "@variables('MISPKey')",
+                "Content-Type": "application/json"
+            },
+            "method": "POST",
+            "uri": "@{variables('MISPURI')}/attributes/add/@{variables('EventId')}"
+        }
+    },
+    "Add_attribute_-_IncidentUri_link_internal_only": {
+        "runAfter": {
+            "Add_attribute_-_IncidentID_internal_only": [
+                "Succeeded"
+            ]
+        },
+        "type": "Http",
+        "inputs": {
+            "body": {
+                "category": "Internal reference",
+                "comment": "Incident link Sentinel",
+                "distribution": "0",
+                "event_id": "@{variables('EventId')}",
+                "type": "other",
+                "value": "@variables('IncidentIdUri')"
+            },
+            "headers": {
+                "Accept": "application/json",
+                "Authorization": "@variables('MISPKey')",
+                "Content-Type": "application/json"
+            },
+            "method": "POST",
+            "uri": "@{variables('MISPURI')}/attributes/add/@{variables('EventId')}"
+        }
+    },
+    "Add_event_tag_MISP_-_tlp_green": {
+        "runAfter": {
+            "Set_variable_EventId_for_new_events": [
+                "Succeeded"
+            ]
+        },
+        "type": "Http",
+        "inputs": {
+            "headers": {
+                "Accept": "application/json",
+                "Authorization": "@variables('MISPKey')",
+                "Content-Type": "application/json"
+            },
+            "method": "POST",
+            "uri": "@{variables('MISPURI')}/events/addTag/@{variables('EventId')}/10789"
+        }
+    },
+    "Condition_-_Check_IoC_kind_fresh_incidents": {
+        "actions": {
+            "Add_IoC_to_new_event_MISP_-_FileHash": {
+            "runAfter": {},
+            "type": "Http",
+            "inputs": {
+                "body": {
+                    "comment": "Filehash from DFE malware alert",
+                    "event_id": "@{variables('EventId')}",
+                    "type": "@toLower(string(body('Parse_Body_to_Json')['properties']['algorithm']))",
+                    "value": "@body('Parse_Body_to_Json')?['properties']?['hashValue']"
+                },
+                "headers": {
+                    "Accept": "application/json",
+                    "Authorization": "@variables('MISPKey')",
+                    "Content-Type": "application/json"
+                },
+                "method": "POST",
+                "uri": "@{variables('MISPURI')}/attributes/add/@{variables('EventId')}"
+            }
+        }
+    },
+    "runAfter": {
+        "Add_attribute_-_IncidentUri_link_internal_only": [
+            "Succeeded"
+        ]
+    },
+    "else": {
+        "actions": {
+            "Add_IoC_to_new_event_MISP_-_FileName": {
+            "runAfter": {},
+            "type": "Http",
+            "inputs": {
+                "body": {
+                    "comment": "Filename from DFE malware alert",
+                    "event_id": "@variables('EventId')",
+                    "type": "filename",
+                    "value": "@body('Parse_Body_to_Json')['properties']['fileName']"
+                },
+                "headers": {
+                    "Accept": "application/json",
+                    "Authorization": "@variables('MISPKey')",
+                    "Content-Type": "application/json"
+                },
+                "method": "POST",
+                "uri": "@{variables('MISPURI')}/attributes/add/@{variables('EventId')}"
+            }
+        }
+    }
+},
+"expression": {
+    "and": [
+        {
+            "equals": [
+                "@body('Parse_Body_to_Json')?['kind']",
+                "FileHash"
+            ]
+        }
+    ]
+},
+"type": "If"
+},
+"Create_new_event_MISP": {
+"runAfter": {},
+"type": "Http",
+"inputs": {
+"body": {
+    "Tag": {
+        "id": "@variables('EventId')",
+        "name": "tlp:green"
+    },
+    "event_creator_email": "admin@admin.com",
+    "info": "@{variables('IncidentTitle')} ",
+    "org_id": "2",
+    "published": false
+},
+"headers": {
+    "Accept": "application/json",
+    "Authorization": "@variables('MISPKey')",
+    "Content-Type": "application/json"
+},
+"method": "POST",
+"uri": "@{variables('MISPURI')}/events/add/"
+}
+},
+"Parse_new_event_to_Json": {
+"runAfter": {
+"Create_new_event_MISP": [
+    "Succeeded"
+]
+},
+"type": "ParseJson",
+"inputs": {
+"content": "@body('Create_new_event_MISP')",
+"schema": {
+    "properties": {
+        "Event": {
+            "properties": {
+                "Attribute": {
+                    "type": "array"
+                },
+                "CryptographicKey": {
+                    "type": "array"
+                },
+                "EventReport": {
+                    "type": "array"
+                },
+                "Galaxy": {
+                    "type": "array"
+                },
+                "Object": {
+                    "type": "array"
+                },
+                "Org": {
+                    "properties": {
+                        "id": {
+                            "type": "string"
+                        },
+                        "local": {
+                            "type": "boolean"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "uuid": {
+                            "type": "string"
+                        }
+                    },
+                    "type": "object"
+                },
+                "Orgc": {
+                    "properties": {
+                        "id": {
+                            "type": "string"
+                        },
+                        "local": {
+                            "type": "boolean"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "uuid": {
+                            "type": "string"
+                        }
+                    },
+                    "type": "object"
+                },
+                "RelatedEvent": {
+                    "type": "array"
+                },
+                "ShadowAttribute": {
+                    "type": "array"
+                },
+                "analysis": {
+                    "type": "string"
+                },
+                "attribute_count": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "disable_correlation": {
+                    "type": "boolean"
+                },
+                "distribution": {
+                    "type": "string"
+                },
+                "event_creator_email": {
+                    "type": "string"
+                },
+                "extends_uuid": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "info": {
+                    "type": "string"
+                },
+                "locked": {
+                    "type": "boolean"
+                },
+                "org_id": {
+                    "type": "string"
+                },
+                "orgc_id": {
+                    "type": "string"
+                },
+                "proposal_email_lock": {
+                    "type": "boolean"
+                },
+            "protected": {},
+            "publish_timestamp": {
+                "type": "string"
+            },
+            "published": {
+                "type": "boolean"
+            },
+            "sharing_group_id": {
+                "type": "string"
+            },
+            "threat_level_id": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string"
+            },
+            "uuid": {
+                "type": "string"
+            }
+        },
+        "type": "object"
+    }
+},
+"type": "object"
+}
+}
+},
+"Set_variable_EventId_for_new_events": {
+"runAfter": {
+"Parse_new_event_to_Json": [
+"Succeeded"
+]
+},
+"type": "SetVariable",
+"inputs": {
+"name": "EventId",
+"value": "@body('Parse_new_event_to_Json')?['Event']?['id']"
+}
+}
+}
+},
+"expression": {
+"and": [
+{
+"equals": [
+"@variables('SetEventIdFailed')",
+"@false"
+]
+}
+]
+},
+"type": "If"
+},
+"Get_EventInfo_MISP": {
+"runAfter": {
+"Initialize_variable_TimeVariable": [
+"Succeeded"
+]
+},
+"type": "Http",
+"inputs": {
+"body": {
+"attribute": "@variables('IncidentId')",
+"eventinfo": "@{variables('IncidentTitle')}",
+"org": "@{variables('MISPOrg')}"
+},
+"headers": {
+"Accept": "application/json",
+"Authorization": "@variables('MISPKey')",
+"Content-Type": "application/json"
+},
+"method": "POST",
+"uri": "@{variables('MISPURI')}/events/restSearch"
+}
+},
+"Initialize_variable_EventId": {
+"runAfter": {
+"Parse_EventInfo_to_Json": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "EventId",
+"type": "string"
+}
+]
+}
+},
+"Initialize_variable_IncidentId": {
+"runAfter": {
+"Initialize_variable_IncidentIdUri": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "IncidentId",
+"type": "string",
+"value": "@{split(string(body('Parse_Headers_to_Json')['IncidentId']), '/')[12]}"
+}
+]
+}
+},
+"Initialize_variable_IncidentIdUri": {
+"runAfter": {
+"Parse_Headers_to_Json": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "IncidentIdUri",
+"type": "string",
+"value": "@{string(body('Parse_Headers_to_Json')['IncidentId'])}"
+}
+]
+}
+},
+"Initialize_variable_IncidentTitle": {
+"runAfter": {
+"Initialize_variable_SubscriptionId": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "IncidentTitle",
+"type": "string",
+"value": "@{string(body('Parse_Headers_to_Json')['IncidentTitle'])}"
+}
+]
+}
+},
+"Initialize_variable_MISP_Key": {
+"runAfter": {},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "MISPKey",
+"type": "string",
+"value": "@parameters('MISP-Key')"
+}
+]
+}
+},
+"Initialize_variable_MISP_Org": {
+"runAfter": {
+"Initialize_variable_MISP_Key": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "MISPOrg",
+"type": "string",
+"value": "@parameters('MISP-Org')"
+}
+]
+}
+},
+"Initialize_variable_MISP_Uri": {
+"runAfter": {
+"Initialize_variable_MISP_Org": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "MISPURI",
+"type": "string",
+"value": "@parameters('MISP-URI')"
+}
+]
+}
+},
+"Initialize_variable_SetEventIdFailed": {
+"runAfter": {
+"Initialize_variable_EventId": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "SetEventIdFailed",
+"type": "boolean"
+}
+]
+}
+},
+"Initialize_variable_SubscriptionId": {
+"runAfter": {
+"Initialize_variable_IncidentId": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "SubscriptionId",
+"type": "string",
+"value": "@{split(string(body('Parse_Headers_to_Json')['IncidentId']), '/')[2]}"
+}
+]
+}
+},
+"Initialize_variable_TimeVariable": {
+"runAfter": {
+"Initialize_variable_IncidentTitle": [
+"Succeeded"
+]
+},
+"type": "InitializeVariable",
+"inputs": {
+"variables": [
+{
+"name": "TimeVariable",
+"type": "string"
+}
+]
+}
+},
+"Parse_Body_to_Json": {
+"runAfter": {
+"Initialize_variable_MISP_Uri": [
+"Succeeded"
+]
+},
+"type": "ParseJson",
+"inputs": {
+"content": "@triggerBody()",
+"schema": {
+"properties": {
+"id": {
+"type": "string"
+},
+"kind": {
+"type": "string"
+},
+"name": {
+"type": "string"
+},
+"properties": {
+"properties": {
+"algorithm": {
+"type": "string"
+},
+"friendlyName": {
+"type": "string"
+},
+"hashValue": {
+"type": "string"
+}
+},
+"type": "object"
+},
+"type": {
+"type": "string"
+}
+},
+"type": "object"
+}
+}
+},
+"Parse_EventInfo_to_Json": {
+"runAfter": {
+"Get_EventInfo_MISP": [
+"Succeeded"
+]
+},
+"type": "ParseJson",
+"inputs": {
+"content": "@body('Get_EventInfo_MISP')",
+"schema": {
+"properties": {
+"response": {
+"items": {
+"properties": {
+"Event": {
+    "properties": {
+        "Attribute": {
+            "type": "array"
+        },
+        "CryptographicKey": {
+            "type": "array"
+        },
+        "EventReport": {
+            "type": "array"
+        },
+        "Galaxy": {
+            "type": "array"
+        },
+        "Object": {
+            "type": "array"
+        },
+        "Org": {
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "local": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "uuid": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "Orgc": {
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "local": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "uuid": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "RelatedEvent": {
+            "type": "array"
+        },
+        "ShadowAttribute": {
+            "type": "array"
+        },
+        "Tag": {
+            "items": {
+                "properties": {
+                    "colour": {
+                        "type": "string"
+                    },
+                    "exportable": {
+                        "type": "boolean"
+                    },
+                    "hide_tag": {
+                        "type": "boolean"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "is_custom_galaxy": {
+                        "type": "boolean"
+                    },
+                    "is_galaxy": {
+                        "type": "boolean"
+                    },
+                    "local": {
+                        "type": "integer"
+                    },
+                    "local_only": {
+                        "type": "boolean"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                "numerical_value": {},
+            "relationship_type": {},
+            "user_id": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "id",
+            "name",
+            "colour",
+            "exportable",
+            "user_id",
+            "hide_tag",
+            "numerical_value",
+            "is_galaxy",
+            "is_custom_galaxy",
+            "local_only",
+            "local",
+            "relationship_type"
+        ],
+        "type": "object"
+    },
+    "type": "array"
+},
+"analysis": {
+    "type": "string"
+},
+"attribute_count": {
+    "type": "string"
+},
+"date": {
+    "type": "string"
+},
+"disable_correlation": {
+    "type": "boolean"
+},
+"distribution": {
+    "type": "string"
+},
+"event_creator_email": {
+    "type": "string"
+},
+"extends_uuid": {
+    "type": "string"
+},
+"id": {
+    "type": "string"
+},
+"info": {
+    "type": "string"
+},
+"locked": {
+    "type": "boolean"
+},
+"org_id": {
+    "type": "string"
+},
+"orgc_id": {
+    "type": "string"
+},
+"proposal_email_lock": {
+    "type": "boolean"
+},
+"protected": {},
+"publish_timestamp": {
+"type": "string"
+},
+"published": {
+"type": "boolean"
+},
+"sharing_group_id": {
+"type": "string"
+},
+"threat_level_id": {
+"type": "string"
+},
+"timestamp": {
+"type": "string"
+},
+"uuid": {
+"type": "string"
+}
+},
+"type": "object"
+}
+},
+"required": [
+"Event"
+],
+"type": "object"
+},
+"type": "array"
+}
+},
+"type": "object"
+}
+}
+},
+"Parse_Headers_to_Json": {
+"runAfter": {
+"Parse_Body_to_Json": [
+"Succeeded"
+]
+},
+"type": "ParseJson",
+"inputs": {
+"content": "@triggerOutputs()['headers']",
+"schema": {
+"properties": {
+"Accept-Encoding": {
+"type": "string"
+},
+"Accept-Language": {
+"type": "string"
+},
+"Content-Length": {
+"type": "string"
+},
+"Content-Type": {
+"type": "string"
+},
+"Host": {
+"type": "string"
+},
+"IndicentId": {
+"type": "string"
+},
+"IndicentTitle": {
+"type": "string"
+},
+"User-Agent": {
+"type": "string"
+},
+"x-ms-action-tracking-id": {
+"type": "string"
+},
+"x-ms-activity-vector": {
+"type": "string"
+},
+"x-ms-client-request-id": {
+"type": "string"
+},
+"x-ms-client-tracking-id": {
+"type": "string"
+},
+"x-ms-correlation-id": {
+"type": "string"
+},
+"x-ms-execution-location": {
+"type": "string"
+},
+"x-ms-tracking-id": {
+"type": "string"
+},
+"x-ms-workflow-id": {
+"type": "string"
+},
+"x-ms-workflow-name": {
+"type": "string"
+},
+"x-ms-workflow-operation-name": {
+"type": "string"
+},
+"x-ms-workflow-repeatitem-batch-index": {
+"type": "string"
+},
+"x-ms-workflow-repeatitem-index": {
+"type": "string"
+},
+"x-ms-workflow-repeatitem-scope-name": {
+"type": "string"
+},
+"x-ms-workflow-resourcegroup-name": {
+"type": "string"
+},
+"x-ms-workflow-run-id": {
+"type": "string"
+},
+"x-ms-workflow-run-tracking-id": {
+"type": "string"
+},
+"x-ms-workflow-subscription-id": {
+"type": "string"
+},
+"x-ms-workflow-system-id": {
+"type": "string"
+},
+"x-ms-workflow-version": {
+"type": "string"
+}
+},
+"type": "object"
+}
+}
+},
+"Set_variable_EventId": {
+"runAfter": {
+"Initialize_variable_SetEventIdFailed": [
+"Succeeded"
+]
+},
+"type": "SetVariable",
+"inputs": {
+"name": "EventId",
+"value": "@{string(body('Parse_EventInfo_to_Json')['response'][0]['Event']['id'])}"
+}
+},
+"Set_variable_SetEventIdFailed_False": {
+"runAfter": {
+"Set_variable_EventId": [
+"Succeeded"
+]
+},
+"type": "SetVariable",
+"inputs": {
+"name": "SetEventIdFailed",
+"value": "@false"
+}
+},
+"Set_variable_SetEventIdFailed_True": {
+"runAfter": {
+"Set_variable_EventId": [
+"Failed",
+"TimedOut"
+]
+},
+"type": "SetVariable",
+"inputs": {
+"name": "SetEventIdFailed",
+"value": "@true"
+}
+}
+},
+"outputs": {}
+},
+"parameters": {}
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"identity": {
+"type": "SystemAssigned"
+},
+"tags": {
+"hidden-SentinelTemplateName": "MISP-Orchestrator",
+"hidden-SentinelTemplateVersion": "1.0"
+},
+"apiVersion": "2017-07-01",
+"dependsOn": []
+}
+]
+}

@@ -1,0 +1,666 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block AAD user or admin - Alert",
+        "description": "For each account entity included in the alert, this playbook will disable the user in Azure Active Directoy, add a comment to the incident that contains this alert and notify manager if available. Note: This playbook will disable admin users as well!",
+        "prerequisites": "",
+        "postDeployment": ["1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity.", "2. Grant User.Read.All, User.ReadWrite.All, Directory.Read.All, Directory.ReadWrite.All permissions to the managed identity.", "3. Assign Global Administrator role to the managed identity.", "4. Authorize Azure AD and Office 365 Outlook Logic App connections."],
+        "lastUpdateTime": "2021-11-26T00:00:00.000Z",
+        "entities": [
+            "Account"
+        ],
+        "tags": [
+            "Remediation"
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Benjamin Kovacevic"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Block-AADUserOrAdmin-Alert",
+            "type": "string"
+        },
+        "Admin disabled notification email": {
+            "defaultValue": "Admin disabled notification email",
+            "type": "string",
+            "metadata": {
+                "description": "To whom the admin disabled notification email wil be sent."
+            }
+        }
+    },
+    "variables": {
+        "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureADConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureADConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Office365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('Office365ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "Block-AADUserOrAdmin_alert",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Admin disabled notification email": {
+                            "defaultValue": "[parameters('Admin disabled notification email')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Condition_-_if_user_is_no_active_admin": {
+                                    "actions": {
+                                        "Condition_-_if_user_have_manager": {
+                                            "actions": {
+                                                "Add_comment_to_incident_-_with_manager_-_no_admin": {
+                                                    "runAfter": {
+                                                        "Get_user_-_details": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                            "message": "<p>User @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUserOrAdmin. Manager (@{body('Parse_JSON_-_get_user_manager')?['userPrincipalName']}) is notified.<br>\nNote: User is not an active admin, but may be eligible for admin role!</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Get_user_-_details": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuread']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/v1.0/users/@{encodeURIComponent(concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix']))}"
+                                                    }
+                                                },
+                                                "Send_an_email_-_to_manager_-_no_admin": {
+                                                    "runAfter": {
+                                                        "Add_comment_to_incident_-_with_manager_-_no_admin": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "Body": "<p>Security notification! This is automated email sent by Microsoft Sentinel Automation!<br>\n<br>\nYour direct report @{items('For_each')?['Name']} has been disabled in Azure AD due to the security incident. Can you please notify the user and work with him to reach&nbsp;our support.<br>\n<br>\nDirect report details:<br>\nFirst name: @{body('Get_user_-_details')?['displayName']}<br>\nSurname: @{body('Get_user_-_details')?['surname']}<br>\nJob title: @{body('Get_user_-_details')?['jobTitle']}<br>\nOffice location: @{body('Get_user_-_details')?['officeLocation']}<br>\nBusiness phone: @{body('Get_user_-_details')?['businessPhones']}<br>\nMobile phone: @{body('Get_user_-_details')?['mobilePhone']}<br>\nMail: @{body('Get_user_-_details')?['mail']}<br>\n<br>\nThank you!</p>",
+                                                            "Importance": "High",
+                                                            "Subject": "@{items('For_each')?['Name']} has been disabled in Azure AD due to the security risk!",
+                                                            "To": "@body('Parse_JSON_-_get_user_manager')?['userPrincipalName']"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/v2/Mail"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_-_get_user_manager": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Add_comment_to_incident_-_no_manager_-_no_admin": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                                "message": "<p>User @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUserOrAdmin. Manager has not been notified, since it is not found for this user!<br>\nNote: User is not an active admin, but may be eligible for admin role!</p>"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/Incidents/Comment"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_JSON_-_get_user_manager')?['userPrincipalName']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "body": {
+                                                    "accountEnabled": false
+                                                },
+                                                "method": "PATCH",
+                                                "uri": "https://graph.microsoft.com/beta/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}"
+                                            }
+                                        },
+                                        "HTTP_-_get_user_manager": {
+                                            "runAfter": {
+                                                "HTTP": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}/manager"
+                                            }
+                                        },
+                                        "Parse_JSON_-_get_user_manager": {
+                                            "runAfter": {
+                                                "HTTP_-_get_user_manager": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_-_get_user_manager')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "userPrincipalName": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_-_get_admin_roles": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Compose_Incident_URL": {
+                                                "runAfter": {
+                                                    "Get_user_-_admin_details": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Compose",
+                                                "inputs": "Admin has been disabled per security incident. </br></br>\nIncident details:</br>\nIncident title: @{body('Alert_-_Get_incident')?['properties']?['title']}</br>\nSeverity:@{body('Alert_-_Get_incident')?['properties']?['severity']}</br>\nIncident link: <a href=\"@{body('Alert_-_Get_incident')?['properties']?['incidentUrl']}\">@{body('Alert_-_Get_incident')?['properties']?['incidentUrl']}</a></br>\n</br>\nIf you select Approve - admin will stay disabled in Azure AD!</br>\nIf you select Reject - admin account will be re-enabled!"
+                                            },
+                                            "Condition_-_is_block_status_rejected": {
+                                                "actions": {
+                                                    "Add_comment_to_incident_-_admin_sign_in_block_is_rejected": {
+                                                        "runAfter": {
+                                                            "HTTP_-_re-enable_admin_user": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                                "message": "<p>Admin user @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUserOrAdmin.<br>\nPer approval process, admin account is re-enabled.</p>"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/Incidents/Comment"
+                                                        }
+                                                    },
+                                                    "HTTP_-_re-enable_admin_user": {
+                                                        "runAfter": {},
+                                                        "type": "Http",
+                                                        "inputs": {
+                                                            "authentication": {
+                                                                "audience": "https://graph.microsoft.com/",
+                                                                "type": "ManagedServiceIdentity"
+                                                            },
+                                                            "body": {
+                                                                "accountEnabled": true
+                                                            },
+                                                            "method": "PATCH",
+                                                            "uri": "https://graph.microsoft.com/beta/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Send_approval_email_-_should_admin_stay_blocked": [
+                                                        "Succeeded",
+                                                        "TimedOut",
+                                                        "Failed"
+                                                    ]
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Condition_-_if_admin_user_have_manager": {
+                                                            "actions": {
+                                                                "Add_comment_to_incident_-_with_manager_-_admin_user": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                                            "message": "<p>Admin user @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUserOrAdmin. Manager (@{body('Parse_JSON_-_get_admin_manager')?['userPrincipalName']}) is notified.</p>"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/Incidents/Comment"
+                                                                    }
+                                                                },
+                                                                "Send_an_email_-_to_manager_-_admin_user": {
+                                                                    "runAfter": {
+                                                                        "Add_comment_to_incident_-_with_manager_-_admin_user": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "Body": "<p>Security notification! This is automated email sent by Microsoft Sentinel Automation!<br>\n<br>\nYour direct report @{items('For_each')?['Name']} has been disabled in Azure AD due to the security incident. Can you please notify the user and work with him to resolve security incident!<br>\n<br>\nDirect report details:<br>\nFirst name: @{body('Get_user_-_admin_details')?['givenName']}<br>\nSurname: @{body('Get_user_-_admin_details')?['surname']}<br>\nJob title: @{body('Get_user_-_admin_details')?['jobTitle']}<br>\nOffice location: @{body('Get_user_-_admin_details')?['officeLocation']}<br>\nBusiness phone: @{body('Get_user_-_admin_details')?['businessPhones']}<br>\nMobile phone: @{body('Get_user_-_admin_details')?['mobilePhone']}<br>\nMail: @{body('Get_user_-_admin_details')?['mail']}<br>\n<br>\nThank you!</p>",
+                                                                            "Subject": "@{items('For_each')?['Name']} has been disabled in Azure AD due to the security risk!",
+                                                                            "To": "@body('Parse_JSON_-_get_admin_manager')?['userPrincipalName']"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/v2/Mail"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Parse_JSON_-_get_admin_manager": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Add_comment_to_incident_-_no_manager_-_admin_user": {
+                                                                        "runAfter": {},
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "body": {
+                                                                                "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                                                "message": "<p>Admin user @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUserOrAdmin. Manager has not been notified, since it is not found for this user!</p>"
+                                                                            },
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "path": "/Incidents/Comment"
+                                                                        }
+                                                                    },
+                                                                    "Send_an_email_-_no_manager_-_admin_user": {
+                                                                        "runAfter": {
+                                                                            "Add_comment_to_incident_-_no_manager_-_admin_user": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "body": {
+                                                                                "Body": "<p>Security notification! This is automated email sent by Microsoft Sentinel Automation!<br>\n<br>\nDisabled sing-in has been confirmed for following admin user @{items('For_each')?['Name']}.<br>\n<br>\nPlease work with user to resolve security issue! Admin user doesn't have manager!<br>\n<br>\nAdmin user details:<br>\nFirst name: @{body('Get_user_-_admin_details')?['givenName']}<br>\nSurname: @{body('Get_user_-_admin_details')?['surname']}<br>\nJob title: @{body('Get_user_-_admin_details')?['jobTitle']}<br>\nOffice location: @{body('Get_user_-_admin_details')?['officeLocation']}<br>\nBusiness phone: @{body('Get_user_-_admin_details')?['businessPhones']}<br>\nMobile phone: @{body('Get_user_-_admin_details')?['mobilePhone']}<br>\nMail: @{body('Get_user_-_admin_details')?['mail']}<br>\n<br>\nThank you!</p>",
+                                                                                "Importance": "High",
+                                                                                "Subject": "@{items('For_each')?['Name']} - admin user disabled sign-in has been confirmed!",
+                                                                                "To": "@parameters('Admin disabled notification email')"
+                                                                            },
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "path": "/v2/Mail"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "not": {
+                                                                            "equals": [
+                                                                                "@body('Parse_JSON_-_get_admin_manager')?['userPrincipalName']",
+                                                                                "@null"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "HTTP_-_get_admin_manager": {
+                                                            "runAfter": {},
+                                                            "type": "Http",
+                                                            "inputs": {
+                                                                "authentication": {
+                                                                    "audience": "https://graph.microsoft.com/",
+                                                                    "type": "ManagedServiceIdentity"
+                                                                },
+                                                                "method": "GET",
+                                                                "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}/manager"
+                                                            }
+                                                        },
+                                                        "Parse_JSON_-_get_admin_manager": {
+                                                            "runAfter": {
+                                                                "HTTP_-_get_admin_manager": [
+                                                                    "Succeeded",
+                                                                    "Failed"
+                                                                ]
+                                                            },
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@body('HTTP_-_get_admin_manager')",
+                                                                "schema": {
+                                                                    "properties": {
+                                                                        "userPrincipalName": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@body('Send_approval_email_-_should_admin_stay_blocked')?['SelectedOption']",
+                                                                "Reject"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            },
+                                            "Get_user_-_admin_details": {
+                                                "runAfter": {
+                                                    "HTTP_-_Block_admin_user": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuread']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "get",
+                                                    "path": "/v1.0/users/@{encodeURIComponent(concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix']))}"
+                                                }
+                                            },
+                                            "HTTP_-_Block_admin_user": {
+                                                "runAfter": {},
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "authentication": {
+                                                        "audience": "https://graph.microsoft.com/",
+                                                        "type": "ManagedServiceIdentity"
+                                                    },
+                                                    "body": {
+                                                        "accountEnabled": false
+                                                    },
+                                                    "method": "PATCH",
+                                                    "uri": "https://graph.microsoft.com/beta/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}"
+                                                }
+                                            },
+                                            "Send_approval_email_-_should_admin_stay_blocked": {
+                                                "runAfter": {
+                                                    "Compose_Incident_URL": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "limit": {
+                                                    "timeout": "PT30M"
+                                                },
+                                                "type": "ApiConnectionWebhook",
+                                                "inputs": {
+                                                    "body": {
+                                                        "Message": {
+                                                            "Body": "@{outputs('Compose_Incident_URL')}",
+                                                            "HideHTMLMessage": false,
+                                                            "Importance": "High",
+                                                            "Options": "Approve, Reject",
+                                                            "ShowHTMLConfirmationDialog": false,
+                                                            "Subject": "Admin - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])} - have been blocked!",
+                                                            "To": "@parameters('Admin disabled notification email')",
+                                                            "UseOnlyHTMLMessage": true
+                                                        },
+                                                        "NotificationUrl": "@{listCallbackUrl()}"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['office365']['connectionId']"
+                                                        }
+                                                    },
+                                                    "path": "/approvalmail/$subscriptions"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@length(body('HTTP_-_get_admin_roles')['value'])",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP_-_get_admin_roles": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}/memberOf/microsoft.graph.directoryRole"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuread": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+                                "connectionName": "[variables('AzureADConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
+                            },
+                            "microsoftsentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName": "[variables('Office365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

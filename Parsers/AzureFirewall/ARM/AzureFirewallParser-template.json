@@ -1,0 +1,74 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "sentinelWorkspaceName": {
+            "type": "String",
+            "metadata": {
+                "description": "The name of the Sentinel workspace"
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "apiVersion": "2017-03-15-preview",
+            "name": "[parameters('sentinelWorkspaceName')]",
+            "location": "[resourceGroup().location]",
+            "resources": [
+                {
+                    "type": "savedSearches",
+                    "apiVersion": "2020-08-01",
+                    "name": "Azure Firewall Network Rules",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('sentinelWorkspaceName'))]"
+                    ],
+                    "properties": {
+                        "etag": "*",
+                        "displayName": "Azure Firewall Network Rules",
+                        "category": "Security",
+                        "FunctionAlias": "AzureFirewallNetworkRuleLogs",
+                        "query": "let AzureFirewallNetworkRuleLogs = AzureDiagnostics | where Category == \"AzureFirewallNetworkRule\" | where isnotempty(msg_s);\r\nlet parseLogs = AzureFirewallNetworkRuleLogs\r\n | where msg_s has_any(\"TCP\", \"UDP\")\r\n | parse-where\r\n msg_s with networkProtocol:string \r\n \" request from \" srcIpAddr:string\r\n \":\" srcPortNumber:int\r\n \" to \" dstIpAddr:string\r\n \":\" dstPortNumber:int\r\n \". Action: \" dvcAction:string\r\n \".\" other:string\r\n | parse\r\n other with *\r\n \"Signature: \" signature:string\r\n \". IDS: \" idsDetails:string\r\n \". Priority: \" priority:int\r\n \". Classification: \" classification:string\r\n | project-away msg_s;\r\nlet parseLogsWithUrls = AzureFirewallNetworkRuleLogs\r\n | where msg_s has_all (\"Url:\",\"ThreatIntel:\")\r\n | parse-where\r\n msg_s with networkProtocol:string \r\n \" request from \" srcIpAddr:string\r\n \" to \" dstIpAddr:string\r\n \". Url: \" url:string\r\n \". Action: \" dvcAction:string\r\n \". ThreatIntel: \" threatIntel:string\r\n | project-away msg_s;\r\nlet parseLogsWithoutUrls = AzureFirewallNetworkRuleLogs\r\n | where msg_s !has \"Url:\" and\r\n msg_s  has \"ThreatIntel\"\r\n | parse-where\r\n msg_s with networkProtocol:string \r\n \" request from \" srcIpAddr:string\r\n \" to \" dstIpAddr:string\r\n \". Action: \" dvcAction:string\r\n \". ThreatIntel: \" threatIntel:string\r\n | project-away msg_s;\r\nlet parseLogsIcmp = AzureFirewallNetworkRuleLogs\r\n | where msg_s  has \"ICMP\" and\r\n msg_s !has \"Type=\"\r\n | parse\r\n msg_s with networkProtocol:string \r\n \" request from \" srcIpAddr:string\r\n \" to \" dstIpAddr:string\r\n \". Action: \" dvcAction:string\r\n \". Signature: \" signature:string\r\n \". IDS: \" idsDetails:string\r\n \". Priority: \" priority:int\r\n \". Classification: \" classification:string\r\n | project-away msg_s;\r\nlet parseLogsIcmpType = AzureFirewallNetworkRuleLogs\r\n | where msg_s has \"ICMP Type=\"\r\n | parse-where\r\n msg_s with networkProtocol:string \r\n \" Type=\" type:int\r\n \" request from \" srcIpAddr:string\r\n \" to \" dstIpAddr:string\r\n \". Action: \" dvcAction:string\r\n | project-away msg_s;\r\nunion\r\n parseLogs, parseLogsWithUrls, parseLogsWithoutUrls, parseLogsIcmp, parseLogsIcmpType\r\n| project TimeGenerated, networkProtocol, type, srcIpAddr, srcPortNumber, dstIpAddr, dstPortNumber, tolower(dvcAction), signature, idsDetails, priority, classification",
+                        "version": 1,
+                        "functionParameters": "disabled:bool=False"
+                    }
+                },
+                {
+                    "type": "savedSearches",
+                    "apiVersion": "2020-08-01",
+                    "name": "Azure Firewall Application Rules",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('sentinelWorkspaceName'))]"
+                    ],
+                    "properties": {
+                        "etag": "*",
+                        "displayName": "Azure Firewall Application Rules",
+                        "category": "Security",
+                        "FunctionAlias": "AzureFirewallApplicationRuleLogs",
+                        "query": "let AzureFirewallApplicationRuleLogs = AzureDiagnostics | where OperationName == \"AzureFirewallApplicationRuleLog\";\r\nlet parseLogsWithUrls = AzureFirewallApplicationRuleLogs\r\n | where msg_s has_all (\"Url:\", \"Rule Collection Group:\")\r\n | parse-where\r\n msg_s with networkProtocol:string \r\n \" request from \" srcIpAddr:string\r\n \":\" srcPortNumber:int\r\n \" to \" dstIpAddr:string\r\n \":\" dstPortNumber:int\r\n \". Url: \" url:string\r\n \". Action: \" dvcAction:string\r\n \". Policy: \" policy:string\r\n \". Rule Collection Group: \" ruleCollectionGroup:string\r\n \". Rule Collection: \" ruleCollection:string\r\n \". Rule: \" ruleName:string\r\n | project-away msg_s;\r\nlet parseLogsWithoutUrls = AzureFirewallApplicationRuleLogs\r\n | where msg_s !has \"Url:\" and\r\n msg_s  has \"Rule Collection Group:\"\r\n | parse-where\r\n msg_s with networkProtocol:string\r\n \" request from \" srcIpAddr:string\r\n \":\" srcPortNumber:int\r\n \" to \" dstIpAddr:string\r\n \":\" dstPortNumber:int\r\n \". Action: \" dvcAction:string\r\n \". Policy: \" policy:string\r\n \". Rule Collection Group: \" ruleCollectionGroup:string\r\n \". Rule Collection: \" ruleCollection:string\r\n \". Rule: \" rule:string\r\n\/\/ Since web category is not always specified it can't be part of the parse statement above\r\n\/\/ otherwise lines without a web category will not be parsed at all.\r\n\/\/ Therefore the web categories is distilled from the \"rule\" colomn if applicable:\r\n | extend ruleName = tostring(split(rule, \" Webcategories. Web Category: \")[0])\r\n | extend webCategory = tostring(split(rule, \" Webcategories. Web Category: \")[1])\r\n | project-away msg_s;\r\nlet parseLogsNoRuleWithUrls = AzureFirewallApplicationRuleLogs\r\n | where msg_s has_all (\"Url:\", \"No rule matched.\")\r\n | parse-where\r\n msg_s with networkProtocol:string\r\n \" request from \" srcIpAddr:string\r\n \":\" srcPortNumber:int\r\n \" to \" dstIpAddr:string\r\n \":\" dstPortNumber:int\r\n \". Url: \" url:string\r\n \". Action: \" dvcAction:string\r\n \". No rule matched. \" policy:string\r\n | where dvcAction == \"Deny\"\r\n | extend ruleName = \"No rule matched\"\r\n | project-away msg_s;\r\nlet parseLogsNoRuleWithoutUrls = AzureFirewallApplicationRuleLogs\r\n | where msg_s !has \"Url:\" and\r\n msg_s  has \"No rule matched.\"\r\n | parse-where\r\n msg_s with networkProtocol:string\r\n \" request from \" srcIpAddr:string\r\n \":\" srcPortNumber:int\r\n \" to \" dstIpAddr:string\r\n \":\" dstPortNumber:int\r\n \". Action: \" dvcAction:string\r\n \". No rule matched. \" policy:string\r\n | where dvcAction == \"Deny\"\r\n \/\/ Since we needed to parse based on \". No rule matched. \" that part of the string is now lost\r\n \/\/ This will be put back as ruleName:\r\n | extend ruleName = \"No rule matched\"\r\n | project-away msg_s;\r\nlet parseLogsResolveFail = AzureFirewallApplicationRuleLogs\r\n | where msg_s has \"Failed to resolve\"\r\n | parse-where\r\n msg_s with networkProtocol:string\r\n \" request from \" srcIpAddr:string\r\n \":\" srcPortNumber:int\r\n \" to \" dstIpAddr:string\r\n \":\" dstPortNumber:int\r\n \". Action: \" dvcAction:string\r\n \". Failed to resolve \" reason:string\r\n \/\/ Since we needed to parse based on \". Failed to resolve \" that part of the string is now lost\r\n \/\/ This will be put back as reason with a concatenate:\r\n | extend reason = strcat(\"Failed to resolve \", reason)\r\n | project-away msg_s;\r\nlet parseLogsNoSni = AzureFirewallApplicationRuleLogs\r\n | where msg_s has \"Reason:\"\r\n | parse-where\r\n msg_s with networkProtocol:string\r\n \" request from \" srcIpAddr:string\r\n \":\" srcPortNumber:int\r\n \". Action: \" dvcAction:string\r\n \". Reason: \" reason:string\r\n | where dvcAction == \"Deny\"\r\n | project-away msg_s;\r\n\/\/ Each of these six let statements will divide the whole dataset union will put everything back together\r\n\/\/ Fuzzy = true should not be used here since we need all parts of the data and cannot accept to miss any of it\r\nunion parseLogsWithUrls, parseLogsWithoutUrls, parseLogsNoRuleWithUrls, parseLogsNoRuleWithoutUrls, parseLogsResolveFail, parseLogsNoSni\r\n| project networkProtocol, srcIpAddr, srcPortNumber,dstIpAddr, dstPortNumber, url, tolower(dvcAction), reason, policy, ruleCollectionGroup, ruleCollection, ruleName, webCategory",
+                        "version": 1,
+                        "functionParameters": "disabled:bool=False"
+                    }
+                },
+                {
+                    "type": "savedSearches",
+                    "apiVersion": "2020-08-01",
+                    "name": "Azure Firewall Dns Proxy",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('sentinelWorkspaceName'))]"
+                    ],
+                    "properties": {
+                        "etag": "*",
+                        "displayName": "Azure Firewall Dns Proxy",
+                        "category": "Security",
+                        "FunctionAlias": "AzureFirewallDnsProxyLogs",
+                        "query": "let DNS_query=(disabled:bool=false){\r\n AzureDiagnostics | where not(disabled)\r\n \/\/ | where ResourceType == \"AZUREFIREWALLS\" -- Implicit in the next line\r\n | where Category == \"AzureFirewallDnsProxy\"\r\n | where msg_s startswith \"DNS Request:\"\r\n | parse msg_s with\r\n \"DNS Request: \" \r\n SrcIpAddr:string \":\" SrcPortNumber:int \r\n \" - \" EventOriginalUid:string \r\n \" \" DnsQueryTypeName:string \r\n \" \" DnsQueryClassName:string\r\n \" \" DnsQuery:string\r\n \". \" NetworkProtocol:string \r\n \" \" SrcBytes:int \r\n \" \" DnsDNSSECflag:bool \r\n \" \" DnsDNSSECBufferSize:int \r\n \" \" EventResultDetails:string \r\n \" \" DnsFlags:string\r\n \" \" DstBytes:int\r\n \" \" DnsNetworkDuration:double\r\n \"s\"\r\n | project-away msg_s\r\n | extend\r\n EventResult = iff (EventResultDetails == \"NOERROR\", \"Success\", \"Failure\"),\r\n EventSubType = \"response\",\r\n DnsNetworkDuration = toint(DnsNetworkDuration*1000)     \r\n };\r\n let DNS_error=(disabled:bool=false) {\r\n AzureDiagnostics | where not(disabled)\r\n \/\/ | where ResourceType == \"AZUREFIREWALLS\" -- Implicit in the next line\r\n | where Category == \"AzureFirewallDnsProxy\"\r\n | where msg_s startswith \" Error:\"\r\n | parse msg_s with \r\n \" Error: \" nu:string \r\n \" \" DnsQuery:string \r\n \". \" DnsQueryTypeName:string \r\n \": \" op:string \r\n \" \" NetworkProtocol:string\r\n \" \" SrcIpAddr:string \":\" SrcPortNumber:int \r\n \"->\" DstIpAddr:string \":\" DstPortNumber:int  \r\n \": \" EventResultOriginalDetails:string\r\n | project-away msg_s\r\n | extend \r\n EventResult = \"Failure\",\r\n EventSubType = \"request\"\r\n };\r\n let AzureFirewallDnsProxy = (disabled:bool=false) {\r\n union DNS_query(disabled), DNS_error(disabled)\r\n | extend\r\n NetworkProtocol = toupper(NetworkProtocol)\r\n | project-rename\r\n DvcId = ResourceId\r\n | extend\r\n DvcIdType = \"AzureResourceId\",\r\n EventCount = int(1),\r\n EventStartTime = TimeGenerated,\r\n EventVendor = \"Microsoft\",\r\n EventProduct = \"Azure Firewall\",\r\n EventSchema = \"Dns\",\r\n EventSchemaVersion = \"0.1.3\",\r\n EventEndTime = TimeGenerated, \r\n EventType = 'Query',\r\n DnsFlagsAuthenticated = DnsFlags has \"aa\",\r\n DnsFlagsAuthoritative = DnsFlags has \"ad\",\r\n DnsFlagsCheckingDisabled = DnsFlags has \"cd\",\r\n DnsFlagsRecursionAvailable = DnsFlags has \"ra\",\r\n DnsFlagsRecursionDesired = DnsFlags has \"rd\",\r\n DnsFlagsTruncates = DnsFlags has \"tc\"\r\n | extend\r\n \/\/ -- Aliases\r\n DnsResponseCodeName=EventResultDetails,\r\n Domain=DnsQuery,\r\n IpAddr=SrcIpAddr,\r\n Src=SrcIpAddr,\r\n Dst=DstIpAddr,\r\n Duration = DnsNetworkDuration,\r\n Dvc = DvcId\r\n | extend\r\n \/\/ -- Backward Compatibility\r\n Query = DnsQuery,\r\n QueryTypeName = DnsQueryTypeName,\r\n ResponseCodeName = DnsResponseCodeName,\r\n Flags = DnsFlags\r\n };\r\nAzureFirewallDnsProxy",
+                        "version": 1,
+                        "functionParameters": "disabled:bool=False"
+                    }
+                }
+            ]
+        }
+    ]
+}

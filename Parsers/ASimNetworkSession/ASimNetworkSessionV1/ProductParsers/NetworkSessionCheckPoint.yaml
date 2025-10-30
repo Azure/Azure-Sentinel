@@ -1,0 +1,69 @@
+Parser:
+  Title: Check Point Firewall Network Sessions
+  Version: '0.0'
+  LastUpdated: June 20, 2021
+Product:
+  Name: CheckPoint
+Normalization:
+  Schema: NetworkSessions
+  Version: '0.1.0'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This Query Parser maps Check Point Firewall Events (CommonSecurityLogs) to the Advanced Security Information Model Network Session schema.
+ParserName: vimNetworkSessionCheckPoint
+ParserQuery: |
+  let NetworkParserCheckPoint=(){
+  CommonSecurityLog
+  | where DeviceVendor=="Check Point" and DeviceProduct=="VPN-1 & FireWall-1"
+  | project-rename 
+      EventResourceId=_ResourceId
+      , EventVendor=DeviceVendor
+      , EventProduct=DeviceProduct
+      , NetworkProtocol=Protocol
+    , EventSeverity=LogSeverity 
+      , SrcNatIpAddr=SourceTranslatedAddress
+      , SrcNatPortNumber=SourceTranslatedPort
+      , DstNatIpAddr=DestinationTranslatedAddress
+      , DstNatPortNumber=DestinationTranslatedPort
+      , DstBytes=ReceivedBytes
+      , SrcBytes=SentBytes
+      , DvcMacAddr=DeviceMacAddress
+      , DstDvcHostname=DestinationHostName
+      , DstMacAddr=DestinationMACAddress
+    , SrcMacAddr=SourceMACAddress
+    , DvcAction=DeviceAction
+  | extend
+      EventSchemaVersion="0.1.0"
+    , EventCount=toint(1)
+    , EventUid=_ItemId
+      , EventOriginalUid=extract(@'loguid=(\{[^\}]+\})',1,AdditionalExtensions, typeof(string))
+      , EventTimeIngested =ingestion_time()
+      , DvcHostname=extract(@'originsicname=cn\\\\=([^,]+),',1,AdditionalExtensions, typeof(string))
+      , EventType="Traffic"
+      , EventResult=case(isempty(DvcAction),"", DvcAction=="Accept","Success","Failure") 
+      , SrcZone=extract(@'inzone=([^;]+);',1,AdditionalExtensions, typeof(string))
+      , DstZone=extract(@'outzone=([^;]+);',1,AdditionalExtensions, typeof(string))
+      , NetworkRuleName=iff (DvcAction=="Accept" ,"", coalesce( DeviceCustomString2 , extract(@'(action_reason=|tcp_packet_out_of_state=)([^;]+)',2,AdditionalExtensions, typeof(string)), Activity))
+      , NetworkApplicationProtocol=iff (DvcAction !="Accept", Activity,"")
+      , ["NetworkRuleNumber"]=extract(@"rule_uid=([0-9a-f\x2d]+)",1, AdditionalExtensions)
+  // Trivial rename for mitigating autocomplete
+  | project-rename
+      NetworkDirection=CommunicationDirection
+      , EventEndTime=EndTime
+    , EventStartTime= StartTime
+    , EventMessage=Message
+    , TimeGenerated=TimeGenerated
+      , DstIpAddr=DestinationIP
+      , DstPortNumber=DestinationPort
+      , SrcPortNumber=SourcePort
+      , SrcIpAddr=SourceIP
+      , DstUserName=DestinationUserName
+    , DvcOutboundInterface=DeviceOutboundInterface
+    , DvcInboundInterface=DeviceInboundInterface
+    , SrcUserName=SourceUserName
+  };
+  NetworkParserCheckPoint

@@ -1,0 +1,32 @@
+id: 5cb88a85-f9d9-48eb-a23a-55960f0f8ad4
+name: Anomaly of MailItemAccess by GraphAPI [Nobelium]
+description: |
+  This query looks for anomalies in mail item access events made by Graph API. It uses standard deviation to determine if the number of events is anomalous. The query returns all clientIDs where the amount of mail sent per day was larger than value given by the formula, 'average + STDThreshold(2.5)*(standard deviation)'.
+  See The MailItemsAccessed mailbox auditing action.
+  Reference - https://docs.microsoft.com/microsoft-365/compliance/mailitemsaccessed-forensics-investigations?view=o365-worldwide#the-mailitemsaccessed-mailbox-auditing-action
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+- Exfiltration
+tags:
+- Nobelium
+query: |
+  let starttime = 30d;
+  let STDThreshold = 2.5;
+  let allMailAccsessByGraphAPI = CloudAppEvents
+  | where   ActionType == "MailItemsAccessed"
+  | where Timestamp between (startofday(ago(starttime))..now())
+  | where isnotempty(RawEventData['ClientAppId'] ) and RawEventData['AppId'] has "00000003-0000-0000-c000-000000000000"
+  | extend ClientAppId = tostring(RawEventData['ClientAppId'])
+  | extend OperationCount = toint(RawEventData['OperationCount'])
+  | project Timestamp,OperationCount , ClientAppId;
+  let calculateNumberOfMailPerDay = allMailAccsessByGraphAPI
+  | summarize NumberOfMailPerDay =sum(toint(OperationCount)) by ClientAppId,format_datetime(Timestamp, 'y-M-d');
+  let calculteAvgAndStdev=calculateNumberOfMailPerDay
+  | summarize avg=avg(NumberOfMailPerDay),stev=stdev(NumberOfMailPerDay) by ClientAppId;
+  calculteAvgAndStdev  | join calculateNumberOfMailPerDay on ClientAppId
+  | sort by ClientAppId
+  |  where NumberOfMailPerDay > avg + STDThreshold * stev
+  | project ClientAppId,Timestamp,NumberOfMailPerDay,avg,stev 

@@ -1,0 +1,196 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Run-Notebook-After-Incident-Creation",
+    "description": "This playbook will trigger a Microsoft Sentinel notebook to process newly created incident.  It will pass incident ID and entities if any to the notebook.",
+    "prerequisites": ["set up Sentinel notebook automation system with a Synapse workspace", "upload incident related notebooks and create pipelines for the notebooks", "gather Synapse workspace name and Synapse pipeline name for template deployment"],
+    "postDeployment": [
+    ],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "2022-11-17T00:00:00.000Z",
+    "entities": [
+    ],
+    "tags": [
+    ],
+    "support": {
+      "tier": "community",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "Zhipeng Zhao"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "<PlaybookName>",
+      "type": "string"
+    },
+    "UserName": {
+      "defaultValue": "<username>@<domain>",
+      "type": "string"
+    },
+    "SynapseWorkspaceName": {
+      "defaultValue": "<SynapseWorkspaceName>",
+      "type": "string"
+    },
+    "SynapsePipelineName": {
+      "defaultValue": "<SynapsePipelineName>",
+      "type": "string"
+    }
+  },
+
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "SynapsePipelineRunUri": "[concat('https://', parameters('SynapseWorkspaceName'), '.dev.azuresynapse.net/pipelines/', parameters('SynapsePipelineName'), '/createRun?api-version=2020-12-01')]",
+    "SynapsePipelineUri": "[concat('https://', parameters('SynapseWorkspaceName'), '.dev.azuresynapse.net/pipelines/', parameters('SynapsePipelineName'), '?api-version=2020-12-01')]",
+    "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "centralus",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Create_Pipeline_Run": {
+              "runAfter": {
+                "Update_Pipeline_Parameters": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "authentication": {
+                  "audience": "https://dev.azuresynapse.net/",
+                  "type": "ManagedServiceIdentity"
+                },
+                "body": {
+                  "IncidentResourceId": [
+                    "@{triggerBody()?['object']?['id']}"
+                  ]
+                },
+                "method": "POST",
+                "uri": "[variables('SynapsePipelineRunUri')]"
+              }
+            },
+            "Update_Pipeline_Parameters": {
+              "runAfter": {},
+              "type": "Http",
+              "inputs": {
+                "authentication": {
+                  "audience": "https://dev.azuresynapse.net/",
+                  "type": "ManagedServiceIdentity"
+                },
+                "body": {
+                  "name": "TestingADLS",
+                  "properties": {
+                    "activities": [
+                      {
+                        "description": "notebook activity for testing",
+                        "name": "notebookactivity",
+                        "type": "SynapseNotebook",
+                        "typeProperties": {
+                          "notebook": {
+                            "referenceName": "NotebookResultSaving",
+                            "type": "NotebookReference"
+                          },
+                          "parameters": {
+                            "Entities": {
+                              "type": "string",
+                              "value": "@{triggerBody()?['object']?['properties']?['relatedEntities']}"
+                            },
+                            "IncidentResourceId": {
+                              "type": "string",
+                              "value": "@{triggerBody()?['object']?['id']}"
+                            },
+                            "IncidentStatus": {
+                              "type": "string",
+                              "value": "@{triggerBody()?['object']?['properties']?['status']}"
+                            }
+                          },
+                          "snapshot": true,
+                          "sparkPool": {
+                            "referenceName": "sparkpoolsnb",
+                            "type": "BigDataPoolReference"
+                          }
+                        }
+                      }
+                    ],
+                    "annotations": [],
+                    "description": "testfromlogicapp"
+                  },
+                  "type": "Microsoft.Synapse/workspaces/pipelines"
+                },
+                "method": "PUT",
+                "uri": "[variables('SynapsePipelineUri')]"
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

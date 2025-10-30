@@ -1,0 +1,139 @@
+// Title:           Blackberry CylancePROTECT
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    12/04/2020
+// Comment:         Initial Release
+//  
+// DESCRIPTION:
+// This parser takes raw CylancePROTECT logs from a Syslog stream and parses the logs into a normalized schema.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+// 
+// Nov 30 15:25:49 sysloghost CylancePROTECT Event Type: Device, Event Name: SystemSecurity, Device Name: TESTHOST013, Agent Version: 2.1.1570.35, IP Address: (10.91.6.156), MAC Address: (005056A67CA5), Logged On Users: (), OS: Microsoft Windows Server 2016 Standard x64 10.0.14393, Zone Names: (Agent Update - Windows - Production 2,Agent Update - Windows - Production 3,Device Type - Server)
+// 
+// Nov 30 14:49:35 sysloghost CylancePROTECT Event Type: Threat, Event Name: threat_quarantined, Device Name: TESTHOST029, IP Address: (192.147.148.170), File Name: MBX@52DC@39D1B30.###, Path: C:\Users\testuser\AppData\Local\Temp\, Drive Type: Internal Hard Drive, File Owner: ABC\test-user57, SHA256: 4344B4702D544149C0C6072914E822E23D60A187302F13D772B4D85976B02AC9, MD5: 3EE72502F87F904A56523F0A2E469FE7A, Status: Quarantined, Cylance Score: 61, Found Date: 11/30/2020 2:49:35 PM, File Type: Executable, Is Running: True, Auto Run: False, Detected By: ExecutionControl, Zone Names: (Agent Update - Windows - Production 2,Agent Update - Windows - Production 3,Device Type - Workstation), Is Malware: False, Is Unique To Cylance: False, Threat Classification: UNCLASSIFIED, Device Id: 333b84cb-5eb3-4733-b57b-5a17d06f8043, Policy Name: Workstation - Standard
+//
+// Nov 30 19:36:17 sysloghost CylancePROTECT Event Type: ScriptControl, Event Name: Blocked, Device Name: TESTHOST091, File Path: d:\program files (x86)\cyberark\psm\scripts\deploy-connectors.ps1, SHA256: 7212CEF22B57C34A0E20C2FA320B9FC723FB653045C2490F9AD62A37B54EB53, Interpreter: Powershell, Interpreter Version: 10.0.14393.0 (rs1_release.160715-1616), Zone Names: (Agent Update - Windows - Production 3,Device Type - Server), User Name: SYSTEM, Device Id: ba302db3-4659-4064-a57a-4b9bb1be6bd2, Policy Name: Server - CyberArk PSM
+//
+// 
+let LogHeader = Syslog
+| where Computer in ("server1", "server2") // server1 and server2 are examples, replace this list with your CylancePROTECT devices
+| extend EventType = extract(@"Event Type: ([^,]+),",1,SyslogMessage),
+        EventName = extract(@"Event Name: ([^,]+),",1,SyslogMessage),
+        DeviceName = extract(@"Device Name: ([^,]+),",1,SyslogMessage);
+let DeviceEvents = LogHeader
+| where EventType == "Device"
+| extend AgentVersion = extract(@"Agent Version: ([^,]+),",1,SyslogMessage),
+        SrcIpAddr = split(extract(@"IP Address: \(([^)]+)\),",1,SyslogMessage),","),
+        SrcMacAddr = split(extract(@"MAC Address: \(([^)]+)\),",1,SyslogMessage),","),
+        LoggedOnUsers = split(extract(@"Logged On Users: \(([^)]+)\),",1,SyslogMessage),","),
+        OsVersion = extract(@"OS: ([^,]+),",1,SyslogMessage),
+        ZoneNames = split(extract(@"Zone Names: \(([^)]+)\)(,|$)",1,SyslogMessage),",");
+let ScriptControlEvents = LogHeader
+| where EventType == "ScriptControl"
+| extend FilePath = extract(@"File Path: ([^,]+),",1,SyslogMessage),
+        FileHashSha256 = extract(@"SHA256: ([^,]+),",1,SyslogMessage),
+        Interpreter = extract(@"Interpreter: ([^,]+),",1,SyslogMessage),
+        InterpreterVersion = extract(@"Interpreter Version: ([^,]+),",1,SyslogMessage),
+        UserName = extract(@"User Name: ([^,]+),",1,SyslogMessage),
+        DeviceId = extract(@"Device Id: ([^,]+),",1,SyslogMessage),
+        PolicyName = extract(@"Policy Name: ([^,]+)(,|$)",1,SyslogMessage);
+let ThreatEvents = LogHeader
+| where EventType == "Threat"
+| extend SrcIpAddr = split(extract(@"IP Address: \(([^)]+)\),",1,SyslogMessage),","),
+        FileName = extract(@"File Name: ([^,]+),",1,SyslogMessage),
+        Path = extract(@"Path: ([^,]+)(,|$)",1,SyslogMessage),
+        DriveType = extract(@"Drive Type: ([^,]+),",1,SyslogMessage),
+        FileHashSha256 = extract(@"SHA256: ([^,]+),",1,SyslogMessage),
+        FileHashMd5 = extract(@"MD5: ([^,]+),",1,SyslogMessage),
+        Status = extract(@"Status: ([^,]+),",1,SyslogMessage),
+        CylanceScore = extract(@"Cylance Score: ([^,]+),",1,SyslogMessage),
+        FoundDate = extract(@"Found Date: ([^,]+),",1,SyslogMessage),
+        FileType = extract(@"File Type: ([^,]+),",1,SyslogMessage),
+        IsRunning = extract(@"Is Running: ([^,]+),",1,SyslogMessage),
+        AutoRun = extract(@"Auto Run: ([^,]+),",1,SyslogMessage),
+        DetectedBy = extract(@"Detected By: ([^,]+),",1,SyslogMessage),
+        ZoneNames = split(extract(@"Zone Names: \(([^)]+)\),",1,SyslogMessage),","),
+        IsMalware = extract(@"Is Malware: ([^,]+),",1,SyslogMessage),
+        IsUniqueToCylance = extract(@"Is Unique To Cylance: ([^,]+),",1,SyslogMessage),
+        ThreatClassification = extract(@"Threat Classification: ([^,]+),",1,SyslogMessage),
+        DeviceId = extract(@"Device Id: ([^,]+),",1,SyslogMessage),
+        PolicyName = extract(@"Policy Name: ([^,]+)(,|$)",1,SyslogMessage);
+let DeviceControlEvents = LogHeader
+| where EventType == "DeviceControl"
+| extend ExtDeviceType = extract(@"External Device Type: ([^,]+),",1,SyslogMessage),
+        ExtDeviceVendorId = extract(@"External Device Vendor ID: ([^,]+),",1,SyslogMessage),
+        ExtDeviceName = extract(@"External Device Name: ([^,]+),",1,SyslogMessage),
+        ExtDeviceProductId = extract(@"External Device Product ID: ([^,]+),",1,SyslogMessage),
+        ExtDeviceSerialNumber = extract(@"External Device Serial Number: ([^,]+),",1,SyslogMessage),
+        ZoneNames = split(extract(@"Zone Names: \(([^)]+)\)(,|$)",1,SyslogMessage),","),
+        DeviceId = extract(@"Device Id: ([^,]+),",1,SyslogMessage),
+        PolicyName = extract(@"Policy Name: ([^,]+)(,|$)",1,SyslogMessage);
+let AuditLog = LogHeader
+| where EventType == "AuditLog"
+| extend Provider = extract(@"Provider: ([^,]+),",1,SyslogMessage),
+        PolicyChanged = extract(@"Policy Changed: ([^,]+),",1,SyslogMessage),
+        ZoneNames = split(extract(@"Zone: ([^,]+)(,|$)",1,SyslogMessage),","),
+        UserName = extract(@"User: ([^,]+)(,|$)",1,SyslogMessage),
+        DeviceName = extract(@"Devices?:\s([\w\d\-\_]+)\,",1,SyslogMessage),
+        SrcIpAddr = split(extract(@"Source IP: ([\w\.\:]+)\,",1,SyslogMessage),",");
+let NoEventType = LogHeader
+| where isempty(EventType)
+| extend EventType = iif(isempty(EventType),"Other",EventType)
+| extend AgentVersion = tostring(parse_json(SyslogMessage).["Agent Version"]),
+        BackgroundDetection = tostring(parse_json(SyslogMessage).["Background Detection"]),
+        EventCreationTime = tostring(parse_json(SyslogMessage).Created),
+        DeviceName = tostring(parse_json(SyslogMessage).["Device Name"]),
+        FilesAnalyzed = toint(parse_json(SyslogMessage).["Files Analyzed"]),
+        SrcIpAddr = split(parse_json(SyslogMessage).["IP Addresses"],","),
+        IsOnline = tostring(parse_json(SyslogMessage).["Is Online"]),
+        LastReportedUser = tostring(parse_json(SyslogMessage).["Last Reported User"]),
+        SrcMacAddr = split(parse_json(SyslogMessage).["Mac Addresses"],","),
+        OsVersion = tostring(parse_json(SyslogMessage).["OS Version"]),
+        OfflineDate = tostring(parse_json(SyslogMessage).["Offline Date"]),
+        OnlineDate = tostring(parse_json(SyslogMessage).["Online Date"]),
+        Policy = tostring(parse_json(SyslogMessage).Policy),
+        SerialNumber = tostring(parse_json(SyslogMessage).["Serial Number"]), 
+        Tenant = tostring(parse_json(SyslogMessage).Tenant),
+        ZoneNames = split(parse_json(SyslogMessage).Zones,",")
+| extend AvIndustry = tostring(parse_json(SyslogMessage).["AV Industry"]),
+        AccessTime = tostring(parse_json(SyslogMessage).["Access Time"]),
+        AutoRun = tostring(parse_json(SyslogMessage).["Auto Run"]),
+        CertIssuer = tostring(parse_json(SyslogMessage).["Cert Issuer"]),
+        CertPublisher = tostring(parse_json(SyslogMessage).["Cert Publisher"]),
+        CertSubject = tostring(parse_json(SyslogMessage).["Cert Subject"]),
+        CertTimestamp = tostring(parse_json(SyslogMessage).["Cert Timestamp"]),
+        Classification_ = tostring(parse_json(SyslogMessage).Classification),
+        CompanyName = tostring(parse_json(SyslogMessage).["Company Name"]),
+        Copyright = tostring(parse_json(SyslogMessage).Copyright),
+        CreateTime = tostring(parse_json(SyslogMessage).["Create Time"]),
+        CylanceScore = tostring(parse_json(SyslogMessage).["Cylance Score"]),
+        Description = tostring(parse_json(SyslogMessage).Description),
+        DetectedBy = tostring(parse_json(SyslogMessage).["Detected By"]),
+        DriveType = tostring(parse_json(SyslogMessage).["Drive Type"]),
+        EverRun = tostring(parse_json(SyslogMessage).["Ever Run"]),
+        FileName = tostring(parse_json(SyslogMessage).["File Name"]),
+        FileOwner = tostring(parse_json(SyslogMessage).["File Owner"]),
+        FilePath = tostring(parse_json(SyslogMessage).["File Path"]),
+        FileSize = tostring(parse_json(SyslogMessage).["File Size (bytes)"]),
+        FileStatus = tostring(parse_json(SyslogMessage).["File Status"]),
+        FileVersion = tostring(parse_json(SyslogMessage).["File Version"]),
+        FirstFound = tostring(parse_json(SyslogMessage).["First Found"]),
+        GlobalQuarantined = tostring(parse_json(SyslogMessage).["Global Quarantined"]),
+        LastFound = tostring(parse_json(SyslogMessage).["Last Found"]),
+        FileHashMd5 = tostring(parse_json(SyslogMessage).MD5),
+        ModificationTime = tostring(parse_json(SyslogMessage).["Modification Time"]),
+        ProductName = tostring(parse_json(SyslogMessage).["Product Name"]),
+        Running = tostring(parse_json(SyslogMessage).Running),
+        FileHashSha256 = tostring(parse_json(SyslogMessage).SHA256),
+        Safelisted = tostring(parse_json(SyslogMessage).Safelisted),
+        SerialNumber = tostring(parse_json(SyslogMessage).["Serial Number"]),
+        SignatureStatus = tostring(parse_json(SyslogMessage).["Signature Status"]),
+        Signed = tostring(parse_json(SyslogMessage).Signed);
+let AllOtherEvents = LogHeader
+| where EventType !in ("Device", "ScriptControl", "Threat", "DeviceControl", "AuditLog", "Other");
+union DeviceEvents, ScriptControlEvents, ThreatEvents, DeviceControlEvents, AuditLog, NoEventType, AllOtherEvents

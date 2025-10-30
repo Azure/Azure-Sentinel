@@ -1,0 +1,780 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "MCASActivityPlaybookName": {
+            "defaultValue": "Get-MCASActivity",
+            "type": "String"
+        },
+        "APIToken": {
+            "defaultValue": "Enter the API token",
+            "type": "string"
+        },
+        "MCASURL": {
+            "defaultValue": "Enter the MCAS URL, somedomain.portal.us3.cloudappsecurity.com",
+            "type": "string"
+        },
+        "workspaceId": {
+            "type": "string"
+        },
+        "workSpaceKey": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "KeyVaultName": "[tolower(concat('mcasactkv', uniqueString(resourceGroup().id, subscription().id)))]",
+        "SecretName": "MCASAPIToken",
+        "StorageAccountName": "[tolower(concat('mcasactsa', uniqueString(resourceGroup().id, subscription().id)))]",
+        "StorageContainerName": "mcasactivitylogicapp",
+        "AzureBlobConnectionName": "azureblob-MCASActivity",
+        "AzureLogAnalyticsDataCollectorConnectionName": "azureloganalyticsdatacollector-MCASActivity",
+        "KeyVaultConnectionName": "keyvault-MCASActivity"
+
+    },
+    "resources": [
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2016-10-01",
+            "name": "[variables('KeyVaultName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "Standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [],
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": true,
+                "enableSoftDelete": true
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('KeyVaultName'), '/', variables('SecretName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('APIToken')]",
+                "contentType": "string",
+                "attributes": {
+                    "enabled": true
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('StorageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "largeFileSharesState": "Disabled",
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [
+                    ],
+                    "ipRules": [
+                    ],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                },
+                "accessTier": "Hot"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": [
+                    ]
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/', variables('StorageContainerName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureBlobConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "displayName": "[variables('AzureBlobConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+                },
+                "parameterValues": {
+                    "accountname": "[variables('AzureBlobConnectionName')]",
+                    "accesskey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                },
+                "parameterValues": {
+                    "username": "[parameters('workspaceId')]",
+                    "password": "[parameters('workSpaceKey')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('KeyVaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[variables('KeyVaultName')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('MCASActivityPlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('StorageAccountName'), 'default', variables('StorageContainerName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('SecretName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Compose_2": {
+                            "inputs": {
+                                "filters": {
+                                    "date": {
+                                        "range": {
+                                            "end": "@variables('EndTimeEpoch')",
+                                            "start": "@variables('StartTimeEpoch')"
+                                        }
+                                    }
+                                },
+                                "isScan": true
+                            },
+                            "runAfter": {
+                                "Initialize_variable_9": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose"
+                        },
+                        "Condition_2": {
+                            "actions": {
+                                "Set_variable_2": {
+                                    "inputs": {
+                                        "name": "StartTime",
+                                        "value": "@ticks(addMinutes(utcNow(), -240))"
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                },
+                                "Set_variable_3": {
+                                    "inputs": {
+                                        "name": "StartTimeEpoch",
+                                        "value": "@div(sub(variables('StartTime'), variables('Ticks1970')),10000)"
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_variable_4": {
+                                        "inputs": {
+                                            "name": "StartTimeEpoch",
+                                            "value": "@body('Parse_JSON_2')?['lastRunEpoch']"
+                                        },
+                                        "runAfter": {},
+                                        "type": "SetVariable"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Parse_JSON_2')?['lastRunEpoch']",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_6": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_blob_content": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/mcasactivitylogicapp/lastrun-MCAS.json'))}/content",
+                                "queries": {
+                                    "inferContentType": true
+                                }
+                            },
+                            "runAfter": {
+                                "Get_secret_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Get_secret_2": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('MCASAPIToken')}/value"
+                            },
+                            "runAfter": {},
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RunTime",
+                                        "type": "string",
+                                        "value": "@{utcNow()}"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Condition_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_2": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TempArrayVar",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Parse_JSON_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_3": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "StartTime",
+                                        "type": "integer"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_4": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EndTime",
+                                        "type": "integer",
+                                        "value": "@ticks(variables('RunTime'))"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_5": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Ticks1970",
+                                        "type": "integer",
+                                        "value": "@ticks('1970-01-01')"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_6": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "StartTimeEpoch",
+                                        "type": "integer"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_7": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EndTimeEpoch",
+                                        "type": "integer",
+                                        "value": "@div(sub(variables('EndTime'), variables('Ticks1970')),10000)"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_8": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Query",
+                                        "type": "object",
+                                        "value": "@outputs('Compose_2')"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Compose_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_9": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "HasNext",
+                                        "type": "string",
+                                        "value": "true"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_7": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Parse_JSON_2": {
+                            "inputs": {
+                                "content": "@json(body('Get_blob_content'))",
+                                "schema": {
+                                    "properties": {
+                                        "lastRun": {
+                                            "type": "string"
+                                        },
+                                        "lastRunEpoch": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "Until_2": {
+                            "actions": {
+                                "Compose_3": {
+                                    "inputs": {
+                                        "filters": {
+                                            "date": {
+                                                "lte": "@body('Parse_JSON')?['nextQueryFilters']?['date']?['lte']",
+                                                "range": {
+                                                    "end": "@variables('EndTimeEpoch')",
+                                                    "start": "@variables('StartTimeEpoch')"
+                                                }
+                                            }
+                                        },
+                                        "isScan": true
+                                    },
+                                    "runAfter": {
+                                        "Set_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
+                                },
+                                "Condition": {
+                                    "actions": {
+                                        "Compose": {
+                                            "inputs": "@variables('TempArrayVar')",
+                                            "runAfter": {
+                                                "For_each": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "For_each": {
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "inputs": {
+                                                        "name": "TempArrayVar",
+                                                        "value": "@items('For_each')"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable"
+                                                }
+                                            },
+                                            "foreach": "@body('HTTP')['data']",
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        },
+                                        "Send_Data": {
+                                            "inputs": {
+                                                "body": "@{outputs('Compose')}",
+                                                "headers": {
+                                                    "Log-Type": "MCASActivity2"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            },
+                                            "runAfter": {
+                                                "Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@length(body('HTTP')['data'])",
+                                                        0
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP": {
+                                    "inputs": {
+                                        "body": "@variables('Query')",
+                                        "headers": {
+                                            "Authorization": "Token @{body('Get_secret_2')?['value']}"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://buildseccxpninja.us3.portal.cloudappsecurity.com/api/v1/activities/"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                },
+                                "Parse_JSON": {
+                                    "inputs": {
+                                        "content": "@body('HTTP')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "_id": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "hasNext": {
+                                                    "type": "boolean"
+                                                },
+                                                "nextQueryFilters": {
+                                                    "properties": {
+                                                        "date": {
+                                                            "properties": {
+                                                                "lte": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "range": {
+                                                                    "properties": {
+                                                                        "end": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "start": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                },
+                                "Set_variable": {
+                                    "inputs": {
+                                        "name": "HasNext",
+                                        "value": "@{body('Parse_JSON')?['hasNext']}"
+                                    },
+                                    "runAfter": {
+                                        "Condition": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "Set_variable_5": {
+                                    "inputs": {
+                                        "name": "Query",
+                                        "value": "@outputs('Compose_3')"
+                                    },
+                                    "runAfter": {
+                                        "Compose_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "expression": "@equals(variables('HasNext'), 'False')",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_8": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Until"
+                        },
+                        "Update_blob": {
+                            "inputs": {
+                                "body": "{\n    \"lastRun\": \"@{variables('RunTime')}\",\n    \"lastRunEpoch\": @{variables('EndTimeEpoch')}\n}",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/mcasactivitylogicapp/lastrun-MCAS.json'))}"
+                            },
+                            "runAfter": {
+                                "Until_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Month",
+                                "interval": 5
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                                "connectionName": "[variables('AzureBlobConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+                            },
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                                "connectionName": "[variables('KeyVaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "name": "[concat(variables('KeyVaultName'), '/add')]",
+            "apiVersion": "2019-09-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('MCASActivityPlaybookName'))]"
+            ],
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('MCASActivityPlaybookName')), '2017-07-01', 'full').identity.principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "Get",
+                                "List"
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

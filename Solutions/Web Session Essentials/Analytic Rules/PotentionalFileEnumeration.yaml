@@ -1,0 +1,75 @@
+id: b3731ce1-1f04-47c4-95c2-9827408c4375
+name: Detect potential file enumeration activity (ASIM Web Session)
+description: |
+  'This detection method identifies potential cases of file enumeration activity. The query is designed to identify client sources that generate multiple requests resulting in 404 error codes'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - CommandAndControl
+  - CredentialAccess
+relevantTechniques:
+  - T1083
+  - T1071
+  - T1110
+query: |
+  // HTTP response status codes indicate whether a specific HTTP request has been successfully completed.
+  // Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+  let HTTPErrorCode=dynamic(["404"]);
+  let threshold = 10; // You can update this threshold to the value that suites your environment
+  // let FileNotFoundRequests = 
+  _Im_WebSession (starttime=ago(1h))
+  | where EventResultDetails in~ (HTTPErrorCode)
+  // Filter the logs to include only HTTP GET requests with an HTTP status code of 404 and '/' in the URL
+  | where HttpRequestMethod =~ "GET" and Url contains "/"
+  | summarize
+      RequestCount = count(),
+      FileCount=dcount(Url),
+      EventStartTime=min(TimeGenerated),
+      EventEndTime=max(TimeGenerated),
+      RequestURLs = make_set(Url, 100),
+      DestinationIPList=make_set(DstIpAddr, 100)
+      by SrcIpAddr, SrcUsername, SrcHostname, DstHostname
+  | where RequestCount > threshold  // Adjust the threshold as per your requirements
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DstHostname
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  RequestCount: RequestCount
+  RequestURLs: RequestURLs
+  FileCount: FileCount
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+  DestinationIPList: DestinationIPList
+alertDetailsOverride:
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with IP '{{SrcIpAddr}}' has been observed with performing file enumeration activity"
+  alertDescriptionFormat: "User generated multiple requests '{{RequestCount}}' that has resulted in error code '404', suggesting the possibility of file enumeration activity. It's important to investigate the source and patterns of these extensive 404 errors to identify potential security threats. Details about this error code could be found [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)"
+version: 1.0.0
+kind: Scheduled

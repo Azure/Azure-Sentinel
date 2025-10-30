@@ -1,0 +1,49 @@
+id: 0b520385-6a16-4e6f-ba89-c320d857695f
+name: Alerts related to IP
+description: |
+  'Any Alerts that fired related to a given IpAddress during the range of +6h and -3d'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetAllAlertsWithIp = (suspiciousEventTime:datetime, v_ipAddress:string){
+  //-3d and +6h as some alerts fire after accumulation of events
+  let v_StartTime = suspiciousEventTime-3d;
+  let v_EndTime = suspiciousEventTime+6h;
+  SecurityAlert
+  | where TimeGenerated between (v_StartTime .. v_EndTime)
+  // expand JSON properties
+  | extend Extprop = parse_json(Entities)
+  | mv-expand Extprop
+  | extend Extprop = parse_json(Extprop)
+  | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '')
+  | where IpAddress == v_ipAddress
+  | extend Account = Extprop['Name']
+  | extend Domain = Extprop['UPNSuffix']
+  | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
+  | extend Computer = iff(Extprop['Type']=="host", Extprop['HostName'], '')
+  | project StartTimeUtc = StartTime, EndTimeUtc = EndTime, AlertName, Computer, Account, IpAddress, ExtendedProperties, Entities
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  };
+  // change datetime value and <ipaddress> value below
+  GetAllAlertsWithIp(datetime('2019-02-05T10:02:51.000'), ("<ipaddress>"))
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Other" ]

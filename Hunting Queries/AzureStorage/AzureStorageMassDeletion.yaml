@@ -1,0 +1,32 @@
+id: 85e16874-72aa-4ebe-b36e-e45f8ba50f79
+name: Azure Storage Mass File Deletion
+description: |
+  'Detect mass file deletion events within Azure File and Blob storage. deleteWindow controls
+  the period of time the deletions must occur in, whilst the deleteThreshold controls how many files
+  must be deleted within that threshold. Query works on a per-IP address basis, so will only detect a single
+  IP deleting multiple files.'
+requiredDataConnectors: []
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+tags:
+  - Ignite2021
+query: |
+
+  let deleteThreshold = 3;
+  let deleteWindow = 10m;
+  union
+  StorageFileLogs,
+  StorageBlobLogs
+  | where StatusText =~ "Success"
+  | where OperationName =~ "DeleteBlob" or OperationName =~ "DeleteFile"
+  | extend CallerIpAddress = tostring(split(CallerIpAddress, ":", 0)[0])
+  | summarize dcount(Uri) by bin(TimeGenerated, deleteWindow), CallerIpAddress, UserAgentHeader, AccountName
+  | where dcount_Uri >= deleteThreshold
+  | project TimeGenerated, IPCustomEntity=CallerIpAddress, UserAgentHeader, FilesDeleted=dcount_Uri, AccountName
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

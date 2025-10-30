@@ -1,0 +1,83 @@
+Id: 4c541df8-a680-4da5-96c9-74456927213f
+DisplayName: Hosts the account failed to log in to the most
+Description: Hosts the account failed to log in to the most during the range of -1d and +1d
+InputEntityType: Account
+InputFields:
+  - Name + UPNSuffix
+  - Name + NTDomain
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 1d
+QueryPeriodAfter: 1d
+DataSources:
+    - SecurityEvent
+Tactics: 
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+  let SuccessfulLoginEventId = 4624;
+  let FailedLoginEventId = 4625;
+  let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+  let Legacy = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_UPNSuffix:string){
+    (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) | join
+    ( 
+          SecurityEvent
+          | extend p_Account_Name = case(
+              // Handles mixed use scenario of NTDomain\AccountName@UPNSuffix
+              v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
+              v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+              v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+              v_Account_Name
+          )
+          | extend p_Account_UPNSuffix = case(
+              v_Account_UPNSuffix has '@', tostring(split(v_Account_UPNSuffix, '@')[1]),
+              v_Account_UPNSuffix has '\\', tostring(split(v_Account_UPNSuffix, '\\')[0]),
+              v_Account_UPNSuffix
+          )
+          | extend p_Account_NTDomain = case(
+              v_Account_NTDomain has '\\', tostring(split(v_Account_UPNSuffix, '\\')[0]),
+              v_Account_NTDomain
+          )  
+          // parse Account sections
+          | extend Account_UPNSuffix = iff(Account has '@', tostring(split(Account,'@')[1]),'')
+          | extend Account_NTDomain = iff(Account has '\\', tostring(split(Account,'\\')[0]),'')
+          | extend Account_Name = extract(@'^([^\\]*\\)?([^@]+)@?',2,Account)
+          // filter by account: Name has to match, NTDomain and UPNSuffix should not be different
+          | where ( (isnotempty(Account_Name) and Account_Name==p_Account_Name) 
+                          and 
+                          iff(isnotempty(p_Account_NTDomain) and isnotempty(Account_NTDomain) ,p_Account_NTDomain==Account_NTDomain,true )
+                          and
+                          iff(isnotempty(p_Account_UPNSuffix) and isnotempty(Account_UPNSuffix) ,p_Account_UPNSuffix==Account_UPNSuffix,true )
+                  )
+          | summarize Host_Aux_SuccessfulLoginCount = countif(EventID==SuccessfulLoginEventId)
+                  , Host_Aux_FailedLoginsCount	= countif(EventID==FailedLoginEventId)
+                  , Host_Aux_LogonTypes=make_set(LogonType)
+            by Computer, Account, SourceComputerId, _ResourceId
+          | top 10 by Host_Aux_FailedLoginsCount
+          | parse Computer with Host_NTDomain '\\' *
+          | extend Host_HostName = tostring(split(Computer,'.')[0]), 
+                  Host_DnsDomain = strcat_array(array_slice(split(Computer,'.'),1,256),'.')
+                , Host_OMSAgentID=SourceComputerId, Host_AzureID = _ResourceId
+          | project-away Computer, Account, _ResourceId, SourceComputerId
+      | extend exists=int(1) ) on exists | project-away exists, exists1 
+    };
+    let Normalized = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_UPNSuffix:string){
+    (datatable(exists:int)[1] | where isimAuthenticationInstalled) | join 
+    (
+        imAuthentication(starttime=ago(24h),targetusername_has=v_Account_Name) 
+        | where isnotempty(TargetDvcHostname)
+        //* postfiltering *//  
+        | where TargetUsername has v_Account_Name
+        | summarize Host_Aux_SuccessfulLoginCount = countif(EventResult=='Success')
+                  , Host_Aux_FailedLoginsCount	= countif(EventResult=='Failure')
+                  , Host_Aux_LogonTypes=make_set(EventSubType)
+          by TargetDvcHostname, TargetDvcId
+        | top 10 by Host_Aux_FailedLoginsCount
+        | parse TargetDvcHostname with Host_NTDomain '\\' *
+        | extend Host_UnstructuredName = TargetDvcHostname
+        | project-keep Host_*
+      | extend exists=int(1) )   on exists | project-away exists, exists1 
+    };
+    union isfuzzy=true Legacy('<Name>','<NTDomain>','<UPNSuffix>'),Normalized('<Name>','<NTDomain>','<UPNSuffix>')

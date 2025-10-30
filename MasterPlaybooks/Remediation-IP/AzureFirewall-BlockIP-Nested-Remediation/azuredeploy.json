@@ -1,0 +1,386 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Block IP Nested Remediation - Azure Firewall",
+    "description": "This playbook allows blocking/allowing IPs in Azure Firewall, using IP Groups. ",
+    "mainSteps": [ "1. Fetches a list of potentially malicious IP addresses", "2.  If malicious IP address is not blocked by security policy rule then blocks it.", "3. If malicious IP address is blocked by security policy rule then unblocks it." ],
+    "prerequisites": [
+      "1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
+      "2. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. ",
+      "3. IP Group must be created in portal. [Refer here](https://docs.microsoft.com/azure/firewall/ip-groups) on how to create IP Group. User must have access tp IP Group.",
+      "4. Client ID, Tenant ID and Client Secret for your application registered in your AAD."
+    ],
+    "lastUpdateTime": "2022-09-05T14:46:14Z",
+    "entities": [ "IP" ],
+    "tags": [ "Remediation" ],
+    "support": {
+      "tier": "microsoft"
+    },
+    "author": {
+      "name": "Microsoft"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Azure-Firewall-Block-IP-Nested-Remediation",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    },
+    "ConnectorName": {
+      "defaultValue": "AzureFirewallConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Azure Firewall"
+      }
+    },
+    "IP Group Name": {
+      "defaultValue": "FirewallIPGroup",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the IP Group"
+      }
+    },
+    "clientId": {
+      "defaultValue": "<enter the ClientId of the application>",
+      "type": "string",
+      "metadata": {
+        "description": "Enter AAD App ClientID"
+      }
+    },
+    "clientSecret": {
+      "defaultValue": "<enter the Client secret of the application>",
+      "type": "securestring",
+      "metadata": {
+        "description": "Enter AAD App Secret Key"
+      }
+    }
+  },
+  "variables": {
+    "OAuthConnection": "[concat('OAuthConnection-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('OAuthConnection')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "OAuthConnection",
+        "parameterValues": {
+          "token:clientId": "[parameters('clientId')]",
+          "token:clientSecret": "[parameters('clientSecret')]",
+          "token:TenantId": "[subscription().tenantId]",
+          "token:grantType": "client_credentials"
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/',parameters('ConnectorName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "method": "POST",
+                "schema": {
+                  "properties": {
+                    "IPs": {
+                      "items": {
+                        "properties": {
+                          "Address": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "Address"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "runs": 1
+                }
+              }
+            }
+          },
+          "actions": {
+            "Catch_Scope": {
+              "actions": {
+                "Create_HTML_table_for_error": {
+                  "runAfter": {
+                    "Filter_array": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Table",
+                  "inputs": {
+                    "columns": [
+                      {
+                        "header": "IP Address",
+                        "value": "@item()['Address']"
+                      },
+                      {
+                        "header": "Action Name",
+                        "value": "@body('Filter_array')[0]?['name']"
+                      },
+                      {
+                        "header": "Message",
+                        "value": "@body('Filter_array')[0]?['outputs']?['body']?['error']?['message']"
+                      }
+                    ],
+                    "format": "HTML",
+                    "from": "@variables('IPs')"
+                  }
+                },
+                "Error_Response": {
+                  "runAfter": {
+                    "Create_HTML_table_for_error": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Response",
+                  "kind": "Http",
+                  "inputs": {
+                    "body": "Azure Firewall Block IP Address Playbook Error\n@{body('Create_HTML_table_for_error')}",
+                    "statusCode": 500
+                  },
+                  "operationOptions": "Asynchronous"
+                },
+                "Filter_array": {
+                  "runAfter": {},
+                  "type": "Query",
+                  "inputs": {
+                    "from": "@result('Try_Scope')",
+                    "where": "@equals(item()?['status'], 'Failed')"
+                  }
+                }
+              },
+              "runAfter": {
+                "Try_Scope": [
+                  "TimedOut",
+                  "Skipped",
+                  "Failed"
+                ]
+              },
+              "type": "Scope"
+            },
+            "Initialize_IPGroupName_variable": {
+              "runAfter": {
+                "Initialize_variable_IPs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "IPGroupName",
+                    "type": "string",
+                    "value": "[parameters('IP Group Name')]"
+                  }
+                ]
+              }
+            },
+            "Initialize_IP_Address_array_variable": {
+              "runAfter": {
+                "Initialize_IPGroupName_variable": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "IPAddresses",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "Variable to assign IP Groups present with in the IP Group"
+            },
+            "Initialize_variable_IPs": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "IPs",
+                    "type": "array",
+                    "value": "@triggerBody()?['IPs']"
+                  }
+                ]
+              }
+            },
+            "Try_Scope": {
+              "actions": {
+                "Create_HTML_table": {
+                  "runAfter": {
+                    "Creates_or_updates_an_ipGroups_in_a_specified_resource_group": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Table",
+                  "inputs": {
+                    "columns": [
+                      {
+                        "header": "IPGroupName",
+                        "value": "IPGroup"
+                      },
+                      {
+                        "header": "IPAddress",
+                        "value": "@item()?['Address']"
+                      }
+                    ],
+                    "format": "HTML",
+                    "from": "@variables('IPs')"
+                  },
+                  "description": "Create HTML table enrichment which contains the list of IP Address were added to the provided IPGroup"
+                },
+                "Creates_or_updates_an_ipGroups_in_a_specified_resource_group": {
+                  "runAfter": {
+                    "For_each_Malicious_IP_Address_Entity_present_in_the_Incident": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "location": "@body('IP_Groups_-_Get')?['location']",
+                      "properties": {
+                        "ipAddresses": "@variables('IPAddresses')"
+                      },
+                      "tags": {
+                        "Configuration": "Sentinel"
+                      }
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['AzureFirewallConnector']['connectionId']"
+                      }
+                    },
+                    "method": "put",
+                    "path": "/subscriptions/@{encodeURIComponent(split(workflow()?['id'],'/')[2])}/resourceGroups/@{encodeURIComponent(split(workflow()?['id'],'/')[4])}/providers/Microsoft.Network/ipGroups/@{encodeURIComponent(variables('IPGroupName'))}",
+                    "queries": {
+                      "api-version": "2020-07-01"
+                    }
+                  }
+                },
+                "For_each_Malicious_IP_Address_Entity_present_in_the_Incident": {
+                  "foreach": "@variables('IPs')",
+                  "actions": {
+                    "Append_IP_Address_to_the_existing_List": {
+                      "runAfter": {},
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "IPAddresses",
+                        "value": "@item()?['Address']"
+                      },
+                      "description": "Append the Malicious IP Address to the variable IPAddresses"
+                    }
+                  },
+                  "runAfter": {
+                    "Set_IP_Address_present_in_the_Azure_Firewall_IP_Group": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach"
+                },
+                "IP_Groups_-_Get": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['AzureFirewallConnector']['connectionId']"
+                      }
+                    },
+                    "method": "get",
+                    "path": "/subscriptions/@{encodeURIComponent(split(workflow()?['id'],'/')[2])}/resourceGroups/@{encodeURIComponent(split(workflow()?['id'],'/')[4])}/providers/Microsoft.Network/ipGroups/@{encodeURIComponent(variables('IPGroupName'))}",
+                    "queries": {
+                      "api-version": "2020-07-01"
+                    }
+                  },
+                  "description": "Get all the IP Addresses present in the provided Azure Firewall IP Group name"
+                },
+                "Response": {
+                  "runAfter": {
+                    "Create_HTML_table": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Response",
+                  "kind": "Http",
+                  "inputs": {
+                    "body": "Azure Firewall Block IP Address Playbook\n@{body('Create_HTML_table')}",
+                    "statusCode": 200
+                  },
+                  "operationOptions": "Asynchronous"
+                },
+                "Set_IP_Address_present_in_the_Azure_Firewall_IP_Group": {
+                  "runAfter": {
+                    "IP_Groups_-_Get": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "IPAddresses",
+                    "value": "@body('IP_Groups_-_Get')?['properties']?['ipAddresses']"
+                  },
+                  "description": "Variable to assign IP Groups present with in the IP Group"
+                }
+              },
+              "runAfter": {
+                "Initialize_IP_Address_array_variable": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "AzureFirewallConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]",
+                "connectionName": "[variables('OAuthConnection')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/',parameters('ConnectorName'))]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

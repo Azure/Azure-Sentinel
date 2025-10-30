@@ -1,0 +1,38 @@
+id: 4a6030de-c11c-4206-b4ea-cd005ebf80a2
+name: Suspicious command line tokens in LolBins or LolScripts
+description: |
+  'This query identifies Microsoft-signed Binaries and Scripts that are not system initiated. This technique is commonly used in phishing attacks'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1218
+  
+query: |
+  let Bin = externaldata(Binary: string) [@"https://raw.githubusercontent.com/sonnyakhere/LOLBAS_to_CSV/main/lolbas.csv"] with (format="csv", ignoreFirstRecord=True);
+  let ioc = dynamic(["http", "ftp"]);
+  SecurityEvent
+  | where EventID == 4688
+  | where TimeGenerated between ( ago(1d) .. now() )
+  // Looking to exclude system initiated activity
+  | where SubjectUserName !endswith "$"
+  | where SubjectUserName != "SYSTEM"
+  | where ParentProcessName has_any (Bin)
+  // Looking to only include details of those that have command line activities matching 1 or more of the defined IOCs
+  | where CommandLine has_any (ioc)
+  | project TimeGenerated, SubjectMachineName, SubjectUserName, ParentProcessName, Process, CommandLine
+  | sort by TimeGenerated asc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.0

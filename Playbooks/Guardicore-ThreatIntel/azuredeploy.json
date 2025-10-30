@@ -1,0 +1,575 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will pull the domain names and IPs from the threat intelligence that Guardicore shares every Sunday. It will create Azure Sentinel Threat Intelligence Indicators with the information gathered and send it to the tiIndicators API. This playbook is configured to run every Monday morning at 6:00 AM EST.",
+        "author": "Accelerynt"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Guardicore-ThreatIntel",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "microsoftgraphsecurity": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('microsoftgraphsecurity')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "GCTI",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('microsoftgraphsecurity'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Week",
+                                "interval": 1,
+                                "schedule": {
+                                    "hours": [
+                                        "6"
+                                    ],
+                                    "minutes": [
+                                        0
+                                    ],
+                                    "weekDays": [
+                                        "Monday"
+                                    ]
+                                },
+                                "timeZone": "UTC"
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "HTTP-_Get_GC_Data": {
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "https://threatintelligence.guardicore.com/downloads/latest.json"
+                            },
+                            "runAfter": {},
+                            "type": "Http"
+                        },
+                        "Parse_JSON_-_GC_Data": {
+                            "inputs": {
+                                "content": "@body('HTTP-_Get_GC_Data')",
+                                "schema": {
+                                    "properties": {
+                                        "connect_back_ips": {
+                                            "items": {
+                                                "properties": {
+                                                    "asn": {
+                                                        "type": [
+                                                            "integer",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "attacker": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "connect_back": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "country_code": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "first_seen": {
+                                                        "type": "string"
+                                                    },
+                                                    "ip": {
+                                                        "type": "string"
+                                                    },
+                                                    "isp": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "last_seen": {
+                                                        "type": "string"
+                                                    },
+                                                    "scanner": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "seen_amount": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "first_seen",
+                                                    "last_seen",
+                                                    "ip",
+                                                    "isp",
+                                                    "asn",
+                                                    "country_code",
+                                                    "attacker",
+                                                    "connect_back",
+                                                    "scanner",
+                                                    "seen_amount"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "human_ratio": {
+                                            "items": {
+                                                "properties": {
+                                                    "number_of_human_attacks": {
+                                                        "type": "integer"
+                                                    },
+                                                    "number_of_script_attacks": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "number_of_human_attacks",
+                                                    "number_of_script_attacks"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "malicious_domains": {
+                                            "type": "array"
+                                        },
+                                        "ports": {
+                                            "items": {
+                                                "properties": {
+                                                    "port_number": {
+                                                        "type": "integer"
+                                                    },
+                                                    "scans_seen_amount": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "port_number",
+                                                    "scans_seen_amount"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "scanners": {
+                                            "items": {
+                                                "properties": {
+                                                    "asn": {
+                                                        "type": [
+                                                            "integer",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "attacker": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "connect_back": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "country_code": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "first_seen": {
+                                                        "type": "string"
+                                                    },
+                                                    "ip": {
+                                                        "type": "string"
+                                                    },
+                                                    "isp": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "last_seen": {
+                                                        "type": "string"
+                                                    },
+                                                    "number_of_scans": {
+                                                        "type": "integer"
+                                                    },
+                                                    "scanned_services": {
+                                                        "type": "string"
+                                                    },
+                                                    "scanner": {
+                                                        "type": "boolean"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "first_seen",
+                                                    "last_seen",
+                                                    "ip",
+                                                    "isp",
+                                                    "asn",
+                                                    "country_code",
+                                                    "attacker",
+                                                    "connect_back",
+                                                    "scanner",
+                                                    "number_of_scans",
+                                                    "scanned_services"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "top_attackers": {
+                                            "items": {
+                                                "properties": {
+                                                    "asn": {
+                                                        "type": [
+                                                            "integer",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "attacked_services": {
+                                                        "type": "string"
+                                                    },
+                                                    "attacker": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "connect_back": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "country_code": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "first_seen": {
+                                                        "type": "string"
+                                                    },
+                                                    "ip": {
+                                                        "type": "string"
+                                                    },
+                                                    "isp": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "last_seen": {
+                                                        "type": "string"
+                                                    },
+                                                    "number_of_attacks": {
+                                                        "type": "integer"
+                                                    },
+                                                    "scanner": {
+                                                        "type": "boolean"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "first_seen",
+                                                    "last_seen",
+                                                    "ip",
+                                                    "isp",
+                                                    "country_code",
+                                                    "attacker",
+                                                    "connect_back",
+                                                    "scanner",
+                                                    "number_of_attacks",
+                                                    "attacked_services"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "top_services": {
+                                            "items": {
+                                                "properties": {
+                                                    "port_number": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "port_number"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP-_Get_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "For_Each_-_GC_Data:_Malicious_Domains_1": {
+                            "actions": {
+                                "Condition_-_Check_Valid_Data_1": {
+                                    "actions": {
+                                        "Create_tiIndicator_2": {
+                                            "inputs": {
+                                                "body": {
+                                                    "action": "alert",
+                                                    "confidence": 0,
+                                                    "description": "Guardicore Malicious Domain",
+                                                    "domainName": "@{items('For_Each_-_GC_Data:_Malicious_Domains_1')?['dns_record']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "severity": 0,
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/beta/security/tiIndicators"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@items('For_Each_-_GC_Data:_Malicious_Domains_1')?['dns_record']",
+                                                    "."
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@body('Parse_JSON_-_GC_Data')?['malicious_domains']",
+                            "runAfter": {
+                                "Parse_JSON_-_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_Each_-_GC_Data:_Malicious_Domains_2": {
+                            "actions": {
+                                "Condition_-_Check_Valid_Data_2": {
+                                    "actions": {
+                                        "For_Each_-_GC_Data:_Malicious_Domains_IPs": {
+                                            "actions": {
+                                                "Create_tiIndicator": {
+                                                    "inputs": {
+                                                        "body": {
+                                                            "action": "alert",
+                                                            "confidence": 0,
+                                                            "description": "Guardicore Malicious Domain (IP)",
+                                                            "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                            "networkDestinationCidrBlock": "@{items('For_Each_-_GC_Data:_Malicious_Domains_IPs')}",
+                                                            "severity": 0,
+                                                            "targetProduct": "Azure Sentinel",
+                                                            "threatType": "WatchList",
+                                                            "tlpLevel": "white"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/beta/security/tiIndicators"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection"
+                                                }
+                                            },
+                                            "foreach": "@split(items('For_Each_-_GC_Data:_Malicious_Domains_2')?['ips'], ',')",
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_Each_-_GC_Data:_Malicious_Domains_2')?['ips']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@body('Parse_JSON_-_GC_Data')?['malicious_domains']",
+                            "runAfter": {
+                                "Parse_JSON_-_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_Each_-_GC_Data:_C2_IPs": {
+                            "foreach": "@body('Parse_JSON_-_GC_Data')?['connect_back_ips']",
+                            "actions": {
+                                "Create_Threat_Indicator_for_C2_IP": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "action": "alert",
+                                            "confidence": 0,
+                                            "description": "GuardiCore Malicious C2 IP",
+                                            "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                            "networkDestinationIPv4": "@items('For_Each_-_GC_Data:_C2_IPs')?['ip']",
+                                            "severity": 0,
+                                            "targetProduct": "Azure Sentinel",
+                                            "threatType": "WatchList",
+                                            "tlpLevel": "white"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/security/tiIndicators"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_Each_-_GC_Data:_Scanners": {
+                            "foreach": "@body('Parse_JSON_-_GC_Data')?['scanners']",
+                            "actions": {
+                                "Create_Threat_Indicator_for_Scanner": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "action": "alert",
+                                            "additionalInformation": "ISP = @{items('For_Each_-_GC_Data:_Scanners')?['isp']}",
+                                            "confidence": 0,
+                                            "description": "Guardicore Malicious Scanner",
+                                            "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                            "networkSourceAsn": "@{items('For_Each_-_GC_Data:_Scanners')?['asn']}",
+                                            "networkSourceIPv4": "@{items('For_Each_-_GC_Data:_Scanners')?['ip']}",
+                                            "severity": 0,
+                                            "targetProduct": "Azure Sentinel",
+                                            "threatType": "WatchList",
+                                            "tlpLevel": "white"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/security/tiIndicators"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_Each_-_GC_Data_Top_Attackers": {
+                            "foreach": "@body('Parse_JSON_-_GC_Data')?['top_attackers']",
+                            "actions": {
+                                "Create_Threat_Indicator_for_Attacker": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "action": "alert",
+                                            "additionalInformation": "ISP = @{items('For_Each_-_GC_Data_Top_Attackers')?['isp']}",
+                                            "confidence": 0,
+                                            "description": "Guardicore Top Attacker",
+                                            "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                            "networkSourceAsn": "@items('For_Each_-_GC_Data_Top_Attackers')?['asn']",
+                                            "networkSourceIPv4": "@items('For_Each_-_GC_Data_Top_Attackers')?['ip']",
+                                            "severity": 0,
+                                            "targetProduct": "Azure Sentinel",
+                                            "threatType": "WatchList",
+                                            "tlpLevel": "white"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/security/tiIndicators"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                        
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftgraphsecurity": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('microsoftgraphsecurity'))]",
+                                "connectionName": "[variables('microsoftgraphsecurity')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

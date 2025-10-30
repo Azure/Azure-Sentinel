@@ -1,0 +1,79 @@
+id: 562900b1-39c4-4baf-a050-9cad1641db35
+name: Failed Login Attempt by Expired account
+description: |
+  'This query looks at Account Logon events found through Windows Event Id's as well as SigninLogs to discover 
+  login attempts by accounts that have expired.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+     - SigninLogs
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+
+  (union isfuzzy=true
+  (SecurityEvent 
+  | where EventID == 4625
+  //4625: An account failed to log on
+  | where AccountType == 'User' 
+  | where SubStatus == '0xc0000193' 
+  | extend Reason = 
+  case
+  ( SubStatus == '0xc0000193', 'Windows EventID (4625) - Account has expired', "Unknown")
+  | project Computer, Account,  Reason , TimeGenerated
+  ),
+  (
+  SecurityEvent 
+  | where EventID == 4769
+  //4769: A Kerberos service ticket was requested ( Kerberos Auth)
+  | parse EventData with * 'Status">' Status "<" *
+  | parse EventData with * 'TargetUserName">' TargetUserName "<" *
+  | where Status == '0x12'
+  | where TargetUserName !has "$" and isnotempty(TargetUserName)
+  | extend Reason = 
+  case(
+  Status == '0x12', 'Windows EventID (4769) - Account disabled, expired, locked out',
+  'Unknown'), Account = TargetUserName 
+  | project Computer, Account, Reason , TimeGenerated
+  ),
+  (
+  SecurityEvent
+  | where EventID == 4776 
+  // 4776: The domain controller attempted to validate the credentials for an account ( NTLM Auth)
+  | where Status == "0xc0000193"
+  | extend Reason = 
+  case(
+  ErrorCode == '0xc0000193', 'Windows EventID (4776) - Account has expired',
+  'Unknown'), Account = TargetAccount 
+  | parse EventData with * 'Workstation">' Workstation "<" *
+  | extend Workstation = trim_start(@"[\\]*", Workstation)
+  | extend Computer = iff(isnotempty(Workstation), Workstation, Computer ) 
+  | project Computer, Account, Reason , TimeGenerated
+  ) ,
+  (
+  SigninLogs 
+  | where ResultType == "50057" 
+  | extend Reason = 
+  case(
+  ResultType == '50057', 'SigninLogs( Result Code- 50057) - User account is disabled. The account has been disabled by an administrator.',
+  'Unknown'), Account = UserPrincipalName 
+  | project Account, Reason , TimeGenerated
+  ) )
+  | summarize StartTimeUtc = min(TimeGenerated), EndTImeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, Reason
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
+  | order by EventCount desc 
+version: 1.0.1
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Other", "Identity" ]

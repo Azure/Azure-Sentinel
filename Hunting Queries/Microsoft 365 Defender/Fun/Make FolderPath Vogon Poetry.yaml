@@ -1,0 +1,57 @@
+id: 3dbe65c4-c2ba-4139-9d7e-bf551d50d600
+name: Make FolderPath Vogon Poetry
+description: |
+  This is a completely stupid and pointless query that makes Vogon poetry out
+  of a random FolderPath from the table you pass it.  You can change
+  DeviceProcessEvents for any table as long as it has a column named DeviceName
+  and a column called FolderPath.  Feel free to check in more verses :)
+  Don't know what Vogon poetry is?  You have a research assignment: http://tinyurl.com/y8ueqchl
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+tactics:
+- Creates Poetry
+query: |
+  let MakeFolderPathVogonPoetry = (SourceData:(DeviceName:string, FolderPath:string)) {
+      let Verses = pack_array(
+          'My life was spent with PATH', 
+          'Looking upon a barren PATH',
+          'Whilst in the distance I saw a PATH',
+          'Gazing at the PATH',
+          'It was quite the dreary PATH',
+          'As I sat alone in the PATH',
+          'It was such a beautiful PATH',
+          'Though I could choose only one PATH',
+          'While I longed for my PATH',
+          'I would never find PATH again',
+          'I hunt in PATH',
+          'The PATH my guide',
+          'The memory of PATH sings in my blood',
+          'I seize the PATH',
+          'I carry it to my PATH',
+          'And I lay my PATH at your feet'
+      );    
+      let PhraseCount = toscalar(array_length(Verses));
+      let CleanedSourceData = (
+          SourceData
+          | take 10000
+          | where isnotempty( FolderPath) and (FolderPath startswith "/" or FolderPath startswith "c:\\")
+          | project DeviceName, FolderPath
+      );
+      let RandRow = rand(toscalar(CleanedSourceData | count));
+      CleanedSourceData
+      | serialize 
+      | where row_number() == RandRow
+      | extend Path = iff(FolderPath startswith "/", split(FolderPath, '/'), split(FolderPath, '\\'))
+      | where array_length( Path ) > 2
+      | mvexpand Path to typeof(string)
+      | where isnotempty(Path)
+      | extend Rand = toint(rand(PhraseCount))
+      | extend VerseTemplate = tostring(Verses[Rand])
+      | extend Verse = strcat(substring(VerseTemplate,0,indexof(VerseTemplate, 'PATH')), Path, substring(VerseTemplate, (indexof(VerseTemplate, 'PATH') + 4), (strlen(VerseTemplate) -  indexof(VerseTemplate, 'PATH') + 4))) 
+      | serialize 
+      | project DeviceName, FolderPath, Verse
+  };
+  DeviceProcessEvents
+  | invoke MakeFolderPathVogonPoetry()

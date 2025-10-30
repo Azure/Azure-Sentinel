@@ -1,0 +1,32 @@
+Id: 3aed43db-e358-4952-a5cd-a10f00d90af4
+DisplayName: User accounts created or deleted on host
+Description: User account creations and deletions on a given host during the time of or recently after compromise (set time range to +-12h when running the query)
+InputEntityType: Host
+InputFields:
+  - HostName
+OutputEntityTypes:
+  - Account
+QueryPeriodBefore: 12h
+QueryPeriodAfter: 12h
+DataSources:
+  - SecurityEvent
+Tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetAccountChangesOnHost = (v_Host_HostName:string){
+  SecurityEvent
+  // 4720: A user account was created, 4726: A user account was deleted
+  | where EventID == 4720 or EventID == 4726
+  | where AccountType == 'User'
+  | where Computer contains v_Host_HostName or WorkstationName contains v_Host_HostName
+  | extend info = pack('TargetAccount', TargetAccount, 'SubjectAccount', SubjectAccount, 'Activity', Activity)
+  | summarize min(TimeGenerated), max(TimeGenerated), Account_Aux_info = makeset(info) by Computer, TargetAccount
+  | project Account_Aux_StartTime=min_TimeGenerated, Account_Aux_EndTime=max_TimeGenerated, Account_Host_UnstructuredName=Computer, Account_UnstructuredName=TargetAccount, Account_Aux_info
+  | top 10 by Account_Aux_StartTime asc nulls last
+  };
+  // change <HostName> value below
+  GetAccountChangesOnHost(toupper('<HostName>'))

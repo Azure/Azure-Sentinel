@@ -1,0 +1,482 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+     "metadata": {
+        "title": "SpyCloud Breach Information - SpyCloud Enterprise", 
+        "description": "This Playbook will be triggered when an spycloud breach incident is created.",
+        "prerequisites": "SpyCloud Enterprise API Key.", 
+        "postDeploymentSteps": ["None"],      
+        "lastUpdateTime": "2022-09-05T00:00:00.000Z", 
+        "entities": ["ACCOUNT"], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "SpyCloud Integrations"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SpyCloud-Breach-Playbook",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        }
+    },
+    "variables": {
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident_2": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Account_Name": {
+                            "runAfter": {
+                                "Incident_Email_Account": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "account_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Astriek_Variable": {
+                            "runAfter": {
+                                "UPN_Suffix_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "astriek",
+                                        "type": "string",
+                                        "value": "@"
+                                    }
+                                ]
+                            }
+                        },
+                        "Check_if_the_incident_is_created_by_SpyCloud_Breach": {
+                            "actions": {
+                                "Entities_-_Get_Accounts": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/entities/account"
+                                    }
+                                },
+                                "For_each_account": {
+                                    "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                                    "actions": {
+                                        "Set__upn_suffix": {
+                                            "runAfter": {
+                                                "Set_account_name": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "upn_suffix",
+                                                "value": "@items('For_each_account')?['UPNSuffix']"
+                                            }
+                                        },
+                                        "Set_account_name": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "account_name",
+                                                "value": "@items('For_each_account')?['Name']"
+                                            }
+                                        },
+                                        "set_email_address": {
+                                            "runAfter": {
+                                                "Set__upn_suffix": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "incident_email_address",
+                                                "value": "@{concat(variables('account_name'),concat(variables('astriek'),variables('upn_suffix')))}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Entities_-_Get_Accounts": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "For_each_incident_alert": {
+                                    "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Check_if_the_exposed_password_is_in_use_on_the_network": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><strong>Breach Playbook successful</strong></p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Check_if_password_exists_in_the_incident": {
+                                            "actions": {
+                                                "Set_Incident_Password": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "incident_password",
+                                                        "value": "@{variables('incident_custom_details_object')?['Password']}"
+                                                    }
+                                                },
+                                                "Set_variable": {
+                                                    "runAfter": {
+                                                        "Set_Incident_Password": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "incident_plain_text_password",
+                                                        "value": "@{replace(replace(variables('incident_password'),'[\"',''),'\"]','')}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_custom_details_object": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@variables('incident_custom_details_object')?['Password']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Check_if_pwd_length_is_greater_than_required_length_by_organization": {
+                                            "actions": {},
+                                            "runAfter": {
+                                                "Check_if_password_exists_in_the_incident": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "",
+                                                            ""
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Check_if_the_exposed_password_is_in_use_on_the_network": {
+                                            "actions": {},
+                                            "runAfter": {
+                                                "Check_if_the_user_is_currently_an_active_employee": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "",
+                                                            ""
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Check_if_the_user_is_currently_an_active_employee": {
+                                            "actions": {},
+                                            "runAfter": {
+                                                "Check_if_pwd_length_is_greater_than_required_length_by_organization": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "",
+                                                            ""
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Set_custom_details_object": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "incident_custom_details_object",
+                                                "value": "@json(items('For_each_incident_alert')?['properties']?['additionalData']?['Custom Details'])"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "For_each_account": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Incident_Custom_Details_Object": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['object']?['properties']?['title']",
+                                            "@variables('incident_name')"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "IP_address": {
+                            "runAfter": {
+                                "Outputs_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip_address",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Incident_Custom_Details_Object": {
+                            "runAfter": {
+                                "IP_address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_custom_details_object",
+                                        "type": "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Incident_Email_Account": {
+                            "runAfter": {
+                                "Incident_Plain_Text_Password": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_email_address",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Incident_Name": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_name",
+                                        "type": "string",
+                                        "value": "SpyCloud Breach Rule"
+                                    }
+                                ]
+                            }
+                        },
+                        "Incident_Password": {
+                            "runAfter": {
+                                "Incident_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_password",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Incident_Plain_Text_Password": {
+                            "runAfter": {
+                                "Incident_Password": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_plain_text_password",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Outputs_Variable": {
+                            "runAfter": {
+                                "Astriek_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "password_enrich_data",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "UPN_Suffix_": {
+                            "runAfter": {
+                                "Account_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "upn_suffix",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

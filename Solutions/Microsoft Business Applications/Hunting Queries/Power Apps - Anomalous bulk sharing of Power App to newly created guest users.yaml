@@ -1,0 +1,89 @@
+id: 169428be-5ed0-4230-9103-c83df89c789a
+name: Power Apps - Anomalous bulk sharing of Power App to newly created guest users
+description: The query detects anomalous attempts to perform bulk sharing of Power
+  App to newly created guest users.
+requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+      - PowerPlatformAdminActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - InitialAccess
+  - LateralMovement
+  - ResourceDevelopment
+relevantTechniques:
+  - T1566
+  - T1534
+  - T1587
+query: |
+  ////////////
+  // Please replace the allowed_domains with a list of domains of your partners/sibling orgs
+  // with whom you generally share power apps with. This will allow us to filter
+  // legitimate bulk sharing attempts. Avoid using domains such as gmail, outlook, etc.
+  ///////////
+  let allowed_domains = pack_array("contoso.com");
+  let start = ago(14d);
+  let end = now();
+  let interval = 1h;
+  PowerPlatformAdminActivity
+  | where EventOriginalType == "PowerAppPermissionEdited"
+  | extend Properties = tostring(PropertyCollection)
+  | extend AppId = extract(@'"powerplatform.analytics.resource.power_app.id","Value":"([^"]+)"', 1, Properties)
+  | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+  | extend TargetPrincipalId = extract(@'"targetuser.id","Value":"([^"]+)"', 1, Properties)
+  | extend
+      PowerAppsAppId = AppId
+  | join kind=leftouter (AuditLogs
+      | where ActivityDateTime >= ago(14d)
+      | where SourceSystem =~ "Azure AD" and OperationName == "Invite external user"
+      | where Result =~ "success"
+      | extend InvitedOrgEmail = tostring(parse_json(AdditionalDetails[5])['value'])
+      | extend InvitedOrgDomain = tostring(split(InvitedOrgEmail, "@")[1])
+      | where not(InvitedOrgDomain has_any(allowed_domains))
+      | extend
+          InvitedById = tostring(parse_json(InitiatedBy)['user']['id']),
+          InvitedByUPN = tostring(parse_json(InitiatedBy)['user']['userPrincipalName']),
+          InvitedEmail = tostring(parse_json(TargetResources[0])['userPrincipalName']),
+          InvitedId = tostring(parse_json(TargetResources[0])['id'])
+      | summarize by InvitedById, InvitedByUPN, InvitedEmail, InvitedId, InvitedOrgDomain)
+      on $left.TargetPrincipalId == $right.InvitedId
+  | where isnotempty(InvitedId)
+  | make-series counter=dcount(TargetPrincipalId) default=0 on TimeGenerated in range(start, end, interval) by PowerAppsAppId, InvitedById, InvitedByUPN
+  | extend(Anomalies, AnomalyScore, ExpectedUsage) = series_decompose_anomalies(counter)
+  | mv-expand
+      counter to typeof(double),
+      TimeGenerated to typeof(datetime),
+      Anomalies to typeof(double),
+      AnomalyScore to typeof(double),
+      ExpectedUsage to typeof(long)
+  | where Anomalies != 0
+  | extend
+      PowerAppsEntityId = 27593,
+      AccountName = tostring(split(InvitedByUPN, '@')[0]),
+      UPNSuffix = tostring(split(InvitedByUPN, '@')[1])
+  | project
+      TimeGenerated,
+      ActualUsage=counter,
+      ExpectedUsage,
+      AnomalyScore,
+      Anomalies,
+      PowerAppsAppId,
+      InvitedById,
+      InvitedByUPN,
+      PowerAppsEntityId,
+      AccountName,
+      UPNSuffix
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - columnName: PowerAppsEntityId
+        identifier: AppId
+  - entityType: Account
+    fieldMappings:
+      - columnName: UPNSuffix
+        identifier: UPNSuffix
+      - columnName: AccountName
+        identifier: Name
+version: 3.2.0

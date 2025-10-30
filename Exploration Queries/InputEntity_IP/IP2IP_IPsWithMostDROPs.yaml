@@ -1,0 +1,31 @@
+Id: 980762f8-014e-4439-8840-5f0a90285dce
+DisplayName: Destination IPs with the greatest number of dropped sessions
+Description: Destination IPs with the greatest number of dropped sessions, sorted by number of ports and number of drops
+InputEntityType: Ip
+InputFields:
+  - Address
+OutputEntityTypes:
+  - Ip
+QueryPeriodBefore: 6h
+QueryPeriodAfter: 6h
+DataSources:
+    - WindowsFirewall
+Tactics: 
+  - Exfiltration
+  - CommandAndControl
+  - Collection
+query: |
+
+  let MostDroppedDestIP = (v_IP_Address:string){
+  WindowsFirewall
+  | where FirewallAction == 'DROP'
+    and SourceIP =~ v_IP_Address
+  | summarize DropCount = count(), Ports = makeset(DestinationPort) by DestinationIP
+  | sort by array_length(Ports), DropCount
+  | serialize rn=row_number()
+  | top 10 by rn asc nulls last
+  | project-rename IP_Address = DestinationIP, IP_Aux_DropCount = DropCount, IP_Aux_DroppedSessionPorts = Ports
+  | project-away rn
+  };
+  MostDroppedDestIP('<Address>')
+

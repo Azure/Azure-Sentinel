@@ -1,0 +1,107 @@
+id: de039242-47e0-43fa-84d7-b6be24305349
+kind: Scheduled
+name: Dataverse - Terminated employee exfiltration over email
+description: This query identifies Dataverse exfiltration via email by terminated
+  employees.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - EmailEvents
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1639
+  - T1567
+query: |
+  // Note this detection relies upon the user's UPN matching their email address.
+  // UEBA can provide more accurate data if enabled.
+  let query_frequency = 1h;
+  let allowed_destination_smtp_domains = dynamic([
+  // Specify a list of recipient domains to exclude from alerting.
+  // Example:
+  // "microsoft.com", "contoso.com"
+      ]);
+  let exfiltration_alert_users = SecurityAlert
+      | where Tactics has 'Exfiltration' and Entities has_all ('account', '32780')
+      | mv-expand DataverseEntities = todynamic(Entities)
+      | where DataverseEntities.AppId == 32780
+      | extend InstanceUrl = tostring(DataverseEntities.InstanceName)
+      | mv-expand AccountEntities = todynamic(Entities)
+      | where AccountEntities.Type == 'account'
+      | extend
+          AccountName = tostring(AccountEntities.Name),
+          UPNSuffix = tostring(AccountEntities.UPNSuffix)
+      | summarize InstanceUrls = make_set(InstanceUrl, 100) by AccountName, UPNSuffix
+      | extend UserId = tolower(strcat(AccountName, "@", UPNSuffix));
+  exfiltration_alert_users
+  | join kind=inner (
+      MSBizAppsTerminatedEmployees
+      | project UserId = tolower(UserPrincipalName), NotificationDate
+      | where startofday(NotificationDate) <= startofday(now()))
+      // Uncomment the below KQL if UEBA is available to gain more accurate
+      // email address data:
+      // | join kind=leftouter (_ASIM_IdentityInfo) on $left.UserId == $right.Username
+      // | extend UserId = iif(UserId == UserMailAddress or isempty(UserMailAddress), UserId, UserMailAddress))
+      on UserId
+  | join kind=inner (
+      EmailEvents
+      | where TimeGenerated >= ago (query_frequency)
+      | where EmailDirection == "Outbound" and AttachmentCount > 0
+      | extend RecipientDomain = tolower(split(RecipientEmailAddress, '@')[1])
+      | where RecipientDomain !in (allowed_destination_smtp_domains)
+      | summarize
+          RecipientAddresses = make_set(RecipientEmailAddress, 1000),
+          Subject = make_set(Subject, 1000)
+          by SenderAddress = tolower(SenderMailFromAddress), SenderIPv4)
+      on $left.UserId == $right.SenderAddress
+  | mv-expand InstanceUrl = InstanceUrls to typeof(string)
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, "@")[0]),
+      UPNSuffix = tostring(split(UserId, "@")[1])
+  | project
+      UserId,
+      InstanceUrl,
+      SenderIPv4,
+      RecipientAddresses,
+      Subject,
+      AccountName,
+      UPNSuffix,
+      CloudAppId
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SenderIPv4
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: Email attachment sent externally by terminated user following
+    Dataverse exfiltration alerts
+  alertDescriptionFormat: 'Departing or terminated user {{UserId}} was found to send
+    email to external domains not on the allowed list: {{RecipientAddresses}}'
+version: 3.2.0

@@ -1,0 +1,43 @@
+Id: 18B7E4E3-5B57-4924-B3CD-7E9A5A143521
+DisplayName: "Peers with a recent alert"
+Description: "Locates the Account's peers with a recent alert" 
+InputEntityType: Account
+InputFields:
+  - Name
+  - UPNSuffix
+OutputEntityTypes:
+  - Account
+QueryPeriodBefore: 7d
+QueryPeriodAfter: 0d
+DataSources:
+  - UserPeerAnalytics
+  - SecurityAlert
+Tactics:
+  - LateralMovement
+query: |
+  let GetUserPeersWithAlerts = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_AadUserId:string) { 
+  let Account_UPN = strcat(v_Account_Name, '@',v_Account_UPNSuffix);
+  let Peers= materialize(IdentityInfo
+    | where AccountUPN =~ Account_UPN or AccountObjectId =~ v_Account_AadUserId
+    | project AccountUPN, AccountObjectId
+    | join kind=inner (UserPeerAnalytics) on $left.AccountObjectId == $right.UserId
+    | project PeerUserId, Rank
+    | join kind=inner (IdentityInfo) on $left.PeerUserId == $right.AccountObjectId
+    | extend PeerUserPrincipalName=tolower(AccountUPN)
+    | parse PeerUserPrincipalName with Account_Name '@' Account_UPNSuffix
+    | summarize max(TimeGenerated) by Account_Name, PeerUserId);
+  let PeerNames= Peers | summarize make_list(Account_Name, maxSize=10000);
+  let PeerIds  = Peers | summarize make_list(PeerUserId, maxSize=10000);
+  let PeersWithSecAlert=SecurityAlert
+    | where Entities has "account"
+    | where Entities has_any (PeerNames) or Entities has_any (PeerIds)
+    | mvexpand todynamic(Entities) 
+    | where tostring(parse_json(Entities).Type) =="account" 
+    | where tostring(parse_json(Entities).Name) has_any (PeerNames) or tostring(parse_json(Entities).AadUserId) has_any (PeerIds)
+    | extend UserPrincipalName = strcat(tolower(tostring(parse_json(Entities).Name)), "@", tolower(tostring(parse_json(Entities).UPNSuffix)))
+    | extend DomainUser = strcat(tolower(tostring(parse_json(Entities).NTDomain)),"\\\\", tolower(tostring(parse_json(Entities).Name)))
+    | extend User = case(UserPrincipalName !endswith "@", UserPrincipalName, DomainUser !startswith "\\\\", DomainUser, tolower(tostring(parse_json(Entities).DisplayName)))
+    | summarize Account_Aux_AlertCount = count() by User | sort by Account_Aux_AlertCount desc | take 10;
+  PeersWithSecAlert
+  };
+  GetUserPeersWithAlerts("{{Account_Name}}","{{Account_UPNSuffix}}", "{{Account_AadUserId}}")

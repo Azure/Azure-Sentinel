@@ -1,0 +1,25 @@
+name: detect-uac-elevation
+description: |
+  This query identifies UAC elevated processes by analyzing launches of consent.exe (the process that performs UAC elevation).
+  The first parameter of consent.exe is the process ID being elevated, therefore we extract this value and use a combination of
+  that ID and the DeviceId to join it with processes that ran UAC elevated on the device. Given that process IDs can be reused, 
+  a time filter is performed to ensure that the elevation request and the process launch occur within a specified period of time
+  (as written 30 minutes).
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+tactics:
+- Execution
+query: |
+  let TimeTolerance = 30m;
+  DeviceProcessEvents
+  | where FileName =~ 'consent.exe'
+  | extend parsedCommandLine = split(ProcessCommandLine,' ')
+  | project ElevationTime = Timestamp, DeviceId, ElevatedProcessId = tolong(parsedCommandLine[1])
+  | join kind=inner ( 
+      DeviceProcessEvents
+      | where ProcessTokenElevation == 'TokenElevationTypeFull'
+  ) on DeviceId, $left.ElevatedProcessId == $right.ProcessId
+  | where ElevationTime - Timestamp <= TimeTolerance
+  | project-away DeviceId1

@@ -1,0 +1,46 @@
+id: d006f4f8-86bb-4c9d-9826-837762ddad6b
+name: Source IP Abnormally Connects to Multiple Destinations
+description: |
+  'Identifies source IP that abnormally connects to multiple destinations according to learning period activity. This can indicate initial access attempts by attackers, trying to jump between different machines in the organization.'
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+      - AZFWNetworkRule
+      - AZFWApplicationRule
+tactics:
+  - Execution
+  - LateralMovement
+relevantTechniques: []
+query: |
+  let LearningPeriod = 5d;
+  let RunTime = 1h;
+  let StartLearningPeriod = LearningPeriod + RunTime;
+  let EndRunTime = RunTime - 1d;
+  let BinTime = 1h;
+  let NumOfStdsThreshold = 3;
+  let MinThreshold = 10;
+  let MinLearningBuckets = 5;
+  let TrafficLogs = (union isfuzzy=true
+  (AzureDiagnostics
+  | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog"
+  | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int "." *
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)),
+  (AZFWApplicationRule
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)),
+  (AZFWNetworkRule
+  | extend Fqdn = DestinationIp
+  | where isnotempty(Fqdn) and isnotempty(SourceIp)));
+  let LearningSrcIp = (TrafficLogs
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | summarize dcount(Fqdn) by SourceIp, bin(TimeGenerated, BinTime)
+  | summarize LearningTimeSrcAvg = avg(dcount_Fqdn), LearningTimeSrcStd = stdev(dcount_Fqdn), LearningTimeBuckets = count() by SourceIp
+  | where LearningTimeBuckets > MinLearningBuckets);
+  let AlertTimeSrcIp = (TrafficLogs
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | summarize AlertTimeSrcIpdCount = dcount(Fqdn) by SourceIp, Fqdn);
+  AlertTimeSrcIp
+  | join kind=leftouter (LearningSrcIp) on SourceIp
+  | extend LearningThreshold = max_of(LearningTimeSrcAvg + NumOfStdsThreshold * LearningTimeSrcStd, MinThreshold)
+  | where AlertTimeSrcIpdCount > LearningThreshold
+  | project-away SourceIp1, LearningTimeSrcAvg, LearningTimeSrcStd

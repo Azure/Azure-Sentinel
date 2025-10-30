@@ -1,0 +1,143 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logAnalyticsWorkspaceName": {
+            "defaultValue": "<Enter Log Analytics Workspace name>",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        },
+        "connectorResourceName": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Resource name for connector"
+            }
+        }
+    },
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/', parameters('connectorResourceName'))]",
+            "apiVersion": "2021-03-01-preview",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "SlackAudit",
+                    "title": "Slack",
+                    "publisher": "Slack",
+                    "descriptionMarkdown": "The [Slack](https://slack.com) data connector provides the capability to ingest [Slack Audit Records](https://api.slack.com/admins/audit-logs) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://api.slack.com/admins/audit-logs#the_audit_event) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more. This data connector uses Microsoft Sentinel native polling capability.",
+                    "graphQueriesTableName": "SlackAuditNativePoller_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Slack audit events",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All Slack audit events",
+                            "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": []
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": true
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            },
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                "providerDisplayName": "Keys",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "action": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Slack API credentials",
+                                "description": "**SlackAPIBearerToken** is required for REST API. [See the documentation to learn more about API](https://api.slack.com/web#authentication). Check all [requirements and follow the instructions](https://api.slack.com/web#authentication) for obtaining credentials."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Slack to Microsoft Sentinel",
+                            "description": "Enable Slack audit Logs.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true"
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "APIKeyName": "Authorization",
+                        "APIKeyIdentifier": "Bearer"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://api.slack.com/audit/v1/logs",
+                        "httpMethod": "Get",
+                        "queryTimeFormat": "UnixTimestamp",
+                        "startTimeAttributeName": "oldest",
+                        "endTimeAttributeName": "latest",
+                        "queryWindowInMin": 5,
+                        "queryParameters": {
+                            "limit": 1000
+                        }
+                    },
+                    "paging": {
+                        "pagingType": "PageToken",
+                        "nextPageParaName": "cursor",
+                        "nextPageTokenJsonPath": "..response_metadata.next_cursor"
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$..entries"
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

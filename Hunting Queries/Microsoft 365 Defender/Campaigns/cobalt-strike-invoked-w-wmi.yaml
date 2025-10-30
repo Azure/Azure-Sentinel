@@ -1,0 +1,38 @@
+id: a0063a56-668f-4661-a00e-5ea82cd2ed4a
+name: cobalt-strike-invoked-w-wmi
+description: |
+  This query was originally published in the threat analytics report, Ryuk ransomware. There is also a related blog.
+  Ryuk is human-operated ransomware. Much like DoppelPaymer ransomware, Ryuk is spread manually, often on networks that are already infected with Trickbot.
+  During the earliest stages of a Ryuk infection, an operator downloads Cobalt Strike, a penetration testing kit that is also used by malicious actors. Cobalt Strike is used by Ryuk operators to explore the network before deploying the Ryuk payload. This malicious behavior is often obscured by Base64 encoding and other tricks.
+  The following query detects possible invocation of Cobalt Strike using Windows Management Instrumentation (WMI).
+  The See also section below lists links to other queries associated with Ryuk ransomware.
+  References:
+  https://www.microsoft.com/security/blog/2020/03/05/human-operated-ransomware-attacks-a-preventable-disaster/
+  https://www.microsoft.com/wdsi/threats/malware-encyclopedia-description?Name=Ransom:Win32/Ryuk&threatId=-2147232689
+  https://www.microsoft.com/security/blog/2020/03/05/human-operated-ransomware-attacks-a-preventable-disaster/
+  https://www.cobaltstrike.com/
+  https://docs.microsoft.com/windows/win32/wmisdk/wmi-start-page
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+tactics:
+- Execution
+- Defense evasion
+query: |
+  // Find use of Base64 encoded PowerShell
+  // Indicating possible Cobalt Strike
+  DeviceProcessEvents
+  | where Timestamp > ago(7d)
+  // Only WMI-initiated instances, remove to broaden scope
+  | where InitiatingProcessFileName =~ 'wmiprvse.exe'
+  | where FileName =~ 'powershell.exe'
+   and (ProcessCommandLine hasprefix '-e' or
+   ProcessCommandLine contains 'frombase64')
+  // Check for Base64 with regex
+  | where ProcessCommandLine matches regex '[A-Za-z0-9+/]{50,}[=]{0,2}'
+  // Exclusions: The above regex may trigger false positive on legitimate SCCM activities.
+  // Remove this exclusion to search more broadly.
+  | where ProcessCommandLine !has 'Windows\\CCM\\'
+  | project DeviceId, Timestamp, InitiatingProcessId,
+  InitiatingProcessFileName, ProcessId, FileName, ProcessCommandLine

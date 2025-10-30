@@ -1,0 +1,73 @@
+id: f327816b-9328-4b17-9290-a02adc2f4928
+kind: Scheduled
+name: Dataverse - Login by a sensitive privileged user
+description: Identifies Dataverse and Dynamics 365 logons by sensitive users.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1133
+  - T1190
+  - T1078
+  - T1212
+query: |
+  # Sensitive users are marked in the VIP Users watchlist using the Tags field.
+  # Enter the tags values to monitor
+  let monitored_tags = dynamic(["DataverseSensitive"]);
+  let query_frequency = 1h;
+  let sensitive_users = MSBizAppsVIPUsers()
+      | where Tags in (monitored_tags);
+  sensitive_users
+  | join kind=inner (DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "UserSignIn")
+      on $left.UserPrincipalName == $right.UserId
+  | summarize FirstSeen = arg_max(TimeGenerated, *) by UserId
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      FirstSeen,
+      UserId,
+      ClientIp,
+      UserAgent,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Sensitive user logged in in at {{InstanceUrl}} '
+  alertDescriptionFormat: A user marked as sensitive for Dataverse in the VIPUsers
+    watchlist signed in at {{InstanceUrl}}.
+version: 3.2.0

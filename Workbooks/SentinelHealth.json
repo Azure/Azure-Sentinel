@@ -1,0 +1,288 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "A workbook to show data of Sentinel Health.\nPlease use this link to enable Sentinel Health Logs\n<br/>\nhttps://learn.microsoft.com/en-us/azure/sentinel/monitor-data-connector-health"
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "81a40fac-caa5-478e-aaca-31d18baa996b",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 7776000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          },
+          {
+            "id": "d8f583a3-910d-43df-be3c-198ac53b3959",
+            "version": "KqlParameterItem/1.0",
+            "name": "Resources",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "SentinelHealth\r\n| distinct SentinelResourceType",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 7776000000
+            },
+            "timeContextFromParameter": "TimeRange",
+            "defaultValue": "value::all",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//Query Name : by Resource Name\nSentinelHealth\n| where SentinelResourceType in ({Resources})\n| summarize count() by SentinelResourceName",
+        "size": 1,
+        "title": "Sentinel Health by Resource Name",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "unstackedbar"
+      },
+      "name": "query - 2"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Failures & Status Changes",
+        "style": "info"
+      },
+      "name": "text - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SentinelHealth\r\n| where SentinelResourceType in ({Resources})\r\n| where OperationName == 'Data fetch status change'\r\n| where Status in ('Success', 'Failure')\r\n| summarize TimeGenerated = arg_max(TimeGenerated,*) by SentinelResourceName, SentinelResourceId\r\n| where Status == 'Failure'",
+        "size": 0,
+        "title": "Detect latest failure events per connector",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let lastestStatus = SentinelHealth\r\n| where SentinelResourceType in ({Resources})\r\n| where OperationName == 'Data fetch status change'\r\n| where Status in ('Success', 'Failure')\r\n| project TimeGenerated, SentinelResourceName, SentinelResourceId, LastStatus = Status\r\n| summarize TimeGenerated = arg_max(TimeGenerated,*) by SentinelResourceName, SentinelResourceId;\r\nlet nextToLastestStatus = SentinelHealth\r\n| where SentinelResourceType in ({Resources})\r\n| where OperationName == 'Data fetch status change'\r\n| where Status in ('Success', 'Failure')\r\n| join kind = leftanti (lastestStatus) on SentinelResourceName, SentinelResourceId, TimeGenerated\r\n| project TimeGenerated, SentinelResourceName, SentinelResourceId, NextToLastStatus = Status\r\n| summarize TimeGenerated = arg_max(TimeGenerated,*) by SentinelResourceName, SentinelResourceId;\r\nlastestStatus\r\n| join kind=inner (nextToLastestStatus) on SentinelResourceName, SentinelResourceId\r\n| where NextToLastStatus == 'Failure' and LastStatus == 'Success'",
+        "size": 0,
+        "title": "Detect connectors with changes from fail to success state",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let lastestStatus = SentinelHealth\r\n| where SentinelResourceType in ({Resources})\r\n| where OperationName == 'Data fetch status change'\r\n| where Status in ('Success', 'Failure')\r\n| project TimeGenerated, SentinelResourceName, SentinelResourceId, LastStatus = Status\r\n| summarize TimeGenerated = arg_max(TimeGenerated,*) by SentinelResourceName, SentinelResourceId;\r\nlet nextToLastestStatus = SentinelHealth\r\n| where SentinelResourceType in ({Resources})\r\n| where OperationName == 'Data fetch status change'\r\n| where Status in ('Success', 'Failure')\r\n| join kind = leftanti (lastestStatus) on SentinelResourceName, SentinelResourceId, TimeGenerated\r\n| project TimeGenerated, SentinelResourceName, SentinelResourceId, NextToLastStatus = Status\r\n| summarize TimeGenerated = arg_max(TimeGenerated,*) by SentinelResourceName, SentinelResourceId;\r\nlastestStatus\r\n| join kind=inner (nextToLastestStatus) on SentinelResourceName, SentinelResourceId\r\n| where NextToLastStatus == 'Success' and LastStatus == 'Failure'",
+        "size": 0,
+        "title": "Detect connectors with changes from success to fail state",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 11"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Sentinel Health Schema",
+        "style": "info"
+      },
+      "name": "text - 14"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SentinelHealth\r\n| getschema",
+        "size": 0,
+        "title": "Sentinel Health Schema",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 13"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Metadata Specific Summary",
+        "style": "info"
+      },
+      "name": "text - 15"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//Query Name : by Operation Name\nSentinelHealth\n| summarize count() by OperationName",
+        "size": 1,
+        "title": "Sentinel Health by Operation Name",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 2 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Query Name : by SentinelResourceKind\nSentinelHealth\n| summarize count() by SentinelResourceKind",
+        "size": 1,
+        "title": "Sentinel Health by by SentinelResourceKind",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 2 - Copy - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Query Name : by Status\nSentinelHealth\n| summarize count() by Status",
+        "size": 1,
+        "title": "Sentinel Health Status Count",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 2 - Copy - Copy - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Query Name : by Description\nSentinelHealth\n| summarize count() by Description\n",
+        "size": 1,
+        "title": "Sentinel Health by Description",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 2 - Copy - Copy - Copy - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SentinelHealth\r\n| summarize count() by SentinelResourceType",
+        "size": 0,
+        "title": "Sentinel Health by SentinelResourceType",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SentinelHealth\r\n| summarize makelist(TimeGenerated) by SentinelResourceType, SentinelResourceKind,SentinelResourceName",
+        "size": 0,
+        "title": "Sentinel Health Summary",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 8"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-SentinelHealth",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

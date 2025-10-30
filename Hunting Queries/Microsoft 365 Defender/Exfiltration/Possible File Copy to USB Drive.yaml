@@ -1,0 +1,28 @@
+id: 34be41b9-eddf-43ca-b208-5b912937f496
+name: Possible File Copy to USB Drive
+description: |
+  This query searches for file copies which occur within a period of time (by default 15 min) to volumes other than the C drive or UNC shares. By default, this query will
+  search all devices. A single device can be specified by entering the DeviceName in the DeviceNameToSearch variable. Additionally, to change the period of time from when
+  the USB device was inserted, adjust the TimespanInSeconds value.
+  Happy hunting!
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+  - DeviceFileEvents
+tactics:
+- Collection
+- Exfiltration
+query: |
+  let DeviceNameToSearch = ''; // DeviceName to search for. Leave blank to search all devices.
+  let TimespanInSeconds = 900; // Period of time between device insertion and file copy
+  let Connections =
+  DeviceEvents
+  | where (isempty(DeviceNameToSearch) or DeviceName =~ DeviceNameToSearch) and ActionType == "PnpDeviceConnected"
+  | extend parsed = parse_json(AdditionalFields)
+  | project DeviceId,ConnectionTime = Timestamp, DriveClass = tostring(parsed.ClassName), UsbDeviceId = tostring(parsed.DeviceId), ClassId = tostring(parsed.DeviceId), DeviceDescription = tostring(parsed.DeviceDescription), VendorIds = tostring(parsed.VendorIds)
+  | where DriveClass == 'USB' and DeviceDescription == 'USB Mass Storage Device';
+  DeviceFileEvents
+  | where (isempty(DeviceNameToSearch) or DeviceName =~ DeviceNameToSearch) and FolderPath !startswith "c" and FolderPath !startswith @"\"
+  | join kind=inner Connections on DeviceId
+  | where datetime_diff('second',Timestamp,ConnectionTime) <= TimespanInSeconds

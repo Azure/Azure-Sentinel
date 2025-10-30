@@ -1,0 +1,39 @@
+Id: b8de20fa-d96e-4fe0-84b3-8477ca29b04a
+DisplayName: Accounts triggering Microsoft Defender Application Control
+Description: Locates Accounts that triggered Microsoft Defender Application Control on the Host
+InputEntityType: Host
+InputFields:
+  - HostName + DnsDomain
+  - HostName + NTDomain
+OutputEntityTypes:
+  - Account
+QueryPeriodBefore: 12h
+QueryPeriodAfter: 12h
+DataSources:
+  - DeviceEvents
+Tactics:
+  - Persistence
+  - Execution
+
+query: |
+  let AppControlEvents=(v_Host_HostName:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+  let p_FullDeviceName = iff(isnotempty(v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_NTDomain));
+  let AppControls=datatable(ActionType:string, Description:string, FriendlyActivityName:string)
+   ["AppControlAppInstallationAudited", "Application control detected the installation of an untrusted app.","Untrusted app installed"
+   ,"AppControlAppInstallationBlocked", "Application control blocked the installation of an untrusted app.",  "Untrusted app installation blocked"
+   ,"AppControlCodeIntegrityDriverRevoked", "Application control found a driver with a revoked certificate.", "Driver with revoked certificate detected"
+   ,"AppControlCodeIntegrityImageRevoked", "Application control found an executable file with a revoked certificate.", "Executable with revoked certificate detected"
+   ,"AppControlExecutableAudited","Application control detected the use of an untrusted executable.","Untrusted executable used"
+   ,"AppControlExecutableClocked","Application control blocked the use of an untrusted executable.","Untrusted executable blocked"
+   ,"AppControlScriptAudited", "Application control detected the use of an untrusted script.", "Untrusted script detected"
+   ,"AppControlScriptBlocked", "Application control blocked the use of an untrusted script.", "Untrusted script blocked" ];
+  DeviceEvents
+  | where ActionType in (AppControls)  
+  | where DeviceName ==p_FullDeviceName
+  | parse InitiatingProcessAccountUpn with Account_Name '@' Account_UPNSuffix
+  | project Account_Name, Account_UPNSuffix, Account_Sid=InitiatingProcessAccountSid
+  | summarize Account_Aux_AppConCount=count() by Account_Name, Account_UPNSuffix, Account_Sid
+  | top 10 by Account_Aux_AppConCount desc nulls last
+  };
+  AppControlEvents('<HostName>','<NTDomain>','<DnsDomain>')
+

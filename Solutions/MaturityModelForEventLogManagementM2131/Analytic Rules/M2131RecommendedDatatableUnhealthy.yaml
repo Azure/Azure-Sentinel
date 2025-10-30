@@ -1,0 +1,98 @@
+id: c61b167a-59ae-42af-bc98-36c78c5acb5c
+name: M2131_RecommendedDatatableUnhealthy
+description: |
+  'This alert is designed to monitor recommended data tables aligned to the Maturity Model for Event Log Management (M-21-31) standard. The alert triggers when a recommended data table hasn't been observed in over 48 hours.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  let M2131Mapping = datatable(DataTable:string, MaturityLevel:string)
+  [
+  "SigninLogs",	"Event Logging (EL0)",
+  "AADManagedIdentitySignInLogs", "Event Logging (EL0)",
+  "AADServicePrincipalSignInLogs",	"Event Logging (EL0)",
+  "StorageBlobLogs",	"Event Logging (EL0)",
+  "StorageFileLogs",	"Event Logging (EL0)",
+  "AzureMetrics",	"Event Logging (EL0)",
+  "AuditLogs",	"Event Logging (EL0)",
+  "IdentityInfo",	"Event Logging (EL0)",
+  "CommonSecurityLog",	"Event Logging (EL0)",
+  "ThreatIntelligenceIndicator",	"Event Logging (EL0)",
+  "DeviceNetworkInfo",	"Event Logging (EL0)",
+  "DnsEvents",	"Event Logging (EL0)",
+  "DeviceNetworkEvents",	"Event Logging (EL0)",
+  "AzureDiagnostics",	"Event Logging (EL0)",
+  "Usage",	"Event Logging (EL0)",
+  "SecurityIncident",	"Event Logging (EL0)",
+  "SecurityAlert",	"Event Logging (EL0)",
+  "AzureActivity",	"Event Logging (EL0)",
+  "Heartbeat",	"Event Logging (EL0)",
+  "OfficeActivity",	"Event Logging (EL0)",
+  "SecurityEvent",	"Event Logging (EL0)",
+  "Syslog",	"Event Logging (EL0)",
+  "AWSCloudTrail",	"Event Logging (EL0)",
+  "GWorkspaceActivityReports",	"Event Logging (EL0)",
+  "AWSGuardDuty",	"Event Logging (EL0)",
+  "AWSVPCFlow",	"Event Logging (EL0)",
+  "Perf",	"Basic Event Logging (EL1)",
+  "SentinelHealth",	"Basic Event Logging (EL1)",
+  "DeviceLogonEvents",	"Basic Event Logging (EL1)",
+  "DeviceEvents",	"Basic Event Logging (EL1)",
+  "DeviceNetworkEvents",	"Basic Event Logging (EL1)",
+  "DeviceFileEvents",	"Basic Event Logging (EL1)",
+  "DeviceRegistryEvents",	"Basic Event Logging (EL1)",
+  "DeviceProcessEvents",	"Basic Event Logging (EL1)",
+  "VMConnection",	"Basic Event Logging (EL1)",
+  "EmailEvents",	"Basic Event Logging (EL1)",
+  "ThreatIntelligenceIndicator",	"Basic Event Logging (EL1)",
+  "SecurityRecommendation",	"Basic Event Logging (EL1)",
+  "DeviceProcessEvents",	"Basic Event Logging (EL1)",
+  "ConfigurationData",	"Basic Event Logging (EL1)",
+  "ConfigurationChange",	"Basic Event Logging (EL1)",
+  "GatewayDiagnosticLog",	"Basic Event Logging (EL1)",
+  "TunnelDiagnosticLog",	"Basic Event Logging (EL1)",
+  "IKEDiagnosticLog",	"Basic Event Logging (EL1)",
+  "RouteDiagnosticLog",	"Basic Event Logging (EL1)",
+  "PS2DiagnosticLog",	"Basic Event Logging (EL1)",
+  "Event",	"Basic Event Logging (EL1)",
+  "SqlAtpStatus",	"Basic Event Logging (EL1)",
+  "ConstainerInstanceLog_CL",	"Basic Event Logging (EL1)",
+  "ContainerEvent_CL",	"Basic Event Logging (EL1)",
+  "InsightsMetrics",	"Intermediate Event Logging (EL2)",
+  "EmailUrlInfo",	"Intermediate Event Logging (EL2)",
+  "EmailAttachmentInfo",	"Intermediate Event Logging (EL2)",
+  "InformationProtectionLogs_CL",	"Intermediate Event Logging (EL2)",
+  "CloudAppEvents",	"Intermediate Event Logging (EL2)",
+  "ContainerInventory",	"Intermediate Event Logging (EL2)",
+  "Update",	"Advanced Event Logging (EL3)",
+  "BehaviorAnalytics",	"Advanced Event Logging (EL3)",
+  "Anomalies",	"Advanced Event Logging (EL3)",
+  "SecurityRegulatoryCompliance",	"Advanced Event Logging (EL3)"
+  ];
+  let LastLogTime = Usage
+  | summarize LastLog_Time = arg_max(TimeGenerated, *) by DataType;
+  Usage
+  | summarize last_log = datetime_diff("day",now(), max(TimeGenerated)) by DataType
+  | where last_log > 0
+  | join kind=inner (LastLogTime) on DataType
+  | project DataTable = DataType, ['Last Log Received'] = last_log, LastLog_Time
+  | where ['Last Log Received'] > 2
+  | join kind=inner (M2131Mapping) on DataTable
+  | project-away DataTable1
+  | order by ['Last Log Received'] desc
+  | extend CloudApplication = DataTable
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: DataTable
+version: 1.0.0
+kind: Scheduled

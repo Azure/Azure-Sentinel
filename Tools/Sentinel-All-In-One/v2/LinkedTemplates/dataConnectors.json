@@ -1,0 +1,297 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "dataConnectorsKind": {
+            "type": "array",
+            "defaultValue": [],
+            "metadata": {
+                "description": "The kind of data connectors to enable"
+            }
+        },
+        "aadStreams": {
+            "type": "array",
+            "metadata": {
+                "description": "The list of data types to enable for Azure AD connector"
+            },
+            "defaultValue": []
+        },
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name for the Log Analytics workspace used to aggregate data"
+            }
+        },
+        "tenantId": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure AD tenant ID"
+            }
+        },
+        "subscriptionId": {
+            "type": "string",
+            "defaultValue": "[subscription().subscriptionId]",
+            "metadata": {
+                "description": "Sbscription Id to monitor"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        }
+    },
+    "variables": {
+        "o365Name": "[concat('o365', uniqueString(resourceGroup().id))]",
+        "m365dName": "[concat('m365d', uniqueString(resourceGroup().id))]",
+        "d365Name": "[concat('d365', uniqueString(resourceGroup().id))]",
+        "iotName": "[concat('iot', uniqueString(resourceGroup().id))]",
+        "projectName": "[concat('project', uniqueString(resourceGroup().id))]",
+        "irmName": "[concat('irm', uniqueString(resourceGroup().id))]",
+        "powerbiName": "[concat('powerbi', uniqueString(resourceGroup().id))]",
+        "ascName": "[concat('asc', uniqueString(resourceGroup().id))]",
+        "aadipName": "[concat('aadip', uniqueString(resourceGroup().id))]",
+        "tiName": "[concat('ti', uniqueString(resourceGroup().id))]"
+    },
+    "resources": [
+         {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'AzureActiveDirectory')]",
+            "type": "microsoft.aadiam/diagnosticSettings",
+            "apiVersion": "2017-04-01",
+            "scope": "/",
+            "name": "[format('{0}-aadDiagnosticSetttings', parameters('workspaceName'))]",
+            "properties": {
+            "logs": [
+                {
+                    "category": "SignInLogs",
+                    "enabled": "[contains(parameters('aadStreams'),'SignInLogs')]"
+                },
+                {
+                    "category": "AuditLogs",
+                    "enabled": "[contains(parameters('aadStreams'),'AuditLogs')]"
+                },
+                {
+                    "category": "NonInteractiveUserSignInLogs",
+                    "enabled": "[contains(parameters('aadStreams'),'NonInteractiveUserSignInLogs')]"
+                },
+                {
+                    "category": "ServicePrincipalSignInLogs",
+                    "enabled": "[contains(parameters('aadStreams'),'ServicePrincipalSignInLogs')]"
+                },
+                {
+                    "category": "ManagedIdentitySignInLogs",
+                    "enabled": "[contains(parameters('aadStreams'),'ManagedIdentitySignInLogs')]"
+                },
+                {
+                    "category": "ProvisioningLogs",
+                    "enabled": "[contains(parameters('aadStreams'),'ProvisioningLogs')]"
+                },
+                {
+                    "category": "ADFSSignInLogs",
+                    "enabled": "[contains(parameters('aadStreams'),'ADFSSignInLogs')]"
+                },
+                {
+                    "category": "UserRiskEvents",
+                    "enabled": "[contains(parameters('aadStreams'),'UserRiskEvents')]"
+                },
+                {
+                    "category": "RiskyUsers",
+                    "enabled": "[contains(parameters('aadStreams'),'RiskyUsers')]"
+                },
+                {
+                    "category": "NetworkAccessTrafficLogs",
+                    "enabled": "[contains(parameters('aadStreams'),'NetworkAccessTrafficLogs')]"
+                },
+                {
+                    "category": "RiskyServicePrincipals",
+                    "enabled": "[contains(parameters('aadStreams'),'RiskyServicePrincipals')]"
+                },
+                {
+                    "category": "ServicePrincipalRiskEvents",
+                    "enabled": "[contains(parameters('aadStreams'),'ServicePrincipalRiskEvents')]"
+                }
+            ],
+            "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'Office365')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2020-01-01",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('o365Name'))]",
+            "kind": "Office365",
+            "properties": {
+                "tenantId": "[parameters('tenantId')]",
+                "dataTypes": {
+                    "exchange": {
+                        "state": "enabled"
+                    },
+                    "sharePoint": {
+                        "state": "enabled"
+                    },
+                    "teams": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'AzureActiveDirectoryIDP')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2020-01-01",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('aadipName'))]",
+            "kind": "AzureActiveDirectory",
+            "properties": {
+                "tenantId": "[parameters('tenantId')]",
+                "dataTypes": {
+                    "alerts": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'AzureActivity')]",
+            "type": "Microsoft.OperationalInsights/workspaces/dataSources",
+            "apiVersion": "2020-03-01-preview",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'), '/', replace(parameters('subscriptionId'),'-', ''))]",
+            "kind": "AzureActivityLog",
+            "properties": {
+                "linkedResourceId": "[concat('/subscriptions/', parameters('subscriptionId'), '/providers/microsoft.insights/eventtypes/management')]"
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'MicrosoftDefenderForCloud')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2020-01-01",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('ascName'))]",
+            "kind": "AzureSecurityCenter",
+            "properties": {
+                "subscriptionId": "[parameters('subscriptionId')]",
+                "dataTypes": {
+                    "alerts": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'Microsoft365Defender')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-12-01-preview",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('m365dName'))]",
+            "kind": "MicrosoftThreatProtection",
+            "properties": {
+                "tenantId": "[parameters('tenantId')]",
+                "dataTypes": {
+                    "incidents": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'Dynamics365')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-12-01-preview",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('d365Name'))]",
+            "kind": "Dynamics365",
+            "properties": {
+                "tenantId": "[parameters('tenantId')]",
+                "dataTypes": {
+                    "dynamics365CdsActivities": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'IOT')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-12-01-preview",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('iotName'))]",
+            "kind": "IOT",
+            "properties": {
+                "subscriptionId": "[parameters('subscriptionId')]",
+                "dataTypes": {
+                    "alerts": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'Office365Project')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-12-01-preview",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('projectName'))]",
+            "kind": "Office365Project",
+            "properties": {
+                "tenantId": "[parameters('tenantId')]",
+                "dataTypes": {
+                    "logs": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'OfficeIRM')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-12-01-preview",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('irmName'))]",
+            "kind": "OfficeIRM",
+            "properties": {
+                "tenantId": "[parameters('tenantId')]",
+                "dataTypes": {
+                    "alerts": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'PowerBI')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2022-12-01-preview",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('powerbiName'))]",
+            "kind": "OfficePowerBI",
+            "properties": {
+                "tenantId": "[parameters('tenantId')]",
+                "dataTypes": {
+                    "logs": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        },
+        {
+            "condition": "[contains(parameters('dataConnectorsKind'), 'ThreatIntelligence')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2020-01-01",
+            "location": "[parameters('location')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('tiName'))]",
+            "kind": "ThreatIntelligence",
+            "properties": {
+                "tenantId": "[parameters('tenantId')]",
+                "dataTypes": {
+                    "indicators": {
+                        "state": "enabled"
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,141 @@
+{
+    "id": "DarktraceRESTConnector",
+    "title": "Darktrace Connector for Microsoft Sentinel REST API",
+    "publisher": "Darktrace",
+    "descriptionMarkdown": "The Darktrace REST API connector pushes real-time events from Darktrace to Microsoft Sentinel and is designed to be used with the Darktrace Solution for Sentinel. The connector writes logs to a custom log table titled \"darktrace_model_alerts_CL\"; Model Breaches, AI Analyst Incidents, System Alerts and Email Alerts can be ingested - additional filters can be set up on the Darktrace System Configuration page. Data is pushed to Sentinel from Darktrace masters.",
+    "graphQueries": [
+        {
+            "metricName": "Total data received",
+            "legend": "darktrace_model_alerts_CL",
+            "baseQuery": "darktrace_model_alerts_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "Look for Test Alerts",
+            "query": "darktrace_model_alerts_CL\n            | where modelName_s == \"Unrestricted Test Model\""
+
+        },
+        {
+            "description": "Return Top Scoring Darktrace Model Breaches",
+            "query": "darktrace_model_alerts_CL\n            | where dtProduct_s ==\"Policy Breach\"\n            | project-rename SrcIpAddr=SourceIP\n            | project-rename SrcHostname=hostname_s\n            | project-rename DarktraceLink=breachUrl_s\n           | project-rename ThreatRiskLevel=score_d\n            | project-rename NetworkRuleName=modelName_s\n            | project TimeGenerated, NetworkRuleName, SrcHostname, SrcIpAddr, ThreatRiskLevel\n            | top 10 by ThreatRiskLevel desc"
+        },
+        {
+            "description": "Return AI Analyst Incidents",
+            "query": "darktrace_model_alerts_CL\n            | where dtProduct_s == \"AI Analyst\"\n            | project-rename  EventStartTime=startTime_s\n            | project-rename EventEndTime = endTime_s\n            | project-rename NetworkRuleName=title_s\n            | project-rename CurrentGroup=externalId_g //externalId is the Current Group ID from Darktrace\n            | project-rename ThreatCategory=dtProduct_s\n            | extend ThreatRiskLevel=score_d //This is the event score, which is different from the GroupScore\n            | project-rename SrcHostname=hostname_s\n            | project-rename DarktraceLink=url_s\n            | project-rename Summary=summary_s\n            | project-rename GroupScore=groupScore_d\n            | project-rename GroupCategory=groupCategory_s\n            | project-rename SrcDeviceName=bestDeviceName_s"
+            
+        },
+        {
+            "description":"Return System Health Alerts",
+            "query":"  darktrace_model_alerts_CL\n            | where dtProduct_s == \"System Alert\""
+        },
+        {
+            "description": "Return email Logs for a specific external sender (example@test.com)",
+            "query": "darktrace_model_alerts_CL\n             | where dtProduct_s == 'Antigena Email'\n        | where from_s == 'example@test.com'"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "darktrace_model_alerts_CL",
+            "lastDataReceivedQuery": "darktrace_model_alerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "darktrace_model_alerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": true
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Darktrace Prerequisites",
+                "description": "To use this Data Connector a Darktrace master running v5.2+ is required.\n Data is sent to the [Azure Monitor HTTP Data Collector API](https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api) over HTTPs from Darktrace masters, therefore outbound connectivity from the Darktrace master to Microsoft Sentinel REST API is required."
+            },
+            {
+                "name": "Filter Darktrace Data",
+                "description": "During configuration it is possible to set up additional filtering on the Darktrace System Configuration page to constrain the amount or types of data sent."
+            },
+            {
+                "name": "Try the Darktrace Sentinel Solution",
+                "description": "You can get the most out of this connector by installing the Darktrace Solution for Microsoft Sentinel. This will provide workbooks to visualise alert data and analytics rules to automatically create alerts and incidents from Darktrace Model Breaches and AI Analyst incidents."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": "1. Detailed setup instructions can be found on the Darktrace Customer Portal: https://customerportal.darktrace.com/product-guides/main/microsoft-sentinel-introduction\n 2. Take note of the Workspace ID and the Primary key. You will need to enter these details on your Darktrace System Configuration page.\n ",
+            "instructions": [
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Workspace ID"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "PrimaryKey"
+                        ],
+                        "label": "Primary Key"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title":"Darktrace Configuration",
+            "description":"1. Perform the following steps on the Darktrace System Configuration page:\n 2. Navigate to the System Configuration Page (Main Menu > Admin > System Config)\n 3. Go into Modules configuration and click on the \"Microsoft Sentinel\" configuration card\n 4. Select \"HTTPS (JSON)\" and hit \"New\"\n 5. Fill in the required details and select appropriate filters\n 6. Click \"Verify Alert Settings\" to attempt authentication and send out a test alert\n 7. Run a \"Look for Test Alerts\" sample query to validate that the test alert has been received",
+            "instructions":""
+        }
+    ],
+    "metadata": {
+        "id": "169a86e6-a4e2-4abc-a5c0-eece5d013204",
+        "version": "1.0.0",
+        "kind": "dataConnector",
+        "source": {
+            "kind": "solution",
+            "name": "Darktrace"
+        },
+        "author": {
+            "name": "Darktrace"
+        },
+        "support": {
+            "tier": "developer",
+            "name": "Darktrace",
+            "link": "customerportal.darktrace.com"
+        }
+    }
+}

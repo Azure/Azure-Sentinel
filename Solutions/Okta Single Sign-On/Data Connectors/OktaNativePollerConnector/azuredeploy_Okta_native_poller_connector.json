@@ -1,0 +1,121 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "string",
+            "defaultValue": ""
+        }
+    },
+    "resources": [{
+            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid(subscription().subscriptionId))]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(subscription().subscriptionId))]",
+            "apiVersion": "2021-03-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "OktaSSO_Polling",
+                    "title": "Okta Single Sign-On (Polling CCP)",
+                    "publisher": "Okta",
+                    "graphQueriesTableName": "OktaNativePoller_CL",
+                    "descriptionMarkdown": "The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft entinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.",
+                    "graphQueries": [{
+                            "metricName": "Total data received",
+                            "legend": "Okta Logs",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [{
+                            "description": "Top 10 Active Applications",
+                            "query": "{{graphQueriesTableName}} \n| mv-expand todynamic(target_s)  \n| where target_s.type == \"AppInstance\"  \n| summarize count() by tostring(target_s.alternateId)  \n| top 10 by count_"
+                        }, {
+                            "description": "Top 10 Client IP Addresses",
+                            "query": "{{graphQueriesTableName}} \n| summarize count() by client_ipAddress_s \n| top 10 by count_"
+                        }
+                    ],
+                    "dataTypes": [{
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [{
+                            "type": "SentinelKindsV2",
+                            "value": []
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": true
+                    },
+                    "permissions": {
+                        "resourceProvider": [{
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ]
+                    },
+                    "instructionSteps": [{
+                            "title": "Connect OktaSSO",
+                            "description": "Please insert your APIKey",
+                            "instructions": [{
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [{
+                                                "displayText": "Domain Name",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{placeHolder1}}",
+                                                "placeHolderValue": ""
+                                            }
+                                        ]
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "owner": "ASI",
+                    "version": "2.0",
+                    "source": "PaaS",
+                    "templateFilePath": "",
+                    "templateFileName": "",
+                    "auth": {
+                        "authType": "APIKey",
+                        "APIKeyName": "Authorization",
+                        "APIKeyIdentifier": "SSWS"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://{{placeHolder1}}.okta.com/api/v1/logs",
+                        "rateLimitQPS": 50,
+                        "queryWindowInMin": 10,
+                        "httpMethod": "Get",
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                        "retryCount": 2,
+                        "timeoutInSeconds": 60,
+                        "queryParameters": {
+                            "phrase": "since={_QueryWindowStartTime}..{_QueryWindowEndTime}"
+                        }
+                    },
+                    "paging": {
+                        "pagingType": "LinkHeader",
+                        "pageSizeParaName": "per_page"
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$"
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}

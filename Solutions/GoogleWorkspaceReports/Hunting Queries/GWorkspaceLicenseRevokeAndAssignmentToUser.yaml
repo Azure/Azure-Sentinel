@@ -1,0 +1,50 @@
+id: b1235ce0-06a0-446b-baad-852874f57bd4
+name: GWorkspace - License Revoke and Assignment to User
+description: |
+  This hunting query searches for license revoke and assignment in quick succession to user, potential sign of data exfiltration.
+  https://www.mitiga.io/blog/mitiga-security-advisory-lack-of-forensic-visibility-with-the-basic-license-in-google-drive
+severity: Medium
+requiredDataConnectors:
+  - connectorId: GoogleWorkspaceReportsAPI
+    dataTypes:
+      - GWorkspaceActivityReports
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1537
+query: |
+  // Adjust timeDelta (in minutes) to adjust the duration between two license revoke and assignment events   
+  let timeDelta = 15;
+  // Adjust lookbackPeriod (in hours) to adjust the time window of search 
+  let lookbackPeriod = 24h;
+  let usersWithLicenseRevoke = GWorkspaceActivityReports
+    | where TimeGenerated > ago(lookbackPeriod)
+    | where EventMessage =~ 'USER_LICENSE_REVOKE'
+    | sort by TimeGenerated desc 
+    | summarize by TimeGenerated, UserEmail, EventMessage, SrcIpAddr;
+  let usersWithLicenseAssignment = GWorkspaceActivityReports
+    | where TimeGenerated > ago(lookbackPeriod)
+    | where EventMessage =~ 'USER_LICENSE_ASSIGNMENT'
+    | sort by TimeGenerated desc 
+    | summarize by TimeGenerated, UserEmail, EventMessage, SrcIpAddr;
+  usersWithLicenseRevoke
+    | join kind=inner usersWithLicenseAssignment on UserEmail
+    | extend isWithinDelta = iff(datetime_diff('minute', TimeGenerated1, TimeGenerated) < timeDelta, 1, 0)
+    | where isWithinDelta == 1
+    | summarize by UserEmail, SrcIpAddr
+    | extend Name = tostring(split(UserEmail,'@',0)[0]), UPNSuffix = tostring(split(UserEmail,'@',1)[0])
+    | extend Account_0_Name = Name
+    | extend Account_0_UPNSuffix = UPNSuffix
+    | extend IP_0_Address = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0

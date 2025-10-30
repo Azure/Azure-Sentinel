@@ -1,0 +1,520 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "PlaybookName",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureKeyVaultConnectionName": "[concat('azurekeyvault-', parameters('PlaybookName'))]",
+        "SharepointOnlineConnectionName": "[concat('sharepointonline-', parameters('PlaybookName'))]",
+        "DefenderATPConnectionName": "[concat('defenderatp-', parameters('PlaybookName'))]",
+        "WordOnlineConnectionName": "[concat('wordonline-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('SharepointOnlineConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('DefenderATPConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('WordOnlineConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "tenantId": {
+                            "defaultValue": "[subscription().tenantId]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_hosts": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "For_each_Sentinel_host": {
+                            "foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
+                            "actions": {
+                                "For_each_MDATP_host": {
+                                    "foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
+                                    "actions": {
+                                        "Add_comment_to_incident_(V2)": {
+                                            "runAfter": {
+                                                "Alert_-_Get_incident": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Value": "Link to vulnerability report:\n@{body('Create_sharing_link_for_a_file_or_folder')?['link']?['webUrl']}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}"
+                                            }
+                                        },
+                                        "Alert_-_Get_incident": {
+                                            "runAfter": {
+                                                "Create_sharing_link_for_a_file_or_folder": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                                            }
+                                        },
+                                        "Convert_Word_Document_to_PDF": {
+                                            "runAfter": {
+                                                "Create_Word_Doc": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['wordonlinebusiness']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/api/templates/convertFile",
+                                                "queries": {
+                                                    "drive": "",
+                                                    "file": "@{replace(body('Create_Word_Doc')?['Path'],'/Shared Documents','')}",
+                                                    "format": "pdf",
+                                                    "source": ""
+                                                }
+                                            }
+                                        },
+                                        "Create_PDF": {
+                                            "runAfter": {
+                                                "Convert_Word_Document_to_PDF": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@body('Convert_Word_Document_to_PDF')",
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/datasets//files",
+                                                "queries": {
+                                                    "folderPath": "",
+                                                    "name": "@{utcNow('s')}_@{items('For_each_MDATP_host')?['computerDnsName']}.pdf",
+                                                    "queryParametersSingleEncoded": true
+                                                }
+                                            }
+                                        },
+                                        "Create_Word_Doc": {
+                                            "runAfter": {
+                                                "Populate_Vulnerability_Report_template": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@body('Populate_Vulnerability_Report_template')",
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/datasets//files",
+                                                "queries": {
+                                                    "folderPath": "",
+                                                    "name": "@{utcNow('s')}_@{items('For_each_MDATP_host')?['computerDnsName']}.docx",
+                                                    "queryParametersSingleEncoded": true
+                                                }
+                                            }
+                                        },
+                                        "Create_sharing_link_for_a_file_or_folder": {
+                                            "runAfter": {
+                                                "Create_PDF": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "scope": "organization",
+                                                    "type": "view"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/datasets//codeless/_api/v2.0/sites/root/lists//items/@{encodeURIComponent(encodeURIComponent(body('Create_PDF')?['ItemId']))}/driveItem/createLink"
+                                            }
+                                        },
+                                        "For_each_Vulnerability": {
+                                            "foreach": "@body('Parse_JSON')?['value']",
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "vulnarray",
+                                                        "value": {
+                                                            "CVE": "@items('For_each_Vulnerability')?['id']",
+                                                            "CVSS": "@items('For_each_Vulnerability')?['cvssV3']",
+                                                            "Description": "@items('For_each_Vulnerability')?['description']",
+                                                            "Name": "@items('For_each_Vulnerability')?['name']",
+                                                            "Severity": "@items('For_each_Vulnerability')?['severity']"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "HTTP": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://securitycenter.onmicrosoft.com/windowsatpservice",
+                                                    "clientId": "",
+                                                    "secret": "@body('Get_secret')?['value']",
+                                                    "tenant": "@parameters('tenantId')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.securitycenter.windows.com/api/machines/@{items('For_each_MDATP_host')?['id']}/vulnerabilities"
+                                            }
+                                        },
+                                        "Parse_JSON": {
+                                            "runAfter": {
+                                                "HTTP": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "@@odata.context": {
+                                                            "type": "string"
+                                                        },
+                                                        "value": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "cvssV3": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "description": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "exploitInKit": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "exploitTypes": {
+                                                                        "type": "array"
+                                                                    },
+                                                                    "exploitUris": {
+                                                                        "type": "array"
+                                                                    },
+                                                                    "exploitVerified": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "exposedMachines": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "publicExploit": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "publishedOn": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "severity": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "updatedOn": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "name",
+                                                                    "description",
+                                                                    "severity",
+                                                                    "cvssV3",
+                                                                    "exposedMachines",
+                                                                    "publishedOn",
+                                                                    "updatedOn",
+                                                                    "publicExploit",
+                                                                    "exploitVerified",
+                                                                    "exploitInKit",
+                                                                    "exploitTypes",
+                                                                    "exploitUris"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Populate_Vulnerability_Report_template": {
+                                            "runAfter": {
+                                                "For_each_Vulnerability": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "metadata": {
+                                                "01VLYQLCBAYFATD4JBZRELY24YCTH3GPCL": ""
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "-102104082": "@variables('vulnarray')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['wordonlinebusiness']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/templates/getFile",
+                                                "queries": {
+                                                    "drive": "",
+                                                    "file": "",
+                                                    "source": ""
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Machines_-_Get_list_of_machines": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Machines_-_Get_list_of_machines": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/machines",
+                                        "queries": {
+                                            "$filter": "computerDnsName eq '@{items('For_each_Sentinel_host')?['HostName']}.@{items('For_each_Sentinel_host')?['DnsDomain']}'"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_vulnarray": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('DefenderATP-VulnAlerts')}/value"
+                            }
+                        },
+                        "Initialize_vulnarray": {
+                            "runAfter": {
+                                "Alert_-_Get_hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vulnarray",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "azuresentinel",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                                "connectionName": "keyvault",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                            },
+                            "sharepointonline": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SharepointOnlineConnectionName'))]",
+                                "connectionName": "sharepointonline",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/sharepointonline')]"
+                            },
+                            "wdatp": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('DefenderATPConnectionName'))]",
+                                "connectionName": "wdatp",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
+                            },
+                            "wordonlinebusiness": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('WordOnlineConnectionName'))]",
+                                "connectionName": "wordonlinebusiness",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wordonlinebusiness')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/azuresentinel')]"
+                },
+                "displayName": "[variables('AzureSentinelConnectionName')]"
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('AzureKeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/keyvault')]"
+                },
+                "displayName": "[variables('AzureKeyVaultConnectionName')]"
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('SharepointOnlineConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/sharepointonline')]"
+                },
+                "displayName": "[variables('SharepointOnlineConnectionName')]"
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('DefenderATPConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/wdatp')]"
+                },
+                "displayName": "[variables('DefenderATPConnectionName')]"
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('WordOnlineConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/wordonlinebusiness')]"
+                },
+                "displayName": "[variables('WordOnlineConnectionName')]"
+            }
+        }
+    ]
+}

@@ -1,0 +1,252 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+        "metadata": {
+        "title": "Send Ingestion Cost Anomaly Alert",
+        "description": "This playbook sends you an alert should there be an ingestion spike into your workspace. The playbook uses the series_decompose_anomalies KQL function to determine anomalous ingestion.",
+        "prerequisites": ["After deployment, define the frequency the playbook should execute. Default is daily so you get alerted at the earliest sign of an ingestion anomaly"],
+        "lastUpdateTime": "2021-08-20T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Utilities" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "inwafula"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "IngestionAnomalyAlert",
+            "type": "string"
+        },
+        "Upper Anomaly Threshold": {
+            "defaultValue": "Upper Anomaly Threshold (type float, E.g 3.0)",
+            "type": "string"
+        },
+        "Reporting Quantity": {
+            "defaultValue": "Reporting Quantity (MB) (type integer, 10)",
+            "type": "int"
+        },
+        "Lookback": {
+            "defaultValue": "Lookback days (type integer, E.g. 30)",
+            "type": "int"
+        },
+        "Percent Increase": {
+            "defaultValue": "Percent increase (type integer, E.g. 25)",
+            "type": "int"
+        },
+        "Azure Sentinel Log Analytics Workspace Resource Group Name": {
+            "defaultValue": "Enter Resource Group Name",
+            "type": "string"
+        },
+        "Azure Sentinel Log Analytics Workspace Name": {
+            "defaultValue": "Enter Workspace Name",
+            "type": "string"
+        },
+        "Notification Email": {
+            "defaultValue": "Notification email (ex. soc@xyz.com)",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "o365ConnectionName": "[concat('o365-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('o365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('o365ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },       
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]"
+            ],
+            "tags": {
+                "hidden-SentinelTemplateName": "Send-IngestionCostAnomalyAlert",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "LookBack": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "PercentIncrease",
+                                        "type": "integer",
+                                        "value": "[parameters('Percent Increase')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "LookBack": {
+                            "runAfter": {
+                                "ReportingQty": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "LookBack",
+                                        "type": "integer",
+                                        "value": "[parameters('Lookback')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "ReportingQty": {
+                            "runAfter": {
+                                "UpperAnomalyThreshold": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ReportingQty",
+                                        "type": "float",
+                                        "value": "[parameters('Reporting Quantity')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_visualize_results": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let UpperThreshold = @{variables('UpperAnomalyThreshold')};\nUsage\n| where IsBillable == \"true\"\n| where Quantity > @{variables('ReportingQty')}\n| make-series Qty=sum(Quantity) on TimeGenerated from ago(@{variables('LookBack')}d) to now() step 1d by DataType\n| extend (anomalies, score, baseline) = series_decompose_anomalies(Qty, 1.5, 7, 'linefit', 1, 'ctukey', 0.01)\n| where anomalies[-1] == 1 or anomalies[-1] == -1\n| extend Score = score[-1]\n| where Score >= @{variables('UpperAnomalyThreshold')}\n| extend PercentageQtyIncrease = ((round(todouble(Qty[-1]),0)-round(todouble(baseline[-1]),1))/round(todouble(Qty[-1]),0) * 100)\n| project DataType,ExpectedQty=round(todouble(baseline[-1]),0), ActualQty=round(todouble(Qty[-1]),0),round(PercentageQtyIncrease,0)  \n| order by  round(todouble(PercentageQtyIncrease),0) desc \n| where PercentageQtyIncrease > @{variables('PercentIncrease')}\n",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/visualizeQuery",
+                                "queries": {
+                                    "resourcegroups": "[parameters('Azure Sentinel Log Analytics Workspace Resource Group Name')]",
+                                    "resourcename": "[parameters('Azure Sentinel Log Analytics Workspace Name')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[subscription().subscriptionId]",
+                                    "timerange": "Set in query",
+                                    "visType": "Html Table"
+                                }
+                            }
+                        },
+                        "Send_an_email_(V2)": {
+                            "runAfter": {
+                                "Run_query_and_visualize_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>An ingestion spike has been detected for the below tables:<br>\n<br>\n<br>\n@{base64ToString(body('Run_query_and_visualize_results')?['body'])}</p>",
+                                    "Importance": "High",
+                                    "Subject": "Ingestion Cost Spike Alert",
+                                    "To": "[parameters('Notification Email')]"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        },
+                        "UpperAnomalyThreshold": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "UpperAnomalyThreshold",
+                                        "type": "float",
+                                        "value": "[parameters('Upper Anomaly Threshold')]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                "connectionName": "[variables('o365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

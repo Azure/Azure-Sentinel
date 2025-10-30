@@ -1,0 +1,47 @@
+id: 382f37b3-b49a-492f-b436-a4717c8c5c3e
+name: Sentinel One - Admin login from new location
+description: |
+  'Detects admin user login from new location (IP address).'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SentinelOne
+    dataTypes:
+      - SentinelOne
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: | 
+  let lback_period = 14d;
+  let lback_time = 1h;
+  SentinelOne
+  | where TimeGenerated between(ago(lback_period)..ago(lback_time))
+  | where ActivityType == 27
+  | where DataRole =~ 'Admin'
+  | extend SrcIpAddr = extract(@'Address\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, EventOriginalMessage)
+  | where isnotempty(SrcIpAddr)
+  | summarize ip_lst = makeset(SrcIpAddr) by SrcUserName
+  | join (SentinelOne
+          | where ActivityType == 27
+          | where DataRole =~ 'Admin'
+          | extend SrcIpAddr = extract(@'Address\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, EventOriginalMessage)
+          | where isnotempty(SrcIpAddr)) on SrcUserName
+  | where ip_lst !has SrcIpAddr
+  | extend AccountCustomEntity = SrcUserName, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

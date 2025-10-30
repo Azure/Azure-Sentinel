@@ -1,0 +1,1097 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "Condition_handle_multiple_VIS_with_same_SID": {
+                "actions": {
+                    "Condition_SAP_virtual_instance_state": {
+                        "actions": {
+                            "Add_SAP_SOC_comment_to_incident": {
+                                "inputs": {
+                                    "body": {
+                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                        "message": "<p>@{body('Parse_JSON_2')?['data']?[variables('TeamssubmitActionComment')]}</p>"
+                                    },
+                                    "host": {
+                                        "connection": {
+                                            "referenceName": "azuresentinel"
+                                        }
+                                    },
+                                    "method": "post",
+                                    "path": "/Incidents/Comment"
+                                },
+                                "runAfter": {
+                                    "Select_comment_for_response": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "ApiConnection"
+                            },
+                            "Parse_JSON_2": {
+                                "inputs": {
+                                    "content": "@body('Post_adaptive_card_for_likely_attack_and_wait_for_a_response')",
+                                    "schema": {
+                                        "properties": {
+                                            "data": {
+                                                "properties": {
+                                                    "ignoreComment": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "messageId": {
+                                                "type": "string"
+                                            },
+                                            "messageLink": {
+                                                "type": "string"
+                                            },
+                                            "responder": {
+                                                "properties": {
+                                                    "displayName": {
+                                                        "type": "string"
+                                                    },
+                                                    "email": {
+                                                        "type": "string"
+                                                    },
+                                                    "objectId": {
+                                                        "type": "string"
+                                                    },
+                                                    "tenantId": {
+                                                        "type": "string"
+                                                    },
+                                                    "userPrincipalName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "responseTime": {
+                                                "type": "string"
+                                            },
+                                            "submitActionId": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "runAfter": {
+                                    "Post_adaptive_card_for_likely_attack_and_wait_for_a_response": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "ParseJson"
+                            },
+                            "Post_adaptive_card_for_likely_attack_and_wait_for_a_response": {
+                                "inputs": {
+                                    "body": {
+                                        "body": {
+                                            "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Microsoft Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"View incident\",\n                            \"url\": \"@{triggerBody()?['object']?['properties']?['incidentUrl']}\",\n                            \"id\": \"openSentinel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time (UTC)\",\n                            \"value\": \"@{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'],'MMM dd yyyy H:mm:ss')}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{variables('Sentinel-Tactics')}\"\n                        },\n                        {\n                            \"title\": \"Sentinel Collector status\",\n                            \"value\": \"@{body('Parse_Connector_Health_JSON')?['Details']}\"\n                        },\n                        {\n                            \"title\": \"Collector last seen (UTC)\",\n                            \"value\": \"@{formatDateTime(body('Parse_Connector_Health_JSON')?['LastSeen'],'MMM dd yyyy H:mm:ss')}\"\n                        }\n                    ]\n                },\n{\n                    \"type\": \"ColumnSet\",\n\"separator\": true,\n\t\t\t\t\t\"columns\": [\n                       {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"text\": \"Inferred from Azure Center for SAP Solutions:\",\n                                    \"wrap\": true\n                                },\n                                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \n                    \"facts\": [\n                        {\n                            \"title\": \"SAP health state\",\n                            \"value\": \"@{body('Select_VIS_metadata')?['properties_health']}\"\n                        },\n                        {\n                            \"title\": \"SAP instance status\",\n                            \"value\": \"@{body('Select_VIS_metadata')?['properties_status']}\"\n                        }\n                    ]\n                },\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Medium\",\n                                    \"weight\": \"Bolder\",\n                                    \"color\": \"Warning\",\n                                    \"text\": \"Likelihood of attack: medium\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        }\n                    ]\n                },\n{\n                    \"type\": \"RichTextBlock\",\n\"separator\": true,\n                    \"inlines\": [\n                        {\n                            \"type\": \"TextRun\",\n                            \"text\": \"Given the active SAP health state reported from Azure Center for SAP solutions, this is likely an attack on SAP disabling Sentinel oversight. Verify recent SAP password changes or disabled RFC users.\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        },\n{\n            \"type\": \"TextBlock\",\n\"size\": \"Medium\",\n            \"weight\": \"Bolder\",\n            \"text\": \"Suggested remediation\",\n            \"wrap\": true\n        }\n    ],\n    \"actions\": [\n{\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Re-Enable SAP RFC user for Sentinel\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"userenableComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"userenable\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        },\n {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Restart SAP collector Agent\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"restartComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"restart\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        },\n {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Ignore\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"ignoreComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"ignore\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        }\n],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}",
+                                            "recipient": {
+                                                "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                            },
+                                            "updateMessage": "Thanks for keeping SAP on Azure secure!"
+                                        },
+                                        "notificationUrl": "@{listCallbackUrl()}"
+                                    },
+                                    "host": {
+                                        "connection": {
+                                            "referenceName": "teams"
+                                        }
+                                    },
+                                    "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                },
+                                "runAfter": {},
+                                "type": "ApiConnectionWebhook"
+                            },
+                            "Reply_with_processed_message_in_a_channel": {
+                                "inputs": {
+                                    "body": {
+                                        "messageBody": "<p>Incident closed as true positive with comment:<br>\n<br>\n@{body('Parse_JSON_2')?['data']?[variables('TeamssubmitActionComment')]}</p>",
+                                        "parentMessageId": "@body('Parse_JSON_2')?['messageId']",
+                                        "recipient": {
+                                            "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                            "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                        }
+                                    },
+                                    "host": {
+                                        "connection": {
+                                            "referenceName": "teams"
+                                        }
+                                    },
+                                    "method": "post",
+                                    "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                },
+                                "runAfter": {
+                                    "Add_SAP_SOC_comment_to_incident": [
+                                        "Succeeded",
+                                        "TimedOut",
+                                        "Skipped",
+                                        "Failed"
+                                    ]
+                                },
+                                "type": "ApiConnection"
+                            },
+                            "Select_comment_for_response": {
+                                "inputs": {
+                                    "name": "TeamssubmitActionComment",
+                                    "value": "@{concat(body('Parse_JSON_2')?['submitActionId'],'Comment')}"
+                                },
+                                "runAfter": {
+                                    "Switch_remediation": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "SetVariable"
+                            },
+                            "Switch_remediation": {
+                                "cases": {
+                                    "Case_RFC_user_re-enable": {
+                                        "actions": {},
+                                        "case": "userenable"
+                                    },
+                                    "Case_collector_restart": {
+                                        "actions": {
+                                            "Reply_with_restart_error_message_in_a_channel": {
+                                                "inputs": {
+                                                    "body": {
+                                                        "messageBody": "<p>Sentinel SAP Collector could not be restarted.<br>\n<br>\n@{body('Restart_Sentinel_Collector_virtual_machine')}</p>",
+                                                        "parentMessageId": "@body('Parse_JSON_2')?['messageId']",
+                                                        "recipient": {
+                                                            "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                            "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                                        }
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "referenceName": "teams"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                },
+                                                "runAfter": {
+                                                    "Restart_Sentinel_Collector_virtual_machine": [
+                                                        "TimedOut",
+                                                        "Failed",
+                                                        "Skipped"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection"
+                                            },
+                                            "Reply_with_restart_success_message_in_a_channel": {
+                                                "inputs": {
+                                                    "body": {
+                                                        "messageBody": "<p>Sentinel SAP Collector successfully restarted.</p>",
+                                                        "parentMessageId": "@body('Parse_JSON_2')?['messageId']",
+                                                        "recipient": {
+                                                            "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                            "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                                        }
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "referenceName": "teams"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                },
+                                                "runAfter": {
+                                                    "Restart_Sentinel_Collector_virtual_machine": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection"
+                                            },
+                                            "Restart_Sentinel_Collector_virtual_machine": {
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "referenceName": "azurevm"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/subscriptions/@{encodeURIComponent(parameters('SentinelCollectorSubscriptionId'))}/resourcegroups/@{encodeURIComponent(parameters('SentinelCollectorResourceGroup'))}/providers/Microsoft.Compute/virtualMachines/@{encodeURIComponent(parameters('SentinelCollectorVMName'))}/restart",
+                                                    "queries": {
+                                                        "api-version": "2019-12-01"
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "type": "ApiConnection"
+                                            }
+                                        },
+                                        "case": "restart"
+                                    },
+                                    "Case_ignore": {
+                                        "actions": {},
+                                        "case": "ignore"
+                                    }
+                                },
+                                "default": {
+                                    "actions": {}
+                                },
+                                "expression": "@string(body('Parse_JSON_2')?['submitActionId'])",
+                                "runAfter": {
+                                    "Parse_JSON_2": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Switch"
+                            }
+                        },
+                        "else": {
+                            "actions": {
+                                "Add_comment_to_incident": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>SAP SOC team informed about SAP Sentinel Collector alert with data points, referring to unlikely attack scenario encouraging double check.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "referenceName": "azuresentinel"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Post_adaptive_card_for_unlikely_attack_in_a_chat_or_channel": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Post_adaptive_card_for_unlikely_attack_in_a_chat_or_channel": {
+                                    "inputs": {
+                                        "body": {
+                                            "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Microsoft Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"View incident\",\n                            \"url\": \"@{triggerBody()?['object']?['properties']?['incidentUrl']}\",\n                            \"id\": \"openSentinel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time (UTC)\",\n                             \"value\": \"@{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], 'MMM dd yyyy H:mm:ss')}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{variables('Sentinel-Tactics')}\"\n                        },\n                        {\n                            \"title\": \"Sentinel Collector status\",\n                            \"value\": \"@{body('Parse_Connector_Health_JSON')?['Details']}\"\n                        },\n                        {\n                            \"title\": \"Collector last seen (UTC)\",\n                            \"value\": \"@{formatDateTime(body('Parse_Connector_Health_JSON')?['LastSeen'], 'MMM dd yyyy H:mm:ss')}\"\n                        }\n                    ]\n                },\n{\n                    \"type\": \"ColumnSet\",\n\"separator\": true,\n\t\t\t\t\t\"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"text\": \"Inferred from Azure Center for SAP Solutions:\",\n                                    \"wrap\": true\n                                },\n                                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \n                    \"facts\": [\n                        {\n                            \"title\": \"SAP health state\",\n                            \"value\": \"unknown\"\n                        },\n                        {\n                            \"title\": \"SAP instance status\",\n                            \"value\": \"unknown\"\n                        }\n                    ]\n                },\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Medium\",\n                                    \"weight\": \"Bolder\",\n                                    \"color\": \"Warning\",\n                                    \"text\": \"Likelihood of attack: low\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        }\n                    ]\n                },\n{\n                    \"type\": \"RichTextBlock\",\n\"separator\": true,\n                    \"inlines\": [\n                        {\n                            \"type\": \"TextRun\",\n                            \"text\": \"Given the SAP state reported from Azure Center for SAP solutions, this is likely an operational issue with SAP. It is worth double checking planned maintance windows. \"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'], '\"', '\\\"'), '\\\\', '\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"actions\": [],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}",
+                                            "recipient": {
+                                                "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                                "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "referenceName": "teams"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "equals": [
+                                        "@body('Select_VIS_metadata')?['properties_status']",
+                                        "Running"
+                                    ]
+                                },
+                                {
+                                    "equals": [
+                                        "@body('Select_VIS_metadata')?['properties_health']",
+                                        "Healthy"
+                                    ]
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Select_VIS_metadata": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "If"
+                    },
+                    "Select_VIS_metadata": {
+                        "inputs": {
+                            "content": "@body('Parse_ACSS_VIS_JSON')?['data'][0]",
+                            "schema": {
+                                "properties": {
+                                    "id": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "properties_health": {
+                                        "type": "string"
+                                    },
+                                    "properties_status": {
+                                        "type": "string"
+                                    },
+                                    "resourceGroup": {
+                                        "type": "string"
+                                    },
+                                    "subscriptionId": {
+                                        "type": "string"
+                                    },
+                                    "tenantId": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "runAfter": {},
+                        "type": "ParseJson"
+                    }
+                },
+                "else": {
+                    "actions": {
+                        "Post_REST_API_error_message_in_a_chat_or_channel": {
+                            "inputs": {
+                                "body": {
+                                    "messageBody": "<p>Reading SAP virtual instance state for @{variables('SID')} via Azure Center for SAP solutions REST api failed! Check your configuration.<br>\n<br>\nAre there multiple systems with the same SID across your scanned subscriptions?<br>\n<br>\nStacktrace:<br>\n@{body('Get_SAP_virtual_instance_state_by_SID_from_ACSS_via_Azure_Resource_Graph')}</p>",
+                                    "recipient": {
+                                        "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                        "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "referenceName": "teams"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "Post_card_in_a_chat_or_channel_despite_ACSS_connection_error": {
+                            "inputs": {
+                                "body": {
+                                    "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"New incident from Microsoft Sentinel!\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{triggerBody()?['object']?['properties']?['title']}\"\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"View incident\",\n                            \"url\": \"@{triggerBody()?['object']?['properties']?['incidentUrl']}\",\n                            \"id\": \"openSentinel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"Creation time (UTC)\",\n                            \"value\": \"@{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'],'MMM dd yyyy H:mm:ss')}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{variables('Sentinel-Tactics')}\"\n                        },\n                        {\n                            \"title\": \"Sentinel Collector status\",\n                            \"value\": \"@{body('Parse_Connector_Health_JSON')?['Details']}\"\n                        },\n                        {\n                            \"title\": \"Collector last seen (UTC)\",\n                            \"value\": \"@{formatDateTime(body('Parse_Connector_Health_JSON')?['LastSeen'],'MMM dd yyyy H:mm:ss')}\"\n                        }\n                    ]\n                },\n{\n                    \"type\": \"ColumnSet\",\n\"separator\": true,\n\t\t\t\t\t\"columns\": [\n                       {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"text\": \"Inferred from Azure Center for SAP Solutions:\",\n                                    \"wrap\": true\n                                },\n                                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \n                    \"facts\": [\n                        {\n                            \"title\": \"SAP health state\",\n                            \"value\": \"Not available\"\n                        },\n                        {\n                            \"title\": \"SAP instance status\",\n                            \"value\": \"Not available\"\n                        }\n                    ]\n                },\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Medium\",\n                                    \"weight\": \"Bolder\",\n                                    \"color\": \"Warning\",\n                                    \"text\": \"Likelihood of attack: medium\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        }\n                    ]\n                },\n{\n                    \"type\": \"RichTextBlock\",\n\"separator\": true,\n                    \"inlines\": [\n                        {\n                            \"type\": \"TextRun\",\n                            \"text\": \"Given the connection error to Azure Center for SAP solutions (ACSS), this is likely an attack on SAP disabling Sentinel oversight. Verify recent SAP password changes or disabled RFC users. Verify Connectivity to ACSS.\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{replace(replace(triggerBody()?['object']?['properties']?['description'],'\"','\\\"'),'\\\\','\\')}\",\n                    \"wrap\": true\n                }\n            ]\n        },\n        {\n            \"type\": \"Container\",\n            \"spacing\": \"Large\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"Related Entities\",\n                    \"wrap\": true,\n                    \"separator\": true,\n                    \"fontType\": \"Default\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\"\n                },\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": @{outputs('Compose_dynamic_json_for_entities_table')}\n                }\n            ],\n            \"bleed\": true\n        }\n    ],\n    \"actions\": [],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support to be rendered properly.\"\n}",
+                                    "recipient": {
+                                        "channelId": "@{variables('TeamsChannel')?['channelID']}",
+                                        "groupId": "@{variables('TeamsChannel')?['teamID']}"
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "referenceName": "teams"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                            },
+                            "runAfter": {
+                                "Post_REST_API_error_message_in_a_chat_or_channel": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        }
+                    }
+                },
+                "expression": {
+                    "and": [
+                        {
+                            "lessOrEquals": [
+                                "@body('Parse_ACSS_VIS_JSON')?['totalRecords']",
+                                1
+                            ]
+                        },
+                        {
+                            "equals": [
+                                "@outputs('Get_SAP_virtual_instance_state_by_SID_from_ACSS_via_Azure_Resource_Graph')['statusCode']",
+                                200
+                            ]
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Parse_ACSS_VIS_JSON": [
+                        "Succeeded",
+                        "TimedOut",
+                        "Skipped",
+                        "Failed"
+                    ]
+                },
+                "type": "If"
+            },
+            "Get_SAP_virtual_instance_state_by_SID_from_ACSS_via_Azure_Resource_Graph": {
+                "inputs": {
+                    "authentication": {
+                        "audience": "https://management.azure.com",
+                        "type": "ManagedServiceIdentity"
+                    },
+                    "body": {
+                        "query": "resources | where type =~ 'Microsoft.Workloads/sapVirtualInstances' | where name == '@{variables('SID')}' | project id,name,tenantId,resourceGroup,subscriptionId,properties.health,properties.status"
+                    },
+                    "method": "POST",
+                    "uri": "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+                },
+                "runAfter": {
+                    "Parse_Connector_Health_JSON": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http"
+            },
+            "Initialize_Comment_for_Teams_SubmitAction": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "TeamssubmitActionComment",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_sentinel_incident_tactics_for_adaptive_card": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_Custom_Details_JSON_string": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "custom-details-json-string",
+                            "type": "string",
+                            "value": "@{replace(replace(replace(replace(triggerBody()?['object']?['properties']?['alerts'][0]?['properties']?['additionalData']?['Custom Details'],'}\"','}'),'\"{','{'),'\\',''),'\"}]}','}]}')}"
+                        }
+                    ]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            },
+            "Initialize_Entities__Kind_for_dynamic_json": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "entitiesKindArray",
+                            "type": "array"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_subscription_containing_SAP_virtual_instance_on_ACSS": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_Entities__Name_for_dynamic_json": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "entitiesNameArray",
+                            "type": "array"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_Entities__Kind_for_dynamic_json": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_SAPClientId_variable": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "sap-client-id",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_SID_variable": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_SAP_user_to_be_locked": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "SAP_User",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_account_variable": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_SID_variable": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "SID",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_default_admin_email": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_account_variable": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "account",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_SAPClientId_variable": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_default_admin_email": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "DefaultAdminEmail",
+                            "type": "string",
+                            "value": "@parameters('DefaultEmail')"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_target_TeamsChannel": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_sentinel_incident_tactics_for_adaptive_card": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "Sentinel-Tactics",
+                            "type": "string",
+                            "value": "@{replace(replace(replace(string(triggerBody()?['object']?['properties']?['additionalData']?['tactics']),'[',''),']',''),'\"','')}"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_Entities__Name_for_dynamic_json": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_subscription_containing_SAP_virtual_instance_on_ACSS": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "sap-subscription",
+                            "type": "string",
+                            "value": "53990dba-8128-4100-bb6d-ed38861c9f8f"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_SAP_user_to_be_locked": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Initialize_target_TeamsChannel": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "TeamsChannel",
+                            "type": "object",
+                            "value": "@parameters('TeamsChannel')"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_Custom_Details_JSON_string": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable"
+            },
+            "Parse_ACSS_VIS_JSON": {
+                "inputs": {
+                    "content": "@body('Get_SAP_virtual_instance_state_by_SID_from_ACSS_via_Azure_Resource_Graph')",
+                    "schema": {
+                        "properties": {
+                            "count": {
+                                "type": "integer"
+                            },
+                            "data": {
+                                "items": {
+                                    "properties": {
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "properties_health": {
+                                            "type": "string"
+                                        },
+                                        "properties_status": {
+                                            "type": "string"
+                                        },
+                                        "resourceGroup": {
+                                            "type": "string"
+                                        },
+                                        "subscriptionId": {
+                                            "type": "string"
+                                        },
+                                        "tenantId": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "id",
+                                        "name",
+                                        "tenantId",
+                                        "resourceGroup",
+                                        "subscriptionId",
+                                        "properties_health",
+                                        "properties_status"
+                                    ],
+                                    "type": "object"
+                                },
+                                "type": "array"
+                            },
+                            "facets": {
+                                "type": "array"
+                            },
+                            "resultTruncated": {
+                                "type": "string"
+                            },
+                            "totalRecords": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "runAfter": {
+                    "Get_SAP_virtual_instance_state_by_SID_from_ACSS_via_Azure_Resource_Graph": [
+                        "Succeeded",
+                        "TimedOut",
+                        "Skipped",
+                        "Failed"
+                    ]
+                },
+                "type": "ParseJson"
+            },
+            "Parse_Connector_Health_JSON": {
+                "inputs": {
+                    "content": "@body('Run_SAPConnectorHealth_check')?['value'][0]",
+                    "schema": {
+                        "properties": {
+                            "Action": {
+                                "type": "string"
+                            },
+                            "Agent": {
+                                "type": "string"
+                            },
+                            "AgentGUID": {
+                                "type": "string"
+                            },
+                            "AgentName": {
+                                "type": "string"
+                            },
+                            "AgentVersion": {
+                                "type": "string"
+                            },
+                            "AssociatedSystems": {
+                                "type": "string"
+                            },
+                            "ClientID": {
+                                "type": "string"
+                            },
+                            "Details": {
+                                "type": "string"
+                            },
+                            "ExtendedDetails": {
+                                "type": "string"
+                            },
+                            "KeyMode": {
+                                "type": "string"
+                            },
+                            "LastSeen": {
+                                "type": "string"
+                            },
+                            "Message": {
+                                "type": "string"
+                            },
+                            "MessageCode": {
+                                "type": "string"
+                            },
+                            "MessageKey": {
+                                "type": "string"
+                            },
+                            "SdkPath": {
+                                "type": "string"
+                            },
+                            "SncPath": {
+                                "type": "string"
+                            },
+                            "Status": {
+                                "type": "string"
+                            },
+                            "StatusCode": {
+                                "type": "integer"
+                            },
+                            "SystemGUID": {
+                                "type": "string"
+                            },
+                            "SystemID": {
+                                "type": "string"
+                            },
+                            "SystemRole": {
+                                "type": "string"
+                            },
+                            "SystemRoleCode": {
+                                "type": "string"
+                            },
+                            "Variables": {
+                                "type": "string"
+                            },
+                            "VaultId": {
+                                "type": "string"
+                            },
+                            "WLItemID": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "runAfter": {
+                    "Run_SAPConnectorHealth_check": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ParseJson"
+            },
+            "Payload_parsing_Scope": {
+                "actions": {
+                    "Compose_dynamic_json_for_entities_table": {
+                        "inputs": [
+                            {
+                                "items": "@variables('entitiesKindArray')",
+                                "type": "Column",
+                                "width": 40
+                            },
+                            {
+                                "items": "@variables('entitiesNameArray')",
+                                "type": "Column",
+                                "width": 60
+                            }
+                        ],
+                        "runAfter": {
+                            "Iterate_related_incident_entities": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Compose"
+                    },
+                    "Iterate_related_incident_entities": {
+                        "actions": {
+                            "Append_to_kind_array": {
+                                "inputs": {
+                                    "name": "entitiesKindArray",
+                                    "value": {
+                                        "text": "@{items('Iterate_related_Incident_entities')?['kind']}",
+                                        "type": "TextBlock",
+                                        "weight": "Default"
+                                    }
+                                },
+                                "runAfter": {},
+                                "type": "AppendToArrayVariable"
+                            },
+                            "Append_to_name_array": {
+                                "inputs": {
+                                    "name": "entitiesNameArray",
+                                    "value": {
+                                        "text": "@{items('Iterate_related_incident_entities')?['properties']?['friendlyName']}",
+                                        "type": "TextBlock",
+                                        "weight": "Default"
+                                    }
+                                },
+                                "runAfter": {
+                                    "Append_to_kind_array": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "AppendToArrayVariable"
+                            }
+                        },
+                        "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "runAfter": {
+                            "Select_related_entities": [
+                                "Succeeded"
+                            ]
+                        },
+                        "runtimeConfiguration": {
+                            "concurrency": {
+                                "repetitions": 1
+                            }
+                        },
+                        "type": "Foreach"
+                    },
+                    "Parse_Incident_Custom_Details": {
+                        "inputs": {
+                            "content": "@variables('custom-details-json-string')",
+                            "schema": {
+                                "properties": {
+                                    "AuditClassID": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "BagOfDetails": {
+                                        "items": {
+                                            "properties": {
+                                                "DestinationEmail": {
+                                                    "type": "string"
+                                                },
+                                                "MessageID": {
+                                                    "type": "string"
+                                                },
+                                                "Severity": {
+                                                    "type": "string"
+                                                },
+                                                "SystemID": {
+                                                    "type": "string"
+                                                },
+                                                "Tactics": {
+                                                    "type": "string"
+                                                },
+                                                "TeamsChannelID": {
+                                                    "properties": {
+                                                        "channelID": {
+                                                            "type": "string"
+                                                        },
+                                                        "teamID": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "required": [
+                                                "MessageID",
+                                                "Tactics",
+                                                "SystemID",
+                                                "Severity",
+                                                "DestinationEmail",
+                                                "TeamsChannelID"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "DestinationEmail": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "IsProductionEnv": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "SAPAuditLogMessageID": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "SAPProcessType": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "SAPUser": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "SystemRole": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "SystemUsage": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "TeamsChannelID": {
+                                        "items": {
+                                            "properties": {
+                                                "channelID": {
+                                                    "type": "string"
+                                                },
+                                                "teamID": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "teamID",
+                                                "channelID"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "runAfter": {},
+                        "type": "ParseJson"
+                    },
+                    "Select_entities": {
+                        "inputs": {
+                            "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                            "select": {
+                                "entity": "@item()?['properties']?['friendlyName']",
+                                "entity-type": "@item()?['kind']"
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_Incident_Custom_Details": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Select"
+                    },
+                    "Select_related_entities": {
+                        "actions": {
+                            "Switch": {
+                                "cases": {
+                                    "Case": {
+                                        "actions": {
+                                            "Select_SID_from_Incident": {
+                                                "inputs": {
+                                                    "name": "SID",
+                                                    "value": "@{items('Select_related_entities')?['properties']?['friendlyName']}"
+                                                },
+                                                "runAfter": {},
+                                                "type": "SetVariable"
+                                            }
+                                        },
+                                        "case": "CloudApplication"
+                                    },
+                                    "Case_2": {
+                                        "actions": {
+                                            "Set_account_from_incident": {
+                                                "inputs": {
+                                                    "name": "account",
+                                                    "value": "@{items('Select_related_entities')?['properties']?['friendlyName']}"
+                                                },
+                                                "runAfter": {},
+                                                "type": "SetVariable"
+                                            }
+                                        },
+                                        "case": "Account"
+                                    }
+                                },
+                                "expression": "@items('Select_related_entities')?['kind']",
+                                "runAfter": {},
+                                "type": "Switch"
+                            }
+                        },
+                        "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "runAfter": {
+                            "Select_entities": [
+                                "Succeeded"
+                            ]
+                        },
+                        "runtimeConfiguration": {
+                            "concurrency": {
+                                "repetitions": 2
+                            }
+                        },
+                        "type": "Foreach"
+                    }
+                },
+                "runAfter": {
+                    "Initialize_Comment_for_Teams_SubmitAction": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Scope"
+            },
+            "Run_SAPConnectorHealth_check": {
+                "inputs": {
+                    "body": "SAPConnectorHealth() | where SystemID == 'AGENT'",
+                    "host": {
+                        "connection": {
+                            "referenceName": "azuremonitorlogs"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/queryData",
+                    "queries": {
+                        "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                        "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                        "resourcetype": "Log Analytics Workspace",
+                        "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                        "timerange": "Last hour"
+                    }
+                },
+                "runAfter": {
+                    "Payload_parsing_Scope": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection"
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {},
+        "triggers": {
+            "Microsoft_Sentinel_incident": {
+                "inputs": {
+                    "body": {
+                        "callback_url": "@{listCallbackUrl()}"
+                    },
+                    "host": {
+                        "connection": {
+                            "referenceName": "azuresentinel"
+                        }
+                    },
+                    "path": "/incident-creation"
+                },
+                "type": "ApiConnectionWebhook"
+            }
+        }
+    },
+    "kind": "Stateful"
+}

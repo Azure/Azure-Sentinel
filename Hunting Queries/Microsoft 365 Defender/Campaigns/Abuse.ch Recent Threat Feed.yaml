@@ -1,0 +1,66 @@
+id: 2bcdf59a-679d-4585-93e7-f14d674de205
+name: Abuse.ch Recent Threat Feed
+description: |
+  This query will hunt for files matching the current abuse.ch recent threat feed based on Sha256. Currently the query is set up to analyze the last day worth of events, but this is configurable using the MaxAge variable.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceFileEvents
+  - DeviceImageLoadEvents
+tactics:
+- Execution
+- Persistence
+- Privilege escalation
+- Credential Access
+- Discovery
+- Impact
+- Exploit
+- Malware, component
+- Ransomware
+query: |
+  let MaxAge = ago(1d);
+  let AbuseFeed = materialize (
+      (externaldata(report:string)
+      [@"https://bazaar.abuse.ch/export/csv/recent/"]
+      with (format = "txt"))
+      | where report !startswith '#'
+      | extend report = trim("\"", report)
+      | extend report = parse_csv(report)
+      | extend FirstSeenUtc = tostring(report[0])
+      | project FirstSeenUtc = todatetime(FirstSeenUtc)
+          ,SHA256 = trim('[ "]+',tostring(report[1]))
+          , MD5 = trim('[ "]+',tostring(report[2]))
+          , SHA1 = trim('[ "]+',tostring(report[3]))
+          , Reporter = trim('[ "]+',tostring(report[4]))
+          , FileName = trim('[ "]+',tostring(report[5]))
+          , FileType = trim('[ "]+',tostring(report[6]))
+          , MimeType = trim('[ "]+',tostring(report[7]))
+          , Signer = iff(report[8] == 'n/a', '', trim('[ "]+',tostring(report[8])))
+          , ClamAV = iff(report[9] == 'n/a', '', trim('[ "]+',tostring(report[9])))
+          , VTPercent = iff(report[10] == 'n/a', 0.0, todouble(report[10]))
+          , ImpHash = iff(report[11] == 'n/a', '', trim('[ "]+',tostring(report[11])))
+          , SSDeep = iff(report[12] == 'n/a', '', trim('[ "]+',tostring(report[12])))
+          , TLSH = iff(report[13] == 'n/a', '', trim('[ "]+',tostring(report[13])))
+  );
+  union (
+      AbuseFeed
+      | join (
+          DeviceProcessEvents
+          | where Timestamp > MaxAge
+      ) on SHA256
+  ), (
+      AbuseFeed
+      | join (
+          DeviceFileEvents
+          | where Timestamp > MaxAge
+      ) on SHA256
+  ), ( 
+      AbuseFeed
+      | join (
+          DeviceImageLoadEvents
+          | where Timestamp > MaxAge
+          | where isnotempty(SHA256)
+      ) on SHA256
+  )
+version: 1.0.0

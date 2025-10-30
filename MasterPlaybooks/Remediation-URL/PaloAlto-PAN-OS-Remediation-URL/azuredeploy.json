@@ -1,0 +1,899 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "PaloAlto PAN OS - Block URL",
+        "description": "This playbook allows blocking/unblocking URLs in PaloAlto, using **predefined address group**. This allows to make changes on predefined address group, which is attached to security policy rule.",
+        "prerequisites": [
+            "1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
+            "2. Generate an API key. [Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation).",
+            "3. Address group should be created for PAN-OS and this should be used while creating playbooks."
+        ],
+        "lastUpdateTime": "2022-08-26T07:00:00.000Z",
+        "entities": [
+            "url"
+        ],
+        "tags": [
+            "Remediation"
+        ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "Playbook Name": {
+            "defaultValue": "PaloAlto-PAN-OS-BlockURL",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "Teams GroupId": {
+            "defaultValue": "TeamgroupId",
+            "type": "String",
+            "metadata": {
+                "description": "GroupId of the Team channel"
+            }
+        },
+        "Teams ChannelId": {
+            "defaultValue": "TeamChannelId",
+            "type": "String",
+            "metadata": {
+                "description": "Team ChannelId"
+            }
+        },
+        "Address Group": {
+            "defaultValue": "AddressGroup",
+            "type": "String",
+            "metadata": {
+                "description": "Address Group"
+            }
+        },
+        "Palo Alto PAN OS Connector Name": {
+            "defaultValue": "PAN-OSRestApiCustomConnector",
+            "type": "String",
+            "metadata": {
+                "description": "Palo Alto PAN OS Connector Name"
+            }
+        }
+    },
+    "variables": {
+        "TeamsConnectionName": "[concat('teamsconnector-', parameters('Playbook Name'))]",
+        "PaloAltoConnectorConnectionName": "[concat('PaloAltoConnector-', parameters('Playbook Name'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('PaloAltoConnectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Palo Alto PAN OS Connector Name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('Playbook Name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('PaloAltoConnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "URLs": {
+                                            "items": {
+                                                "properties": {
+                                                    "url": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "url"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Response": {
+                            "runAfter": {
+                                "For_each_malicious_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": "<p>PAN-OS Playbook ran and performed the following actions:<br>\n@{variables('URLAddressAction')}<br>\n<br>\n<br>\n</p>",
+                                "statusCode": 200
+                            }
+                        },
+                        "For_each_malicious_URL": {
+                            "foreach": "@triggerBody()?['URLs']",
+                            "actions": {
+                                "Condition_based_on_user_inputs_from_the_adaptive_card": {
+                                    "actions": {
+                                        "Condition__to_check_if_user_chosen_Block_URL": {
+                                            "actions": {
+                                                "Create_an_address_object": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "entry": [
+                                                                {
+                                                                    "@@name": "@items('For_each_malicious_URL')?['url']",
+                                                                    "description": "@items('For_each_malicious_URL')?['url']",
+                                                                    "fqdn": "@items('For_each_malicious_URL')?['url']"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/restapi/v10.0/Objects/Addresses",
+                                                        "queries": {
+                                                            "address type": "",
+                                                            "location": "vsys",
+                                                            "name": "@items('For_each_malicious_URL')?['url']",
+                                                            "vsys": "vsys1"
+                                                        }
+                                                    },
+                                                    "description": "This creates a new address object for the malicious URL"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']",
+                                                            "Block URL ( add to @{outputs('Configured_address_group')} address group )"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "equals": [
+                                                            "@length(body('Filter_array_of_URL_address_from_list_of_address_objects'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If",
+                                            "description": "This check if user chooses Block URL"
+                                        },
+                                        "Condition_to_check_the_edit_an_address_object_group_status": {
+                                            "actions": {
+                                                "Condition_to_check_the_action_of_adaptive_card_to_set_the_action_summary": {
+                                                    "actions": {
+                                                        "Append_success_status_Blocked_URL_status_to_summary_card": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "URLAddressAction",
+                                                                "value": "URL Address : @{items('For_each_malicious_URL')?['url']} ,  Action Taken :  Blocked  by               \n                       adding to @{outputs('Configured_address_group')}  ,  Status  :  Success"
+                                                            },
+                                                            "description": "append action taken to summarize on the adaptive card"
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "else": {
+                                                        "actions": {
+                                                            "Append_success_status_UnBlocked_URL_status_to_summary_card": {
+                                                                "runAfter": {},
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "URLAddressAction",
+                                                                    "value": "URL Address : @{items('For_each_malicious_URL')?['url']} ,  Action Taken :  UnBlocked  by               \n                       adding to @{outputs('Configured_address_group')}  ,  Status  :  Success"
+                                                                },
+                                                                "description": "append action taken to summarize on the adaptive card"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']",
+                                                                    "Block URL ( add to @{outputs('Configured_address_group')} address group )"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Update_an_address_object_group": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Append_failure_status_to_summary_card": {
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "URLAddressAction",
+                                                            "value": "URL Address : @{items('For_each_malicious_URL')?['url']}  ,  Action Taken :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']} ,  Status :  Failure"
+                                                        },
+                                                        "description": "append action taken to summarize on the adaptive card"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@body('Update_an_address_object_group')?['@status']",
+                                                            "success"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Update_an_address_object_group": {
+                                            "runAfter": {
+                                                "Condition__to_check_if_user_chosen_Block_URL": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "entry": {
+                                                        "@@name": "[parameters('Address Group')]",
+                                                        "static": {
+                                                            "member": "@{variables('AddressGroupMembers')}"
+                                                        }
+                                                    }
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/restapi/v10.0/Objects/AddressGroups",
+                                                "queries": {
+                                                    "location": "vsys",
+                                                    "name": "[parameters('Address Group')]",
+                                                    "vsys": "vsys1"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_array_variable_URL_address_action_chosen": {
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "URLAddressAction",
+                                                    "value": "URL Address : @{items('For_each_malicious_URL')?['url']},  Action Taken :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']} ,  Status :  Success                                               "
+                                                },
+                                                "description": "This appends the action taken on URL to the list of existing actions"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']",
+                                                        "Ignore"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "condition to check the submit action is block / unblock or Ignore"
+                                },
+                                "Condition_to_check_if_URL_address_already_present_in_list_of_address_objects": {
+                                    "actions": {
+                                        "Condition_to_check_if_URL_already_present_in_predefined_address_group": {
+                                            "actions": {
+                                                "Append_address_group_text": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "AdaptiveCardBody",
+                                                        "value": {
+                                                            "text": "The URL @{items('For_each_malicious_URL')?['url']}  is already a member of the blocked address group @{outputs('Configured_address_group')}",
+                                                            "type": "TextBlock",
+                                                            "wrap": true
+                                                        }
+                                                    },
+                                                    "description": "append address group text to adaptive card dynamically"
+                                                },
+                                                "Filter_array_URL_address_from_the_list_of_address_objects_to_unreference": {
+                                                    "runAfter": {
+                                                        "Set_dynamic_action_name": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Query",
+                                                    "inputs": {
+                                                        "from": "@variables('AddressGroupMembers')",
+                                                        "where": "@not(equals(item(), items('For_each_malicious_URL')?['url']))"
+                                                    },
+                                                    "description": "This filters the URL address from predefined address group to unreference/unblock URL"
+                                                },
+                                                "Set_dynamic_action_name": {
+                                                    "runAfter": {
+                                                        "Append_address_group_text": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "ActionName",
+                                                        "value": "UnBlock URL"
+                                                    },
+                                                    "description": "variable to set action name dynamically"
+                                                },
+                                                "unreference_URL_address_from_the_existing_group_members": {
+                                                    "runAfter": {
+                                                        "Filter_array_URL_address_from_the_list_of_address_objects_to_unreference": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "AddressGroupMembers",
+                                                        "value": "@body('Filter_array_URL_address_from_the_list_of_address_objects_to_unreference')"
+                                                    },
+                                                    "description": "unreference URL address from the group members and update"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Append_URL_address_to_the_address_group_members": {
+                                                        "runAfter": {
+                                                            "Append_address_group_text_to_adaptive_card_body": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "AddressGroupMembers",
+                                                            "value": "@items('For_each_malicious_URL')?['url']"
+                                                        },
+                                                        "description": "append URL address to the address group members"
+                                                    },
+                                                    "Append_address_group_text_to_adaptive_card_body": {
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "AdaptiveCardBody",
+                                                            "value": {
+                                                                "text": "The URL @{items('For_each_malicious_URL')?['url']}  is not a member of the blocked address group @{outputs('Configured_address_group')}",
+                                                                "type": "TextBlock",
+                                                                "wrap": true
+                                                            }
+                                                        },
+                                                        "description": "append address group text to adaptive card dynamically"
+                                                    },
+                                                    "Set_dynamic_action_name_to_variable_Action_name": {
+                                                        "runAfter": {
+                                                            "Append_URL_address_to_the_address_group_members": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "ActionName",
+                                                            "value": "Block URL"
+                                                        },
+                                                        "description": "set action name dynamically"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@variables('AddressGroupMembers')",
+                                                            "@items('For_each_malicious_URL')?['url']"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If",
+                                            "description": "condition to check the malicious URL address is present in the predefined address group and the URL is part of static member"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_the_URL_is_a_part_of_security_policy_rules": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_URL_to_array_of_address_group_members": {
+                                                "runAfter": {
+                                                    "Append_to_array_variable_text_if_URL_is_not_a_member_of_blocked_address_group": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "AddressGroupMembers",
+                                                    "value": "@items('For_each_malicious_URL')?['url']"
+                                                },
+                                                "description": "append the Malicious URL address to the existing group members to block / unblock from the predefined address group"
+                                            },
+                                            "Append_to_array_variable_text_if_URL_is_not_a_member_of_blocked_address_group": {
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "AdaptiveCardBody",
+                                                    "value": {
+                                                        "text": "The URL @{items('For_each_malicious_URL')?['url']}  is not a member of the blocked address group @{outputs('Configured_address_group')}",
+                                                        "type": "TextBlock",
+                                                        "wrap": true
+                                                    }
+                                                },
+                                                "description": "This appends the text to display If URL is not a member of security policy rules"
+                                            },
+                                            "Set_variable_to_Block_URL": {
+                                                "runAfter": {
+                                                    "Append_URL_to_array_of_address_group_members": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "ActionName",
+                                                    "value": "Block URL"
+                                                },
+                                                "description": "This sets the variable block URL"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Filter_array_of_URL_address_from_list_of_address_objects'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "This checks if URL is a member of any of the list of address objects"
+                                },
+                                "Condition_to_check_if_the_URL_is_a_part_of_security_policy_rules": {
+                                    "actions": {
+                                        "Append_policy_text": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "AdaptiveCardBody",
+                                                "value": {
+                                                    "text": "It is also member of the following security policy rules",
+                                                    "type": "TextBlock"
+                                                }
+                                            },
+                                            "description": "dynamic policy text based on security policies"
+                                        },
+                                        "Append_security_policies": {
+                                            "runAfter": {
+                                                "Append_policy_text": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "AdaptiveCardBody",
+                                                "value": {
+                                                    "columns": [
+                                                        {
+                                                            "items": "@body('Select_security_policy_rules')",
+                                                            "type": "Column"
+                                                        }
+                                                    ],
+                                                    "type": "ColumnSet"
+                                                }
+                                            },
+                                            "description": "append security policies which the URL address is exist"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Select_security_policy_rules": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_policy_text_to_adaptive_card_body_variable": {
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "AdaptiveCardBody",
+                                                    "value": {
+                                                        "text": "It is not a member of any other Policy Rules",
+                                                        "type": "TextBlock"
+                                                    }
+                                                },
+                                                "description": "dynamic policy text based on security policies"
+                                            },
+                                            "Append_security_policies_to_adaptive_card_body_variable": {
+                                                "runAfter": {
+                                                    "Append_policy_text_to_adaptive_card_body_variable": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "AdaptiveCardBody",
+                                                    "value": {}
+                                                },
+                                                "description": "append security policies which the URL address is exist"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Select_security_policy_rules'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "condition to check if the URL address is present in the existing security policy rules to conditionally apply the policy text and security policy rules"
+                                },
+                                "Configured_address_group": {
+                                    "runAfter": {
+                                        "Set_variable_address_group_members": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@body('List_address_groups')?['result']?['entry']?[0]?['@name']",
+                                    "description": "compose predefined address group"
+                                },
+                                "Filter_array_URL_from_list_of_security_rules": {
+                                    "runAfter": {
+                                        "Configured_address_group": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('List_security_rules')?['result']?['entry']",
+                                        "where": "@contains(item()?['destination']?['member'], items('For_each_malicious_URL')?['url'])"
+                                    },
+                                    "description": "This filters all the security rules in which this URL is a member"
+                                },
+                                "Filter_array_of_URL_address_from_list_of_address_objects": {
+                                    "runAfter": {
+                                        "Set_variable_adaptive_card_body": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('List_address_objects')?['result']?['entry']",
+                                        "where": "@equals(item()?['fqdn'], items('For_each_malicious_URL')?['url'])"
+                                    },
+                                    "description": "This filters the list of address objects in which this URL is a member "
+                                },
+                                "List_address_groups": {
+                                    "runAfter": {
+                                        "Filter_array_of_URL_address_from_list_of_address_objects": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/restapi/v10.0/Objects/AddressGroups",
+                                        "queries": {
+                                            "location": "vsys",
+                                            "name": "[parameters('Address Group')]",
+                                            "vsys": "vsys1"
+                                        }
+                                    },
+                                    "description": "This gets complete list of address object groups present in the PAN-OS"
+                                },
+                                "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3": {
+                                    "runAfter": {
+                                        "Condition_to_check_if_URL_address_already_present_in_list_of_address_objects": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnectionWebhook",
+                                    "inputs": {
+                                        "body": {
+                                            "body": {
+                                                "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\":@{variables('AdaptiveCardBody')} ,\n     \"actions\": [\n  {\n    \"title\": \"@{variables('ActionName')} ( add to @{outputs('Configured_address_group')} address group )\",\n    \"type\": \"Action.Submit\"\n  },\n  {\n    \"title\": \"Ignore\",\n    \"type\": \"Action.Submit\"\n  }\n],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                                                "recipient": {
+                                                    "channelId": "[parameters('Teams ChannelId')]"
+                                                },
+                                                "shouldUpdateCard": true
+                                            },
+                                            "notificationUrl": "@{listCallbackUrl()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "path": "/flowbot/actions/flowcontinuation/recipienttypes/channel/$subscriptions",
+                                        "queries": {
+                                            "groupId": "[parameters('Teams GroupId')]"
+                                        }
+                                    }
+                                },
+                                "Select_security_policy_rules": {
+                                    "runAfter": {
+                                        "Filter_array_URL_from_list_of_security_rules": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Select",
+                                    "inputs": {
+                                        "from": "@body('Filter_array_URL_from_list_of_security_rules')",
+                                        "select": {
+                                            "text": " @{item()?['@name']}, action :  @{item()?['action']}",
+                                            "type": "TextBlock",
+                                            "weight": "bolder"
+                                        }
+                                    },
+                                    "description": "prepare columns list to show the security policy rules in the adaptive card if URL address is present"
+                                },
+                                "Set_variable_adaptive_card_body": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "AdaptiveCardBody",
+                                        "value": [
+                                            {
+                                                "size": "Large",
+                                                "text": "Suspicious URL - Azure Sentinel",
+                                                "type": "TextBlock",
+                                                "weight": "Bolder",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "text": "Possible Comprised URL @{items('For_each_malicious_URL')?['url']}",
+                                                "type": "TextBlock",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "size": "Medium",
+                                                "text": "Response in PAN-OS",
+                                                "type": "TextBlock",
+                                                "weight": "Bolder"
+                                            },
+                                            {
+                                                "size": "Small",
+                                                "style": "Person",
+                                                "type": "Image",
+                                                "url": "https://avatars2.githubusercontent.com/u/4855743?s=280&v=4"
+                                            }
+                                        ]
+                                    },
+                                    "description": "variable to hold adaptive card body"
+                                },
+                                "Set_variable_address_group_members": {
+                                    "runAfter": {
+                                        "List_address_groups": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "AddressGroupMembers",
+                                        "value": "@body('List_address_groups')?['result']?['entry']?[0]?['static']?['member']"
+                                    },
+                                    "description": "assign list of address group members"
+                                }
+                            },
+                            "runAfter": {
+                                "List_security_rules": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Initialize_variable_URL_address_action": {
+                            "runAfter": {
+                                "Initialize_variable_address_group_members": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "URLAddressAction",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the action taken on each URL "
+                        },
+                        "Initialize_variable_action_name": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ActionName",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "variable to store action name to be displayed on adaptive card"
+                        },
+                        "Initialize_variable_adaptive_card_body": {
+                            "runAfter": {
+                                "Initialize_variable_action_name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AdaptiveCardBody",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "variable to store adaptive card body json"
+                        },
+                        "Initialize_variable_address_group_members": {
+                            "runAfter": {
+                                "Initialize_variable_adaptive_card_body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AddressGroupMembers",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "variable to store the list of address group members"
+                        },
+                        "List_address_objects": {
+                            "runAfter": {
+                                "Initialize_variable_URL_address_action": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/restapi/v10.0/Objects/Addresses",
+                                "queries": {
+                                    "location": "vsys",
+                                    "vsys": "vsys1"
+                                }
+                            },
+                            "description": "This gets complete list of address object present in the PAN-OS"
+                        },
+                        "List_security_rules": {
+                            "runAfter": {
+                                "List_address_objects": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/restapi/v10.0/Policies/SecurityRules",
+                                "queries": {
+                                    "location": "vsys",
+                                    "vsys": "vsys1"
+                                }
+                            },
+                            "description": "This gets complete list of security policy rules present in the PAN-OS"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "PaloAltoConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PaloAltoConnectorConnectionName'))]",
+                                "connectionName": "[variables('PaloAltoConnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Palo Alto PAN OS Connector Name'))]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

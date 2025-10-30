@@ -1,0 +1,88 @@
+id: b6baa3bb-a231-4e50-8ad1-4e28a958a0d3
+name: User Granted Access and created resources
+description: |
+  'Identifies when a new user is granted access and starts creating resources in Azure.  This can help you identify rogue or malicious user behavior.'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AuditLogs
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - Impact
+relevantTechniques:
+  - T1098
+  - T1078
+  - T1496
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let auditLookback = starttime-14d;
+  let opName = dynamic(["Add user", "Invite external user"]);
+  // Helper function to extract relevant fields from AuditLog events
+  let auditLogEvents = view (startTimeSpan:timespan, operation:dynamic)  {
+      AuditLogs | where TimeGenerated >= auditLookback
+      | where OperationName in~ (operation)
+      | extend ModProps = iff(TargetResources.[0].modifiedProperties != "[]", TargetResources.[0].modifiedProperties, todynamic("NoValues"))
+      | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+      tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+      | extend InitiatedByFull = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)),
+      tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
+      | extend InitiatedBy = replace("_","@",tostring(split(InitiatedByFull, "#")[0]))
+      | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+      | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
+      | extend TargetResourceName = case(
+      isempty(tostring(TargetResources.[0].displayName)), TargetUserPrincipalName,
+      isnotempty(tostring(TargetResources.[0].displayName)) and tostring(TargetResources.[0].displayName) startswith "upn:", tolower(tostring(TargetResources.[0].displayName)),
+      tolower(tostring(TargetResources.[0].displayName))
+      )
+      | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
+      | extend TargetUserName = iff(isempty(TargetUserName), tostring(split(split(TargetResourceName, ",")[0], " ")[1]), TargetUserName )
+      | mvexpand ModProps
+      | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue));
+  };
+  let UserAdd = auditLogEvents(auditLookback, opName)
+  | project Action = "User Added", TimeGenerated, Type, InitiatedBy_Caller = InitiatedBy, IpAddress, TargetUserName = tolower(TargetUserName), OperationName, PropertyName_ResourceId = PropertyName, Value = newValue;
+  // Get the simple list of creatd users so we can use later to get just the associated resource creation events
+  let SimpleUserList = UserAdd | project TimeGenerated, TargetUserName;
+  let ResourceCreation = AzureActivity
+  | where TimeGenerated >= auditLookback
+  // We look for any Operation that created and then succeeded where ActivityStatus has a value so that we can provide context
+  | where OperationName has "Create"
+  | where ActivityStatus has "Succeeded"
+  | project Action = "Resource Created", ResourceCreationTimeGenerated = TimeGenerated, Type, InitiatedBy_Caller = tolower(Caller), IpAddress = CallerIpAddress, OperationName, Value = OperationNameValue, PropertyName_ResourceId = ResourceId;
+  // Get just the Resources added by the new user
+  let ResourceMatch = SimpleUserList | join kind= innerunique (
+     ResourceCreation
+  ) on $left.TargetUserName == $right.InitiatedBy_Caller
+  // where the resource creation is after (greater than) the user addition
+  | where TimeGenerated < ResourceCreationTimeGenerated
+  | project-away TimeGenerated
+  | project-rename TimeGenerated = ResourceCreationTimeGenerated
+  ;
+  let SimpleResourceMatch = ResourceMatch | project InitiatedBy_Caller;
+  // Get only resource add, remove, change by the new user
+  let UserAddWithResource = SimpleResourceMatch | join kind= rightsemi (
+     UserAdd
+  ) on $left.InitiatedBy_Caller == $right.TargetUserName;
+  // union the user addition events and resource addition events and provide common column names, additionally pack the value, property and resource info to reduce result set.
+  UserAddWithResource
+  | union isfuzzy=true(ResourceMatch
+  | extend PropertySet = pack("Value", Value, "PropertyName_ResourceId", PropertyName_ResourceId)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makeset(PropertySet)  by Action, Type, TargetUserName, InitiatedBy_Caller, IpAddress, OperationName
+  | order by StartTimeUtc asc)
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = TargetUserName, IPCustomEntity = IpAddress
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Cloud Provider" ]

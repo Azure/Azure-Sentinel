@@ -1,0 +1,205 @@
+{
+    "id": "UnfiSG",
+    "title": "Unfi Security Gateway (Preview) ",
+    "publisher": "Azure Sentinel Community",
+    "descriptionMarkdown": "The UniFi Security Gateway extends the UniFi Enterprise System to provide cost-effective, reliable routing and advanced security for your network.  Unifi Security Gateway does not output CEF by default, Logstash is used to parse message into CEF for this connector. By connecting your CEF logs to Azure Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.",
+    "graphQueries": [
+        {
+            "metricName": "Total data received",
+            "legend": "UnifiSG",
+            "baseQuery": "CommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\"\n"
+        },
+        {
+            "metricName":"Total data received",
+            "legend": "UnifiSG-Netflow",
+            "baseQuery": "netflow_CL\n"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "UnifiSG Firewall Logs",
+            "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"Firewall\"\n"
+        },
+        {
+            "description": "UnifiSG IPS Logs",
+            "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"IPS\"\n"
+        },
+        {
+            "description": "UnifiSG DNS Logs",
+            "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"DNS\"\n"
+        },
+        {
+            "description": "UnifiSG DHCP Logs",
+            "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"DHCP\"\n"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "CommonSecurityLog (UnifiSG)",
+            "lastDataReceivedQuery": "CommonSecurityLog\n| where DeviceVendor == \"Unifi\"\n| where DeviceProduct == \"USG\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+            "name": "NetFlow (UnifiSG)",
+            "lastDataReceivedQuery":"netflow_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "CommonSecurityLog\n| where DeviceVendor == \"Unifi\"\n| where DeviceProduct == \"USG\"\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": true
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "read": true,
+                    "write": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "1. Linux Syslog agent configuration",
+            "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Azure Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+            "innerSteps": [
+                {
+                    "title": "1.1 Select or create a Linux machine",
+                    "description": "Select or create a Linux machine that Azure Sentinel will use as the proxy between your security solution and Azure Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                },
+                {
+                    "title": "1.2 Install the CEF collector on the Linux machine",
+                    "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Azure Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "fillWith": [
+                                    "WorkspaceId",
+                                    "PrimaryKey"
+                                ],
+                                "label": "Run the following command to install and apply the CEF collector:",
+                                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                },
+                {
+                    "title": "1.3 Install Elastic Logstash on the Linux Machine",
+                    "description": "Install Logstash on your Linux machine and use the provided configuration to parse the messages.\n\n> 1. Make sure that you have Java on your machine using the following command: java -version.\n\n> 2. Install Logstash using the instrcutions provided at https://www.elastic.co/guide/en/logstash/current/installing-logstash.html.\n\n> 3. Enable the Logstash service to auto start.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "label": "Run the following command to download the provided configuration",
+                                "value": "sudo /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog\nsudo wget -o /etc/logstash/conf.d/ui-logstash.conf https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/UnifiSG/ui-logstash.conf",
+                                "rows": 4
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                },
+                {
+                    "title": "1.4 Optional: Download the configuration to collect NetFlow",
+                    "description": "Unifi Security Gateway supports sending NetFlow logs.  If you wish to collect these you will need an additional Logstash configuration.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "fillWith": [
+                                    "WorkspaceId",
+                                    "PrimaryKey"
+                                ],
+                                "label": "Run the following command to download the provided NetFlow configuartion",
+                                "value": "sudo /usr/share/logstash/bin/logstash-plugin install microsoft-logstash-output-azure-loganalytics\nsudo wget -o /etc/logstash/conf.d/ui-netflow-logstash.conf https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/UnifiSG/ui-netflow-logstash.conf\nsudo sed -i 's/\"workspaceid\"/\"{0}\"/g' /etc/logstash/conf.d/ui-netflow-logstash.conf\nsudo sed -i 's/\"workspacekey\"/\"{1}\"/g' /etc/logstash/conf.d/ui-netflow-logstash.conf",
+                                "rows": 11
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "title": "2. Forward Unifi Security Gateway logs to Logstash",
+            "description": "Configure the USG for Remote logging.",
+            "innerSteps": [
+                {
+                    "title": "2.1 Configure the USG to send logs via syslog to Logstash using port 5514.",
+                    "description": "Information is documented here: https://help.ui.com/hc/en-us/articles/227129127-UniFi-Methods-for-Capturing-Useful-Debug-Information#2\n"
+                },
+                {
+                    "title": "2.2 Configure the USG o log firewall",
+                    "description": "Go to Settings -> Routing and Firewall -> Firewall -> Settings\n Set Default Action Logging to enabled for WAN, LAN and Guest Rules.\nClick Apply Changes\n"
+                },
+                {
+                    "title": "2.3 Optional:  Configure DNS log collection.",
+                    "description": "Configure DNS log collection on the USG.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "label": "Configure logging using the CLI (USG Device) to run the following commands:",
+                                "value": "sudo bash\nsudo sed -i 's/$output .= \"log-facility/$output .= \"# log-facility/g' /opt/vyatta/sbin/vyatta-dns-forwarding.pl\nservice rsyslog restart\nservice dnsmasq restart\nexit\nconfigure\nset service dns forwarding options log-queries=extra\nset system syslog host <LogstashIP:5514> facility all level info\ncommit\nsave\nexit",
+                                "rows": 12
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                },
+                {
+                    "title": "2.4 Optional: Configure NetFlow collection using port 2055",
+                    "description": "Configure NetFlow log collection on the USG.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "label": "Configure logging using the CLI (USG Device) to run the following commands:",
+                                "value": "configure\nset system flow-acccounting interface eth<#>\nset system flow-accounting netflow server <ip_address_of_Receiver> port 2055\nset system flow-accounting netflow version 9\ncommit\nsave",
+                                "rows": 6
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "title": "3. Validate connection",
+            "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+            "instructions": [
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Run the following command to validate your connectivity:",
+                        "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "4. Secure your machine ",
+            "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
+        }
+    ]
+}

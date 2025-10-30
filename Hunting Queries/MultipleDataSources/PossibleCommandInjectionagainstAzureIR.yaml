@@ -1,0 +1,89 @@
+id: 2d1a3e86-f1a0-49d0-b88a-55789e1d6660
+name: Possible command injection attempts against Azure Integration Runtimes
+description: |
+  'This hunting query looks for potential command injection attempts via the vulnerable third-party driver against Azure IR with Managed VNet or SHIR processes as well as post-exploitation activity based on process execution and command line activity
+  Reference: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2022-29972 
+   https://msrc-blog.microsoft.com/2022/05/09/vulnerability-mitigated-in-the-third-party-data-connector-used-in-azure-synapse-pipelines-and-azure-data-factory-cve-2022-29972'
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+tactics:
+  - Collection
+relevantTechniques:
+  - T1074.001
+query: |
+  let parent_proc_list = dynamic(["diawp.exe", "ReportingServicesService.exe", "RSPortal.exe", "RsPowerBI.exe", "taskexecutor.exe"]);
+  let cmdline_tokens = dynamic(["| curl ", "/c start ", " whoami 2>&1", "-m 5 ", "--data-binary"]);
+  (union isfuzzy=true
+  ( DeviceProcessEvents  
+  | where FileName =~ "cmd.exe"
+  | where InitiatingProcessFileName in~ (parent_proc_list)
+  | where ProcessCommandLine has_any (cmdline_tokens)
+  | project-reorder  TimeGenerated, DeviceName, DeviceId, FileName, ProcessCommandLine, InitiatingProcessFileName, AccountName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName,  ProcessCustomEntity = FileName
+  ),
+  (imProcessCreate
+  | where ParentProcessName endswith "diawp.exe" or ParentProcessName endswith "ReportingServicesService.exe" or ParentProcessName endswith "RSPortal.exe" or ParentProcessName endswith "RsPowerBI.exe" or ParentProcessName endswith "taskexecutor.exe"
+  | where ActingProcessName == "cmd.exe"
+  | where (CommandLine has_any (cmdline_tokens))
+  | extend timestamp = TimeGenerated, HostCustomEntity = DvcHostname , AccountCustomEntity = ActorUsername, ProcessCustomEntity = TargetProcessName
+  ),
+  (SecurityEvent
+  | where EventID == '4688'
+  | where Process == "cmd.exe" and isnotempty(ParentProcessName)
+  | extend ParentProcess = tostring(parse_json(parse_path(ParentProcessName)).Filename)
+  | where ParentProcess in~ (parent_proc_list)  and (CommandLine has_any (cmdline_tokens)) 
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, CommandLine
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+  ),
+  (WindowsEvent
+  | where EventID == '4688' and (EventData has_any (cmdline_tokens) or EventData has_all (parent_proc_list))
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | where NewProcessName =~ "cmd.exe" and ParentProcessName in~ (parent_proc_list)
+  | where (CommandLine has_any (cmdline_tokens))
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend NewProcessId = tostring(EventData.NewProcessId)
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, CommandLine
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+  )
+  )
+  | extend NTDomain = tostring(split(AccountCustomEntity, '\\', 0)[0]), Name = tostring(split(AccountCustomEntity, '\\', 1)[0])
+  | extend HostName = tostring(split(HostCustomEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostCustomEntity, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend Process_0_ProcessId = ProcessCustomEntity
+  | extend Process_0_CommandLine = CommandLineCustomEntity
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessCustomEntity
+      - identifier: CommandLine
+        columnName: CommandLineCustomEntity
+version: 1.0.1

@@ -1,0 +1,40 @@
+id: f05271b6-26a5-49cf-ad73-4a202fba6eb6
+name: Cisco Duo - New access device
+description: |
+  'Detects new access device.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  CiscoDuo
+  | where EventType =~ 'authentication'
+  | where EventResult =~ 'success'
+  | where isnotempty(AccessDvcIpAddr)
+  | summarize dvc_ip = makeset(AccessDvcIpAddr) by DstUserName
+  | join (CiscoDuo
+          | where EventType =~ 'authentication'
+          | where EventResult =~ 'success') on DstUserName
+  | where dvc_ip !has AccessDvcIpAddr
+  | extend IPCustomEntity = AccessDvcIpAddr, AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

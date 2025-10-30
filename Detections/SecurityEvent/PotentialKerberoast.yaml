@@ -1,0 +1,118 @@
+id: 1572e66b-20a7-4012-9ec4-77ec4b101bc8
+name: Potential Kerberoasting
+description: |
+  'A service principal name (SPN) is used to uniquely identify a service instance in a Windows environment.
+  Each SPN is usually associated with a service account. Organizations may have used service accounts with weak passwords in their environment.
+  An attacker can try requesting Kerberos ticket-granting service (TGS) service tickets for any SPN from a domain controller (DC) which contains a hash of the Service account. This can then be used for offline cracking.
+  This hunting query looks for accounts that are generating excessive requests to different resources within the last hour compared with the previous 24 hours.  Normal users would not make an unusually large number of request within a small time window. This is based on 4769 events which can be very noisy so environment based tweaking might be needed.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1558
+query: |
+  let starttime = 1d;
+  let endtime = 1h;
+  let prev23hThreshold = 4;
+  let prev1hThreshold = 15;
+  let Kerbevent = (union isfuzzy=true
+  (SecurityEvent
+  | where TimeGenerated >= ago(starttime)
+  | where EventID == 4769
+  | parse EventData with * 'TicketEncryptionType">' TicketEncryptionType "<" *
+  | where TicketEncryptionType == '0x17'
+  | parse EventData with * 'TicketOptions">' TicketOptions "<" *
+  | where TicketOptions == '0x40810000'
+  | parse EventData with * 'Status">' Status "<" *
+  | where Status == '0x0'
+  | parse EventData with * 'ServiceName">' ServiceName "<" *
+  | where ServiceName !contains "$" and ServiceName !contains "krbtgt"
+  | parse EventData with * 'TargetUserName">' TargetUserName "<" *
+  | where TargetUserName !contains "$@" and TargetUserName !contains ServiceName
+  | parse EventData with * 'IpAddress">::ffff:' ClientIPAddress "<" *
+  ),
+  (
+  WindowsEvent
+  | where TimeGenerated >= ago(starttime)
+  | where EventID == 4769 and EventData has '0x17' and EventData has '0x40810000' and EventData has 'krbtgt'
+  | extend TicketEncryptionType = tostring(EventData.TicketEncryptionType)
+  | where TicketEncryptionType == '0x17'
+  | extend TicketOptions = tostring(EventData.TicketOptions)
+  | where TicketOptions == '0x40810000'
+  | extend Status = tostring(EventData.Status)
+  | where Status == '0x0'
+  | extend ServiceName = tostring(EventData.ServiceName)
+  | where ServiceName !contains "$" and ServiceName !contains "krbtgt"
+  | extend TargetUserName = tostring(EventData.TargetUserName)
+  | where TargetUserName !contains "$@" and TargetUserName !contains ServiceName
+  | extend ClientIPAddress = tostring(EventData.IpAddress)
+  ));
+  let Kerbevent23h = Kerbevent
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)
+  | summarize ServiceNameCountPrev23h = dcount(ServiceName), ServiceNameSet23h = makeset(ServiceName)
+  by Computer, TargetUserName,TargetDomainName, ClientIPAddress, TicketOptions, TicketEncryptionType, Status
+  | where ServiceNameCountPrev23h < prev23hThreshold;
+  let Kerbevent1h =
+  Kerbevent
+  | where TimeGenerated >= ago(endtime)
+  | summarize min(TimeGenerated), max(TimeGenerated), ServiceNameCountPrev1h = dcount(ServiceName), ServiceNameSet1h = makeset(ServiceName)
+  by Computer, TargetUserName, TargetDomainName, ClientIPAddress, TicketOptions, TicketEncryptionType, Status;
+  Kerbevent1h
+  | join kind=leftanti
+  (
+  Kerbevent23h
+  ) on TargetUserName, TargetDomainName
+  // Threshold value set above is based on testing, this value may need to be changed for your environment.
+  | where ServiceNameCountPrev1h > prev1hThreshold
+  | project StartTime = min_TimeGenerated, EndTime = max_TimeGenerated, TargetUserName, Computer, ClientIPAddress, TicketOptions,
+  TicketEncryptionType, Status, ServiceNameCountPrev1h, ServiceNameSet1h, TargetDomainName
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend TargetAccount = strcat(TargetDomainName,  "\\", TargetUserName)
+  | project-away DomainIndex
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetAccount
+      - identifier: Name
+        columnName: TargetUserName
+      - identifier: NTDomain
+        columnName: TargetDomainName
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIPAddress
+version: 1.1.7
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

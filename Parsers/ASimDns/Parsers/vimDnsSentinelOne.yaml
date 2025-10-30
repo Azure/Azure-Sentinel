@@ -1,0 +1,248 @@
+Parser:
+  Title: DNS activity ASIM parser for SentinelOne
+  Version: '0.1.0'
+  LastUpdated: Jun 28 2023
+Product:
+  Name: SentinelOne
+Normalization:
+  Schema: Dns
+  Version: '0.1.7'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: SentinelOne Documentation
+  Link: https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview
+Description: |
+  This ASIM parser supports normalizing SentinelOne logs to the ASIM DNS normalized schema. SentinelOne events are captured through SentinelOne data connector which ingests SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API.
+ParserName: vimDnsSentinelOne
+EquivalentBuiltInParser: _Im_Dns_SentinelOne
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ThreatConfidenceLookup_undefined = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_undefined: int
+  )
+      [
+      "FALSE_POSITIVE", 5,
+      "Undefined", 15,
+      "SUSPICIOUS", 25,
+      "TRUE_POSITIVE", 33 
+  ];
+  let ThreatConfidenceLookup_suspicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_suspicious: int
+  )
+      [
+      "FALSE_POSITIVE", 40,
+      "Undefined", 50,
+      "SUSPICIOUS", 60,
+      "TRUE_POSITIVE", 67 
+  ];
+  let ThreatConfidenceLookup_malicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_malicious: int
+  )
+      [
+      "FALSE_POSITIVE", 75,
+      "Undefined", 80,
+      "SUSPICIOUS", 90,
+      "TRUE_POSITIVE", 100 
+  ];
+  let parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      srcipaddr: string='*', 
+      domain_has_any: dynamic=dynamic([]),
+      responsecodename: string='*',
+      response_has_ipv4: string='*',
+      response_has_any_prefix: dynamic=dynamic([]),
+      eventtype: string='Query',
+      disabled: bool=false
+      ) {
+      let alldata = SentinelOne_CL
+          | where not(disabled)
+              and (eventtype == '*' or eventtype == "Query")
+              and (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+              and event_name_s == "Alerts." 
+              and alertInfo_eventType_s == "DNS"
+              and srcipaddr == '*'
+              and (array_length(domain_has_any) == 0 or alertInfo_dnsRequest_s has_any (domain_has_any))
+              and (response_has_ipv4 == '*' or has_ipv4(alertInfo_dnsResponse_s, response_has_ipv4))
+              and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(alertInfo_dnsResponse_s, response_has_any_prefix))
+          | parse alertInfo_dnsResponse_s with * "type: " DnsQueryType: int " " RestMessage;
+      let undefineddata = alldata
+          | where ruleInfo_treatAsThreat_s == "UNDEFINED"
+          | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;
+      let suspiciousdata = alldata
+          | where ruleInfo_treatAsThreat_s == "Suspicious"
+          | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;
+      let maaliciousdata = alldata
+          | where ruleInfo_treatAsThreat_s == "Malicious"
+          | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;
+      union undefineddata, suspiciousdata, maaliciousdata
+      | extend 
+          DnsResponseCode = case(
+                        alertInfo_dnsResponse_s has "NoError" or alertInfo_dnsResponse_s has "No Error",
+                        int(0),
+                        alertInfo_dnsResponse_s has "FormErr" or alertInfo_dnsResponse_s has "Format Error",
+                        int(1),
+                        alertInfo_dnsResponse_s has "ServFail" or alertInfo_dnsResponse_s has "Server Failure",
+                        int(2),
+                        alertInfo_dnsResponse_s has "NXDomain" or alertInfo_dnsResponse_s has "Non-Existent Domain",
+                        int(3),
+                        alertInfo_dnsResponse_s has "NotImp" or alertInfo_dnsResponse_s has "Not Implemented",
+                        int(4),
+                        alertInfo_dnsResponse_s has "Refused" or alertInfo_dnsResponse_s has "Query Refused",
+                        int(5),
+                        alertInfo_dnsResponse_s has "YXDomain" or alertInfo_dnsResponse_s has "Name Exists when it should not",
+                        int(6),
+                        alertInfo_dnsResponse_s has "YXRRSet" or alertInfo_dnsResponse_s has "RR Set Exists when it should not",
+                        int(7),
+                        alertInfo_dnsResponse_s has "NXRRSet" or alertInfo_dnsResponse_s has "RR Set that should exist does not",
+                        int(8),
+                        alertInfo_dnsResponse_s has "NotAuth" or alertInfo_dnsResponse_s has "Server Not Authoritative for zone",
+                        int(9),
+                        alertInfo_dnsResponse_s has "NotAuth" or alertInfo_dnsResponse_s has "Not Authorized",
+                        int(9),
+                        alertInfo_dnsResponse_s has "NotZone" or alertInfo_dnsResponse_s has "Name not contained in zone",
+                        int(10),
+                        alertInfo_dnsResponse_s has "DSOTYPENI" or alertInfo_dnsResponse_s has "DSO-TYPE Not Implemented",
+                        int(11),
+                        alertInfo_dnsResponse_s has "Unassigned",
+                        int(12),
+                        alertInfo_dnsResponse_s has "BADVERS" or alertInfo_dnsResponse_s has "Bad OPT Version",
+                        int(16),
+                        alertInfo_dnsResponse_s has "BADSIG" or alertInfo_dnsResponse_s has "TSIG Signature Failure",
+                        int(16),
+                        alertInfo_dnsResponse_s has "BADKEY" or alertInfo_dnsResponse_s has "Key not recognized",
+                        int(17),
+                        alertInfo_dnsResponse_s has "BADTIME" or alertInfo_dnsResponse_s has "Signature out of time window",
+                        int(18),
+                        alertInfo_dnsResponse_s has "BADMODE" or alertInfo_dnsResponse_s has "Bad TKEY Mode",
+                        int(19),
+                        alertInfo_dnsResponse_s has "BADNAME" or alertInfo_dnsResponse_s has "Duplicate key name",
+                        int(20),
+                        alertInfo_dnsResponse_s has "BADALG" or alertInfo_dnsResponse_s has "Algorithm not supported",
+                        int(21),
+                        alertInfo_dnsResponse_s has "BADTRUNC" or alertInfo_dnsResponse_s has "Bad Truncation",
+                        int(22),
+                        alertInfo_dnsResponse_s has "BADCOOKIE" or alertInfo_dnsResponse_s has "Bad/missing Server Cookie",
+                        int(23),
+                        int(0)
+                    ),
+          AdditionalFields = bag_pack(
+                        "MachineType",
+                        agentDetectionInfo_machineType_s,
+                        "OsRevision",
+                        agentDetectionInfo_osRevision_s
+                    )
+      | extend EventResultDetails = _ASIM_LookupDnsResponseCode(DnsResponseCode)
+      | where (responsecodename == '*' or EventResultDetails =~ responsecodename)
+      | extend 
+          DnsQueryType = iff(isempty(DnsQueryType) and DnsResponseCode == 0, int(1), DnsQueryType),
+          ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious)
+      | project-rename
+          EventStartTime = sourceProcessInfo_pidStarttime_t,
+          DnsQuery = alertInfo_dnsRequest_s,
+          EventUid = _ItemId,
+          DnsResponseName = alertInfo_dnsResponse_s,
+          DvcId = agentDetectionInfo_uuid_g,
+          DvcOs = agentDetectionInfo_osName_s,
+          DvcOsVersion = agentDetectionInfo_osRevision_s,
+          EventOriginalType = alertInfo_eventType_s,
+          EventOriginalSeverity = ruleInfo_severity_s,
+          EventOriginalUid = alertInfo_dvEventId_s,
+          RuleName = ruleInfo_name_s,
+          SrcProcessId = sourceProcessInfo_pid_s,
+          SrcProcessName = sourceProcessInfo_name_s,
+          SrcUsername = sourceProcessInfo_user_s,
+          ThreatOriginalConfidence = ruleInfo_treatAsThreat_s
+      | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
+      | extend
+          Dvc = DvcId,
+          EventEndTime = EventStartTime,
+          EventResult = iff(DnsResponseCode == 0, "Success", "Failure"),
+          EventSubType = iff(isnotempty(DnsResponseName), "Response", "Request"),
+          EventOriginalResultDetails = DnsResponseCode,
+          DnsQueryTypeName = _ASIM_LookupDnsQueryType(DnsQueryType),
+          Rule = RuleName,
+          SrcDvcId = DvcId,
+          SrcHostname = DvcHostname,
+          EventSeverity = iff(EventOriginalSeverity == "Critical", "High", EventOriginalSeverity),
+          Domain = DnsQuery,
+          Process = SrcProcessName,
+          User = SrcUsername,
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          SrcUserType = _ASIM_GetUserType(SrcUsername, "")
+      | extend 
+          Src = SrcHostname,
+          Hostname = SrcHostname,
+          DnsResponseCodeName = EventResultDetails,
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          SrcDvcIdType = iff(isnotempty(SrcDvcId), "Other", "")
+      | extend
+          EventCount = int(1),
+          EventProduct = "SentinelOne",
+          EventSchema = "Dns",
+          EventSchemaVersion = "0.1.7",
+          EventType = "Query",
+          EventVendor = "SentinelOne",
+          DnsQueryClassName = "IN",
+          DnsQueryClass = int(1)
+      | project-away
+          *_d,
+          *_s,
+          *_g,
+          *_t,
+          *_b,
+          RestMessage,
+          _ResourceId,
+          TenantId,
+          RawData,
+          Computer,
+          MG,
+          ManagementGroupName,
+          SourceSystem,
+          ThreatConfidence_*
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr=srcipaddr,
+      domain_has_any=domain_has_any,
+      responsecodename=responsecodename, 
+      response_has_ipv4=response_has_ipv4, 
+      response_has_any_prefix=response_has_any_prefix, 
+      eventtype=eventtype, 
+      disabled=disabled
+  )

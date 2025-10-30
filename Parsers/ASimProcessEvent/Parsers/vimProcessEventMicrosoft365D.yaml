@@ -1,0 +1,176 @@
+Parser:
+  Title: Process Create Event ASIM parser for Microsoft 365 Defender for endpoint
+  Version: '0.2.0'
+  LastUpdated: Apr 30, 2022
+Product:
+  Name: Microsoft 365 Defender for endpoint
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+    This ASIM parser supports normalizing Microsoft 365 Defender for endpoint to the ASIM Process Event normalized schema.
+ParserName: vimProcessEventMicrosoft365D
+EquivalentBuiltInParser: _Im_ProcessEvent_Microsoft365D
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: commandline_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_all
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_any_ip_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actingprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: parentprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: '*'
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])    
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+   let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      commandline_has_any:dynamic=dynamic([]),
+      commandline_has_all:dynamic=dynamic([]),
+      commandline_has_any_ip_prefix:dynamic=dynamic([]),
+      actingprocess_has_any:dynamic=dynamic([]),
+      targetprocess_has_any:dynamic=dynamic([]),
+      parentprocess_has_any:dynamic=dynamic([]),
+      targetusername_has:string='*',
+      dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dvchostname_has_any:dynamic=dynamic([]),
+      eventtype:string='*',
+      hashes_has_any:dynamic=dynamic([]),
+      disabled:bool=false
+    ) {
+    DeviceProcessEvents 
+    // -- pre-filtering
+    | where
+      (isnull(starttime)   or TimeGenerated >= starttime )
+      and (isnull(endtime) or TimeGenerated <= endtime )
+      and not(disabled)
+      and (array_length(dvcipaddr_has_any_prefix)==0)
+      and (array_length(commandline_has_all)==0 or ProcessCommandLine has_all (commandline_has_all)) 
+      and (array_length(commandline_has_any)==0 or ProcessCommandLine has_any (commandline_has_any)) 
+      and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(ProcessCommandLine, commandline_has_any_ip_prefix) ) 
+      and (array_length(actingprocess_has_any)==0 or InitiatingProcessFolderPath has_any (actingprocess_has_any)) 
+      and (array_length(targetprocess_has_any)==0 or FolderPath has_any (targetprocess_has_any)) 
+      and (array_length(parentprocess_has_any)==0 or InitiatingProcessParentFileName has_any (parentprocess_has_any))  
+      and (targetusername_has=='*' or AccountName has targetusername_has or AccountDomain has targetusername_has)  
+      and (array_length(dvchostname_has_any)==0 or DeviceName has_any (dvchostname_has_any))   
+      and (array_length(hashes_has_any)==0 or SHA256 in (hashes_has_any) or SHA1 in (hashes_has_any) or MD5 in (hashes_has_any))
+      and (eventtype=='*' or eventtype=='ProcessCreated')
+    | extend
+        EventOriginalUid = tostring(ReportId),
+        EventCount = int(1),
+        EventProduct = 'M365 Defender for Endpoint',
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'ProcessEvent',
+        EventStartTime = todatetime(TimeGenerated),
+        EventEndTime = todatetime(TimeGenerated),
+        EventResult = 'Success'
+    | extend
+        ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)),
+        TargetUsername = iff (AccountDomain == '', AccountName, strcat(AccountDomain, '\\', AccountName)),
+        TargetUsernameType = iff(AccountDomain == '','Simple', 'Windows'),
+        ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'),
+        ActorUserIdType = 'SID',
+        TargetUserIdType = 'SID',
+        ActorSessionId = tostring(InitiatingProcessLogonId),
+        TargetUserSessionId = tostring(LogonId),
+        Hash = coalesce (SHA256, SHA1, MD5, ""),
+        TargetProcessId = tostring(ProcessId),
+        ActingProcessId = tostring(InitiatingProcessId),
+        ParentProcessId = tostring(InitiatingProcessParentId),
+        DvcOs = iff (AdditionalFields has "ProcessPosixProcessGroupId", "Linux", "Windows")
+    | project-away InitiatingProcessAccountDomain, InitiatingProcessAccountName, AccountDomain, AccountName, ProcessId, InitiatingProcessId, InitiatingProcessParentId, LogonId, InitiatingProcessLogonId, ReportId
+    | extend
+         HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(SHA256, SHA1, MD5),Hash)])
+    | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+    | project-rename
+        DvcId = DeviceId,
+        EventType = ActionType,
+        ActorUserId = InitiatingProcessAccountSid,
+        ActorUserAadId = InitiatingProcessAccountObjectId,
+        ActorUserUpn = InitiatingProcessAccountUpn,
+        TargetUserId = AccountSid,
+        TargetUserAadId = AccountObjectId,
+        TargetUserUpn = AccountUpn,
+        ParentProcessName = InitiatingProcessParentFileName,
+        TargetProcessFilename = FileName,
+        ParentProcessCreationTime = InitiatingProcessParentCreationTime,
+        TargetProcessName = FolderPath,
+        TargetProcessCommandLine = ProcessCommandLine,
+        TargetProcessMD5 = MD5,
+        TargetProcessSHA1 = SHA1,
+        TargetProcessSHA256 = SHA256,
+        TargetProcessIntegrityLevel = ProcessIntegrityLevel,
+        TargetProcessTokenElevation = ProcessTokenElevation,
+        TargetProcessCreationTime = ProcessCreationTime,
+        ActingProcessName = InitiatingProcessFolderPath, 
+        ActingProcessFilename = InitiatingProcessFileName,
+        ActingProcessCommandLine = InitiatingProcessCommandLine, 
+        ActingProcessMD5 = InitiatingProcessMD5, 
+        ActingProcessSHA1 = InitiatingProcessSHA1, 
+        ActingProcessSHA256 = InitiatingProcessSHA256, 
+        ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel,
+        ActingProcessTokenElevation = InitiatingProcessTokenElevation,
+        ActingProcessCreationTime = InitiatingProcessCreationTime,
+        MDE_MachineGroup = MachineGroup
+    | extend  // -- aliases
+        User = coalesce(TargetUsername, ActorUsername),
+        CommandLine = TargetProcessCommandLine,
+        Process = TargetProcessName,
+        Dvc = DvcHostname
+    | project-away AppGuardContainerId, Timestamp , SourceSystem, TenantId
+    };
+    parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      targetusername_has=targetusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      hashes_has_any=hashes_has_any,
+      disabled=disabled
+   )

@@ -1,0 +1,67 @@
+id: faa40333-1e8b-40cc-a003-51ae41fa886f
+name: Detect instances of multiple client errors occurring within a brief period of time (ASIM Web Session)
+description: |
+  'This detection mechanism identifies situations where multiple client errors originate from a single source within a limited time frame.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1133
+  - T1071
+query: |
+  // HTTP response status codes indicate whether a specific HTTP request has been successfully completed.
+  // Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+  let threshold = 100; // You can set threshold value that suits your environment
+  _Im_WebSession(starttime=ago(1h))
+  | where toint(EventResultDetails) between (400 .. 499)
+  | summarize
+      TotalErrorCount = count(),
+      EventStartTime = min(TimeGenerated),
+      EventEndTime = max(TimeGenerated),
+      URLs=make_set(Url, 100),
+      EventResultDetailsSet=make_set(EventResultDetails,10)
+      by SrcIpAddr, bin(TimeGenerated, 5m), SrcUsername, SrcHostname
+  | where TotalErrorCount > threshold
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),""), Threshold=threshold
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  TotalErrorCount: TotalErrorCount
+  ErrorThreshold: Threshold
+  RequestURLs: URLs
+  EventResultSet: EventResultDetailsSet
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+alertDetailsOverride:
+  alertDisplayNameFormat: "High number of client errors originated by user '{{SrcUsername}}' from IP address '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "The client has made a total of '{{TotalErrorCount}}' requests to URLs '{{URLs}}', 
+                            which have resulted in client errors. A sudden surge in HTTP code errors, especially in the form of client-side errors like 400 or 401, could indicate malicious activity, such as attackers attempting to exploit vulnerabilities or perform unauthorized actions. For detailed information regarding the specific errors encountered, please refer to the following link:
+                            https://developer.mozilla.org/en-US/docs/Web/HTTP/Status."
+version: 1.0.0
+kind: Scheduled

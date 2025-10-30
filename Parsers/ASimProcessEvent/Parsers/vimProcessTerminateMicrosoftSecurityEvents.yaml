@@ -1,0 +1,118 @@
+Parser:
+  Title: Process Terminate Event ASIM parser for Windows Security Events
+  Version: '0.3'
+  LastUpdated: May 1st 2023
+Product:
+  Name: Security Events 
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Windows process terminate events (event 4689) collected using the Security Events connectors, utilizing either the Log Analytics agent or the Azure Monitor Agent (AMA) and stored in the SecurityEvent table to the ASIM Process Event normalized schema. 
+ParserName: vimProcessTerminateMicrosoftSecurityEvents
+EquivalentBuiltInParser: _Im_ProcessTerminate_MicrosoftSecurityEvents
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: commandline_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_all
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_any_ip_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actingprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: parentprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername
+    Type: string
+    Default: '*'
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: | 
+    let ProcessEvents=(){
+    SecurityEvent
+    // -- Filter
+    | where EventID == 4689
+    // --------------------------------------------------------------------------------------
+    | where
+    (isnull(starttime)   or TimeGenerated >= starttime )
+    and (isnull(endtime) or TimeGenerated <= endtime )
+    and not(disabled)
+    and (array_length(actingprocess_has_any)==0 ) 
+    and (array_length(parentprocess_has_any)==0) 
+    and (array_length(dvcipaddr_has_any_prefix)==0)
+    and (eventtype=='*' or eventtype=='ProcessTerminated')
+    and (array_length(commandline_has_any)==0 or CommandLine has_any (commandline_has_any)) 
+    and (array_length(commandline_has_all)==0 or CommandLine has_all (commandline_has_all)) 
+    and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix) ) 
+    and (array_length(targetprocess_has_any)==0 or ProcessName has_any (targetprocess_has_any)) 
+    and (actorusername=='*' or SubjectAccount has actorusername)  
+    and (array_length(dvcname_has_any)==0 or Computer has_any (dvcname_has_any))   
+    // --------------------------------------------------------------------------------------
+    // -- Map
+    | extend
+      // Event
+        EventCount = int(1),
+        EventVendor = "Microsoft",
+        EventProduct = "Security Events",
+        EventSchemaVersion = "0.1.0",
+        EventSchema = 'ProcessEvent',
+        EventStartTime = todatetime(TimeGenerated),
+        EventEndTime = todatetime(TimeGenerated),
+        EventType = "ProcessTerminated",
+        EventResult = 'Success',
+        EventOriginalType = tostring(EventID),
+        EventOriginalUid = EventOriginId,
+        EventResultDetails = Status,
+        EventOriginalResultDetails = Status, 
+      // Device
+        DvcId = SourceComputerId,
+        DvcHostname = Computer,
+        DvcOs = "Windows",
+      // Users
+        ActorUserIdType = iff (SubjectUserSid <> "S-1-0-0", "SID", ""),
+        ActorUserId = iff (SubjectUserSid <> "S-1-0-0", SubjectUserSid, ""),  
+        ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount),
+        ActorUsernameType = iff(SubjectDomainName == '-','Simple', 'Windows'),
+        ActorSessionId = SubjectLogonId,
+        ActorDomainName = SubjectDomainName,
+      // Processes 
+        TargetProcessId = tostring(toint(ProcessId)),
+        TargetProcessName = ProcessName,
+        TargetProcessCommandLine = CommandLine,
+        TargetProcessTokenElevation = TokenElevationType,
+        Process = ProcessName
+      // Aliases
+      | extend 
+        User = ActorUsername,
+        Dvc = DvcHostname,
+        Process = TargetProcessName
+    }; ProcessEvents

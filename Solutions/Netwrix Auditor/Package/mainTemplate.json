@@ -1,0 +1,240 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Netwrix Auditor"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Netwrix Auditor",
+    "_solutionVersion": "3.0.2",
+    "solutionId": "azuresentinel.azure-sentinel-solution-netwrixauditor",
+    "_solutionId": "[variables('solutionId')]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','NetwrixAuditor')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'NetwrixAuditor')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('NetwrixAuditor-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "NetwrixAuditor-Parser"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "NetwrixAuditor Data Parser with template version 3.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "NetwrixAuditor",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "NetwrixAuditor",
+                "query": "CommonSecurityLog\n| where DeviceVendor == 'Netwrix'\n| extend EventVendor = 'Netwrix'\n| extend EventProduct = 'Netwrix Auditor'\n| extend EventSchemaVersion = 0.2\n| extend EventCount = 1\n| project-rename EventProductVersion=DeviceVersion\n                , EventSubType=DeviceProduct\n                , EventOriginalType=DeviceEventClassID\n                , EventSeverity=LogSeverity\n                , EventMessage=Message\n                , SrcHostname=SourceHostName\n                , EventResult= Activity\n                , Object = FilePath\n                , ActorUsername = SourceUserName\n| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><\" ]+)', dynamic([\"key\",\"value\"]), AdditionalExtensions) on (\n    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))\n    | summarize bag = make_bag(packed1)\n)\n| evaluate bag_unpack(bag)\n| extend EventStartTime = coalesce(column_ifexists(\"StartTime\",datetime(null)),todatetime(start))\n| extend EventOriginalResultDetails = coalesce(column_ifexists(\"DeviceEventCategory\",\"\"),cat)\n| project-away start,\n               cat,\n               AdditionalExtensions\n",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'NetwrixAuditor')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "Netwrix Auditor",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "NetwrixAuditor",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "NetwrixAuditor",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "NetwrixAuditor",
+        "query": "CommonSecurityLog\n| where DeviceVendor == 'Netwrix'\n| extend EventVendor = 'Netwrix'\n| extend EventProduct = 'Netwrix Auditor'\n| extend EventSchemaVersion = 0.2\n| extend EventCount = 1\n| project-rename EventProductVersion=DeviceVersion\n                , EventSubType=DeviceProduct\n                , EventOriginalType=DeviceEventClassID\n                , EventSeverity=LogSeverity\n                , EventMessage=Message\n                , SrcHostname=SourceHostName\n                , EventResult= Activity\n                , Object = FilePath\n                , ActorUsername = SourceUserName\n| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><\" ]+)', dynamic([\"key\",\"value\"]), AdditionalExtensions) on (\n    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))\n    | summarize bag = make_bag(packed1)\n)\n| evaluate bag_unpack(bag)\n| extend EventStartTime = coalesce(column_ifexists(\"StartTime\",datetime(null)),todatetime(start))\n| extend EventOriginalResultDetails = coalesce(column_ifexists(\"DeviceEventCategory\",\"\"),cat)\n| project-away start,\n               cat,\n               AdditionalExtensions\n",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": ""
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'NetwrixAuditor')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "Netwrix Auditor",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Netwrix Auditor",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Netwrix%20Auditor/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Netwrix Auditor solution provides the capability to ingest <a href=\"https://www.netwrix.com/auditor.html\"> Netwrix Auditor</a> (formerly Stealthbits Privileged Activity Manager) events into Microsoft Sentinel. Refer to Netwrix <a href=\"https://helpcenter.netwrix.com/\">documentation</a> for more information.</p>\n<p>This solution is dependent on the Common Event Format solution containing the CEF via AMA connector to collect the logs. The CEF solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE:</strong> Microsoft recommends installation of CEF via AMA Connector. The existing connectors were deprecated on <strong>Aug 31, 2024</strong>.</p>\n<p><strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Netwrix Auditor",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
+            },
+            {
+              "kind": "Solution",
+              "contentId": "azuresentinel.azure-sentinel-solution-commoneventformat"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-06-17",
+        "providers": [
+          "Netwrix"
+        ],
+        "categories": {
+          "domains": [
+            "Compliance"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

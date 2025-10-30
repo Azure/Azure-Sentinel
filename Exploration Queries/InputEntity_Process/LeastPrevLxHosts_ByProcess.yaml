@@ -1,0 +1,34 @@
+Id: def383f2-dff3-4f5b-9416-aca8dca39812
+DisplayName: Least prevalent Linux hosts with this process
+Description: Bottom 10 hosts, IP with this process and syslog message (set time range to +-1h when running the query)
+InputEntityType: Process
+InputFields:
+  - CommandLine
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 1h
+QueryPeriodAfter: 1h
+DataSources:
+  - Syslog
+Tactics:
+  - Execution
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetSysLogEventsWithProcess = (v_Process_CommandLine:string){
+  let tempFullPath = tostring(split(v_Process_CommandLine, ' ')[0]);
+  let tempFullPath2 = iff(tempFullPath startswith '"', substring(tempFullPath, 1, strlen(tempFullPath)-2), tempFullPath);
+  let v_Process_ImageFile_FullPath = iff(tempFullPath2 startswith '\\??\\', substring(tempFullPath2, 4, strlen(tempFullPath2)-1), tempFullPath2);
+  Syslog
+  | where ProcessName has v_Process_ImageFile_FullPath
+  | extend info = pack('HostName', HostName, 'HostIP', HostIP, 'ProcessName', ProcessName, 'SyslogMessage', SyslogMessage)
+  | summarize min(EventTime), max(EventTime), count(), Host_Aux_info = makeset(info) by Computer
+  | top 10 by count_ asc nulls last 
+  | project Host_Aux_StartTime=min_EventTime, Host_Aux_EndTime=max_EventTime, Computer, Host_Aux_info
+  | project-rename Host_UnstructuredName=Computer
+  };
+  // change <CommandLine> value below
+  GetSysLogEventsWithProcess('<CommandLine>')

@@ -1,0 +1,142 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logAnalyticsWorkspaceName": {
+            "defaultValue": "<Enter Log Analytics Workspace name>",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        },
+        "connectorResourceName": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Resource name for connector"
+            }
+        }
+    },
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/', parameters('connectorResourceName'))]",
+            "apiVersion": "2021-03-01-preview",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "ProofpointTAPNativePoller",
+                    "title": "Proofpoint TAP",
+                    "publisher": "Proofpoint",
+                    "descriptionMarkdown": "The Proofpoint TAP data connector provides the capability to ingest [Proofpoint TAP events](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API) into Microsoft Sentinel.",
+                    "graphQueriesTableName": "ProofpointTAPNativePoller_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Proofpoint TAP events",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All Proofpoint TAP events",
+                            "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": []
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            },
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                "providerDisplayName": "Keys",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "action": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Proofpoint TAP API credentials",
+                                "description": "Proofpoint TAP API username and password are required. [See the documentation to learn more about Proofpoint SIEM API](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API)."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Proofpoint TAP to Microsoft Sentinel",
+                            "description": "Enable Proofpoint TAP Logs.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true"
+                                    },
+                                    "type": "BasicAuth"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "Basic"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://tap-api-v2.proofpoint.com/v2/siem/all",
+                        "httpMethod": "Get",
+                        "queryTimeIntervalAttributeName": "interval",
+                        "queryTimeIntervalDelimiter": "/",
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                        "queryWindowInMin": 5,
+                        "queryParameters": {
+                            "format": "json"
+                        }
+                    },
+                    "paging": {
+                        "pagingType": "None"
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$..messagesDelivered",
+                            "$..messagesBlocked",
+                            "$..clicksPermitted",
+                            "$..clicksBlocked"
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

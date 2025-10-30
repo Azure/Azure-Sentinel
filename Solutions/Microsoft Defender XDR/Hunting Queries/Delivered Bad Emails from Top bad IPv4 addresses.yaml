@@ -1,0 +1,42 @@
+id: cdac93ef-56c0-45bf-9e7f-9cbf0ad06567
+name: Determine Successfully Delivered Phishing Emails by top IP Addresses
+description: |
+  This query identifies phishing emails sent that were successfully delivered, by top IP addressess. cutoff default value is 5, adjust the value as needed. 
+requiredDataConnectors:
+- connectorId: OfficeATP
+  dataTypes:
+  - EmailEvents
+tactics:
+- InitialAccess
+relevantTechniques:
+- T1566
+query: |
+  // Adjust the cutoff as needed 
+  let cutoff = 5;
+  EmailEvents
+  | where ThreatTypes has "Malware" or ThreatTypes has "Phish" 
+  | summarize count() by SenderIPv4 
+  | where count_ > cutoff
+  | join kind=inner EmailEvents on SenderIPv4  
+  | where DeliveryAction =~ "Delivered"
+  | extend Name = tostring(split(SenderFromAddress, '@', 0)[0]), UPNSuffix = tostring(split(SenderFromAddress, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = SenderIPv4
+  | extend MailBox_0_MailboxPrimaryAddress = RecipientEmailAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SenderIPv4
+  - entityType: MailBox
+    fieldMappings:
+      - identifier: MailboxPrimaryAddress
+        columnName: RecipientEmailAddress
+version: 1.0.1

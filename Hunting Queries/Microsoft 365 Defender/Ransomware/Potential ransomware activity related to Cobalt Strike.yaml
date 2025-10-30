@@ -1,0 +1,40 @@
+id: 95db9b9c-7a12-4c0b-85c8-1c54f67c5ac7
+name: Potential ransomware activity related to Cobalt Strike
+description: |
+  Use this query to look for alerts related to suspected ransomware and Cobalt Strike activity, a tool used in numerous ransomware campaigns
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - AlertInfo
+  - AlertEvidence
+  - DeviceLogonEvents
+tactics:
+- Ransomware
+query: |
+  // Look for sc.exe disabling services
+  AlertInfo 
+  // Attempts to clear security event logs. 
+  | where Title in("Event log was cleared", 
+  // List alerts flagging attempts to delete backup files. 
+  "File backups were deleted", 
+  // Potential Cobalt Strike activity - Note that other threat activity can also 
+  // trigger alerts for suspicious decoded content 
+  "Suspicious decoded content", 
+  // Cobalt Strike activity 
+  "\'Atosev\' malware was detected", 
+  "\'Ploty\' malware was detected", 
+  "\'Bynoco\' malware was detected",
+  "\'Cobaltstrike\' malware was detected",
+  "Echo command over pipe on localhost",
+  "Known attack framework activity was observed",
+  "An active \'Cobaltstrike\' malware was detected",
+  "Suspicious \'CobaltStrike\' behavior was prevented",
+  "Suspicious process launch by Rundll32.exe") 
+  | extend AlertTime = Timestamp | distinct AlertTime, AlertId, Title 
+  | join AlertEvidence on $left.AlertId == $right.AlertId
+  | summarize by DeviceId, AlertTime, Title, AlertId
+  // Get device IDs
+  | join DeviceLogonEvents on $left.DeviceId == $right.DeviceId 
+  // Creating 10 day Window surrounding alert activity 
+  | where Timestamp < AlertTime +5d and Timestamp > AlertTime - 5d // Projecting specific columns 
+  | project Title, DeviceName, DeviceId, Timestamp, LogonType, AccountDomain, AccountName, AccountSid, AlertTime, AlertId, RemoteIP, RemoteDeviceName

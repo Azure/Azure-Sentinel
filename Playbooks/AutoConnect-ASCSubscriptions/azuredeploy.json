@@ -1,0 +1,534 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This playbook goes over all the subscriptions the app has access to, and creates an ASC data connector to Azure Sentinel if not exists",
+        "author": "Lior Tamir",
+        "modifiedby": "Nathan Swift"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AutoConnect-ASCSubscriptions",
+            "type": "string"
+        },
+        "SendSummaryMailTo": {
+            "defaultValue": "<name@microsoft.com>",
+            "type": "string"
+        },
+        "AzureSentinelWorkspaceName": {
+            "defaultValue": "<enter the name of the Azure Sentinel Workspace>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "ARMConnectionName": "[concat('arm_connection-', parameters('PlaybookName'))]",
+        "LogAnalyticsConnectionName": "[concat('LA_connection-', parameters('PlaybookName'))]",
+        "office365ConnectionName": "[concat('Office365_connection-', parameters('PlaybookName'))]",
+        "__encodeURIComponent___workspaces_externalid": "/subscriptions/@{encodeURIComponent(variables('sentinel-sub'))}/resourceGroups/@{encodeURIComponent(variables('sentinel-RGname'))}/providers/@{encodeURIComponent('Microsoft.OperationalInsights')}/@{encodeURIComponent('/workspaces"
+    },
+    "resources": [
+        {
+	        "type": "Microsoft.Web/connections",
+	        "apiVersion": "2016-06-01",
+	        "name": "[variables('ARMConnectionName')]",
+	        "location": "[resourceGroup().location]",
+            "kind": "V1",
+	        "properties": {
+		        "displayName": "MSIConnection",
+                "parameterValueType": "Alternative",
+		        "customParameterValues": {},
+		        "api": {
+			        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/arm')]"
+		        }
+	        }
+        }, 
+        {
+	        "type": "Microsoft.Web/connections",
+	        "apiVersion": "2016-06-01",
+	        "name": "[variables('LogAnalyticsConnectionName')]",
+	        "location": "[resourceGroup().location]",
+	        "properties": {
+		        "displayName": "ASCAutoConnectLog",
+		        "customParameterValues": {},
+		        "api": {
+			        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+		        }
+	        }
+        }, 
+        {
+	        "type": "Microsoft.Web/connections",
+	        "apiVersion": "2016-06-01",
+	        "name": "[variables('office365ConnectionName')]",
+	        "location": "[resourceGroup().location]",
+	        "properties": {
+		        "displayName": "office365_connection",
+		        "customParameterValues": {},
+		        "api": {
+			        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+		        }
+	        }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('ARMConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('LogAnalyticsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "SendSummaryMailToPB": {
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "type": "Recurrence",
+                            "inputs": {}
+                        }
+                    },
+                    "actions": {
+                        "ASCDataConnectors": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Parse_JSON')?['value']",
+                                "where": "@equals(item()?['kind'], 'AzureSecurityCenter')"
+                            }
+                        },
+                        "ASCDataConnectorsSubIDs": {
+                            "runAfter": {
+                                "ASCDataConnectors": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@body('ASCDataConnectors')",
+                                "select": {
+                                    "SubscriptionID": "@item()?['properties']?['subscriptionId']"
+                                }
+                            }
+                        },
+                        "Condition-_Send_a_summary_email": {
+                            "actions": {
+                                "Join": {
+                                    "runAfter": {},
+                                    "type": "Join",
+                                    "inputs": {
+                                        "from": "@variables('Connected Subscriptions')",
+                                        "joinWith": "<br>"
+                                    }
+                                },
+                                "Send_an_email_(V2)": {
+                                    "runAfter": {
+                                        "Join": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "Body": "<p>This is an automatic email generated by ASC Auto Connect playbook.<br>\nWorkflow run id: &nbsp;@{workflow()['run']['name']}<br>\nRun time: &nbsp;@{variables('RunTime')}<br>\n<br>\nA connection rule has been created to the following subscriptions:<br>\n@{body('Join')}</p>",
+                                            "Subject": "ASC Auto Connect Run Summary",
+                                            "To": "@parameters('SendSummaryMailToPB')"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/v2/Mail"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greaterOrEquals": [
+                                            "@length(variables('Connected Subscriptions'))",
+                                            1
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Connected_Subscriptions": {
+                            "runAfter": {
+                                "SubscriptionsNotConnectedToASC": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Connected Subscriptions",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('SubscriptionsNotConnectedToASC')",
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {
+                                        "PUT_SyncSettings": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "Connected Subscriptions",
+                                        "value": "@items('For_each')?['SubscriptionId']"
+                                    }
+                                },
+                                "Create_or_update_a_resource": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "kind": "AzureSecurityCenter",
+                                            "plan": {
+                                                "name": "null"
+                                            },
+                                            "properties": {
+                                                "dataTypes": {
+                                                    "alerts": {
+                                                        "state": "enabled"
+                                                    }
+                                                },
+                                                "subscriptionId": "@{items('For_each')?['SubscriptionID']}"
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['arm']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/subscriptions/@{encodeURIComponent(variables('sentinel-sub'))}/resourcegroups/@{encodeURIComponent(variables('sentinel-RGname'))}/providers/@{encodeURIComponent('Microsoft.OperationalInsights')}/@{encodeURIComponent('/workspaces/',variables('sentinel-WorkspaceName'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid())}",
+                                        "queries": {
+                                            "x-ms-api-version": "2019-01-01-preview"
+                                        }
+                                    }
+                                },
+                                "PUT_SyncSettings": {
+                                    "runAfter": {
+                                        "Create_or_update_a_resource": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://management.azure.com",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": {
+                                            "kind": "AlertSyncSettings",
+                                            "properties": {
+                                                "enabled": true
+                                            }
+                                        },
+                                        "method": "PUT",
+                                        "uri": "https://management.azure.com/subscriptions/@{items('For_each')?['SubscriptionID']}/providers/Microsoft.Security/settings/Sentinel?api-version=2021-06-01"
+                                    }
+                                },
+                                "Send_Data": {
+                                    "runAfter": {
+                                        "Append_to_array_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "[[\n    {\n        \"WorkflowRunId\":\" @{workflow()['run']['name']}\",\n        \"SubscriptionId\": \"@{items('For_each')?['SubscriptionID']}\",\n        \"RuleCreationTime\":\" @{variables('RunTime')}\"\n    }\n]",
+                                        "headers": {
+                                            "Log-Type": "AutoConnectASC"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Connected_Subscriptions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "GetAll_DataConnectors": {
+                            "runAfter": {
+                                "SubscriptionsIDList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['arm']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/subscriptions/@{encodeURIComponent(variables('sentinel-sub'))}/resourcegroups/@{encodeURIComponent(variables('sentinel-RGname'))}/providers/@{encodeURIComponent('Microsoft.OperationalInsights')}/@{encodeURIComponent('/workspaces/',variables('sentinel-WorkspaceName'),'/providers/Microsoft.SecurityInsights/dataConnectors')}",
+                                "queries": {
+                                    "x-ms-api-version": "2019-01-01-preview"
+                                }
+                            }
+                        },
+                        "Initialize_Variable_-_Resource_Provider": {
+                            "runAfter": {
+                                "Initialize_Variable_-_Sentinel_Workspace_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sentinel-RGname",
+                                        "type": "String",
+                                        "value": "[resourceGroup().name]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Variable_-_Run_Time": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RunTime",
+                                        "type": "string",
+                                        "value": "@{utcNow()}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Variable_-_Sentinel_Subscription_ID": {
+                            "runAfter": {
+                                "Initialize_Variable_-_Run_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sentinel-sub",
+                                        "type": "String",
+                                        "value": "[subscription().subscriptionId]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Variable_-_Sentinel_Workspace_Name": {
+                            "runAfter": {
+                                "Initialize_Variable_-_Sentinel_Subscription_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sentinel-WorkspaceName",
+                                        "type": "String",
+                                        "value": "[parameters('AzureSentinelWorkspaceName')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "List_subscriptions": {
+                            "runAfter": {
+                                "Initialize_Variable_-_Resource_Provider": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['arm']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/subscriptions",
+                                "queries": {
+                                    "x-ms-api-version": "2016-06-01"
+                                }
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "GetAll_DataConnectors": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('GetAll_DataConnectors')",
+                                "schema": {
+                                    "properties": {
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "etag": {
+                                                        "type": "string"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "kind": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "properties": {
+                                                        "properties": {
+                                                            "dataTypes": {
+                                                                "properties": {
+                                                                    "alerts": {
+                                                                        "properties": {
+                                                                            "state": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "subscriptionId": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "name",
+                                                    "etag",
+                                                    "type",
+                                                    "kind",
+                                                    "properties"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "SubscriptionsIDList": {
+                            "runAfter": {
+                                "List_subscriptions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@body('List_subscriptions')?['value']",
+                                "select": {
+                                    "SubscriptionID": "@item()?['subscriptionId']"
+                                }
+                            }
+                        },
+                        "SubscriptionsNotConnectedToASC": {
+                            "runAfter": {
+                                "ASCDataConnectorsSubIDs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('SubscriptionsIDList')",
+                                "where": "@not(contains(body('ASCDataConnectorsSubIDs'), item()))"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "arm": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('ARMConnectionName'))]",
+                                "connectionName": "[variables('ARMConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/arm')]"
+                            },
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('LogAnalyticsConnectionName'))]",
+                                "connectionName": "[variables('LogAnalyticsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]",
+                                "connectionName": "[variables('office365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    },
+                    "SendSummaryMailToPB": {
+                        "value": "[parameters('SendSummaryMailTo')]"
+                    }
+                }
+            }
+        }
+    ]
+}

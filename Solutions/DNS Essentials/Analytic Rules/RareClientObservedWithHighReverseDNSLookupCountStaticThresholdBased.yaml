@@ -1,0 +1,58 @@
+id: 77b7c820-5f60-4779-8bdb-f06e21add5f1
+name: Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)
+description: |
+  'This rule identifies clients with high reverse DNS counts, which could be carrying out reconnaissance or discovery activity. This helps in detecting the possible initial phases of an attack, like discovery and reconnaissance. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 10d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1590
+query: |
+  let threshold = 10;
+  let stime = 10d;
+  let etime = 1d;
+  let SearchDomain = dynamic(["in-addr.arpa"]);
+  _Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)
+  | summarize
+    StartTimeUtc = min(TimeGenerated),
+    EndTimeUtc = max(TimeGenerated),
+    DNSQueryCount=dcount(DnsQuery)
+    by SrcIpAddr
+  | where DNSQueryCount > threshold
+  | project StartTimeUtc, EndTimeUtc, SrcIpAddr, DNSQueryCount 
+  | join kind=leftanti (_Im_Dns(starttime=ago(stime), endtime=ago(etime), domain_has_any=SearchDomain)
+    | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated, 1d)
+    | where DNSQueryCount > threshold
+    | project SrcIpAddr, DNSQueryCount
+    )
+    on SrcIpAddr
+  | join kind=inner (_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)
+    | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)
+    on SrcIpAddr
+  | extend DNSQuerythreshold = threshold
+  | project-away SrcIpAddr1
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  DNSQueries: DNSQueries
+  DNSQuerythreshold: DNSQuerythreshold
+  DNSQueryCount: DNSQueryCount
+alertDetailsOverride:
+  alertDisplayNameFormat: "[Static threshold] Rare client has been observed as making high reverse DNS lookup count  - client IP: '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "Client identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nReverse DNS lookup threshold is: '{{DNSQuerythreshold}}'\n\nCurrent reverse DNS lookup count from this client is : '{{DNSQueryCount}}'\n\nDNS queries requested by this client inlcude: '{{DNSQueries}}'"
+version: 1.0.2
+kind: Scheduled

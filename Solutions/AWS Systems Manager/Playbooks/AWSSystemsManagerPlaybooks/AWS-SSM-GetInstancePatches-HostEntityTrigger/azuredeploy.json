@@ -1,0 +1,623 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AWS Systems Manager - Get Missing Patches for EC2 Instances for given Hostname",
+        "description": "The playbook can be triggered manually from a Host Entity to get the missing patches on a managed EC2 instance. This playbook performs the following actions:\n 1. Get the Hostname from the Host Entity.\n 2. Get the Instance ID from AWS EC2 for given Hostname.\n 3. Get the missing patches for the Instance ID.\n 4. Add the missing patches to the incident comment.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, AWS Systems Manager Functions App Custom Connector needs to be deployed under the same subscription.",
+            "2. Refer to [AWS Systems Manager Functions App Custom Connector](../../CustomConnector/AWS_SSM_FunctionAppConnector/readme.md) documentation for deployment instructions."
+        ],
+        "postDeployment": [
+            "1. Authorize each connection.",
+            "2. Assign Microsoft Sentinel Responder Role to Playbook.",
+            "3. Update Function App Settings with AWS Credentials.",
+            "4. Check readme.md for detailed instructions."
+
+        ],
+        "prerequisitesDeployTemplateFile": "../../CustomConnector/AWS_SSM_FunctionAppConnector/azuredeploy.json",
+        "lastUpdateTime": "2023-05-30T12:00:00.000Z",
+        "entities": [
+            "Host"
+        ],
+        "tags": [
+            "AWS",
+            "Systems Manager"
+        ],
+        "support": {
+            "tier": "Microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AWS-SSM-GetInstancePatches-HostEntityTrigger",
+            "type": "string"
+        },
+        "FunctionsAppName": {
+            "defaultValue": "awsssm",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "FunctionsAppName": "[concat(parameters('FunctionsAppName'), uniqueString(resourceGroup().id))]",
+        "AWSSSMFuntionsAppId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('FunctionsAppName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_entity": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/entity/@{encodeURIComponent('Host')}"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Append_to_IncidentComment_on_error": {
+                            "runAfter": {
+                                "GetInventory": [
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "IncidentComment",
+                                "value": "Issue with Playbook exeution. Check the playbook for detailed error info. "
+                            }
+                        },
+                        "Condition_to_check_if_IncidentARMId_exist": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                            "message": "\u003cp\u003e@{variables('IncidentComment')}\u003c/p\u003e"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Append_to_IncidentComment_on_error": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "Condition_to_check_if_any_instanceid": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['IncidentArmID']",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_to_check_if_any_instanceid": {
+                            "actions": {
+                                "For_each_InstanceId": {
+                                    "foreach": "@variables('InstanceIdList')",
+                                    "actions": {
+                                        "Append_to_IncidentComment_on_success": {
+                                            "runAfter": {
+                                                "Create_HTML_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "IncidentComment",
+                                                "value": "AWS EC2 instance \u003cstrong\u003e@{items('For_each_InstanceId')}\u003c/strong\u003e with Hostname \u003cstrong\u003e@{triggerBody()?['Entity']?['properties']?['HostName']}\u003c/strong\u003e has these missing patches.\n@{body('Create_HTML_table')}\n(Blank output signifies, no missing patches.)"
+                                            }
+                                        },
+                                        "Create_HTML_table": {
+                                            "runAfter": {
+                                                "Filter_Missing_Patches": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@body('Filter_Missing_Patches')"
+                                            }
+                                        },
+                                        "DescribeInstancePatches": {
+                                            "runAfter": {
+                                            },
+                                            "type": "Function",
+                                            "inputs": {
+                                                "body": {
+                                                    "InstanceId": "@items('For_each_InstanceId')"
+                                                },
+                                                "function": {
+                                                    "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/DescribeInstancePatches')]"
+                                                }
+                                            }
+                                        },
+                                        "Filter_Missing_Patches": {
+                                            "runAfter": {
+                                                "Parse_JSON_-_DescribeInstancePatches": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('Parse_JSON_-_DescribeInstancePatches')?['Patches']",
+                                                "where": "@equals(item()?['State'], 'Missing')"
+                                            }
+                                        },
+                                        "Parse_JSON_-_DescribeInstancePatches": {
+                                            "runAfter": {
+                                                "DescribeInstancePatches": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('DescribeInstancePatches')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "Patches": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "CVEIds": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Classification": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "InstalledTime": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "KBId": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Severity": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "State": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Title": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_AWS_EC2_Hostname": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Append_to_IncidentComment": {
+                                        "runAfter": {
+                                        },
+                                        "type": "AppendToStringVariable",
+                                        "inputs": {
+                                            "name": "IncidentComment",
+                                            "value": "For Hostname \u003cstrong\u003e@{triggerBody()?['Entity']?['properties']?['HostName']}\u003c/strong\u003e no matching EC2 instance found in AWS Systems Manager.\n"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('InstanceIdList'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_each_AWS_EC2_Hostname": {
+                            "foreach": "@variables('HostnameList')",
+                            "actions": {
+                                "Condition_if_incident_Hostname_matches_AWS_EC2_hostname": {
+                                    "actions": {
+                                        "Append_to_array_-_InstanceIdList": {
+                                            "runAfter": {
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "InstanceIdList",
+                                                "value": "@string(items('For_each_AWS_EC2_Hostname')?['InstanceId'])"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@triggerBody()?['Entity']?['properties']?['HostName']",
+                                                    "@{items('For_each_AWS_EC2_Hostname')?['Hostname']}"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_AWS_Instance_get_hostname_and_private_ip": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_AWS_Instance_get_hostname_and_private_ip": {
+                            "foreach": "@body('Parse_JSON_-_GetInventory')?['Entities']",
+                            "actions": {
+                                "For_each_Instance_Entity": {
+                                    "foreach": "@items('For_each_AWS_Instance_get_hostname_and_private_ip')['Data']['AWS:InstanceInformation']['Content']",
+                                    "actions": {
+                                        "Condition_to_skip_Terminated_Instances": {
+                                            "actions": {
+                                                "Append_to_array_HostnameList": {
+                                                    "runAfter": {
+                                                        "Compose_InstanceId_Hostname_Pair": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "HostnameList",
+                                                        "value": "@outputs('Compose_InstanceId_Hostname_Pair')"
+                                                    }
+                                                },
+                                                "Compose_InstanceId_Hostname_Pair": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Hostname": "@items('For_each_Instance_Entity')?['ComputerName']",
+                                                        "InstanceId": "@items('For_each_Instance_Entity')?['InstanceId']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each_Instance_Entity')?['InstanceStatus']",
+                                                                "Terminated"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_GetInventory": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "GetInventory": {
+                            "runAfter": {
+                                "Initialize_variable_-_IncidentComment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "function": {
+                                    "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/GetInventory')]"
+                                }
+                            }
+                        },
+                        "Initialize_Array_-_HostnameList": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "HostnameList",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Array_-_InstanceIdList": {
+                            "runAfter": {
+                                "Initialize_Array_-_PrivateIPList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "InstanceIdList",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Array_-_PrivateIPList": {
+                            "runAfter": {
+                                "Initialize_Array_-_HostnameList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "PrivateIPList",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_IncidentComment": {
+                            "runAfter": {
+                                "Initialize_Array_-_InstanceIdList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IncidentComment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_GetInventory": {
+                            "runAfter": {
+                                "GetInventory": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('GetInventory')",
+                                "schema": {
+                                    "properties": {
+                                        "Entities": {
+                                            "items": {
+                                                "properties": {
+                                                    "Data": {
+                                                        "properties": {
+                                                            "AWS:InstanceInformation": {
+                                                                "properties": {
+                                                                    "CaptureTime": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Content": {
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "AgentType": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "AgentVersion": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "ComputerName": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "InstanceId": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "InstanceStatus": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "IpAddress": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "PlatformName": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "PlatformType": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "PlatformVersion": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "ResourceType": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "SchemaVersion": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "TypeName": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "Id": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "ResponseMetadata": {
+                                            "properties": {
+                                                "HTTPHeaders": {
+                                                    "properties": {
+                                                        "connection": {
+                                                            "type": "string"
+                                                        },
+                                                        "content-length": {
+                                                            "type": "string"
+                                                        },
+                                                        "content-type": {
+                                                            "type": "string"
+                                                        },
+                                                        "date": {
+                                                            "type": "string"
+                                                        },
+                                                        "server": {
+                                                            "type": "string"
+                                                        },
+                                                        "x-amzn-requestid": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "HTTPStatusCode": {
+                                                    "type": "integer"
+                                                },
+                                                "RequestId": {
+                                                    "type": "string"
+                                                },
+                                                "RetryAttempts": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "AWS-SSM-GetInstancePatches-HostEntityTrigger",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,67 @@
+// NetScaler (Non-AppFw Logs)
+// Last Updated Date: June 8, 2020
+//
+// This parser parses Syslog events for Citrix event logs except for AppFw log which are parsed via the CEF parser (or CommonSecurityLogs table.)
+// https://developer-docs.citrix.com/projects/netscaler-syslog-message-reference/en/12.0/
+//
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias.
+// Functions usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. NetScaler_CL | take 10).
+//
+// Note: This parser will take an up to 30 seconds to return results
+
+Syslog
+| where SyslogMessage contains "Citrix"
+| where SyslogMessage !contains "Palo Alto Networks"
+| where SyslogMessage contains "Citrix|NetScaler"
+| where SyslogMessage contains "-PPE-"
+| extend SyslogMessage = replace(@" user (.*?) ", @" User \1 ", SyslogMessage)
+| extend SyslogMessage = replace(@" clientip (\d+[.]\d+[.]\d+[.]\d+) ", @" Remote_ip \1 ", SyslogMessage)
+| extend SyslogMessage = replace(@'Browser (.*)', @'Browser_type "\1"', SyslogMessage)
+| extend HostName = extract(@":\d+\sGMT\s(.*?)\s0", 1, SyslogMessage),
+    CitrixPacketEngine = extract(@"\-PPE\-(.*?)\s\:", 1, SyslogMessage),
+    CitrixMessage = extract(@"\-PPE\-\d\s\:\s(.*?)$", 1, SyslogMessage)
+| extend CitrixFeature = extract(@"\w+\s(.*?)\s", 1, CitrixMessage),
+    CitrixSubFeature = extract(@"default\s\w+\s(.*?)\s", 1, CitrixMessage),
+    CitrixEventMessage = extract(@"\s\d+\s\d\s\:\s(.*?)$", 1,CitrixMessage) 
+| extend SPCBId = extract(@"SPCBId\s(.*?)\s\-", 1, CitrixEventMessage),
+    SubjectName = extract(@'SubjectName\s\"\s(.*?)\"', 1, CitrixEventMessage),
+    CitrixSessionId = extract(@"SessionId\:\s(.*?)\s\-\s", 1, CitrixEventMessage),
+    CitrixUser = extract(@"User\s(.*?)\s", 1, CitrixEventMessage),
+    CitrixGroups = extract(@"Group\(s\)\s(.*?)\s\:\s", 1, CitrixEventMessage),
+    CitrixVserver_IP = extract(@"Vserver\s(.*?)\:\d+\s", 1, CitrixEventMessage),
+    Citrix_SrcIp = extract(@"Remote_ip\s(\d+[.]\d+[.]\d+[.]\d+)\s", 1, CitrixEventMessage),
+    Citrix_DestIp = extract(@"Destination\s(\d+[.]\d+[.]\d+[.]\d+)\s", 1, CitrixEventMessage),
+    Citrix_TotalBytesSend  = extract(@"Total_bytes_send\s(\d+)\s\-", 1, CitrixEventMessage),
+    Citrix_TotalBytesRecv = extract(@"Total_bytes_recv\s(\d+)\s\-", 1, CitrixEventMessage),
+    Citrix_AccessAction = extract(@"Access\s(.*?)\s\-", 1, CitrixEventMessage),
+    CitrixCMD_Command = extract(@'Command\s\"(.*?)\"', 1, CitrixEventMessage),
+    CitrixCMD_Status = extract(@'Status\s\"(.*?)\"', 1, CitrixEventMessage),
+    CitrixVserver_Port = extract(@"Vserver\s{\d+[.]\d+[.]\d+[.]\d+}\:(.*?)\s\-\s", 1, CitrixEventMessage),
+    CitrixResource_URL = extract(@"\s\:\sGET\s(.*?)$", 1, CitrixEventMessage),
+    CitrixExtracted_GroupRAW = extract(@'Extracted\_groups\s\"(.*?)\"', 1, CitrixEventMessage),
+    CitrixContextRAW = extract(@"Context\s(.*?)\s", 1, CitrixEventMessage),
+    CitrixRequest_URL = extract(@"\srequest\:\s(.*?)\s", 1, CitrixEventMessage),
+    CitrixSession_StartTime = extract(@'Start_time\s\"(.*?)\"', 1, CitrixEventMessage),
+    Citrix_EndTime = extract(@'End_time\s\"(.*?)\"', 1, CitrixEventMessage),
+    CitrixSession_UserAgent = extract(@'Browser_type\s\"(.*?)\"', 1, CitrixEventMessage),
+    CitrixSession_ClientType = extract(@"SSLVPN_client_type\s(.*?)\s\-", 1, CitrixEventMessage),
+    CitrixSession_FailedReason = extract(@'Failure_reason\s\"(.*?)\"', 1, CitrixEventMessage),
+    CitrixApp_ModulePath = extract(@"module_path\s(.*?)$", 1, CitrixEventMessage),
+    CitrixApp_Name = extract(@"app_name\s(.*?)\s\-", 1, CitrixEventMessage),
+    CitrixApp_ProcId = extract(@"app_process_id\s(\d+)\s\-", 1, CitrixEventMessage),
+    CitrixApp_LaunchTime = extract(@"app_Launch_time\s(.*?)\s\-", 1, CitrixEventMessage),
+    CitrixApp_Guid = extract(@"session_guid\s(.*?)\s\-", 1, CitrixEventMessage),
+    CitrixApp_DeviceSN = extract(@"device_serial_number\s(\d+)\s\-", 1, CitrixEventMessage),
+    CitrixSrvMon_IP = extract(@"MonServiceBinding_(.*?)\:", 1, CitrixEventMessage),
+    CitrixDvcMon_IP = extract(@"server_serviceGroup_NSSVC_HTTP_(.*?)\:", 1, CitrixEventMessage),
+    CitrixICA_SrcIP = extract(@"Source\s(.*?)\:", 1, CitrixEventMessage),
+    CitrixICA_SrcPort = extract(@"Source\s{\d+[.]\d+[.]\d+[.]\d+}\:(.*?)\s", 1, CitrixEventMessage),
+    CitrixICA_DestIP = extract(@"Destination\s(.*?)\:", 1, CitrixEventMessage),
+    CitrixICA_DestPort = extract(@"Destination\s{\d+[.]\d+[.]\d+[.]\d+}\:(.*?)\s", 1, CitrixEventMessage),
+    CitrixICA_Username = extract(@"username\:domainname\s(.*?)\;\s", 1, CitrixEventMessage),
+    CitrixICA_AppName = extract(@"applicationName\s(.*?)\s\-", 1, CitrixEventMessage),
+    CitrixICA_StartTime = extract(@'startTime\s\"(.*?)\"', 1, CitrixEventMessage),
+    CitrixICA_ConnectionId = extract(@"connectionId\s(.*?)$", 1, CitrixEventMessage)
+| extend CitrixSrc_IP = extract(@"(\d+[.]\d+[.]\d+[.]\d+)", 1, CitrixContextRAW)
+| extend CitrixExtracted_Groups = split(CitrixExtracted_GroupRAW, ",")

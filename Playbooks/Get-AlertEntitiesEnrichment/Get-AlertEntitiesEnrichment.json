@@ -1,0 +1,591 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "defaultValue": "GetAlertEntitiesEnrichment",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the logic app."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "String",
+            "metadata": {
+                "description": "Location of the logic app."
+            }
+        },
+        "azuresentinel_Connection_Name": {
+            "defaultValue": "azuresentinel",
+            "type": "String",
+            "metadata": {
+                "description": "Azure Sentinel connection"
+            }
+        },
+        "UserEnrichmentLogicApp": {
+            "defaultValue": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/UserEnrichment')]",
+            "type": "string",
+            "metadata": {
+                "description": "User enrichment Logic App path, like subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.Logic/workflows/{workflowName}"
+            }
+        },
+        "logAnalytics_connectionName": {
+            "type": "String",
+            "defaultValue": "azureloganalyticsdatacollector",
+            "metadata": {
+                "description": "Log analytics API connection name"
+            }
+        },
+        "logAnalytics_id": {
+            "type": "String",
+            "defaultValue": "[concat('subscriptions/', subscription().subscriptionId,  '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', parameters('logAnalytics_connectionName'))]",
+            "metadata": {
+                "description": "Log analytics id property"
+            }
+        },
+        "logAnalytics_connectionId": {
+            "type": "String",
+            "defaultValue": "[concat('subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', parameters('logAnalytics_connectionName'))]",
+            "metadata": {
+                "description": "Log analytics connection id property"
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('azuresentinel_Connection_Name')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/', 'azuresentinel')]"
+                },
+                "displayName": "[parameters('azuresentinel_Connection_Name')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "location": "[resourceGroup().location]",
+            "name": "[parameters('logAnalytics_connectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[parameters('logAnalytics_id')]"
+                },
+                "displayName": "[parameters('logAnalytics_connectionName')]",
+                "parameterValues": {
+
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[parameters('azuresentinel_Connection_Name')]",
+                "[parameters('logAnalytics_connectionName')]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "UserEnrichmentLogicApp": {
+                            "defaultValue": "[parameters('UserEnrichmentLogicApp')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    },
+                    "actions": {
+                        "Initialize_comments": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "comments",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Users_enrichment": {
+                            "actions": {
+                                "Get_accounts": {
+                                    "inputs": {
+                                        "body": "@triggerBody()?['Entities']",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/entities/account"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                },
+                                "For_each_user": {
+                                    "actions": {
+                                        "Compose_username": {
+                                            "description": "If AAD object ID is missing, building UPN",
+                                            "inputs": "@if(empty(items('For_each_user')?['AadUserId']), concat(items('For_each_user')?['Name'], '@', items('For_each_user')?['UPNSuffix']), items('For_each_user')?['AadUserId'])",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Call_UserEnrichment_LogicApp": {
+                                            "description": "Calls the logic app in charge or enriching user details with AAD information",
+                                            "inputs": {
+                                                "body": {
+                                                    "userPrincipalName": "@{outputs('Compose_username')}"
+                                                },
+                                                "host": {
+                                                    "triggerName": "manual",
+                                                    "workflow": {
+                                                        "id": "[parameters('UserEnrichmentLogicApp')]"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Compose_username": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Workflow"
+                                        },
+                                        "MDATP_devices_table": {
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@body('Call_UserEnrichment_LogicApp')?['devices']?['mdatpDevices']"
+                                            },
+                                            "runAfter": {
+                                                "Inbox_rules_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table"
+                                        },
+                                        "AAD_Devices_table": {
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@body('Call_UserEnrichment_LogicApp')?['devices']?['aadDevices']"
+                                            },
+                                            "runAfter": {
+                                                "MDATP_devices_table": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Table"
+                                        },
+                                        "Threatscore_History_table": {
+                                            "inputs": {
+                                                "columns": [
+                                                    {
+                                                        "header": "Date",
+                                                        "value": "@item()?['date']"
+                                                    },
+                                                    {
+                                                        "header": "Score",
+                                                        "value": "@item()?['score']"
+                                                    },
+                                                    {
+                                                        "header": "ScoreHigherThanXPercent",
+                                                        "value": "@item()?['percentile']"
+                                                    }
+                                                ],
+                                                "format": "HTML",
+                                                "from": "@body('Call_UserEnrichment_LogicApp')?['threatScoreHistory']?['body']"
+                                            },
+                                            "runAfter": {
+                                                "Call_UserEnrichment_LogicApp": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table"
+                                        },
+                                        "Admin_roles_table": {
+                                            "inputs": {
+                                                "columns": [
+                                                    {
+                                                        "header": "Name",
+                                                        "value": "@item()?['displayName']"
+                                                    },
+                                                    {
+                                                        "header": "Description",
+                                                        "value": "@item()?['description']"
+                                                    },
+                                                    {
+                                                        "header": "Built-in",
+                                                        "value": "@item()?['isBuiltIn']"
+                                                    },
+                                                    {
+                                                        "header": "Enabled",
+                                                        "value": "@item()?['isEnabled']"
+                                                    }
+                                                ],
+                                                "format": "HTML",
+                                                "from": "@body('Call_UserEnrichment_LogicApp')?['adminRoles']"
+                                            },
+                                            "runAfter": {
+                                                "Locations_table": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Table"
+                                        },
+                                        "Manager_table": {
+                                            "inputs": {
+                                                "columns": [
+                                                    {
+                                                        "header": "DisplayName",
+                                                        "value": "@item()?['displayName']"
+                                                    },
+                                                    {
+                                                        "header": "UserPrincipalName",
+                                                        "value": "@item()?['userPrincipalName']"
+                                                    },
+                                                    {
+                                                        "header": "Mail",
+                                                        "value": "@item()?['mail']"
+                                                    },
+                                                    {
+                                                        "header": "JobTitle",
+                                                        "value": "@item()?['jobTitle']"
+                                                    },
+                                                    {
+                                                        "header": "MobilePhone",
+                                                        "value": "@item()?['mobilePhone']"
+                                                    }
+                                                ],
+                                                "format": "HTML",
+                                                "from": "@createArray(body('Call_UserEnrichment_LogicApp')?['manager'])"
+                                            },
+                                            "runAfter": {
+                                                "Admin_roles_table": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Table"
+                                        },
+                                        "Inbox_rules_table": {
+                                            "inputs": {
+                                                "columns": [
+                                                    {
+                                                        "header": "Sequence",
+                                                        "value": "@item()?['sequence']"
+                                                    },
+                                                    {
+                                                        "header": "Name",
+                                                        "value": "@item()?['displayName']"
+                                                    },
+                                                    {
+                                                        "header": "Enabled",
+                                                        "value": "@item()?['isEnabled']"
+                                                    },
+                                                    {
+                                                        "header": "Conditions",
+                                                        "value": "@item()?['conditions']"
+                                                    },
+                                                    {
+                                                        "header": "Actions",
+                                                        "value": "@item()?['actions']"
+                                                    }
+                                                ],
+                                                "format": "HTML",
+                                                "from": "@body('Call_UserEnrichment_LogicApp')?['mailboxInboxRules']"
+                                            },
+                                            "runAfter": {
+                                                "Manager_table": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Table"
+                                        },
+                                        "Locations_table": {
+                                            "inputs": {
+                                                "columns": [
+                                                    {
+                                                        "header": "Country",
+                                                        "value": "@item()?['country']"
+                                                    },
+                                                    {
+                                                        "header": "UsagePercentage",
+                                                        "value": "@item()?['percentageTotalActivities']"
+                                                    },
+                                                    {
+                                                        "header": "LastActivity",
+                                                        "value": "@item()?['lastActivity']"
+                                                    },
+                                                    {
+                                                        "header": "ActivitiesLast30Days",
+                                                        "value": "@item()?['activities']"
+                                                    }
+                                                ],
+                                                "format": "HTML",
+                                                "from": "@body('Call_UserEnrichment_LogicApp')?['locationsUsage']"
+                                            },
+                                            "runAfter": {
+                                                "Threatscore_History_table": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Table"
+                                        },
+                                        "Compose_comments_part1": {
+                                            "inputs": "<h2>User Location details</h2><table style=\"width:75%\"><tr><th>Company:</th><td>@{body('Call_UserEnrichment_LogicApp')?['companyName']}</td></tr><tr><th>Job Title:</th><td>@{body('Call_UserEnrichment_LogicApp')?['jobTitle']}</td></tr><tr><th>Department:</th><td>@{body('Call_UserEnrichment_LogicApp')?['department']}</td></tr><tr><th>Country:</th><td>@{body('Call_UserEnrichment_LogicApp')?['country']}</td></tr><tr><th>City:</th><td>@{body('Call_UserEnrichment_LogicApp')?['city']}</td></tr><tr><th>Office Location:</th><td>@{body('Call_UserEnrichment_LogicApp')?['officeLocation']}</td></tr><tr><th>Street Address:</th><td>@{body('Call_UserEnrichment_LogicApp')?['streetAddress']}</td></tr><tr><th>Postal Code:</th><td>@{body('Call_UserEnrichment_LogicApp')?['postalCode']}</td></tr><tr><th>Preffered Language:</th><td>@{body('Call_UserEnrichment_LogicApp')?['preferredLanguage']}</td></tr><tr><th>Business Phone:</th><td>@{body('Call_UserEnrichment_LogicApp')?['businessPhones']}</td></tr><tr><th>Mobile Phone:</th><td>@{body('Call_UserEnrichment_LogicApp')?['mobilePhone']}</td></tr>",
+                                            "runAfter": {
+                                                "AAD_Devices_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Append_to_comments_part1": {
+                                            "inputs": {
+                                                "name": "comments",
+                                                "value": "@outputs('Compose_comments_part1')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_comments_part1": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Compose_comments_part2": {
+                                            "inputs": "<h2>User details</h2><table style=\"width:75%\"><tr><th>UserPrincipalName:</th><td>@{body('Call_UserEnrichment_LogicApp')?['userPrincipalName']}</td></tr><tr><th>Display Name:</th><td>@{body('Call_UserEnrichment_LogicApp')?['displayName']}</td></tr><tr><th>Employee Id:</th><td>@{body('Call_UserEnrichment_LogicApp')?['employeeId']}</td></tr><tr><th>Manager:</th><td>@{body('Call_UserEnrichment_LogicApp')?['manager']}</td></tr><tr><th>User id:</th><td> @{body('Call_UserEnrichment_LogicApp')?['id']}</td></tr><tr><th>Admin roles:</th><td>@{body('Admin_roles_table')}</td></tr><th>Mfa Registered:</th><td>@{body('Call_UserEnrichment_LogicApp')?['isMfaRegistered']}</td></tr><tr><th>Registered Mfa Methods:</th><td> @{body('Call_UserEnrichment_LogicApp')?['authMethodsMfa']}</td></tr><tr><th>Sspr Registered:</th><td> @{body('Call_UserEnrichment_LogicApp')?['isSsprRegistered']}</td></tr>",
+                                            "runAfter": {
+                                                "AAD_Devices_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Append_to_comments_part2": {
+                                            "inputs": {
+                                                "name": "comments",
+                                                "value": "@outputs('Compose_comments_part2')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_comments_part2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Compose_comments_part3": {
+                                            "inputs": "<h2>Additional details</h2><table style=\"width:75%\"><tr><th>Locations usage:</th><td>@{body('Locations_table')}</td></tr><tr><th>MCAS Threat Score:</th><td>@{body('Call_UserEnrichment_LogicApp')?['threatScore']}</td></tr><tr><th>Threat Score History:</th><td>@{body('Threatscore_History_table')}</td></tr><tr><th>AAD Risk Level:</th><td>@{body('Call_UserEnrichment_LogicApp')?['riskLevel']}</td></tr><tr><th>AAD Risk State:</th><td>@{body('Call_UserEnrichment_LogicApp')?['riskState']}</td></tr><tr><th>AAD Risk Details:</th><td>@{body('Call_UserEnrichment_LogicApp')?['riskDetail']}</td></tr><tr><th>AAD Risk Last Update:</th><td>@{body('Call_UserEnrichment_LogicApp')?['riskLastUpdatedDateTime']}</td></tr><tr><th>Self-Service Password Reset Activities:</th><td>@{body('Call_UserEnrichment_LogicApp')?['ssprActivities']}</td></tr>",
+                                            "runAfter": {
+                                                "AAD_Devices_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Append_to_comments_part3": {
+                                            "inputs": {
+                                                "name": "comments",
+                                                "value": "@outputs('Compose_comments_part3')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_comments_part3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Compose_comments_part4": {
+                                            "inputs": "<h2>Mailbox and Devices details</h2><table style=\"width:75%\"><tr><th>Mail:</th><td>@{body('Call_UserEnrichment_LogicApp')?['mail']}</td></tr><tr><th>Out-Of-Office is enabled:</th><td>@{body('Call_UserEnrichment_LogicApp')?['mailboxOofEnabled']}</td></tr><tr><th>Out-Of-Office Message:</th><td>@{createArray(body('Call_UserEnrichment_LogicApp')?['mailboxOofMessage'])}</td></tr><tr><th>Mailbox Inbox Rules:</th><td>@{replace(body('Inbox_rules_table'), '&quot;', '\"')}</td></tr>",
+                                            "runAfter": {
+                                                "AAD_Devices_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Append_to_comments_part4": {
+                                            "inputs": {
+                                                "name": "comments",
+                                                "value": "@outputs('Compose_comments_part4')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_comments_part4": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Compose_comments_part5": {
+                                            "inputs": "<h2>Account details</h2><table style=\"width:75%\"><tr><th>Account is Enabled:</th><td>@{body('Call_UserEnrichment_LogicApp')?['accountEnabled']}</td></tr><tr><th>Creation Time:</th><td>@{body('Call_UserEnrichment_LogicApp')?['createdDateTime']}</td></tr><tr><th>On-Premises DN:</th><td>@{body('Call_UserEnrichment_LogicApp')?['onPremisesDistinguishedName']}</td></tr><tr><th>On-Premises Domain Name:</th><td>@{body('Call_UserEnrichment_LogicApp')?['onPremisesDomainName']}</td></tr><tr><th>On-Premises Last DirSync:</th><td>@{body('Call_UserEnrichment_LogicApp')?['onPremisesLastSyncDateTime']}</td></tr><tr><th>On-Premises SamAccountName:</th><td>@{body('Call_UserEnrichment_LogicApp')?['onPremisesSamAccountName']}</td></tr><tr><th>On-Premises SID:</th><td>@{body('Call_UserEnrichment_LogicApp')?['onPremisesSecurityIdentifier']}</td></tr><tr><th>On-Premises SyncEnabled:</th><td>@{body('Call_UserEnrichment_LogicApp')?['onPremisesSyncEnabled']}</td></tr><tr><th>Refresh Token Valid From:</th><td>@{body('Call_UserEnrichment_LogicApp')?['refreshTokensValidFromDateTime']}}</td></tr>",
+                                            "runAfter": {
+                                                "AAD_Devices_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Append_to_comments_part5": {
+                                            "inputs": {
+                                                "name": "comments",
+                                                "value": "@outputs('Compose_comments_part5')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_comments_part5": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Compose_comments_part6": {
+                                            "inputs": "<h2>Devices details</h2><table style=\"width:75%\"><tr><th>Azure AD Devices:</th><td>@{replace(body('AAD_Devices_table'), '&quot;', '\"')}</td></tr><tr><th>MDATP Devices:</th><td>@{replace(body('MDATP_Devices_table'), '&quot;', '\"')}</td></tr>",
+                                            "runAfter": {
+                                                "AAD_Devices_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Append_to_comments_part6": {
+                                            "inputs": {
+                                                "name": "comments",
+                                                "value": "@outputs('Compose_comments_part6')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_comments_part6": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Send_Data_to_Sentinel": {
+                                            "runAfter": {
+                                                "Call_UserEnrichment_LogicApp": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@{body('Call_UserEnrichment_LogicApp')}",
+                                                "headers": {
+                                                    "Log-Type": "Users"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "foreach": "@body('Get_accounts')?['Accounts']",
+                                    "runAfter": {
+                                        "Get_accounts": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                }
+
+                            },
+                            "runAfter": {
+                                "Initialize_comments": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Post_comments": {
+                            "actions": {
+                                "Post_all_comments": {
+                                    "actions": {
+                                        "Add_account_comment_to_incident": {
+                                            "inputs": {
+                                                "body": {
+                                                    "Value": "@{items('Post_all_comments')}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "foreach": "@variables('comments')",
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Users_enrichment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azuresentinel_Connection_Name'))]",
+                                "connectionName": "[parameters('azuresentinel_Connection_Name')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/', 'azuresentinel')]"
+                            },
+                            "[parameters('logAnalytics_connectionName')]": {
+                                "connectionId": "[parameters('logAnalytics_connectionId')]",
+                                "connectionName": "[parameters('logAnalytics_connectionName')]",
+                                "id": "[parameters('logAnalytics_id')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    ],
+    "outputs": {
+
+        "logicAppUrl": {
+            "type": "string",
+            "value": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows/', parameters('logicAppName')), '/triggers/When_a_response_to_an_Azure_Sentinel_alert_is_triggered'), '2016-06-01').value]"
+        }
+    }
+}

@@ -1,0 +1,57 @@
+id: f9f8b17c-52ed-4fd1-8edd-6278b6e2669f
+name: Risky Sign-in with Device Registration
+description: |
+  'Looks for new device registrations following a risky user account sign-in. By default the
+  query will use a 6 hour lookback period, this can be configured within the query.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.004
+query: |
+  let timeDelta = 6h;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let registeredDevices=AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "Add registered owner to device" 
+  | where Identity =~ "Device Registration Service" 
+  | extend AccountUpn = tostring(TargetResources[0].userPrincipalName)
+  | extend AccountObjectId = tostring(TargetResources[0].id)
+  | extend DeviceObjectId = trim('"', tostring(TargetResources[0].modifiedProperties[0].newValue))
+  | extend DeviceDisplayName = trim('"', tostring(TargetResources[0].modifiedProperties[1].newValue))
+  | project DeviceRegistrationTimestamp=TimeGenerated,CorrelationId,AccountUpn,AccountObjectId,DeviceObjectId,DeviceDisplayName;
+  let registeringUser= 
+  registeredDevices 
+  | distinct AccountObjectId;
+  let hasRegisteringUser = isnotempty(toscalar(registeringUser));
+  let riskySignins=SigninLogs
+  | where TimeGenerated between ((starttime-timeDelta) .. endtime)
+  | where hasRegisteringUser
+  | where UserId in (registeringUser) 
+  | where RiskLevelDuringSignIn has_any ('medium', 'high')
+  | where AppDisplayName in~ ("Office 365 Exchange Online", "OfficeHome") 
+  | where isnotempty(Id) 
+  | project SignInTimestamp=TimeGenerated, AppDisplayName, CorrelationId, AccountObjectId=UserId, IPAddress, RiskLevelDuringSignIn 
+  | summarize SignInTimestamp=argmin(SignInTimestamp,*) by AppDisplayName, CorrelationId, AccountObjectId, IPAddress, RiskLevelDuringSignIn;
+  registeredDevices 
+  | join riskySignins on AccountObjectId 
+  | where DeviceRegistrationTimestamp - SignInTimestamp < timeDelta //Time delta between risky sign-in and device registration less than 6h 
+  | project-away AccountObjectId1
+  | extend timestamp = DeviceRegistrationTimestamp, AccountCustomEntity = AccountUpn, IPCustomEntity = IPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUpn
+      - identifier: AadUserId
+        columnName: AccountObjectId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Endace - support@endace.com",
+    "comments": "Solution template for Endace"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@endace.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Endace",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-endace",
+    "_solutionId": "[variables('solutionId')]",
+    "huntingQueryObject1": {
+      "huntingQueryVersion1": "1.0.0",
+      "_huntingQuerycontentId1": "b70b02bd-fe1f-4466-8c4d-64d42adc59b3",
+      "huntingQueryTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('b70b02bd-fe1f-4466-8c4d-64d42adc59b3')))]"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject1').huntingQueryTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Endace_Pivot-to-Vision_HuntingQueries Hunting Query with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2022-10-01",
+              "name": "Endace_Hunting_Query_1",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Endace - Pivot-to-Vision",
+                "category": "Hunting Queries",
+                "query": "// Specify the IP Address or FQDN of the Endace InvestigationManager (or EndaceProbe) and Rotation File Name\nlet Endace_IM = \"<FQDN>\";\nlet Endace_Rotfile = \"main\";\n// Specify the default tools\nlet Endace_Tools = \"conversations_by_ninetuple%2CtrafficOverTime_by_app\";\n// Identify the Database\nCommonSecurityLog\n// We're using the following DB fields to build the Pivot-to-Vision URL:\n// SourceIP, DestinationIP, TimeGenerated\n// Limit our search to 'Threat' records\n| where Activity == \"THREAT\"\n| extend p2v_ip = case(\n    isnotnull(SourceIP) and isnotnull(DestinationIP), strcat(\"&ip_conv=\", SourceIP, \"%20%26%20\", DestinationIP),\n    isnotnull(SourceIP), strcat(\"&ip=\", SourceIP),\n    isnotnull(DestinationIP), strcat(\"&ip=\", DestinationIP),\n    \"\"\n  )\n// Set the URL Variable\n| extend Endace_p2v = strcat(\"https://\", Endace_IM, \"/vision2/pivotintovision/?datasources=\", Endace_Rotfile, \"&title=Pivot+From+Sentinel\", p2v_ip, \"&tools=\", Endace_Tools, \"&incidenttime=\", tostring(TimeGenerated))\n// Display the new Table\n| project TimeGenerated, Activity, Message, SourceIP, DestinationIP, Endace_p2v\n// Set a record limit\n| limit 5\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "This query displays a Pivot-to-Vision URL from the fields populated within the CommonSecurityLog.  This KQL can be used as-is, or adapted to suite other threat-hunting and playbook functionality"
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "ResourceDevelopment,InitialAccess,Discovery,LateralMovement,CommandandControl,Exfiltration"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1),'/'))))]",
+              "properties": {
+                "description": "Endace Hunting Query 1",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1)]",
+                "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Endace",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Endace",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Endace",
+                  "email": "support@endace.com",
+                  "tier": "Partner",
+                  "link": "https://endace.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+        "contentKind": "HuntingQuery",
+        "displayName": "Endace - Pivot-to-Vision",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Endace",
+        "publisherDisplayName": "Endace",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Endace/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Endace (<a href=\"https://www.endace.com\">https://www.endace.com</a>) solution for Microsoft Sentinel enables you to create Pivot-to-Vision URL links from alerts in your CEF logs.</p>\n<p>Pivot-to-Vision links take you directly from an alert to viewing the related packets of interest in EndaceVision, Endace's traffic analysis application. In EndaceVision, you can further analyze the incident and zoom in to inspect decoded, full packet data.</p>\n<p>The KQL in this example can be easily adapted to be used for other advanced features associated with threat hunting, such as in tickets, workbooks, and wherever KQL can be leveraged.</p>\n<p><strong>Hunting Queries:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/endace_vert_logo_black.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Endace",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Endace",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Endace",
+          "email": "support@endace.com",
+          "tier": "Partner",
+          "link": "https://endace.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+              "version": "[variables('huntingQueryObject1').huntingQueryVersion1]"
+            },
+            {
+              "kind": "Solution",
+              "contentId": "azuresentinel.azure-sentinel-solution-commoneventformat"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-03-24",
+        "providers": [
+          "Endace"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network",
+            "Security - Automation (SOAR)"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

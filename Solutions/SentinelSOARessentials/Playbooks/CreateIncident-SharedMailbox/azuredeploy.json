@@ -1,0 +1,319 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Create Incident From Shared Mailbox",
+        "description": "This playbook will create a new Microsoft Sentinel incident when new email arrives to shared mailbox with 'incident' keyword in the subject.",
+        "prerequisites": ["1. Create shared mailbox that will be used for incident creation.", "2. Prepare Subscription ID, Resource Group name, and Log Analytics Workspace name as it is needed for template deployment."],
+    "postDeployment": ["1. Add Microsoft Sentinel Responder role to the playbook's managed identity.", "2. Authorize Office 365 Outlook connector and Conversion Service connector (HTML to text).", "3. Utilize [email template](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/CreateIncident-SharedMailbox/NewMicrosoftSentinelIncidentCreationTemplate.oft) to get correct data"],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "2022-09-04T00:00:00.000Z",
+"entities": [],
+"tags": ["Utilities"],
+"support": {
+"tier": "community"
+},
+"author": {
+"name": "Benjamin Kovacevic"
+}
+},
+"parameters": {
+"PlaybookName": {
+"defaultValue": "CreateIncident-SharedMailbox",
+"type": "string"
+},
+"Shared Mailbox Address": {
+"type": "string",
+"metadata": {
+    "description": "Enter value for Shared Mailbox Address"
+}
+},
+"Subscription": {
+"type": "string",
+"metadata": {
+    "description": "Enter value for Subscription"
+}
+},
+"Resource Group": {
+"type": "string",
+"metadata": {
+    "description": "Enter value for Resource Group"
+}
+},
+"Workspace Name": {
+"type": "string",
+"metadata": {
+    "description": "Enter value for Workspace Name"
+}
+}
+},
+"variables": {
+"MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+"ConversionserviceConnectionName": "[concat('Conversionservice-', parameters('PlaybookName'))]",
+"Office365ConnectionName": "[concat('Office365-', parameters('PlaybookName'))]"
+},
+"resources": [
+{
+"properties": {
+    "provisioningState": "Succeeded",
+    "state": "Enabled",
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "parameters": {
+            "$connections": {
+            "defaultValue": {},
+            "type": "Object"
+        },
+        "Resource Group": {
+            "type": "string",
+            "defaultValue": "[parameters('Resource Group')]"
+        },
+        "Shared Mailbox Address": {
+            "type": "string",
+            "defaultValue": "[parameters('Shared Mailbox Address')]"
+        },
+        "Subscription": {
+            "type": "string",
+            "defaultValue": "[parameters('Subscription')]"
+        },
+        "Workspace Name": {
+            "type": "string",
+            "defaultValue": "[parameters('Workspace Name')]"
+        }
+    },
+    "triggers": {
+        "When_a_new_email_arrives_in_a_shared_mailbox_(V2)": {
+            "recurrence": {
+                "frequency": "Minute",
+                "interval": 3
+            },
+            "evaluatedRecurrence": {
+                "frequency": "Minute",
+                "interval": 3
+            },
+            "splitOn": "@triggerBody()?['value']",
+            "type": "ApiConnection",
+            "inputs": {
+                "host": {
+                    "connection": {
+                        "name": "@parameters('$connections')['office365']['connectionId']"
+                    }
+                },
+                "method": "get",
+                "path": "/v2/SharedMailbox/Mail/OnNewEmail",
+                "queries": {
+                    "folderId": "Inbox",
+                    "hasAttachments": false,
+                    "importance": "Any",
+                    "includeAttachments": false,
+                    "mailboxAddress": "@parameters('Shared Mailbox Address')",
+                    "subjectFilter": "incident"
+                }
+            }
+        }
+    },
+    "actions": {
+        "Condition": {
+            "actions": {
+                "Send_an_email_from_a_shared_mailbox_(V2)": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "body": {
+                        "Body": "<p>New Microsoft Sentinel incident created succesfully using shared mailbox.&nbsp;</p>",
+                        "Importance": "Normal",
+                        "MailboxAddress": "@parameters('Shared Mailbox Address')",
+                        "Subject": "New Microsoft Sentinel Incident created sucesfully!",
+                        "To": "@triggerBody()?['from']"
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['office365']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/SharedMailbox/Mail"
+                }
+            }
+        },
+        "runAfter": {
+            "Create_incident": [
+                "Succeeded",
+                "Failed"
+            ]
+        },
+        "else": {
+            "actions": {
+                "Send_an_email_from_a_shared_mailbox_(V2)_3": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "body": {
+                        "Body": "<p>There was an error while creating new incident in Microsoft Sentinel using shared mailbox.<br>\n<br>\nError details:<br>\n@{body('Create_incident')?['Content']}</p>",
+                        "Importance": "Normal",
+                        "MailboxAddress": "@parameters('Shared Mailbox Address')",
+                        "Subject": "There was an error creating new incident in Microsoft Sentinel using shared mailbox!",
+                        "To": "@triggerBody()?['from']"
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['office365']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/SharedMailbox/Mail"
+                }
+            }
+        }
+    },
+    "expression": {
+        "and": [
+            {
+                "equals": [
+                    "@outputs('Create_incident')?['statusCode']",
+                    200
+                ]
+            }
+        ]
+    },
+    "type": "If"
+},
+"Create_incident": {
+    "runAfter": {
+        "Email_body_to_text": [
+            "Succeeded"
+        ]
+    },
+    "type": "ApiConnection",
+    "inputs": {
+        "body": {
+            "description": "@{trim(first(split(last(split(body('Email_body_to_text'),'Incident Description: ')),'Incident Severity: ')))}",
+            "owner": "@{first(skip(split(body('Email_body_to_text'),'Assign Incident to:'),1))}",
+            "ownerAction": "@{trim(first(split(last(split(body('Email_body_to_text'),'Assign Incident: ')),'Assign Incident to: ')))}",
+            "severity": "@{trim(first(split(last(split(body('Email_body_to_text'),'Incident Severity: ')),'Incident Status: ')))}",
+            "status": "@{trim(first(split(last(split(body('Email_body_to_text'),'Incident Status: ')),'Incident tag: ')))}",
+            "tagsToAdd": {
+                "TagsToAdd": [
+                    {
+                        "Tag": "@{trim(first(split(last(split(body('Email_body_to_text'),'Incident tag: ')),'Assign Incident: ')))}"
+                    }
+                ]
+            },
+            "title": "@{trim(first(split(last(split(body('Email_body_to_text'),'Incident title: ')),'Incident Description: ')))}"
+        },
+        "host": {
+            "connection": {
+                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+            }
+        },
+        "method": "put",
+        "path": "/Incidents/subscriptions/@{encodeURIComponent(parameters('Subscription'))}/resourceGroups/@{encodeURIComponent(parameters('Resource Group'))}/workspaces/@{encodeURIComponent(parameters('Workspace Name'))}"
+    }
+},
+"Email_body_to_text": {
+"runAfter": {},
+"type": "ApiConnection",
+"inputs": {
+    "body": "<p>@{triggerBody()?['body']}</p>",
+    "host": {
+        "connection": {
+            "name": "@parameters('$connections')['conversionservice']['connectionId']"
+        }
+    },
+    "method": "post",
+    "path": "/html2text"
+}
+}
+},
+"outputs": {}
+},
+"parameters": {
+"$connections": {
+"value": {
+"azuresentinel": {
+"connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+"connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+"connectionProperties": {
+    "authentication": {
+        "type": "ManagedServiceIdentity"
+    }
+}
+},
+"conversionservice": {
+"connectionId": "[resourceId('Microsoft.Web/connections', variables('ConversionserviceConnectionName'))]",
+"connectionName": "[variables('ConversionserviceConnectionName')]",
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Conversionservice')]"
+},
+"office365": {
+"connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+"connectionName": "[variables('Office365ConnectionName')]",
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+}
+}
+}
+}
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"identity": {
+"type": "SystemAssigned"
+},
+"tags": {
+"hidden-SentinelTemplateName": "CreateIncident-SharedMailbox",
+"hidden-SentinelTemplateVersion": "1.0"
+},
+"apiVersion": "2017-07-01",
+"dependsOn": [
+"[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+"[resourceId('Microsoft.Web/connections', variables('ConversionserviceConnectionName'))]",
+"[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+]
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('MicrosoftSentinelConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('MicrosoftSentinelConnectionName')]",
+"customParameterValues": {},
+"parameterValueType": "Alternative",
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('ConversionserviceConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('ConversionserviceConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Conversionservice')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('Office365ConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('Office365ConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+}
+}
+}
+]
+}

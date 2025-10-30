@@ -1,0 +1,32 @@
+id: fc2c5bbb-5347-4903-87e6-c2c76c43e420
+name: Files copied to USB drives
+description: |
+  This query lists files copied to USB external drives with USB drive information based on FileCreated events associated with most recent USBDriveMount events befor file creations. But be aware that Advanced Hunting is not monitoring all the file types.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+  - DeviceFileEvents
+tactics:
+- Exfiltration
+query: |
+  let UsbDriveMount = DeviceEvents
+  | where ActionType=="UsbDriveMounted"
+  | extend ParsedFields=parse_json(AdditionalFields)
+  | project DeviceId, DeviceName, DriveLetter=ParsedFields.DriveLetter, MountTime=Timestamp,
+  ProductName=ParsedFields.ProductName,SerialNumber=ParsedFields.SerialNumber,Manufacturer=ParsedFields.Manufacturer
+  | order by DeviceId asc, MountTime desc;
+  let FileCreation = DeviceFileEvents
+  | where InitiatingProcessAccountName != "system"
+  | where ActionType == "FileCreated"
+  | where FolderPath !startswith "C:\\"
+  | where FolderPath !startswith "\\"
+  | project ReportId,DeviceId,InitiatingProcessAccountDomain,
+  InitiatingProcessAccountName,InitiatingProcessAccountUpn,
+  FileName, FolderPath, SHA256, Timestamp, SensitivityLabel, IsAzureInfoProtectionApplied
+  | order by DeviceId asc, Timestamp desc;
+  FileCreation | lookup kind=inner (UsbDriveMount) on DeviceId
+  | where FolderPath startswith DriveLetter
+  | where Timestamp >= MountTime
+  | partition hint.strategy=native by ReportId ( top 1 by MountTime )
+  | order by DeviceId asc, Timestamp desc

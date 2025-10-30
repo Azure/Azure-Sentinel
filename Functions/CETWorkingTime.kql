@@ -1,0 +1,43 @@
+// This query can help you to compute if a date (or the current time) happens during a predefined working schedule, it returns true or false.
+//
+// This should be adapted for each working schedule and time zone (https://docs.microsoft.com/azure/data-explorer/kusto/query/timezone)
+// This is currently configured for Central European Time and European Daylight Saving Times (Madrid, Spain time)
+//
+// Click "Save as function", in Parameters write in the fields: "datetime" "date_time" "datetime(null)"
+//
+// If you name the function "IsWorkingTime", you can check the function with queries like the following:
+//
+// print IsWorkingTime()
+//
+// SigninLogs
+// | extend SecondTime = TimeGenerated
+// | summarize take_any(TimeGenerated) by bin(SecondTime, 1h)
+// | project TimeGenerated, IsWorkingTime(TimeGenerated)
+//
+//let Function = (date_time:datetime = datetime(null)){
+    // Pick your timezone string from https://docs.microsoft.com/azure/data-explorer/kusto/query/timezone
+    let time_zome = 'Europe/Madrid';
+    // If empty, take current time
+    let parsed_date_time = iff(isnull(date_time), now(), date_time);
+    let corrected_date_time = datetime_utc_to_local(parsed_date_time, time_zome);
+    // Start and end hours of daily work schedule
+    let schedule_start_hour = 8;
+    let schedule_end_hour = 17;
+    let schedule_intensive_end_hour = 15;
+    let schedule_friday_end_hour = 14;
+    // Start date of intensive working time
+    let IntensiveStartTime = make_datetime(getyear(parsed_date_time), 6, 16);
+    // End date of intensive working time
+    let IntensiveEndTime = make_datetime(getyear(parsed_date_time), 9, 16);
+    let hour_of_day = hourofday(corrected_date_time);
+    let day_of_week = dayofweek(corrected_date_time - 1d)/1d + 1;
+    let Intensive = corrected_date_time between (IntensiveStartTime .. IntensiveEndTime);
+    // Return boolean indicating if a date is working time
+    case(
+        day_of_week < 5 and not(Intensive) and hour_of_day between (schedule_start_hour..(schedule_end_hour - 1)), true, // Monday to Thursday
+        day_of_week < 5 and Intensive and hour_of_day between (schedule_start_hour..(schedule_intensive_end_hour - 1)), true, // Intensive Monday to Thursday
+        day_of_week == 5 and hour_of_day between (schedule_start_hour .. (schedule_friday_end_hour - 1)), true, // Friday
+        false
+    )
+//};
+//Function(date_time)

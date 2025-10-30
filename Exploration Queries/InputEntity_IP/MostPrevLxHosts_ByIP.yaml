@@ -1,0 +1,32 @@
+Id: 41146c58-ffc6-47ff-975e-f85013629dfd
+DisplayName: Most prevalent hosts with this IP
+Description: Top 10 hosts with this IPAddress (set time range to +-6h when running the query)
+InputEntityType: Ip
+InputFields:
+  - Address
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 6h
+QueryPeriodAfter: 6h
+DataSources:
+  - _Im_NetworkSession
+Tactics:
+  - Execution
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+  let GetSysLogEventsWithIP = (v_IP_Address:string){
+  _Im_NetworkSession
+    | where has_ipv4(SrcIpAddr, v_IP_Address) or ipv6_is_match(SrcIpAddr, v_IP_Address)
+    | where NetworkDirection =~ "Outbound"
+    | extend Process = columnifexists("Process", "")
+    | extend info = pack('HostIP', SrcIpAddr, 'SrcPort', SrcPortNumber, 'DstIP', DstIpAddr,'DstPort', DstPortNumber, 'DstFQDN', DstFQDN, 'User', SrcUsername, 'Process', Process)
+    | extend Dvc = tolower(Dvc)
+    | summarize min(TimeGenerated), max(TimeGenerated), count(), Host_Aux_info = make_set(info, maxSize=100) by Dvc
+    | top 10 by count_ desc nulls last 
+    | project Host_Aux_StartTime = min_TimeGenerated, Host_Aux_EndTime = max_TimeGenerated, Host_HostName = Dvc, Host_Aux_info = Host_Aux_info
+  };
+  // change <Address> value below
+  GetSysLogEventsWithIP('<Address>')

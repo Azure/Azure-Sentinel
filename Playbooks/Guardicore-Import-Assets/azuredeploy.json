@@ -1,0 +1,644 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will pull Guardicore Assets into Azure Sentinel Logs.",
+        "author": "Accelerynt"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Guardicore-Import-Assets",
+            "type": "String"
+        },
+        "GCURL": {
+            "type": "string",
+             "metadata": {
+                "description": "https://<guardicore_instance_url>.com"
+            } 
+        },
+        "GCUsername": {
+            "type": "string",
+             "metadata": {
+                "description": "Enter your Guardicore API username"
+            } 
+        },
+        "GCPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter your Guardicore API password"
+            } 
+        }
+    },
+    "variables": {
+        "azureloganalyticsdatacollector": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azureloganalyticsdatacollector')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "GCAssets",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Send_Authorization_Callout": {
+                                        "inputs": {
+                                            "body": {
+                                                "password": "[parameters('GCPassword')]",
+                                                "username": "[parameters('GCUsername')]"
+                                            },
+                                            "method": "POST",
+                                            "uri": "[concat('', parameters('GCURL'), '/api/v3.0/authenticate')]"
+                                        },
+                                        "runAfter": {},
+                                        "type": "Http"
+                        },
+                        "Handle_Authorization_Response": {
+                            "inputs": {
+                                "content": "@body('Send_authorization_callout')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "username": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "Send_authorization_callout": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "Send_Get_Assets_Callout": {
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "bearer @{body('Handle_Authorization_Response')?['access_token']}"
+                                },
+                                "method": "GET",
+                                "uri": "[concat('', parameters('GCURL'), '/api/v3.0/assets')]"
+                            },
+                            "runAfter": {
+                                "Handle_Authorization_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "Handle_Get_Assets_Response": {
+                            "inputs": {
+                                "content": "@body('Send_Get_Assets_Callout')",
+                                "schema": {
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "integer"
+                                        },
+                                        "db_query_time": {
+                                            "type": "string"
+                                        },
+                                        "dict_mapping_time": {
+                                            "type": "string"
+                                        },
+                                        "filter": {
+                                            "properties": {},
+                                            "type": "object"
+                                        },
+                                        "from": {
+                                            "type": "integer"
+                                        },
+                                        "is_count_exact": {
+                                            "type": "boolean"
+                                        },
+                                        "objects": {
+                                            "items": {
+                                                "properties": {
+                                                    "_id": {
+                                                        "type": "string"
+                                                    },
+                                                    "active": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "bios_uuid": {
+                                                        "type": "string"
+                                                    },
+                                                    "comments": {
+                                                        "type": "string"
+                                                    },
+                                                    "doc_version": {
+                                                        "type": "integer"
+                                                    },
+                                                    "file_detection_rules": {
+                                                        "type": "array"
+                                                    },
+                                                    "first_seen": {
+                                                        "type": "integer"
+                                                    },
+                                                    "full_name": {
+                                                        "type": "string"
+                                                    },
+                                                    "guest_agent_details": {
+                                                        "properties": {
+                                                            "agent_type": {
+                                                                "type": "integer"
+                                                            },
+                                                            "agent_version": {
+                                                                "type": "string"
+                                                            },
+                                                            "build_commit": {
+                                                                "type": "string"
+                                                            },
+                                                            "build_date": {
+                                                                "type": "integer"
+                                                            },
+                                                            "client_cert_ssl_cn_name": {
+                                                                "type": "string"
+                                                            },
+                                                            "client_cert_ssl_expire_date": {
+                                                                "type": "integer"
+                                                            },
+                                                            "containers": {
+                                                                "type": "array"
+                                                            },
+                                                            "hardware": {
+                                                                "properties": {
+                                                                    "architecture": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "bios_uuid": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "cloud_provider": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "hw_uuid": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "serial": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "vendor": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "hostname": {
+                                                                "type": "string"
+                                                            },
+                                                            "labels": {
+                                                                "properties": {},
+                                                                "type": "object"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "network": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "hardware_address": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "interface_name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "ip_addresses": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "address": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "address_type": {
+                                                                                        "type": "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "is_bond": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "is_cloud_public": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "is_loopback": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "is_up": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "is_virtual": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "os": {
+                                                                "type": "integer"
+                                                            },
+                                                            "os_details": {
+                                                                "properties": {
+                                                                    "distribution": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "full_kernel_version": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "install_date": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "kernel_config_hash": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "num_of_processors": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "os_display_name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "os_guest_name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "os_kernel_major": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "os_kernel_minor": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "os_type": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "os_version_name": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "protocol_versions": {
+                                                                "properties": {
+                                                                    "DECEPTION": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "ENFORCEMENT": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "REVEAL": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "resource_limits": {
+                                                                "properties": {},
+                                                                "type": "object"
+                                                            },
+                                                            "supported_features": {
+                                                                "properties": {
+                                                                    "Controller": {
+                                                                        "items": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "hw_uuid": {
+                                                        "type": "string"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "instance_id": {
+                                                        "type": "string"
+                                                    },
+                                                    "ip_addresses": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "is_on": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "label_groups": {
+                                                        "type": "array"
+                                                    },
+                                                    "labels": {
+                                                        "type": "array"
+                                                    },
+                                                    "last_full_visibility_report": {
+                                                        "type": "integer"
+                                                    },
+                                                    "last_guest_agent_details_update": {
+                                                        "type": "integer"
+                                                    },
+                                                    "last_seen": {
+                                                        "type": "integer"
+                                                    },
+                                                    "last_summary_update": {
+                                                        "type": "integer"
+                                                    },
+                                                    "mac_addresses": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "metadata": {
+                                                        "properties": {
+                                                            "Agent": {
+                                                                "properties": {},
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "mitigation_agent_id": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "nics": {
+                                                        "items": {
+                                                            "properties": {
+                                                                "discovered_ip_addresses": {
+                                                                    "type": "array"
+                                                                },
+                                                                "ip_addresses": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "mac_address": {
+                                                                    "type": "string"
+                                                                },
+                                                                "vif_id": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "orchestration_details": {
+                                                        "items": {
+                                                            "properties": {
+                                                                "orchestration_id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "orchestration_obj_id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "orchestration_type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "revision_id": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "recent_domains": {
+                                                        "type": "array"
+                                                    },
+                                                    "risk_level": {
+                                                        "type": "integer"
+                                                    },
+                                                    "risk_level_decrease_basetime": {
+                                                        "type": "integer"
+                                                    },
+                                                    "risk_title": {
+                                                        "type": "string"
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "summary": {
+                                                        "properties": {
+                                                            "bad_reputation": {
+                                                                "type": "integer"
+                                                            },
+                                                            "incidents_by_label": {
+                                                                "properties": {
+                                                                    "source": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "incidents_by_severity": {
+                                                                "properties": {
+                                                                    "High": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "Low": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "Medium": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "integrity_violations": {
+                                                                "type": "integer"
+                                                            },
+                                                            "lateral_movements": {
+                                                                "type": "integer"
+                                                            },
+                                                            "network_scans": {
+                                                                "type": "integer"
+                                                            },
+                                                            "policy_violations": {
+                                                                "type": "integer"
+                                                            },
+                                                            "total_incidents_count": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "unhandled_recommendations": {
+                                                        "type": "array"
+                                                    },
+                                                    "unhandled_recommendations_len": {
+                                                        "type": "integer"
+                                                    },
+                                                    "vm": {
+                                                        "properties": {
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "orchestration_details": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "orchestration_id": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "orchestration_obj_id": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "orchestration_type": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "revision_id": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "tenant_name": {},
+                                                            "vm_id": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "vm_id": {
+                                                        "type": "string"
+                                                    },
+                                                    "vm_name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "objects_cleanup_time": {
+                                            "type": "string"
+                                        },
+                                        "objects_mapping_time": {
+                                            "type": "string"
+                                        },
+                                        "results_in_page": {
+                                            "type": "integer"
+                                        },
+                                        "sort": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "to": {
+                                            "type": "integer"
+                                        },
+                                        "total_count": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "Send_Get_Assets_Callout": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "For_Each_Asset": {
+                            "actions": {
+                                "Send_Data": {
+                                    "inputs": {
+                                        "body": "@{items('For_Each_Asset')}",
+                                        "headers": {
+                                            "Log-Type": "GCAssets"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "foreach": "@body('Handle_Get_Assets_Response')?['objects']",
+                            "runAfter": {
+                                "Handle_Get_Assets_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                     "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector'))]",
+                                "connectionName": "[variables('azureloganalyticsdatacollector')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,509 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Forcepoint - isv@email.com",
+    "comments": "Solution template for Forcepoint DLP"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Forcepoint Data Loss Prevention (DLP)",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "microsoftsentinelcommunity.azure-sentinel-solution-forcepoint-dlp",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "isv@email.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "Forcepoint_DLP",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Forcepoint_DLP",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "ForcepointDLPWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Forcepoint DLP data connector with template",
+        "displayName": "Forcepoint DLP template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Forcepoint DLP data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Forcepoint DLP",
+                  "publisher": "Forcepoint",
+                  "descriptionMarkdown": "The Forcepoint DLP (Data Loss Prevention) connector allows you to automatically export DLP incident data from Forcepoint DLP into Microsoft Sentinel in real-time. This enriches visibility into user activities and data loss incidents, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "ForcepointDLPEvents_CL",
+                      "baseQuery": "ForcepointDLPEvents_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Rules triggered in the last three days",
+                      "query": "ForcepointDLPEvents_CL\n | where TimeGenerated > ago(3d)\n | summarize count(RuleName_1_s) by RuleName_1_s, SourceIpV4_s\n | render barchart"
+                    },
+                    {
+                      "description": "Rules triggered over time (90 days)",
+                      "query": "ForcepointDLPEvents_CL\n | where TimeGenerated > ago(90d)\n | sort by CreatedAt_t asc nulls last\n | summarize count(RuleName_1_s)  by  CreatedAt_t, RuleName_1_s\n | render linechart"
+                    },
+                    {
+                      "description": "Count of High, Medium and Low rules triggered over 90 days",
+                      "query": "ForcepointDLPEvents_CL\n | where TimeGenerated > ago(90d)\n | sort by CreatedAt_t asc nulls last\n | summarize count(Severity_s)  by  CreatedAt_t, Severity_s\n | render barchart"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ForcepointDLPEvents_CL",
+                      "lastDataReceivedQuery": "ForcepointDLPEvents_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ForcepointDLPEvents_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Follow step by step instructions in the [Forcepoint DLP documentation for Microsoft Sentinel](https://frcpnt.com/dlp-sentinel) to configure this connector.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    }
+                  ],
+                  "metadata": {
+                    "id": "c4961e1e-45b1-4565-a096-6e14561c90b6",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Forcepoint"
+                    },
+                    "support": {
+                      "name": "Forcepoint",
+                      "link": "https://support.forcepoint.com/",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Forcepoint DLP",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Forcepoint",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Forcepoint DLP",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Forcepoint",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Forcepoint DLP",
+          "publisher": "Forcepoint",
+          "descriptionMarkdown": "The Forcepoint DLP (Data Loss Prevention) connector allows you to automatically export DLP incident data from Forcepoint DLP into Microsoft Sentinel in real-time. This enriches visibility into user activities and data loss incidents, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ForcepointDLPEvents_CL",
+              "baseQuery": "ForcepointDLPEvents_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ForcepointDLPEvents_CL",
+              "lastDataReceivedQuery": "ForcepointDLPEvents_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ForcepointDLPEvents_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Rules triggered in the last three days",
+              "query": "ForcepointDLPEvents_CL\n | where TimeGenerated > ago(3d)\n | summarize count(RuleName_1_s) by RuleName_1_s, SourceIpV4_s\n | render barchart"
+            },
+            {
+              "description": "Rules triggered over time (90 days)",
+              "query": "ForcepointDLPEvents_CL\n | where TimeGenerated > ago(90d)\n | sort by CreatedAt_t asc nulls last\n | summarize count(RuleName_1_s)  by  CreatedAt_t, RuleName_1_s\n | render linechart"
+            },
+            {
+              "description": "Count of High, Medium and Low rules triggered over 90 days",
+              "query": "ForcepointDLPEvents_CL\n | where TimeGenerated > ago(90d)\n | sort by CreatedAt_t asc nulls last\n | summarize count(Severity_s)  by  CreatedAt_t, Severity_s\n | render barchart"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Follow step by step instructions in the [Forcepoint DLP documentation for Microsoft Sentinel](https://frcpnt.com/dlp-sentinel) to configure this connector.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Forcepoint DLP Workbook with template",
+        "displayName": "Forcepoint DLP workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ForcepointDLPWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Get insights on DLP incidents with the Forcepoint DLP (Data Loss Prevention) workbook."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"<h3>Rules triggered in the last three days\\r\\n\"},\"name\":\"text - 0\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ForcepointDLPEvents_CL\\r\\n| where TimeGenerated > ago(3d) and Title_s == \\\"Forcepoint DLP Incident\\\" \\r\\n| summarize count(RuleName_1_s) by RuleName_1_s, SourceIpV4_s\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"name\":\"query - 1\"},{\"type\":1,\"content\":{\"json\":\"<h3>Rules triggered over time (90 days)\"},\"name\":\"text - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ForcepointDLPEvents_CL\\r\\n| where TimeGenerated > ago(90d) and Title_s == \\\"Forcepoint DLP Incident\\\" \\r\\n| sort by CreatedAt_t asc nulls last \\r\\n| summarize count(RuleName_1_s)  by  CreatedAt_t, RuleName_1_s\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"query - 2\"},{\"type\":1,\"content\":{\"json\":\"<h3>Count of High, Medium  and Low rules triggered over 90 days\"},\"name\":\"text - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"ForcepointDLPEvents_CL\\r\\n| where TimeGenerated > ago(90d) and Title_s == \\\"Forcepoint DLP Incident\\\" \\r\\n| sort by CreatedAt_t asc nulls last \\r\\n| summarize count(Severity_s)  by  CreatedAt_t, Severity_s\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"unstackedbar\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"Severity_s\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_Severity_s\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"Severity_s\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_Severity_s\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"name\":\"query - 5\"}],\"fromTemplateId\":\"sentinel-ForcepointDLP\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=ForcepointDLPWorkbook; logoFileName=FP_Green_Emblem_RGB-01.svg; description=Get insights on DLP incidents with the Forcepoint DLP (Data Loss Prevention) workbook.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Forcepoint Data Loss Prevention (DLP); templateRelativePath=ForcepointDLP.json; subtitle=; provider=Forcepoint}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Forcepoint DLP",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Forcepoint",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Forcepoint DLP",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Forcepoint",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-09",
+        "providers": [
+          "Forcepoint"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Information Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

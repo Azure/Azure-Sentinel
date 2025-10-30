@@ -1,0 +1,78 @@
+id: a3c7b8ed-56a9-47b7-98e5-2555c16e17c9
+name: Darktrace Model Breach
+description: |
+  'This rule creates Microsoft Sentinel Alerts based on Darktrace Model Breaches, fetched every 5 minutes.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DarktraceRESTConnector
+    dataTypes:
+      - darktrace_model_alerts_CL
+queryFrequency: 5m
+queryPeriod: 5m 
+triggerOperator: gt
+triggerThreshold: 0
+tactics: # tactics pulled dynamically
+relevantTechniques:
+query: |
+  darktrace_model_alerts_CL 
+  | where dtProduct_s =="Policy Breach"
+  | project-rename EventSeverity=score_d, EventStartTime=breachTime_s, NetworkRuleName=modelName_s, NetworkRuleNumber=pid_d, ThreatId=threatID_d, ThreatCategory=dtProduct_s, SrcIpAddr=SourceIP, SrcHostname=hostname_s, SrcMacAddr=sourceMac_s, SrcPortNumber=sourcePort_s, DstIpAddr=destIP_s, DstPortNumber=destPort_s, DstHostname=destHost_s, DstMacAddr=destMac_s, DtCompliance=compliance_b, DtClientSensor=cSensor_b, DtDescription=description_s, DtAntigena=antigena_b, DtDeviceID=deviceId_d, DtSubnetID=sid_d, DtTags=tags_s, DtMitreTechniques=mitreTechniques_s, DtMessage=Message, DtUUID=uuid_g, DtBreachURL=breachUrl_s, DtSrcTypeLabel=typeLabel_s, DtTriggeredComponents=triggeredComponents_s, DtDetails=details_s, DtLongitude=longitude_d, DtLatitude=latitude_d, DtCategory=Category
+  | extend EventCount=1, EventType="NetworkSession", EventSchema="NetworkSession", EventSchemaVersion="0.2.2", EventResult="Success", DvcAction = "Allow", EventVendor = "Darktrace", EventProduct = "Darktrace DETECT", EventEndTime=EventStartTime, ThreatName=NetworkRuleName, ThreatRiskLevel=EventSeverity
+  | extend DtSentinelCategory = case(DtCategory == "Suspicious", "Medium", 
+                                    DtCategory == "Critical", "High",
+                                    "Informational") 
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DstHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+customDetails:
+  SrcMacAddr: SrcMacAddr
+  EventSeverity: EventSeverity
+  EventStartTime: EventStartTime
+  NetworkRuleName: NetworkRuleName
+  NetworkRuleNumber: NetworkRuleNumber
+  ThreatId: ThreatId
+  DtSentinelCategory: DtSentinelCategory
+  SrcPortNumber: SrcPortNumber
+  DstPortNumber: DstPortNumber
+  DstMacAddr: DstMacAddr
+  DtCompliance: DtCompliance
+  DtDescription: DtDescription
+  DtCategory: DtCategory
+  DtDeviceID: DtDeviceID
+# These are described here - this is why we're leaving tactics and techniques above empty
+alertDetailsOverride:
+  # model breach name here
+  alertDisplayNameFormat: 'Darktrace: {{ThreatRiskLevel}} - {{NetworkRuleName}}' # Up to 256 chars and 3 placeholders
+  alertDescriptionFormat: '{{DtMessage}}' # Up to 5000 chars and 3 placeholders
+  # MITRE tactic
+  alertTacticsColumnName: # leave empty
+  alertSeverityColumnName: # leave empty
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: DtBreachURL
+    - alertProperty: ProviderName
+      value: EventVendor
+    - alertProperty: ProductName
+      value: EventProduct
+    - alertProperty: ProductComponentName
+      value: ThreatCategory
+    - alertProperty: Severity
+      value: DtSentinelCategory
+version: 1.1.0
+kind: NRT

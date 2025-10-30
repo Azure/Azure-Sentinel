@@ -1,0 +1,176 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Fortinet FortiGate
+  Version: '0.4'
+  LastUpdated: Dec 11, 2022
+Product:
+  Name: Fortinet FortiGate
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.3'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: traffic log fields
+    Link: https://docs.fortinet.com/document/fortigate/7.2.0/fortios-log-message-reference/949981/traffic-log-support-for-cef
+  - Title: Fortinet FortiGate CEF setup
+    Link: https://community.fortinet.com/t5/FortiGate/Technical-Tip-Integrate-FortiGate-with-Microsoft-Sentinel/ta-p/199709
+  - Title: Fortinet FortiGate syslogd documentation
+    Link: https://docs.fortinet.com/document/fortigate/7.2.0/cli-reference/450620/config-log-syslogd-setting
+Description: |
+  This ASIM parser supports filtering and normalizing Fortinet FortiGate logs produced by the Microsoft Sentinel Fortinet connector to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionFortinetFortiGate                                  
+EquivalentBuiltInParser: _Im_NetworkSession_FortinetFortiGate                                  
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventResultDetails:string)
+    [
+      "accept","Allow","Success",""
+      , "client-rst","Reset Source","Failure",""
+      , "close","","Success",""
+      , "deny","Deny","Failure",""
+      , "ip-conn","","Failure","IP connection error"
+      , "server-rst","Reset Destination","Failure",""
+      , "timeout","","Failure",""
+    ];
+    // -- See https://docs.fortinet.com/document/fortigate/7.2.4/fortios-log-message-reference/671442/cef-priority-levels
+    let SeverityLookup = datatable (EventOriginalSeverity:string, EventSeverity:string)
+    [
+      "1", "Informational", // Debug
+      "2", "Informational", // Information
+      "3", "Informational", // Notification
+      "4", "Low", // Warning
+      "5", "Low", // Error
+      "6", "Critical", // High
+      "7", "Alert", // Medium
+      "8", "High" // Emergency
+    ];
+    let Parser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
+      let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      CommonSecurityLog
+      | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime)
+      | where DeviceVendor == "Fortinet" and DeviceProduct startswith "FortiGate" and (column_ifexists("DeviceEventCategory","") has "traffic" or AdditionalExtensions has "cat=traffic")
+      | where DeviceAction != "dns" and Activity !has "dns" 
+      | where (array_length(hostname_has_any)==0)
+      | where  (isnull(dstportnumber) or DestinationPort==dstportnumber)
+      | extend temp_ResultMatch = case (
+          eventresult=="*", true,
+          (eventresult == "Success") and (DeviceAction in ("accept", "close") or Activity has_any ("accept", "close")), true,
+          (eventresult == "Failure") and (DeviceAction !in ("accept", "close") and not(Activity has_any ("accept", "close"))), true,
+          false
+      )
+      | where temp_ResultMatch
+      | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any)
+        , temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
+      | extend ASimMatchingIpAddr=case(
+          array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+          temp_SrcMatch and temp_DstMatch, "Both",
+          temp_SrcMatch, "SrcIpAddr",
+          temp_DstMatch, "DstIpAddr",
+          "No match"
+      )
+      | where ASimMatchingIpAddr != "No match" 
+      | parse Activity with "traffic:forward " temp_DeviceAction:string 
+      | extend DeviceAction = coalesce(DeviceAction, temp_DeviceAction)  
+      | lookup EventLookup on DeviceAction 
+      | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
+      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, ASimMatchingIpAddr, DvcAction
+      | project-rename DstBytes = ReceivedBytes
+        , DstInterfaceName = DeviceOutboundInterface
+        , DstIpAddr = DestinationIP
+        , DstPortNumber = DestinationPort
+        , Dvc = Computer
+        , EventMessage = Activity
+        , EventOriginalSeverity = LogSeverity
+        , EventProduct = DeviceProduct
+        , EventProductVersion = DeviceVersion
+        , SrcBytes = SentBytes
+        , SrcInterfaceName = DeviceInboundInterface
+        , SrcIpAddr = SourceIP
+        , SrcPortNumber = SourcePort
+        , DvcId = DeviceExternalID
+        , EventUid = _ItemId
+      | invoke _ASIM_ResolveNetworkProtocol ('Protocol')
+      | project-rename DvcOriginalAction = DeviceAction
+      | parse-kv AdditionalExtensions as (
+              FortinetFortiGatestart:datetime,
+              FortinetFortiGatesrcintfrole:string,
+              FortinetFortiGatedstintfrole:string,
+              FortinetFortiGateexternalID:string,
+              FortinetFortiGatepolicyid:int,
+              FortinetFortiGatedstcountry:string,
+              FortinetFortiGatesrccountry:string,
+              FortinetFortiGatecrscore:string,
+              FortinetFortiGateduration:int,
+              FortinetFortiGatesentpkt:long,
+              FortinetFortiGatercvdpkt:long
+          ) with (pair_delimiter=';', kv_delimiter='=')
+      | project-rename
+          EventStartTime          = FortinetFortiGatestart,
+          SrcZone                 = FortinetFortiGatesrcintfrole,
+          DstZone                 = FortinetFortiGatedstintfrole,
+          NetworkSessionId        = FortinetFortiGateexternalID,
+          NetworkRuleNumber       = FortinetFortiGatepolicyid,
+          NetworkDuration         = FortinetFortiGateduration,
+          DstGeoCountry           = FortinetFortiGatedstcountry,
+          SrcGeoCountry           = FortinetFortiGatesrccountry,
+          ThreatOriginalRiskLevel = FortinetFortiGatecrscore,
+          SrcPackets              = FortinetFortiGatesentpkt,
+          DstPackets              = FortinetFortiGatercvdpkt
+      | extend EventCount = int(1)
+        , EventSchema = "NetworkSession"
+        , EventSchemaVersion = "0.2.3"
+        , EventType = "NetworkSession"
+        , EventVendor = "Fortinet"
+        , DvcIdType = "Other"
+        , NetworkBytes = DstBytes + SrcBytes
+        , EventEndTime = TimeGenerated
+        , EventStartTime = coalesce(EventStartTime, TimeGenerated)
+        , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
+            , DstIpAddr contains ":", "IPv6"
+            , "")
+        , NetworkPackets = DstPackets + SrcPackets
+        | lookup SeverityLookup on EventOriginalSeverity
+        | extend 
+            Src = SrcIpAddr,
+            Dst = DstIpAddr,
+            SessionId = NetworkSessionId,
+            IpAddr = SrcIpAddr,
+            Duration = NetworkDuration,
+            Rule = tostring(NetworkRuleNumber)
+      | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber
+    };
+    Parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)

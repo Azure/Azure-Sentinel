@@ -1,0 +1,51 @@
+id: 4355f601-1421-4ac4-b2ce-88f0859cc101
+name: New device registration from unfamiliar location
+description: |
+  'This query identifies new device being registered from a location where the user does not normally login from'
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+  - connectorId: OktaSSOv2
+    dataTypes:
+      - OktaSSO
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+tags:
+  - Okta
+query: |
+ let Events = dynamic(["device.enrollment.create"]);
+ let DeviceRegistrations =  OktaSSO
+  | where eventType_s in (Events)
+  | where outcome_result_s == "SUCCESS"
+  | extend oktaDeviceId_ = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).oktaDeviceId), NewDevice_osPlatform = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osPlatform),  NewDevice_osVersion = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osVersion), displayName_ = tostring(parse_json(target_s)[0].displayName)
+  | extend Location = strcat(client_geographicalContext_city_s,  " | ", client_geographicalContext_state_s," | ", client_geographicalContext_country_s)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, displayMessage_s, outcome_result_s,
+  outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s',""), client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location ;
+ let UserLogins =   OktaSSO
+  | where TimeGenerated > ago(14d)
+  | where eventType_s =~ "user.session.start"
+  | where outcome_result_s =~ "SUCCESS"
+  | extend Location = strcat(client_geographicalContext_city_s,  " | ", client_geographicalContext_state_s," | ", client_geographicalContext_country_s)
+  | project actor_alternateId_s, actor_displayName_s, Location;
+ DeviceRegistrations
+  | join kind=leftanti (
+     UserLogins
+  )
+ on  Location, actor_alternateId_s
+  | extend Account_0_Name = actor_displayName_s
+  | extend IP_0_Address = client_ipAddress_s
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: client_ipAddress_s
+version: 1.0.0

@@ -1,0 +1,62 @@
+id: f0be11a9-ec48-4df6-801d-479556044d4e
+name: Ingress Tool Transfer - Certutil
+description: |
+  This detection addresses most of the known ways to utilize this binary for malicious/unintended purposes. 
+  It attempts to accommodate for most detection evasion techniques, like commandline obfuscation and binary renaming.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - DefenseEvasion
+relevantTechniques:
+  - T1105
+  - T1564.004
+  - T1027
+  - T1140
+query: |
+  // Set the time span for the query.
+  let Timeframe = 1h;
+  // Set the HashTimeframe for the hash lookup; longer makes it more accurate, but obviously also more resource-intensive.
+  let HashTimeframe = 14d;
+  // Get all known SHA1 hashes for certutil executions or renamed files formerly named certutil.
+  let CertUtilPESha1=materialize(DeviceProcessEvents | where Timestamp > ago(HashTimeframe)| where FileName has "certutil"  | where isnotempty(SHA1) | summarize sha1=make_set(SHA1));
+  let CertUtilFESha1=materialize(DeviceFileEvents | where Timestamp > ago(HashTimeframe)| where PreviousFileName contains "certutil" or FileName contains "certutil"  | where isnotempty(SHA1) | summarize sha1=make_set(SHA1));
+  DeviceProcessEvents
+  | where Timestamp >= ago(Timeframe)
+  // Get all executions by processes with a SHA1 hash that is or was named certutil.
+  | where SHA1 in (CertUtilPESha1) or SHA1 in (CertUtilFESha1) or FileName =~ "certutil.exe" or ProcessCommandLine has "certutil"
+  // Create a new field called CleanProcessCommandLine which gets populated with the value of ProcessCommandLine as Windows parses it for execution, 
+  // removing any potential command line obfuscation. 
+  | extend CleanProcessCommandLine=parse_command_line(ProcessCommandLine, "windows")
+  // Search for de-obfuscated commands used. 
+  // Urlcache is the documented attribute. However, url is also accepted.
+  // Verifyctl is the documented attribute. However, verify is also accepted.
+  | where CleanProcessCommandLine has_any ("decode", "encode", "verify","url") 
+  | order by Timestamp
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: AccountSid 
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+kind: Scheduled

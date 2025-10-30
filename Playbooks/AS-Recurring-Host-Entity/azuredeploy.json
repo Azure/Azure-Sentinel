@@ -1,0 +1,301 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Recurring-Host-Entity", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will take the Hosts from the Incident entities list and search the Microsoft Sentinel SecurityAlert logs for other entities containing the same Hosts. A comment noting the Alerts the Hosts appear in, and their occurrence count, will be added to the Incident.",
+        "postDeployment": ["The Microsoft Sentinel Contributor role must be applied to the playbook"],
+        "lastUpdateTime": "2023-09-08T16:21:43Z",
+        "entities": ["Host"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Log Analytics Workspace"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Recurring-Host-Entity",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App resource to be created"
+            }
+        },
+        "SentinelResourceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Microsoft Sentinel Workspace SecurityAlerts will be queried from"
+            }
+        }
+    },
+    "variables": {
+        "azuremonitorlogs": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogs')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },  
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },      
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><strong>Incident Hosts Appeared in Entities in the Last 7 Days<br>\n</strong>@{variables('Recurring Hosts')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@variables('Recurring Hosts')",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "For_each_-_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "For_each_-_Hosts": {
+                            "actions": {
+                                "Condition_-_Query_has_results": {
+                                    "actions": {
+                                        "Append_to_string_variable_-_HTML_formatting": {
+                                            "inputs": {
+                                                "name": "Recurring Hosts",
+                                                "value": "</ul>"
+                                            },
+                                            "runAfter": {
+                                                "For_each_-_Related_Alert": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable"
+                                        },
+                                        "Append_to_string_variable_-_Host_Name_Header": {
+                                            "inputs": {
+                                                "name": "Recurring Hosts",
+                                                "value": "\n<strong>@{items('For_each_-_Hosts')?['HostName']} </strong> appeared in the following Alerts:\n<ul>\n"
+                                            },
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable"
+                                        },
+                                        "For_each_-_Related_Alert": {
+                                            "actions": {
+                                                "Append_to_string_variable_-_Alert_Info": {
+                                                    "inputs": {
+                                                        "name": "Recurring Hosts",
+                                                        "value": "<li>@{items('For_each_-_Related_Alert')?['AlertName']} -- <i>@{items('For_each_-_Related_Alert')?['Count']} occurrences</i></li>"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable"
+                                                }
+                                            },
+                                            "foreach": "@body('Run_query_and_list_results')?['value']",
+                                            "runAfter": {
+                                                "Append_to_string_variable_-_Host_Name_Header": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Run_query_and_list_results')?['value'])",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Run_query_and_list_results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Run_query_and_list_results": {
+                                    "inputs": {
+                                        "body": "SecurityAlert\n| where Entities has '@{items('For_each_-_Hosts')?['HostName']}'\n| summarize Count = count() by AlertName\n| order by Count desc",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "[resourceGroup().name]",
+                                            "resourcename": "[parameters('SentinelResourceName')]",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "[subscription().subscriptionId]",
+                                            "timerange": "@{addDays(utcNow(), -7)}"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "runAfter": {
+                                "Initialize_variable_-_Recurring_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_-_Recurring_Hosts": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Recurring Hosts",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]",
+                                "connectionName": "[variables('azuremonitorlogs')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

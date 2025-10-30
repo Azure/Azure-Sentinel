@@ -1,0 +1,112 @@
+id: 2fed0668-6d43-4c78-87e6-510f96f12145
+name: Phishing link click observed in Network Traffic
+description: |
+  'The purpose of this content is to identify successful phishing links accessed by users. Once a user clicks on a phishing link, we observe successful network activity originating from non-Microsoft network devices. These devices may include Palo Alto Networks, Fortinet, Check Point, and Zscaler devices.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId:  OfficeATP
+    dataTypes:
+    - SecurityAlert
+  - connectorId:  PaloAltoNetworks
+    dataTypes:
+    - CommonSecurityLog (PaloAlto)
+  - connectorId:  Fortinet
+    dataTypes:
+    - CommonSecurityLog (Fortinet)
+  - connectorId:  CheckPoint
+    dataTypes:
+    - CommonSecurityLog (CheckPoint)
+  - connectorId:  Zscaler
+    dataTypes:
+    - CommonSecurityLog (Zscaler)
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+    //Finding MDO Security alerts and extracting the Entities user, Domain, Ip, and URL.
+    let Alert_List= dynamic([
+    "Phishing link click observed in Network Traffic",
+    "Phish delivered due to an IP allow policy",
+    "A potentially malicious URL click was detected",
+    "High Risk Sign-in Observed in Network Traffic",
+    "A user clicked through to a potentially malicious URL",
+    "Suspicious network connection to AitM phishing site",
+    "Messages containing malicious entity not removed after delivery",
+    "Email messages containing malicious URL removed after delivery",
+    "Email reported by user as malware or phish",
+    "Phish delivered due to an ETR override",
+    "Phish not zapped because ZAP is disabled"]);
+    SecurityAlert
+    |where ProviderName in~ ("Office 365 Advanced Threat Protection", "OATP")
+    | where AlertName in~ (Alert_List)
+    //extracting Alert Entities
+     | extend Entities = parse_json(Entities)
+    | mv-apply Entity = Entities on
+    (
+    where Entity.Type == 'account'
+    | extend EntityUPN = iff(isempty(Entity.UserPrincipalName), tostring(strcat(Entity.Name, "@", tostring (Entity.UPNSuffix))), tostring(Entity.UserPrincipalName))
+    )
+    | mv-apply Entity = Entities on
+    (
+    where Entity.Type == 'url'
+    | extend EntityUrl = tostring(Entity.Url)
+    )
+    | summarize AccountUpn=tolower(tostring(take_any(EntityUPN))),Url=tostring(tolower(take_any(EntityUrl))),AlertTime= min(TimeGenerated)by SystemAlertId, ProductName
+    // filtering 3pnetwork devices
+    | join kind= inner (CommonSecurityLog
+    | where DeviceVendor has_any  ("Palo Alto Networks", "Fortinet", "Check Point", "Zscaler")
+    | where DeviceAction != "Block"
+    | where DeviceProduct startswith "FortiGate" or DeviceProduct startswith  "PAN" or DeviceProduct startswith  "VPN" or DeviceProduct startswith "FireWall" or DeviceProduct startswith  "NSSWeblog" or DeviceProduct startswith "URL"
+    | where isnotempty(RequestURL)
+    | where isnotempty(SourceUserName)
+    | extend SourceUserName = tolower(SourceUserName)
+    | project
+    3plogTime=TimeGenerated,
+    DeviceVendor,
+    DeviceProduct,
+    Activity,
+    DestinationHostName,
+    DestinationIP,
+    RequestURL=tostring(tolower(RequestURL)),
+    MaliciousIP,
+    Name = tostring(split(SourceUserName,"@")[0]),
+    UPNSuffix =tostring(split(SourceUserName,"@")[1]),
+    SourceUserName,
+    IndicatorThreatType,
+    ThreatSeverity,AdditionalExtensions,
+    ThreatConfidence)on $left.Url == $right.RequestURL and $left.AccountUpn == $right.SourceUserName
+    // Applied the condition where alert trigger 1st and then the 3p Network activity execution
+    | where AlertTime between ((3plogTime - 1h) .. (3plogTime + 1h))
+entityMappings:
+    - entityType: Account
+      fieldMappings:
+      - identifier: FullName
+        columnName: SourceUserName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+    - entityType: IP
+      fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+    - entityType: DNS
+      fieldMappings:
+      - identifier: DomainName
+        columnName: DestinationHostName
+kind: Scheduled
+version: 1.0.4
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

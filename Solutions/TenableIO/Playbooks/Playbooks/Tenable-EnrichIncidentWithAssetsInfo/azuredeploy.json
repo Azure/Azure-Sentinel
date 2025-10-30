@@ -1,0 +1,417 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Tenable.io - Enrich incident with asset info",
+        "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Obtains IPs from the incident. \n 2. Searches asset information by the IPs in Microsoft Sentinel.\n 3. Adds obtained information as a comment to the incident.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, TenableIO Data Connector should be deployed."
+        ],
+        "lastUpdateTime": "2022-09-29T12:00:00.000Z",
+        "entities": [
+            "IP"
+        ],
+        "tags": [
+            "Enrichment"
+        ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Tenable-EnrichIncidentWithAssetsInfo",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{body('Create_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Create_HTML_table": {
+                            "runAfter": {
+                                "For_each_IP_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('results_list')"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_variable_results_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_IP_in_incident": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "For_each_asset_in_assets": {
+                                    "foreach": "@body('Run_query_and_list_results')?['value']",
+                                    "actions": {
+                                        "Append_to_array_variable": {
+                                            "runAfter": {
+                                                "Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "results_list",
+                                                "value": "@outputs('Compose')"
+                                            }
+                                        },
+                                        "Compose": {
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "acr_score": "@body('Parse_JSON')?['acr_score_s']",
+                                                "fqdns": "@body('Parse_JSON')?['fqdns_s']",
+                                                "hostnames": "@body('Parse_JSON')?['hostnames_s']",
+                                                "id": "@body('Parse_JSON')?['id_g']",
+                                                "ipv4s": "@body('Parse_JSON')?['ipv4s_s']",
+                                                "mac_addresses": "@body('Parse_JSON')?['mac_addresses_s']",
+                                                "operating_systems": "@body('Parse_JSON')?['operating_systems_s']"
+                                            }
+                                        },
+                                        "Parse_JSON": {
+                                            "runAfter": {},
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('For_each_asset_in_assets')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "Computer": {
+                                                            "type": "string"
+                                                        },
+                                                        "MG": {
+                                                            "type": "string"
+                                                        },
+                                                        "ManagementGroupName": {
+                                                            "type": "string"
+                                                        },
+                                                        "RawData": {
+                                                            "type": "string"
+                                                        },
+                                                        "SourceSystem": {
+                                                            "type": "string"
+                                                        },
+                                                        "TenantId": {
+                                                            "type": "string"
+                                                        },
+                                                        "TimeGenerated": {
+                                                            "type": "string"
+                                                        },
+                                                        "Type": {
+                                                            "type": "string"
+                                                        },
+                                                        "_ResourceId": {
+                                                            "type": "string"
+                                                        },
+                                                        "acr_score_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "agent_names_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "created_at_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "exposure_score_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "first_scan_time_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "first_seen_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "fqdns_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "has_agent_b": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "has_plugin_results_b": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "hostnames_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "id_g": {
+                                                            "type": "string"
+                                                        },
+                                                        "installed_software_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "ipv4s_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "ipv6s_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "last_licensed_scan_date_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "last_scan_id_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "last_scan_time_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "last_schedule_id_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "last_seen_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "mac_addresses_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "manufacturer_tpm_ids_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "netbios_names_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "network_interfaces_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "operating_systems_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "qualys_asset_ids_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "qualys_host_ids_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "sources_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "ssh_fingerprints_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "symantec_ep_hardware_keys_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "system_types_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "tags_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "updated_at_t": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Run_query_and_list_results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Run_query_and_list_results": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "Tenable_IO_Assets_CL | where ipv4s_s contains \"@{items('For_each_IP_in_incident')?['Address']}\" and TimeGenerated > ago(30d)",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                            "timerange": "Set in query"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_assets": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "assets",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_results_list": {
+                            "runAfter": {
+                                "Initialize_variable_assets": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "results_list",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuremonitorlogs": {
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

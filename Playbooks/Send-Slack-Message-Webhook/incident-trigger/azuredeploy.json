@@ -1,0 +1,334 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+        "metadata": {
+        "title": "Post Message Slack Via Webhook",
+        "description": "This playbook will be sending Slack with basic incidents details (Incident title, severity, tactics, link,…) when incident is created in Microsoft Sentinel. The playbook includes functionality to:<br>Close Incident As False Positive<br>Close Incident As Benign Positve<br>Change Incident Status To Active<br>Add entities to allow list",
+        "prerequisites": ["Slack application with Webhook installed and Interactivity Enbaled"],
+        "lastUpdateTime": "2022-03-15T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Notification" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Zachi Neuman"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Send_SlackMessage_to_Webbook",
+            "type": "string"
+        },
+        "SlackWebhook": {
+            "defaultValue": "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX>",
+            "type": "string"
+        }
+    },
+    "variables": { 
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', replace(parameters('PlaybookName'),' ',''))]"
+    },
+    "resources": [
+ {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+                 "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "PostMessageSlack-Webhook",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_Incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "Append_to_string_variable": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Entities",
+                                        "value": "@{items('For_each')['Entity']} *Type:* @{items('For_each')['Entity Type']}\n"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "blocks": [
+                                        {
+                                            "text": {
+                                                "text": "Incident: *<@{triggerBody()?['object']?['properties']?['incidentUrl']}|@{triggerBody()?['object']?['properties']?['title']}>*",
+                                                "type": "mrkdwn"
+                                            },
+                                            "type": "section"
+                                        },
+                                        {
+                                            "text": {
+                                                "text": "@{triggerBody()?['object']?['id']}",
+                                                "type": "mrkdwn"
+                                            },
+                                            "type": "section"
+                                        },
+                                        {
+                                            "text": {
+                                                "text": "Incident title: @{triggerBody()?['object']?['properties']?['title']}\nIncident Descripition: @{triggerBody()?['object']?['properties']?['description']}\nIncident ID:@{triggerBody()?['object']?['properties']?['incidentNumber']}\nCreation time:@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\nSeverity:@{triggerBody()?['object']?['properties']?['severity']}\nAlert providers:@{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], '<br />')}\nTactics: @{join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '<br />')}\nDescription: @{triggerBody()?['object']?['properties']?['description']}",
+                                                "type": "mrkdwn"
+                                            },
+                                            "type": "section"
+                                        },
+                                        {
+                                            "text": {
+                                                "text": "*Entities:* @{variables('Entities')}",
+                                                "type": "mrkdwn"
+                                            },
+                                            "type": "section"
+                                        },
+                                        {
+                                            "elements": [
+                                                {
+                                                    "confirm": {
+                                                        "confirm": {
+                                                            "text": "Do it",
+                                                            "type": "plain_text"
+                                                        },
+                                                        "deny": {
+                                                            "text": "Stop, I've changed my mind!",
+                                                            "type": "plain_text"
+                                                        },
+                                                        "text": {
+                                                            "text": "Are you sure you want to close it?",
+                                                            "type": "mrkdwn"
+                                                        },
+                                                        "title": {
+                                                            "text": "Are you sure?",
+                                                            "type": "plain_text"
+                                                        }
+                                                    },
+                                                    "style": "primary",
+                                                    "text": {
+                                                        "emoji": true,
+                                                        "text": "Close Alert As False Positive",
+                                                        "type": "plain_text"
+                                                    },
+                                                    "type": "button",
+                                                    "value": "FP"
+                                                },
+                                                {
+                                                    "confirm": {
+                                                        "confirm": {
+                                                            "text": "Do it",
+                                                            "type": "plain_text"
+                                                        },
+                                                        "deny": {
+                                                            "text": "Stop, I've changed my mind!",
+                                                            "type": "plain_text"
+                                                        },
+                                                        "text": {
+                                                            "text": "Are you sure you want to close it?",
+                                                            "type": "mrkdwn"
+                                                        },
+                                                        "title": {
+                                                            "text": "Are you sure?",
+                                                            "type": "plain_text"
+                                                        }
+                                                    },
+                                                    "style": "primary",
+                                                    "text": {
+                                                        "emoji": true,
+                                                        "text": "Close Alert As Benign Positive",
+                                                        "type": "plain_text"
+                                                    },
+                                                    "type": "button",
+                                                    "value": "BP"
+                                                },
+                                                {
+                                                    "style": "danger",
+                                                    "text": {
+                                                        "emoji": true,
+                                                        "text": "Change Status To Active",
+                                                        "type": "plain_text"
+                                                    },
+                                                    "type": "button",
+                                                    "value": "TP"
+                                                },
+                                                {
+                                                    "confirm": {
+                                                        "confirm": {
+                                                            "text": "Do it",
+                                                            "type": "plain_text"
+                                                        },
+                                                        "deny": {
+                                                            "text": "Stop, I've changed my mind!",
+                                                            "type": "plain_text"
+                                                        },
+                                                        "text": {
+                                                            "text": "Are you sure you want to close it?",
+                                                            "type": "mrkdwn"
+                                                        },
+                                                        "title": {
+                                                            "text": "Are you sure?",
+                                                            "type": "plain_text"
+                                                        }
+                                                    },
+                                                    "style": "primary",
+                                                    "text": {
+                                                        "emoji": true,
+                                                        "text": "Allow List Entities",
+                                                        "type": "plain_text"
+                                                    },
+                                                    "type": "button",
+                                                    "value": "WL"
+                                                }
+                                            ],
+                                            "type": "actions"
+                                        }
+                                    ]
+                                },
+                                "headers": {
+                                    "Content-type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "[parameters('SlackWebhook')]"
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Entities",
+                                        "type": "string",
+                                        "value": "\n"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Select_Entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Select_Entities')",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "Entity": {
+                                                "type": "string"
+                                            },
+                                            "Entity Type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "Entity",
+                                            "Entity Type"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Select_Entities": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "select": {
+                                    "Entity": "@item()?['properties']?['friendlyName']",
+                                    "Entity Type": "@item()?['kind']"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

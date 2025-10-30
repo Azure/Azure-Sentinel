@@ -1,0 +1,23 @@
+id: 11d725f5-93d8-4b34-a64f-bf8450cdb184
+name: Gootkit File Delivery
+description: |
+  This query surfaces alerts related to Gootkit and enriches with command and control information, which has been observed delivering ransomware.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - AlertInfo
+  - AlertEvidence
+  - DeviceNetworkEvents
+tactics:
+- Ransomware
+query: |
+  AlertInfo | where Title =~ "Suspected delivery of Gootkit malware" 
+  // Below section is to surface active follow-on Command and Control as a result of the above behavior. Comment out the below joins to see 
+  // only file create events where the malware may be present but has not yet been executed. 
+  //// 
+  // Get alert evidence 
+  | join AlertEvidence on $left.AlertId == $right.AlertId 
+  // Look for C2 
+  | join DeviceNetworkEvents on $left.DeviceId == $right.DeviceId 
+  | where InitiatingProcessFileName =~ "wscript.exe" and InitiatingProcessCommandLine has ".zip" and InitiatingProcessCommandLine has ".js" 
+  | summarize by RemoteUrl, RemoteIP , DeviceId, InitiatingProcessCommandLine, Timestamp, InitiatingProcessFileName, AlertId, Title, AccountName

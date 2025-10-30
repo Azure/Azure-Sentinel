@@ -1,0 +1,232 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+    "metadata":{
+        "title": "EnrichIP-RecordedFuture-IOCEnrichment-Nested",
+        "description": "This playbook leverages the Recorded Future API to automatically enrich the IP found in incidents, with the following Recorded Future context: Risk Score, Risk Rules and Link to Intelligence Card.",
+        "prerequisites": "",
+        "lastUpdateTime": "2022-08-29T10:43:00Z",
+        "entities": ["ip"],
+        "tags": ["Enrichment"],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+	"parameters": {
+		"PlaybookName": {
+			"defaultValue": "EnrichIP-RecordedFuture-IOCEnrichment-Nested",
+			"type": "string"
+		}
+	},
+	"variables": {
+		"RecordedFutureConnectionName": "[concat('recordedfuture-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName":  "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+	"resources": [
+		{
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2017-07-01",
+			"name": "[parameters('PlaybookName')]",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('RecordedFutureConnectionName'))]"
+			],
+			"properties": {
+				"definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+                "$connections": {
+                    "defaultValue": {},
+                    "type": "Object"
+                }
+            },
+            "triggers": {
+                "manual": {
+                    "type": "Request",
+                    "kind": "Http",
+                    "inputs": {
+                        "method": "POST",
+                        "schema": {
+                            "properties": {
+                                "IPs": {
+                                    "items": {
+                                        "properties": {
+                                            "Address": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "Address"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "actions": {
+                "For_each_IP": {
+                    "foreach": "@triggerBody()?['IPs']",
+                    "actions": {
+                        "Append_to_string_variable_Consolidated_Comment": {
+                            "runAfter": {
+                                "For_each_evidence_details-_Ip": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "Consolidated Comment",
+                                "value": "Recorded Future IP Enrichment\nIP: @{items('For_each_IP')?['Address']}\nRisk Score: @{body('IP_Enrichment')?['data']?['risk']?['score']}\nRisk Rules: @{variables('Rules')}\nLink to Intelligence Card: @{body('IP_Enrichment')?['data']?['intelCard']}"
+                            }
+                        },
+                        "For_each_evidence_details-_Ip": {
+                            "foreach": "@body('IP_Enrichment')?['data']?['risk']?['evidenceDetails']",
+                            "actions": {
+                                "Append_to_string_variable_Rules": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Rules",
+                                        "value": "@items('For_each_evidence_details-_Ip')?['rule']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "IP_Enrichment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "IP_Enrichment": {
+                            "runAfter": {
+                                "Set_variable_Rules": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['recordedfuture']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/ip/@{encodeURIComponent(items('For_each_IP')?['Address'])}",
+                                "queries": {
+                                    "fields": "intelCard,risk"
+                                }
+                            }
+                        },
+                        "Set_variable_Rules": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "Rules",
+                                "value": " "
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable_Consolidated_Comment": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach"
+                },
+                "Initialize_variable_Consolidated_Comment": {
+                    "runAfter": {
+                        "Initialize_variable_Rules": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "Consolidated Comment",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_Rules": {
+                    "runAfter": {},
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "Rules",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "Response": {
+                    "runAfter": {
+                        "For_each_IP": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Response",
+                    "kind": "Http",
+                    "inputs": {
+                        "body": "@variables('Consolidated Comment')",
+                        "statusCode": 200
+                    }
+                }
+            },
+            "outputs": {}
+        },
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuresentinel": {
+								"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+								"connectionName": "[variables('AzureSentinelConnectionName')]"
+							},
+							"recordedfuture": {
+								"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/recordedfuture')]",
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedFutureConnectionName'))]",
+								"connectionName": "[variables('RecordedFutureConnectionName')]"
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('RecordedFutureConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/recordedfuture')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,125 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "Establish the needed base resources to leverage with all RiskIQ playbooks.",
+        "title": "RiskIQ-Base", 
+        "description": "This playbook creates a shared API Connection for all RiskIQ playbooks to leverage. This eases the configuration process for a user during deployment of the RiskIQ solution. In time, this base playbook may be extended to set more functionality. You will need your API credentials (email/secret) when configuring this playbook. Those can be found on your [account settings](https://community.riskiq.com/settings) page. For enterprise customers, it's preferred to use the 'organization' credential pair, not the user. If you have trouble accessing your account or your credentials contact your account representative (support[@]riskiq.com).",
+        "prerequisites": ["None"],
+        "lastUpdateTime": "2022-08-05T00:00:00.000Z", 
+        "entities": [], 
+        "tags": [], 
+        "postDeployment": [
+            "After deploying the playbook, you must authorize the connections leveraged.", 
+            "1. Visit the playbook resource.", 
+            "2. Under 'Development Tools' (located on the left), click 'API Connections'.", 
+            "3. Ensure each connection has been authorized.", 
+            "**Note: If you've deployed the [RiskIQ-Base](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/RiskIQ/Playbooks/RiskIQ-Base/azuredeploy.json) playbook, you will only need to authorize the Microsoft Sentinel connection.**"],
+        "support": {
+            "tier": "microsoft" 
+        },
+        "author": {
+            "name": "Brandon Dixon, RiskIQ"
+        },
+        "releaseNotes": [
+        {
+            "version": "1.0.0",
+            "title": "RiskIQ Base",
+            "notes": [
+                "Initial version"
+            ]
+        }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RiskIQ-Base",
+            "type": "string"
+        },
+        "RiskiqEmail": {
+            "defaultValue": "<your-email-here@example.com>",
+            "type": "string"
+        },
+        "RiskiqApiKey": {
+            "defaultValue": "<your-api-key-here>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "RiskIQConnectionName": "riskiq-shared"
+    },
+    "resources": [{
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('RiskIQConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+            "displayName": "RiskIQ-Shared",
+            "parameterValues": {
+                "username": "[parameters('RiskiqEmail')]",
+                "password": "[parameters('RiskiqApiKey')]"
+            },
+            "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/riskiqpassivetotal')]"
+            }
+        }
+    }, {
+        "type": "Microsoft.Logic/workflows",
+        "apiVersion": "2017-07-01",
+        "name": "[parameters('PlaybookName')]",
+        "location": "[resourceGroup().location]",
+        "tags": {
+            "LogicAppsCategory": "security"
+        },
+        "dependsOn": [
+            "[resourceId('Microsoft.Web/connections', variables('RiskIQConnectionName'))]"
+        ],
+        "properties": {
+            "state": "Enabled",
+            "definition": {
+                "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                "actions": {
+                    "Get_account_metadata_and_settings": {
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['riskiqpassivetotal']['connectionId']"
+                                }
+                            },
+                            "method": "get",
+                            "path": "/account"
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                    }
+                },
+                "contentVersion": "1.0.0.0",
+                "outputs": {},
+                "parameters": {
+                    "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    }
+                },
+                "triggers": {
+                    "manual": {
+                        "inputs": {},
+                        "kind": "Http",
+                        "type": "Request"
+                    }
+                }
+            },
+            "parameters": {
+                "$connections": {
+                    "value": {
+                        "riskiqpassivetotal": {
+                            "connectionId": "[resourceId('Microsoft.Web/connections', variables('RiskIQConnectionName'))]",
+                            "connectionName": "[variables('RiskIQConnectionName')]",
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/riskiqpassivetotal')]"
+                        }
+                    }
+                }
+            }
+        }
+    }]
+}

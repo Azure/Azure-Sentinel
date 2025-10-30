@@ -1,0 +1,275 @@
+// KQL Sysmon Event Parser
+// Last Updated Date: Apr 28, 2020
+// Sysmon Version: 9.01, Binary Version : 8.00 , Schema Version: 4.2
+//
+// Sysmon Instructions:
+// If you want to print configuration schema definition of sysmon. Execute below command from command shell or powershell terminal
+// Sysmon.exe -s
+//
+// You can further customize config XML definition and install sysmon with it via below command. 
+// Sample Sysmon config XML from Swift on Security's GitHub page : https://github.com/SwiftOnSecurity/sysmon-config/blob/master/sysmonconfig-export.xml
+// Sysmon.exe -i sysmonconfig-export.xml -accepteula -h sha1,md5,sha256 -n -l  
+// -n : Log all network connections and -l: log loading of modules.
+//
+// Parser Notes:
+// 1. This parser works against sysmon version 9, Schema version 4.21
+// 2. technique_id and technique_name will only be parsed/available if deployed via above mentioned sample sysmon XML config or any other with ATT&CK mapping already available.
+//
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. Sysmon_Normalized).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. Sysmon_Normalized | take 10).
+// Reference :
+// Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Tech Community Blog on KQL Functions : https://techcommunity.microsoft.com/t5/Azure-Sentinel/Using-KQL-functions-to-speed-up-analysis-in-Azure-Sentinel/ba-p/712381
+//
+let EventData = Event
+| where Source == "Microsoft-Windows-Sysmon"
+| extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+| project TimeGenerated, Source, EventID, Computer, UserName, EventData, RenderedDescription
+| extend EvData = parse_xml(EventData)
+| extend EventDetail = EvData.DataItem.EventData.Data
+| project-away EventData, EvData
+;
+let SysmonEvent1_ProcessCreate=() {
+let processEvents = EventData
+| where EventID == 1
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"], Image = EventDetail.[4].["#text"],
+FileVersion = EventDetail.[5].["#text"], Description = EventDetail.[6].["#text"], Product = EventDetail.[7].["#text"], Company = EventDetail.[8].["#text"],
+CommandLine = EventDetail.[9].["#text"], CurrentDirectory = EventDetail.[10].["#text"], User = EventDetail.[11].["#text"], LogonGuid = EventDetail.[12].["#text"],
+LogonId = EventDetail.[13].["#text"], TerminalSessionId = EventDetail.[14].["#text"], IntegrityLevel = EventDetail.[15].["#text"], Hashes = EventDetail.[16].["#text"], 
+ParentProcessGuid = EventDetail.[17].["#text"], ParentProcessId = EventDetail.[18].["#text"], ParentImage = EventDetail.[19].["#text"], ParentCommandLine = EventDetail.[20].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
+| mv-apply Hashes on ( 
+    summarize ParsedHashes = make_bag(pack(tostring(Hashes[0]), tostring(Hashes[1])))
+    )
+| project-away EventDetail, RuleName
+;
+processEvents;
+};
+let SysmonEvent2_FileCreateTime=() {
+let processEvents = EventData
+| where EventID == 2
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"], Image = EventDetail.[4].["#text"],
+TargetFilename = EventDetail.[5].["#text"], CreationUtcTime = EventDetail.[6].["#text"], PreviousCreationUtcTime = EventDetail.[7].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
+| mv-apply Hashes on ( 
+    summarize ParsedHashes = make_bag(pack(tostring(Hashes[0]), tostring(Hashes[1])))
+    )
+| project-away EventDetail, RuleName
+;
+processEvents;
+};
+let SysmonEvent3_NetworkConnect=() {
+let processEvents = EventData
+| where EventID == 3
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"], Image = EventDetail.[4].["#text"],
+User = EventDetail.[5].["#text"], Protocol = EventDetail.[6].["#text"], Initiated = EventDetail.[7].["#text"], SourceIsIpv6 = EventDetail.[8].["#text"], SourceIp = EventDetail.[9].["#text"], 
+SourceHostname = EventDetail.[10].["#text"], SourcePort = EventDetail.[11].["#text"], SourcePortName = EventDetail.[12].["#text"], DestinationIsIpv6 = EventDetail.[13].["#text"], 
+DestinationIp = EventDetail.[14].["#text"], DestinationHostname = EventDetail.[15].["#text"], DestinationPort = EventDetail.[16].["#text"], DestinationPortName = EventDetail.[17].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName
+;
+processEvents;
+};
+let SysmonEvent4_ServiceStateChange=() {
+let processEvents = EventData
+| where EventID == 4
+| extend UtcTime = EventDetail.[0].["#text"], State = EventDetail.[1].["#text"], Schema = EventDetail.[2].["#text"], SchemaVersion = EventDetail.[3].["#text"]
+| project-away EventDetail
+;
+processEvents;
+};
+let SysmonEvent5_ProcessTerminate=() {
+let processEvents = EventData
+| where EventID == 5
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"], Image = EventDetail.[4].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent6_DriverLoad=() {
+let processEvents = EventData
+| where EventID == 6
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ImageLoaded = EventDetail.[2].["#text"], Hashes = EventDetail.[3].["#text"],
+Signed = EventDetail.[4].["#text"], Signature = EventDetail.[5].["#text"], SignatureStatus = EventDetail.[6].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+| extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
+| mv-apply Hashes on ( 
+    summarize ParsedHashes = make_bag(pack(tostring(Hashes[0]), tostring(Hashes[1])))
+    )
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent7_ImageLoad=() {
+let processEvents = EventData
+| where EventID == 7
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"], Image = EventDetail.[4].["#text"], 
+ImageLoaded = EventDetail.[5].["#text"], FileVersion = EventDetail.[6].["#text"], Description = EventDetail.[7].["#text"], Product = EventDetail.[8].["#text"], Company = EventDetail.[9].["#text"], 
+Hashes = EventDetail.[10].["#text"], Signed = EventDetail.[11].["#text"], Signature = EventDetail.[12].["#text"], SignatureStatus = EventDetail.[13].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+| extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
+| mv-apply Hashes on ( 
+    summarize ParsedHashes = make_bag(pack(tostring(Hashes[0]), tostring(Hashes[1])))
+    )
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent8_CreateRemoteThread=() {
+let processEvents = EventData
+| where EventID == 8
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], SourceProcessGuid = EventDetail.[2].["#text"], SourceProcessId = EventDetail.[3].["#text"],
+SourceImage = EventDetail.[4].["#text"], TargetProcessGuid = EventDetail.[5].["#text"], TargetProcessId = EventDetail.[6].["#text"], TargetImage = EventDetail.[7].["#text"],
+NewThreadId = EventDetail.[8].["#text"], StartAddress = EventDetail.[9].["#text"], StartModule = EventDetail.[10].["#text"], StartFunction = EventDetail.[11].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent9_RawAccessRead=() {
+let processEvents = EventData
+| where EventID == 9
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"], Image = EventDetail.[4].["#text"], Device = EventDetail.[5].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent10_ProcessAccess=() {
+let processEvents = EventData
+| where EventID == 10
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], SourceProcessGUID = EventDetail.[2].["#text"], SourceProcessId = EventDetail.[3].["#text"], 
+SourceThreadId = EventDetail.[4].["#text"], SourceImage = EventDetail.[5].["#text"], TargetProcessGUID = EventDetail.[6].["#text"], TargetProcessId = EventDetail.[7].["#text"], 
+TargetImage = EventDetail.[8].["#text"], GrantedAccess = EventDetail.[9].["#text"], CallTrace = EventDetail.[10].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent11_FileCreate=() {
+let processEvents = EventData
+| where EventID == 11
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"],
+Image = EventDetail.[4].["#text"], TargetFilename = EventDetail.[5].["#text"], CreationUtcTime = EventDetail.[6].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent12_RegistryObjectAddDel=() {
+let processEvents = EventData
+| where EventID == 12
+| extend RuleName = EventDetail.[0].["#text"], EventType = EventDetail.[1].["#text"], UtcTime = EventDetail.[2].["#text"], ProcessGuid = EventDetail.[3].["#text"],
+ProcessId = EventDetail.[4].["#text"], Image = EventDetail.[5].["#text"], TargetObject = EventDetail.[6].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent13_RegistrySetValue=() {
+let processEvents = EventData
+| where EventID == 13
+| extend RuleName = EventDetail.[0].["#text"], EventType = EventDetail.[1].["#text"], UtcTime = EventDetail.[2].["#text"], ProcessGuid = EventDetail.[3].["#text"],
+ProcessId = EventDetail.[4].["#text"], Image = EventDetail.[5].["#text"], TargetObject = EventDetail.[6].["#text"], Details = EventDetail.[7].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent14_RegistryObjectRename=() {
+let processEvents = EventData
+| where EventID == 14
+| extend RuleName = EventDetail.[0].["#text"], EventType = EventDetail.[1].["#text"], UtcTime = EventDetail.[2].["#text"], ProcessGuid = EventDetail.[3].["#text"],
+ProcessId = EventDetail.[4].["#text"], Image = EventDetail.[5].["#text"], TargetObject = EventDetail.[6].["#text"], NewName = EventDetail.[7].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent15_FileCreateStreamHash=() {
+let processEvents = EventData
+| where EventID == 15
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"],
+Image = EventDetail.[4].["#text"], TargetFileName = EventDetail.[5].["#text"], CreationUtcTime = EventDetail.[6].["#text"], Hash = EventDetail.[7].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent16_ConfigChange=() {
+let processEvents = EventData
+| where EventID == 16
+| extend UtcTime = EventDetail.[0].["#text"], Configuration = EventDetail.[1].["#text"], ConfigurationFileHash = EventDetail.[2].["#text"]
+| project-away EventDetail
+;
+processEvents;
+};
+let SysmonEvent17_CreateNamedPipe=() {
+let processEvents = EventData
+| where EventID == 17
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"], PipeName = EventDetail.[4].["#text"], 
+Image = EventDetail.[5].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent18_ConnectNamedPipe=() {
+let processEvents = EventData
+| where EventID == 18
+| extend RuleName = EventDetail.[0].["#text"], UtcTime = EventDetail.[1].["#text"], ProcessGuid = EventDetail.[2].["#text"], ProcessId = EventDetail.[3].["#text"], PipeName = EventDetail.[4].["#text"], 
+Image = EventDetail.[5].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent19_WMIEventFilter=() {
+let processEvents = EventData
+| where EventID == 19
+| extend RuleName = EventDetail.[0].["#text"], EventType = EventDetail.[1].["#text"], UtcTime = EventDetail.[2].["#text"], Operation = EventDetail.[3].["#text"],
+User = EventDetail.[4].["#text"], EventNamespace = EventDetail.[5].["#text"], Name = EventDetail.[6].["#text"], Query = EventDetail.[7].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent20_WMIEventConsumer=() {
+let processEvents = EventData
+| where EventID == 20
+| extend RuleName = EventDetail.[0].["#text"], EventType = EventDetail.[1].["#text"], UtcTime = EventDetail.[2].["#text"], Operation = EventDetail.[3].["#text"],
+User = EventDetail.[4].["#text"],Name = EventDetail.[5].["#text"],Type = EventDetail.[6].["#text"],Destination = EventDetail.[7].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+let SysmonEvent21_WMIEventConsumerToFilter=() {
+let processEvents = EventData
+| where EventID == 21
+| extend RuleName = EventDetail.[0].["#text"], EventType = EventDetail.[1].["#text"], UtcTime = EventDetail.[2].["#text"], Operation = EventDetail.[3].["#text"],
+User = EventDetail.[4].["#text"], Consumer = EventDetail.[5].["#text"], Filter = EventDetail.[7].["#text"]
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName 
+| project-away EventDetail, RuleName 
+;
+processEvents;
+};
+(union isfuzzy=true
+SysmonEvent1_ProcessCreate, SysmonEvent2_FileCreateTime, SysmonEvent3_NetworkConnect, SysmonEvent4_ServiceStateChange, SysmonEvent5_ProcessTerminate,
+SysmonEvent6_DriverLoad, SysmonEvent7_ImageLoad, SysmonEvent8_CreateRemoteThread, SysmonEvent9_RawAccessRead, SysmonEvent10_ProcessAccess,
+SysmonEvent11_FileCreate, SysmonEvent12_RegistryObjectAddDel, SysmonEvent13_RegistrySetValue, SysmonEvent14_RegistryObjectRename,
+SysmonEvent15_FileCreateStreamHash, SysmonEvent16_ConfigChange, SysmonEvent17_CreateNamedPipe, SysmonEvent18_ConnectNamedPipe, 
+SysmonEvent19_WMIEventFilter, SysmonEvent20_WMIEventConsumer, SysmonEvent21_WMIEventConsumerToFilter)
+| extend Details = column_ifexists("Details", ""), RuleName = column_ifexists("RuleName", ""), PreviousCreationUtcTime=column_ifexists("PreviousCreationUtcTime", "")
+| project TimeGenerated, Source, EventID, Computer, UserName, RenderedDescription, UtcTime, ProcessGuid, ProcessId, Image, FileVersion,
+Description, Product, Company, CommandLine, CurrentDirectory, User, LogonGuid, LogonId, TerminalSessionId, IntegrityLevel, ParentProcessGuid,
+ParentProcessId, ParentImage, ParentCommandLine, TechniqueId, TechniqueName, ParsedHashes, State, Schema, SchemaVersion, ImageLoaded,
+Hashes, Signed, Signature, SignatureStatus, SourceProcessGuid, SourceProcessId, SourceImage, TargetProcessGuid, TargetProcessId, TargetImage,
+NewThreadId, StartAddress, StartModule, StartFunction, Device, SourceProcessGUID, SourceThreadId, TargetProcessGUID, GrantedAccess, CallTrace,
+TargetFilename, CreationUtcTime, EventType, TargetObject, NewName, TargetFileName, Hash, Configuration, ConfigurationFileHash, PipeName, Operation,
+EventNamespace, Name, Query, Type, Destination, Consumer, Filter, RuleName, PreviousCreationUtcTime, Protocol, Initiated, SourceIsIpv6, SourceIp, 
+SourceHostname, SourcePort, SourcePortName, DestinationIsIpv6, DestinationIp, DestinationHostname, DestinationPort, DestinationPortName, Details

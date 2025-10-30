@@ -1,0 +1,169 @@
+{
+   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+	"metadata": {
+		"title": "Needs-Review-Incident-Email-Notification",
+		"description": "This playbook will send an email notification when a new incident is created in Microsoft Sentinel.",
+		"prerequisites": [
+            "An O365 account to be used to send email notification. The user account will be used in O365 connector (Send an email)"
+        ],
+		"lastUpdateTime": "2022-09-13T00:00:00.000Z",
+        "entities": [],
+        "tags": [],
+		"postDeployment": [
+			"**Configure connections**",
+			"Once this Playbooks template is deployed, you will need to go into the Logic App, edit it and click on each of the steps that require an authenticated connection to your tenant and complete the connection process. These steps will have an exclamation mark showing that the connection needs to be completed. Make sure to also open the 'For each' step which also contains a step that requires an authenticated connection.",
+			"Note:  Emails sent with this playbook will be from the user that creates the connection.",
+			
+			"**Attach the playbook**",
+			"After deployment, attach this playbook to the `Armorblox Needs Review` analytic rule so it runs when the alert is created.",
+			"Note: Playbook is disabled by default. Please enable it before assigning to the Automation rule."],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Armorblox"
+        },
+		"releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Needs-Review-Incident-Email-Notification",
+                "notes": [ "Initial version" ]
+            }
+        ]
+	},
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Armorblox",
+            "type": "String"
+        },
+        "NotificationEmail": {
+            "type": "String",
+            "metadata": {
+                "description": "Alert details will be sent to this email (ex. soc@xyz.com)"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "o365ConnectionName": "[concat('o365-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('o365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "to": {
+                            "defaultValue": "[parameters('NotificationEmail')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Send_an_email_(V2)": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>Hello,<br>\n<br>\n@{triggerBody()?['Description']}<br>\n<br>\nThank you</p>",
+                                    "Subject": "@triggerBody()?['AlertDisplayName']",
+                                    "To": "@parameters('to')"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                "connectionName": "[variables('o365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

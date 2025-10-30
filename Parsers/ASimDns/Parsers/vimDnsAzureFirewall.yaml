@@ -1,0 +1,189 @@
+Parser:
+  Title: DNS activity ASIM filtering parser for Azure Firewall
+  Version: '0.3.1'
+  LastUpdated: Dec 26 2022
+Product:
+  Name: Azure Firewall
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Azure Firewall logs to the ASIM Dns normalized schema.
+ParserName: vimDnsAzureFirewall
+EquivalentBuiltInParser: _Im_Dns_AzureFirewall
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DNS_query=(
+    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*', response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
+    , disabled:bool=false
+    ){
+    AzureDiagnostics | where not(disabled)
+    // | where ResourceType == "AZUREFIREWALLS" -- Implicit in the next line
+    | where Category == "AzureFirewallDnsProxy"
+    | project msg_s, TimeGenerated, ResourceId
+    | where msg_s startswith "DNS Request:"
+    //  --Pre-parsing filtering:
+    | where
+      // Return empty list if response IPs are passed
+      (response_has_ipv4=='*')
+      and (array_length(response_has_any_prefix) ==0) 
+      and (eventtype=='*' or eventtype in ("Query", "lookup")) // -- support both legacy and standard value 
+      and (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime) 
+      and (srcipaddr=='*' or has_ipv4(msg_s, srcipaddr))
+      and (array_length(domain_has_any) ==0 or  msg_s has_any (domain_has_any))
+      and (responsecodename=='*' or  msg_s has(responsecodename))
+    // --
+        | parse msg_s with
+        "DNS Request: " 
+        SrcIpAddr:string ":" SrcPortNumber:int 
+        " - " EventOriginalUid:string 
+        " " DnsQueryTypeName:string 
+        " " DnsQueryClassName:string
+        " " DnsQuery:string
+        ". " NetworkProtocol:string 
+        " " SrcBytes:int 
+        " " DnsDNSSECflag:bool 
+        " " DnsDNSSECBufferSize:int 
+        " " EventResultDetails:string 
+        " " DnsFlags:string
+        " " DstBytes:int
+        " " DnsNetworkDuration:double
+        "s"
+    // -- Post-filtering accurately now that message is parsed
+    | where
+        (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
+          and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))
+          and (responsecodename=="*" or EventResultDetails has responsecodename)
+    | project-away msg_s
+    | extend
+      EventResult = iff (EventResultDetails == "NOERROR", "Success", "Failure"),
+      EventSubType = "response",
+      DnsNetworkDuration = toint(DnsNetworkDuration*1000)     
+  };
+  let DNS_error=(
+    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*', response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
+    , disabled:bool=false
+    ) {
+    AzureDiagnostics
+    // | where ResourceType == "AZUREFIREWALLS" -- Implicit in the next line
+    | where Category == "AzureFirewallDnsProxy"
+    | project msg_s, TimeGenerated, ResourceId
+    | where msg_s startswith " Error:"
+    //  --Pre-parsing filtering:
+    | where
+      (response_has_ipv4=='*') // Return empty list if response IPs are passed
+      and (array_length(response_has_any_prefix) ==0) // Return empty list if response IPs are passed
+      and (eventtype=='*' or eventtype in ("Query", "lookup")) // -- support both legacy and standard value 
+      and (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime) 
+      and (srcipaddr=='*' or has_ipv4(msg_s, srcipaddr))
+      and (array_length(domain_has_any) ==0 or  msg_s has_any (domain_has_any))
+      and (responsecodename=='*') // Return empty list if response code is passed
+    // --
+    | parse msg_s with 
+        " Error: " nu:string 
+        " " DnsQuery:string 
+        ". " DnsQueryTypeName:string 
+        ": " op:string 
+        " " NetworkProtocol:string
+        " " SrcIpAddr:string ":" SrcPortNumber:int 
+        "->" DstIpAddr:string ":" DstPortNumber:int  
+        ": " EventResultOriginalDetails:string
+    // -- Post-filtering accurately now that message is parsed
+    | where
+        (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
+          and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))
+    | project-away msg_s
+    | extend 
+      EventResult = "Failure",
+      EventSubType = "request"
+  };
+  let DNS = (
+    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*', response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
+    , disabled:bool=false
+    ) {
+    union 
+      DNS_query (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled),
+      DNS_error (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)
+    | extend
+      NetworkProtocol = toupper(NetworkProtocol)
+    | project-rename
+        DvcId = ResourceId
+    | extend
+        DvcIdType = "AzureResourceId",
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventVendor = "Microsoft",
+        EventProduct = "Azure Firewall",
+        EventSchema = "Dns",
+        EventSchemaVersion = "0.1.3",
+        EventEndTime = TimeGenerated, 
+        EventType = 'Query',
+        DnsFlagsAuthenticated = DnsFlags has "aa",
+        DnsFlagsAuthoritative = DnsFlags has "ad",
+        DnsFlagsCheckingDisabled = DnsFlags has "cd",
+        DnsFlagsRecursionAvailable = DnsFlags has "ra",
+        DnsFlagsRecursionDesired = DnsFlags has "rd",
+        DnsFlagsTruncates = DnsFlags has "tc"
+    | extend
+      // -- Aliases
+        DnsResponseCodeName=EventResultDetails,
+        Domain=DnsQuery,
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr,
+        Dst=DstIpAddr,
+        Duration = DnsNetworkDuration,
+        Dvc=DvcId
+    | extend
+        // -- Backward Compatibility
+        Query = DnsQuery,
+        QueryTypeName = DnsQueryTypeName,
+        ResponseCodeName = DnsResponseCodeName,
+        Flags = DnsFlags
+  };
+  DNS (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)

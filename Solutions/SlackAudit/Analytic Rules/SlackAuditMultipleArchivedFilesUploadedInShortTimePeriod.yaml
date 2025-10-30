@@ -1,0 +1,34 @@
+id: 3db0cb83-5fa4-4310-a8a0-d8d66183f0bd
+name: SlackAudit - Multiple archived files uploaded in short period of time
+description: |
+  'This query helps to detect when a user uploads multiple archived files in short period of time.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: SlackAuditAPI
+    dataTypes:
+      - SlackAudit_CL
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics: 
+  - Exfiltration
+relevantTechniques:
+  - T1567
+query: |
+  let threshold = 10;
+  SlackAudit
+  | where DvcAction =~ 'file_uploaded'
+  | extend FE = extract(@'.*\.(.*)$', 1, EntityFileName)
+  | where FE in~ ('tar', 'bz2', 'gz', 'tgz', 'Z', 'tbz2', 'zst', 'zip', 'zipx', '7z', 'rar', 'sfx')
+  | summarize count() by SrcUserName, bucket = bin(TimeGenerated, 15m)
+  | where count_ > threshold
+  | extend AccountCustomEntity = SrcUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

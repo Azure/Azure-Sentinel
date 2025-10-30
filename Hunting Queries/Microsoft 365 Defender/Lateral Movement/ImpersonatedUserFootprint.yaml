@@ -1,0 +1,35 @@
+id: aeb65be9-7a40-409e-a227-56ebbcf33de4
+name: ImpersonatedUserFootprint
+description: |
+  Microsoft Defender for Identity raises alert on suspicious Kerberos ticket, pointing to a potential overpass-the-hash attack.
+  Once attackers gain credentials for a user with higher privileges, they will use the stolen credentials to sign into other devices and move laterally.
+  This query finds related sign-in events following overpass-the-hash attack to trace the footprint of the impersonated user.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - AlertInfo
+  - AlertEvidence
+  - DeviceLogonEvents
+tactics:
+- Lateral movement
+query: |
+  AlertInfo
+  | where ServiceSource =~ "Microsoft Defender for Identity"
+  | where Title == "Suspected overpass-the-hash attack (Kerberos)"
+  | extend AlertTime = Timestamp 
+  | join 
+      (
+          AlertEvidence 
+              | where EntityType == "User"
+      ) 
+      on AlertId 
+  | distinct AlertTime,AccountSid 
+  | join kind=leftouter  
+      (
+          DeviceLogonEvents
+          | where LogonType == "Network" and ActionType == "LogonSuccess"
+          | extend LogonTime = Timestamp 
+      )
+      on AccountSid 
+  | where LogonTime between (AlertTime .. (AlertTime + 2h))
+  | project DeviceId , AlertTime , AccountName , AccountSid 

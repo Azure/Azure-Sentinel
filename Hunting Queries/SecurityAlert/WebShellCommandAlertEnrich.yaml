@@ -1,0 +1,81 @@
+id: d2e6f31b-add1-4f44-b54d-1975a5605c1d
+name: Web shell command alert enrichment
+description: |
+  'Extracts MDATP Alerts that indicate a command was executed by a web shell. Uses time window based querying to idneitfy the potential web shell location on the server, then enriches with Attacker IP and User Agent'
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+query: |
+  let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
+  let lookupWindow = 1m;  
+  let lookupBin = lookupWindow / 2.0; 
+  let distinctIpThreshold = 3; 
+  let alerts = SecurityAlert  
+  | extend alertData = parse_json(Entities), recordGuid = new_guid(); 
+  let shellAlerts = alerts 
+  | where ProviderName =~ "MDATP"  
+  | mvexpand alertData 
+  | where alertData.Type =~ "file" and alertData.Name =~ "w3wp.exe" 
+  | distinct SystemAlertId 
+  | join kind=inner (alerts) on SystemAlertId; 
+  let alldata = shellAlerts  
+  | mvexpand alertData 
+  | extend Type = alertData.Type; 
+  let filedata = alldata  
+  | extend id = tostring(alertData.$id)  
+  | extend ImageName = alertData.Name  
+  | where Type =~ "file" and ImageName != "w3wp.exe" 
+  | extend imagefileref = id;  
+  let commanddata = alldata  
+  | extend CommandLine = tostring(alertData.CommandLine)  
+  | extend creationtime = tostring(alertData.CreationTimeUtc)  
+  | where Type =~ "process"  
+  | where isnotempty(CommandLine)  
+  | extend imagefileref = tostring(alertData.ImageFile.$ref); 
+  let hostdata = alldata 
+  | where Type =~ "host" 
+  | project HostName = tostring(alertData.HostName), DnsDomain = tostring(alertData.DnsDomain), SystemAlertId 
+  | distinct HostName, DnsDomain, SystemAlertId; 
+  let commandKeyedData = filedata 
+  | join kind=inner (  
+  commanddata  
+  ) on imagefileref 
+  | join kind=inner (hostdata) on SystemAlertId 
+  | project recordGuid, TimeGenerated, ImageName, CommandLine, TimeKey = bin(TimeGenerated, lookupBin), HostName, DnsDomain 
+  | extend Start = TimeGenerated; 
+  let baseline = W3CIISLog  
+  | project-rename SourceIP=cIP, PageAccessed=csUriStem 
+  | summarize dcount(SourceIP) by PageAccessed 
+  | where dcount_SourceIP <= distinctIpThreshold; 
+  commandKeyedData 
+  | join kind=inner ( 
+  W3CIISLog   
+  | where csUriStem has_any(scriptExtensions)  
+  | extend splitUriStem = split(csUriStem, "/")  
+  | extend FileName = splitUriStem[-1] | extend firstDir = splitUriStem[-2] | extend TimeKey = range(bin(TimeGenerated-lookupWindow, lookupBin), bin(TimeGenerated, lookupBin),lookupBin)  
+  | mv-expand TimeKey to typeof(datetime)  
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated) by Site=sSiteName, HostName=sComputerName, AttackerIP=cIP, AttackerUserAgent=csUserAgent, csUriStem, filename=tostring(FileName), tostring(firstDir), TimeKey 
+  ) on TimeKey, HostName 
+  | where (StartTime - EndTime) between (0min .. lookupWindow) 
+  | extend IPCustomEntity = AttackerIP, timestamp = StartTime
+  | extend attackerP = pack(AttackerIP, AttackerUserAgent)  
+  | summarize Site=make_set(Site), Attacker=make_bag(attackerP) by csUriStem, filename, tostring(ImageName), CommandLine, HostName, IPCustomEntity, timestamp
+  | project Site, ShellLocation=csUriStem, ShellName=filename, ParentProcess=ImageName, CommandLine, Attacker, HostName, IPCustomEntity, timestamp
+  | join kind=inner (baseline) on $left.ShellLocation == $right.PageAccessed
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Thomas McElroy
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

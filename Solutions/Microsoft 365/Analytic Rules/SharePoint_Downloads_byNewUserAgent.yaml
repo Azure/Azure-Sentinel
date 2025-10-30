@@ -1,0 +1,82 @@
+id: 5dd76a87-9f87-4576-bab3-268b0e2b338b
+name: SharePointFileOperation via devices with previously unseen user agents
+description: |
+  'Identifies anomalies if the number of documents uploaded or downloaded from device(s) associated with a previously unseen user agent exceeds a threshold (default is 5) and deviation (default is 25).'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+  // Set threshold for the number of downloads/uploads from a new user agent
+  let threshold = 5;
+  // Define constants for SharePoint file operations
+  let szSharePointFileOperation = "SharePointFileOperation";
+  let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+  // Define the historical activity for analysis
+  let starttime = 14d; // Define the start time for historical data (14 days ago)
+  let endtime = 1d;   // Define the end time for historical data (1 day ago)
+  // Extract the base events for analysis
+  let Baseevents =
+    OfficeActivity
+    | where TimeGenerated between (ago(starttime) .. ago(endtime))
+    | where RecordType =~ szSharePointFileOperation
+    | where Operation in~ (szOperations)
+    | where isnotempty(UserAgent);
+  // Identify frequently occurring user agents
+  let FrequentUA = Baseevents
+    | summarize FUACount = count() by UserAgent, RecordType, Operation
+    | where FUACount >= threshold
+    | distinct UserAgent;
+  // Calculate a user baseline for further analysis
+  let UserBaseLine = Baseevents
+    | summarize Count = count() by UserId, Operation, Site_Url
+    | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;
+  // Extract recent activity for analysis
+  let RecentActivity = OfficeActivity
+    | where TimeGenerated > ago(endtime)
+    | where RecordType =~ szSharePointFileOperation
+    | where Operation in~ (szOperations)
+    | where isnotempty(UserAgent)
+    | where UserAgent in~ (FrequentUA)
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OfficeObjectIdCount = dcount(OfficeObjectId), OfficeObjectIdList = make_set(OfficeObjectId), UserAgentSeenCount = count() 
+    by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url;
+  // Analyze user behavior based on baseline and recent activity
+  let UserBehaviorAnalysis = UserBaseLine
+    | join kind=inner (RecentActivity) on UserId, Operation, Site_Url
+    | extend Deviation = abs(UserAgentSeenCount - AvgCount) / AvgCount;
+  // Filter and format results for specific user behavior analysis
+  UserBehaviorAnalysis
+    | where Deviation > 25
+    | extend UserIdName = tostring(split(UserId, '@')[0]), UserIdUPNSuffix = tostring(split(UserId, '@')[1])
+    | project-reorder StartTime, EndTime, UserAgent, UserAgentSeenCount, UserId, ClientIP, Site_Url
+    | project-away Site_Url1, UserId1, Operation1
+    | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: UserIdName
+      - identifier: UPNSuffix
+        columnName: UserIdUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Site_Url
+version: 2.2.4
+kind: Scheduled

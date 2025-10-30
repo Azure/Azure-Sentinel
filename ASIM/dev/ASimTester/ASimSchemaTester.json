@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+      "Workspace": {
+        "type": "string",
+        "metadata": {
+          "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+        }
+      },
+      "WorkspaceRegion": {
+        "type": "string",
+        "defaultValue": "[resourceGroup().location]",
+        "metadata": {
+          "description": "The region of the selected workspace. The default value will use the Region selection above."
+        }
+      }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimSchemaTester",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Schema tester",
+            "category": "Security",
+            "FunctionAlias": "ASimSchemaTester",
+            "query": "let ASimFields = materialize(externaldata (ColumnName: string, ColumnType: string, Class: string, Schema: string, LogicalType:string, ListOfValues: string, AliasedField: string)\r\n        [@\"https:\/\/raw.githubusercontent.com\/Azure\/Azure-Sentinel\/master\/ASIM\/dev\/ASimTester\/ASimTester.csv\"] with (format=\"csv\", IgnoreFirstRecord=true)\r\n        | where Schema =~ selected_schema);\r\n    let ASimFieldsWithAliases = materialize(ASimFields | project-rename SchemaColumn = ColumnName, SchemaType = ColumnType | lookup (ASimFields | project ParentClass = Class, ParentColumn = ColumnName) on $left.AliasedField == $right.ParentColumn);\r\n    let ParserFields = toscalar (T | summarize make_set(ColumnName));\r\n    T \r\n    | join kind=fullouter ASimFieldsWithAliases on $left.ColumnName == $right.SchemaColumn\r\n    | extend Result = case(\r\n        ColumnName == \"\" and Class == \"Mandatory\",  strcat (\"(0) Error: Missing mandatory field [\", SchemaColumn, \"]\"),\r\n        ColumnName == \"\" and Class == \"Recommended\", strcat (\"(1) Warning: Missing recommended field [\", SchemaColumn, \"]\"),\r\n        ColumnName == \"\" and Class == \"Conditional\" and ParentClass == \"Mandatory\", \r\n           strcat (\"(0) Error: Missing field [\", SchemaColumn, \"] is mandatory when mandatory column [\", AliasedField, \"] exists\"),\r\n        ColumnName == \"\" and Class == \"Conditional\" and AliasedField in (ParserFields), \r\n           strcat (\"(0) Error: Missing field [\", SchemaColumn, \"] is mandatory when field [\", AliasedField, \"] exists\"),  \r\n        ColumnName == \"\" and Class == \"Alias\", \r\n            case \r\n              (ParentClass == \"Mandatory\", \r\n                    iff (AliasedField in (ParserFields),  \r\n                        strcat (\"(0) Error: Missing mandatory alias [\", SchemaColumn, \"] aliasing existing column [\", AliasedField, \"]\"),\r\n                        strcat (\"(0) Error: Missing mandatory alias [\", SchemaColumn, \"] aliasing missing column [\", AliasedField, \"]\")\r\n                    ),\r\n               ParentClass == \"Recommended\" , \r\n                    iff (AliasedField in (ParserFields),\r\n                        strcat (\"(0) Error: Missing recommended alias [\", SchemaColumn, \"] aliasing existing column [\", AliasedField, \"]\"),  \r\n                        strcat (\"(2) Info: Missing recommended alias [\", SchemaColumn, \"] aliasing non-existent column [\", AliasedField, \"]\")\r\n                    ),\r\n                \/\/ -- default: ParentClass is optional\r\n                iff (AliasedField in (ParserFields),\r\n                    strcat (\"(0) Error: Missing optional alias [\", SchemaColumn, \"] aliasing existing column [\", AliasedField, \"]\"),\r\n                    strcat (\"(2) Info: Missing optional alias [\", SchemaColumn, \"] aliasing non-existent column [\", AliasedField, \"]\")\r\n                )\r\n            ),\r\n        ColumnName == \"\" and Class == \"Optional\", strcat (\"(2) Info: Missing optional field [\", SchemaColumn, \"]\"),\r\n        SchemaColumn == \"\", strcat (\"(2) Info: extra unnormalized column [\", ColumnName, \"]\"),\r\n        ColumnName != \"\" and ColumnType != SchemaType, strcat (\"(0) Error: type mismatch for column [\", ColumnName, \"]. It is currently \", ColumnType, \" and should be \", SchemaType),\r\n        'None'\r\n        )\r\n    | where Result != \"None\" | sort by Result asc | project Result\r\n",
+            "version": 1,
+            "functionParameters": "T:(ColumnName:string,ColumnType:string),selected_schema:string"
+          }
+        }
+      ]
+    }
+  ]
+}
