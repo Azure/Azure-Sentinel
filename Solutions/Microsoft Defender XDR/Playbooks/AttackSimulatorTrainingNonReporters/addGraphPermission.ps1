@@ -14,7 +14,7 @@ Write-Host "Connected to Graph" -ForegroundColor Green
 # Prompt for the details of the managed identity from the logic app if not already provided
 if ($ManagedIdentity -eq "") {
     Write-Host ""
-    $ManagedIdentity = Read-Host -Prompt "Enter the DisplayName or GUID of the Managed Identity"
+    $ManagedIdentity = Read-Host -Prompt "Enter the DisplayName (default: TriggerASTNonReporting) or GUID of the Managed Identity"
 }
 
 # Match whether it's a GUID which can be easily retrieved from the Logic App itself. Otherwise assume that what has been entered is a string for the Display Name.
