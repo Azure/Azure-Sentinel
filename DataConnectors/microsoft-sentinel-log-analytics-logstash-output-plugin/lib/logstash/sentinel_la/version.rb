@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 module LogStash; module Outputs;
 class MicrosoftSentinelOutputInternal
   VERSION_INFO = [1, 1, 4].freeze
@@ -8,3 +9,15 @@ class MicrosoftSentinelOutputInternal
   end
 end
 end;end
+=======
+module LogStash; module Outputs;
+class MicrosoftSentinelOutputInternal
+  VERSION_INFO = [1, 1, 4].freeze
+  VERSION = VERSION_INFO.map(&:to_s).join('.').freeze
+
+  def self.version
+    VERSION
+  end
+end
+end;end
+>>>>>>> origin/master
