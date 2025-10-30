@@ -28,6 +28,14 @@
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
     },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Qscout Dashboards",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    },
     "resourceGroupName": {
       "type": "string",
       "defaultValue": "[resourceGroup().name]",
@@ -50,6 +58,13 @@
     "_solutionVersion": "3.0.0",
     "solutionId": "quokka.io.quokka-qscout-mobile-apps-security-solution",
     "_solutionId": "[variables('solutionId')]",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "QuokkaQscoutWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
     "analyticRuleObject1": {
       "analyticRuleVersion1": "1.0.0",
       "_analyticRulecontentId1": "97ad71ed-e4c0-4f7a-b1a2-683108bece4f",
@@ -57,7 +72,6 @@
       "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('97ad71ed-e4c0-4f7a-b1a2-683108bece4f')))]",
       "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','97ad71ed-e4c0-4f7a-b1a2-683108bece4f','-', '1.0.0')))]"
     },
-    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "dataConnectorCCPVersion": "1.0.0",
     "_dataConnectorContentIdConnectorDefinition1": "QscoutAppEventsCCFDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
@@ -68,6 +82,93 @@
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "QscoutDashboards Workbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain insights into Quokka Qscout by analyzing, collecting and correlating endpoint data.\nThis workbook provides visibility into endpoint activities"
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# Quokka Findings Dashboards (last 7d)\"},\"name\":\"malicious results\"},{\"type\":1,\"content\":{\"json\":\"## Suspicious / Malicious findings\"},\"name\":\"malicious results - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"QscoutAppEvents_CL\\n| where TimeGenerated > ago(7d)\\n| where result_type == \\\"maliciousness\\\"\\n| extend r = todynamic(results)\\n| where isnotempty(r.entries)\\n| mv-expand entry = r.entries\\n| extend ruleId = tostring(entry.ruleId)\\n| summarize count() by ruleId\\n\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"ruleId\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"\",\"color\":\"blue\"},{\"seriesName\":\"malware/suspicious\",\"label\":\"Suspicious findings\",\"color\":\"orange\"},{\"seriesName\":\"malware/malicious\",\"label\":\"Malicious findings\",\"color\":\"red\"},{\"color\":\"lightBlue\"}]}},\"name\":\"malicious results\"},{\"type\":1,\"content\":{\"json\":\"## SBOM findings (grouped by CVE ID with an averaged severity score)\"},\"name\":\"malicious results - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"QscoutAppEvents_CL\\n| where TimeGenerated > ago(7d)\\n| where result_type == \\\"sbom\\\"\\n| extend r = todynamic(results)\\n| where isnotempty(r.vulnerabilities)\\n| mv-expand vulnerability = r.vulnerabilities\\n| extend vulnId = tostring(vulnerability.id)\\n| mv-expand rating = vulnerability.ratings\\n| extend score = todouble(rating.score)\\n| summarize avgScore = avg(score) by vulnId\\n| order by avgScore desc\\n\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"vulnId\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"createOtherGroup\":50}},\"name\":\"query - 2\"},{\"type\":1,\"content\":{\"json\":\"## SARIF error-level findings\"},\"name\":\"malicious results - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"QscoutAppEvents_CL\\n| where TimeGenerated > ago(7d)\\n| where result_type == \\\"pattern\\\"\\n| extend r = todynamic(results)\\n| mv-expand findingKey = bag_keys(r.findings)\\n| extend findingKey = tostring(findingKey)\\n| extend finding = r.findings[findingKey]\\n| extend category = findingKey,\\n         errorCount = toint(finding.error.count)\\n| summarize totalErrors = sum(errorCount) by category\\n| project category, totalErrors\\n\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"chartSettings\":{\"createOtherGroup\":25}},\"name\":\"query - 4\"},{\"type\":1,\"content\":{\"json\":\"## SARIF warning-level findings\"},\"name\":\"malicious results - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"QscoutAppEvents_CL\\n| where TimeGenerated > ago(7d)\\n| where result_type == \\\"pattern\\\"\\n| extend r = todynamic(results)\\n| mv-expand findingKey = bag_keys(r.findings)\\n| extend findingKey = tostring(findingKey)\\n| extend finding = r.findings[findingKey]\\n| extend category = findingKey,\\n         warningCount = toint(finding.warning.count)\\n| summarize totalWarnings = sum(warningCount) by category\\n| project category, totalWarnings\\n\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"chartSettings\":{\"createOtherGroup\":25}},\"name\":\"query - 5\"}],\"fromTemplateId\":\"sentinel-QscoutWorkbook\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=QuokkaQscoutWorkbook; logoFileName=quokka_logo.svg; description=Gain insights into Quokka Qscout by analyzing, collecting and correlating endpoint data.\nThis workbook provides visibility into endpoint activities; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; version=1.0.0; title=Qscout Dashboards; templateRelativePath=QscoutDashboards.json; subtitle=; provider=Quokka}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Quokka",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Quokka",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Quokka",
+                  "tier": "Partner",
+                  "link": "https://www.quokka.io/contact-us#customer-support"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "QscoutAppEvents_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "QscoutAppEventsCCFDefinition",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_workbookContentId1')]",
+        "contentKind": "Workbook",
+        "displayName": "[parameters('workbook1-name')]",
+        "contentProductId": "[variables('_workbookcontentProductId1')]",
+        "id": "[variables('_workbookcontentProductId1')]",
+        "version": "[variables('workbookVersion1')]"
+      }
+    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
@@ -264,7 +365,7 @@
                         {
                           "type": "Textbox",
                           "parameters": {
-                            "label": "QScourt Organization API Key",
+                            "label": "Qscout Organization API Key",
                             "placeholder": "abcdxyz",
                             "type": "text",
                             "name": "apiKey"
@@ -575,7 +676,7 @@
                 {
                   "type": "Textbox",
                   "parameters": {
-                    "label": "QScourt Organization API Key",
+                    "label": "Qscout Organization API Key",
                     "placeholder": "abcdxyz",
                     "type": "text",
                     "name": "apiKey"
@@ -769,7 +870,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Quokka",
         "publisherDisplayName": "Quokka",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Quokka/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Qscout CCF data connector ingest app events logs from Quokka Qscout platform</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Quokka/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Qscout CCF data connector ingest app events logs from Quokka Qscout platform</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -793,6 +894,11 @@
         "dependencies": {
           "operator": "AND",
           "criteria": [
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            },
             {
               "kind": "AnalyticsRule",
               "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
