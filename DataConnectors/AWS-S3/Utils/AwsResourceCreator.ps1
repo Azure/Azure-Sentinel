@@ -80,7 +80,11 @@ function New-ArnRole {
             # If there was an error the role does not already exist, so it must be created.
             $isRuleNotExist = $lastexitcode -ne 0
             if ($isRuleNotExist) {
-                $script:roleName = "OIDC_$roleName"
+                # Add OIDC prefix
+                if (-not $roleName.StartsWith("OIDC_")) {
+                    $script:roleName = "OIDC_$roleName"
+                }
+
                 Write-Log -Message "Using role name: $roleName with OIDC prefix because OpenID Connect authentication is being used." -LogFileName $LogFileName -Severity Information -Indent 2
 
                 Write-Output "`n`n"
@@ -168,6 +172,7 @@ function New-S3Bucket {
                     
                     if ($lastexitcode -eq 0) {
                         Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
+                    }
                 }
                 else {
                     exit
