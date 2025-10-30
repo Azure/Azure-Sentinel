@@ -3,10 +3,10 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "functionAppName": {
-        "type": "string",
-        "metadata": {
-            "description": "Name of the Function App. This must be unique across Azure, since each instance requires its own Function App (e.g., BloodHoundEnterprise-Maple)."
-        }
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Function App. This must be unique across Azure, since each instance requires its own Function App (e.g., BloodHoundEnterprise-Maple)."
+      }
     },
     "logAnalyticsWorkspaceName": {
       "type": "string",
@@ -44,7 +44,7 @@
         "description": "A confidential secret generated for your Microsoft Entra ID application. This secret, also known as the Client Secret, is used along with the App ID to prove the application's identity when requesting an access token."
       }
     },
-    "lookupDays":{
+    "lookupDays": {
       "type": "int",
       "defaultValue": 2,
       "metadata": {
@@ -86,7 +86,7 @@
     "applicationInsightsName": "[parameters('functionAppName')]",
     "subscriptionId": "[subscription().subscriptionId]",
     "logAnalyticsWorkspaceLocation": "[resourceGroup().location]",
-    "logAnalyticsWorkspaceResourceGroupName": "[resourceGroup().name]", 
+    "logAnalyticsWorkspaceResourceGroupName": "[resourceGroup().name]",
     "tenantId": "[subscription().tenantId]",
     "storageAccountType": "Standard_LRS",
     "keyVaultName": "[concat('kv-', toLower(parameters('functionAppName')))]",
@@ -481,7 +481,7 @@
     },
     {
       "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheTierZeroAssetsTable'))]",
-      "type": "Microsoft.OperationalInsights/workspaces/tables",  
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
       "properties": {
         "schema": {
@@ -941,7 +941,7 @@
     },
     {
       "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAttackPathsTimelineTable'))]",
-      "type": "Microsoft.OperationalInsights/workspaces/tables", 
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
       "properties": {
         "schema": {
@@ -1982,7 +1982,7 @@
     },
     {
       "type": "Microsoft.Web/sites",
-      "apiVersion": "2024-04-01",
+      "apiVersion": "2023-12-01",
       "name": "[parameters('functionAppName')]",
       "location": "[variables('logAnalyticsWorkspaceLocation')]",
       "kind": "functionapp,linux",
@@ -2002,19 +2002,11 @@
           "appSettings": [
             {
               "name": "AzureWebJobsStorage",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').keys[0].value)]"
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value, ';EndpointSuffix=core.windows.net')]"
             },
             {
               "name": "FUNCTIONS_EXTENSION_VERSION",
               "value": "~4"
-            },
-            {
-              "name": "FUNCTIONS_WORKER_RUNTIME",
-              "value": "python"
-            },
-            {
-              "name": "WEBSITE_RUN_FROM_PACKAGE",
-              "value": "https://github.com/metron-labs/Azure-Sentinel/blob/bloodhound/Solutions/BloodHound%20Enterprise/Data%20Connectors/BloodHoundDataConnector/BloodHoundAzureFunction.zip?raw=true"
             },
             {
               "name": "BLOODHOUND_TENANT_DOMAIN",
@@ -2087,6 +2079,14 @@
             {
               "name": "SELECTED_FINDING_TYPES",
               "value": "[parameters('selectedFindingTypes')]"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName')), '2020-02-02').InstrumentationKey]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName')), '2020-02-02').ConnectionString]"
             }
           ],
           "cors": {
@@ -2094,23 +2094,42 @@
               "https://portal.azure.com"
             ]
           },
-          "linuxFxVersion": "Python|3.12",
           "ftpsState": "Disabled"
+        },
+        "functionAppConfig": {
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').primaryEndpoints.blob, 'deploymentpackage')]",
+              "authentication": {
+                "type": "StorageAccountConnectionString",
+                "storageAccountConnectionStringName": "AzureWebJobsStorage"
+              }
+            }
+          },
+          "scaleAndConcurrency": {
+            "maximumInstanceCount": 40,
+            "instanceMemoryMB": 2048
+          },
+          "runtime": {
+            "name": "python",
+            "version": "3.12"
+          }
         }
       }
     },
     {
       "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2022-03-01",
+      "apiVersion": "2023-01-01",
       "name": "[variables('appServicePlanName')]",
       "location": "[variables('logAnalyticsWorkspaceLocation')]",
       "sku": {
-        "name": "Y1",
-        "tier": "Dynamic"
+        "name": "FC1",
+        "tier": "FlexConsumption"
       },
       "kind": "functionapp",
       "properties": {
-            "reserved": true
+        "reserved": true
       }
     },
     {
@@ -2123,6 +2142,31 @@
       },
       "kind": "StorageV2",
       "properties": {}
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(variables('storageAccountName'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "deleteRetentionPolicy": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[concat(variables('storageAccountName'), '/default/deploymentpackage')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
     },
     {
       "type": "Microsoft.KeyVault/vaults",
