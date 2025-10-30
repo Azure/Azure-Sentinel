@@ -1,0 +1,39 @@
+id: 22d177d5-588c-4f1a-a332-2695f52079bb
+name: VMware ESXi - Multiple Failed Shell Login via SSH
+description: |
+ Identifies a failed ESXi Shell login via SSH in a short TimeFrame. This could be suspicious activity especially if this alert is seen triggering many times within a short time frame which could be evidence of a brute-force attack. 
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SyslogAma
+    datatypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1529
+query: |
+  let triggerThreshold = 5;
+  VMwareESXi
+  | where SyslogMessage has "sshd"
+  | where SyslogMessage contains "authentication failure"
+  | extend SrcUsername = extract(@'\[info\]\s+\[(.*?)\]', 1, SyslogMessage)
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | summarize make_set(SrcUsername),count() by DstHostname
+  | where count_ >= triggerThreshold
+  | extend HostCustomEntity = DstHostname
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.2
+kind: Scheduled
