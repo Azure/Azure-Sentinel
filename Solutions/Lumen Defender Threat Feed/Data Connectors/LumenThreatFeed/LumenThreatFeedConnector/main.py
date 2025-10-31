@@ -1,3 +1,32 @@
+"""
+Lumen Threat Intelligence Connector for Microsoft Sentinel
+Version: 1.1 (Delta Sync)
+
+This connector integrates Lumen threat intelligence feeds with Microsoft Sentinel.
+
+V1.1 Changes (Delta Sync):
+- Migrated from daily full sync to 15-minute delta sync
+- New API flow: POST /reputation-query → Poll GET /reputation-query/{cache_id} → Download results
+- Combined indicator types (ipv4 + domain) in single endpoint
+- Polling: 1-second intervals, 5-minute timeout
+- Enhanced statistics tracking (poll attempts, query times)
+
+Architecture:
+1. Timer Function (every 15 min): Initiates delta query, downloads results to blob storage
+2. Orchestrator: Coordinates parallel upload activities with rate limit handling
+3. Activity Functions: Upload indicators from blobs to Sentinel in chunks of 100
+
+Environment Variables:
+- LUMEN_API_KEY: API key for Lumen authentication
+- LUMEN_BASE_URL: Base URL for delta API endpoint
+- LUMEN_CONFIDENCE_THRESHOLD: Minimum confidence score (default: 80)
+- LUMEN_MAX_INDICATORS_PER_TYPE: Testing limit per type (0 = no limit)
+- LUMEN_MAX_TOTAL_INDICATORS: Testing limit total (0 = no limit)
+- TENANT_ID, CLIENT_ID, CLIENT_SECRET, WORKSPACE_ID: Azure/Sentinel credentials
+- LUMEN_BLOB_CONNECTION_STRING: Azure Blob Storage connection
+- LUMEN_BLOB_CONTAINER: Blob container name (default: lumenthreatfeed)
+"""
+
 import json
 import logging
 import os
@@ -77,7 +106,7 @@ class LumenSentinelUpdater:
         self.token_expiry = None
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'LumenSentinelConnector/4.0',
+            'User-Agent': 'LumenSentinelConnector/1.1',
             'Accept': 'application/json'
         })
         
@@ -92,21 +121,25 @@ class LumenSentinelUpdater:
             'indicators_uploaded': 0,
             'errors': 0,
             'rate_limit_events': 0,
-            'processing_time': 0
+            'processing_time': 0,
+            'delta_query_time': 0,
+            'poll_attempts': 0,
+            'cache_query_time': 0
         }
 
     def log_config(self):
         """Log current configuration for debugging."""
         enabled_types = [k for k, v in INDICATOR_TYPES.items() if v]
         
-        logging.debug("=== LUMEN CONNECTOR V4 CONFIGURATION ===")
-        logging.debug(f"Enabled indicator types: {enabled_types}")
+        logging.debug("=== LUMEN CONNECTOR V1.1 (DELTA SYNC) ===")
+        logging.debug(f"Mode: Delta sync (15-minute intervals)")
+        logging.debug(f"Enabled indicator types: {enabled_types if enabled_types else 'All types (combined endpoint)'}")
         logging.debug(f"Confidence threshold: {self.confidence_threshold}")
         logging.debug(f"Max indicators per type: {MAX_INDICATORS_PER_TYPE if MAX_INDICATORS_PER_TYPE > 0 else 'No limit'}")
         logging.debug(f"Max total indicators: {MAX_TOTAL_INDICATORS if MAX_TOTAL_INDICATORS > 0 else 'No limit'}")
         logging.debug(f"Lumen API base URL: {self.lumen_setup.base_url}")
         logging.debug(f"Workspace ID: {self.msal_setup.workspace_id}")
-        logging.debug("========================================")
+        logging.debug("=========================================")
 
     def _get_access_token(self) -> str:
         """Get or refresh Microsoft access token for Sentinel API."""
@@ -141,6 +174,144 @@ class LumenSentinelUpdater:
             logging.error(f"Token acquisition error: {e}")
             raise
 
+    def initiate_delta_query(self) -> str:
+        """POST to /reputation-query endpoint to initiate delta query.
+        
+        Returns:
+            cache_id (str): The cache ID to use for polling
+            
+        Raises:
+            Exception: If POST fails or response doesn't contain cache_id
+        """
+        headers = {
+            'Authorization': self.lumen_setup.api_key,
+            'Content-Type': 'application/json'
+        }
+        
+        url = self.lumen_setup.base_url
+        
+        for attempt in range(self.lumen_setup.max_retries):
+            try:
+                logging.info(f"Initiating delta query (attempt {attempt + 1})")
+                
+                response = self.session.post(url, headers=headers, json={}, timeout=30)
+                response.raise_for_status()
+                
+                data = response.json()
+                cache_id = data.get('cache_id')
+                
+                if cache_id:
+                    logging.debug(f"✓ Delta query initiated, cache_id: {cache_id}")
+                    return cache_id
+                else:
+                    raise ValueError("No 'cache_id' field in POST response")
+                    
+            except requests.exceptions.RequestException as e:
+                if attempt == self.lumen_setup.max_retries - 1:
+                    logging.error(f"✗ Failed to initiate delta query: {e}")
+                    raise
+                else:
+                    logging.warning(f"Retry {attempt + 1} for delta query initiation: {e}")
+                    time.sleep(2 ** attempt)
+
+    def poll_query_status(self, cache_id: str, timeout: int = 300, poll_interval: int = 1) -> Dict[str, Any]:
+        """Poll GET /reputation-query/{cache_id} until status is COMPLETED or timeout.
+        
+        Args:
+            cache_id: The cache ID from initiate_delta_query
+            timeout: Maximum time to wait in seconds (default 300 = 5 minutes)
+            poll_interval: Time between polls in seconds (default 1 second)
+            
+        Returns:
+            dict: Response containing 'status' and 'results' (presigned URL)
+            
+        Raises:
+            TimeoutError: If polling exceeds timeout
+            Exception: If polling fails
+        """
+        headers = {
+            'Authorization': self.lumen_setup.api_key,
+            'Content-Type': 'application/json'
+        }
+        
+        url = f"{self.lumen_setup.base_url}/{cache_id}"
+        start_time = time.time()
+        poll_count = 0
+        
+        logging.info(f"Polling for query completion (timeout: {timeout}s, interval: {poll_interval}s)")
+        
+        while True:
+            poll_count += 1
+            elapsed = time.time() - start_time
+            
+            if elapsed > timeout:
+                error_msg = f"Polling timeout after {elapsed:.1f}s ({poll_count} attempts)"
+                logging.error(f"✗ {error_msg}")
+                raise TimeoutError(error_msg)
+            
+            try:
+                response = self.session.get(url, headers=headers, timeout=30)
+                response.raise_for_status()
+                
+                data = response.json()
+                status = data.get('status', '').upper()
+                
+                if response.status_code == 200 and status == 'COMPLETED':
+                    results_url = data.get('results')
+                    if not results_url:
+                        raise ValueError("COMPLETED response missing 'results' field")
+                    
+                    self.stats['poll_attempts'] = poll_count
+                    self.stats['cache_query_time'] = elapsed
+                    
+                    logging.info(f"✓ Query completed after {elapsed:.1f}s ({poll_count} polls)")
+                    logging.debug(f"Results URL obtained: {results_url[:80]}...")
+                    return data
+                    
+                elif response.status_code == 202:
+                    # Still processing
+                    if poll_count % 10 == 0:  # Log every 10 polls to reduce noise
+                        logging.info(f"Poll #{poll_count}: Status {status} (elapsed: {elapsed:.1f}s)")
+                    time.sleep(poll_interval)
+                    continue
+                    
+                else:
+                    raise ValueError(f"Unexpected response: status_code={response.status_code}, status={status}")
+                    
+            except requests.exceptions.RequestException as e:
+                logging.warning(f"Poll attempt {poll_count} failed: {e}")
+                time.sleep(poll_interval)
+                continue
+
+    def get_delta_results_url(self) -> str:
+        """Orchestrate the full delta query flow: POST → Poll → Extract presigned URL.
+        
+        Returns:
+            str: Presigned URL for downloading delta results
+            
+        Raises:
+            Exception: If any step fails
+        """
+        start_time = time.time()
+        
+        logging.info("=== STARTING DELTA QUERY FLOW ===")
+        
+        # Step 1: Initiate query
+        cache_id = self.initiate_delta_query()
+        
+        # Step 2: Poll until completed
+        response = self.poll_query_status(cache_id)
+        
+        # Step 3: Extract results URL
+        results_url = response.get('results')
+        
+        total_time = time.time() - start_time
+        self.stats['delta_query_time'] = total_time
+        
+        logging.info(f"=== DELTA QUERY COMPLETE ({total_time:.1f}s) ===")
+        
+        return results_url
+
     def get_lumen_presigned_urls(self, indicator_types: Dict[str, bool]) -> Dict[str, str]:
         """Get presigned URLs from Lumen API for enabled indicator types."""
         headers = {
@@ -157,7 +328,7 @@ class LumenSentinelUpdater:
             
             for attempt in range(self.lumen_setup.max_retries):
                 try:
-                    logging.debug(f"Getting presigned URL for {indicator_type} (attempt {attempt + 1})")
+                    logging.info(f"Getting presigned URL for {indicator_type} (attempt {attempt + 1})")
                     
                     response = self.session.get(url, headers=headers, timeout=30)
                     response.raise_for_status()
@@ -167,7 +338,7 @@ class LumenSentinelUpdater:
                     
                     if presigned_url:
                         presigned_urls[indicator_type] = presigned_url
-                        logging.debug(f"✓ Got presigned URL for {indicator_type}")
+                        logging.info(f"✓ Got presigned URL for {indicator_type}")
                         break
                     else:
                         raise ValueError(f"No 'url' field in response for {indicator_type}")
@@ -264,8 +435,21 @@ class LumenSentinelUpdater:
                 )
                 response.raise_for_status()
 
-                # Ensure raw stream is decoded if compressed
-                response.raw.decode_content = True
+                # Check if response is empty
+                if not response.content and response.status_code == 200:
+                    logging.warning(f"Empty response from presigned URL for {indicator_type}")
+                    logging.info(f"Response headers: {dict(response.headers)}")
+                    return chunks  # Return empty chunks list
+
+                # For small responses or debugging, try reading as text first
+                response_text = response.text
+                
+                if not response_text or len(response_text.strip()) == 0:
+                    logging.warning(f"Empty or whitespace-only response for {indicator_type}")
+                    return chunks
+
+                logging.debug(f"Response size: {len(response_text)} bytes")
+                logging.debug(f"Response preview (first 500 chars): {response_text[:500]}")
 
                 parsed_any = False
 
@@ -291,45 +475,37 @@ class LumenSentinelUpdater:
                             return True  # signal to stop
                     return False
 
-                # Try parsing as { "stixobjects": [ ... ] }
+                # Parse the JSON response
                 try:
-                    for obj in ijson.items(response.raw, 'stixobjects.item'):
-                        parsed_any = True
-                        if handle_obj(obj):
-                            break
-                except Exception as e_json_path:
-                    logging.debug(f"ijson 'stixobjects.item' parse attempt failed: {e_json_path}")
-
-                # If nothing parsed, try top-level array [ ... ]
-                if not parsed_any:
-                    try:
-                        text_sample = response.text[:512]
-                        logging.debug(f"Response prefix (512 chars): {text_sample}")
-                        # Try full JSON if it's an array or object
-                        try:
-                            data = json.loads(response.text)
-                        except json.JSONDecodeError as jde:
-                            logging.error(f"JSON decode error for {indicator_type}: {jde}")
-                            raise
-
-                        if isinstance(data, dict) and 'stixobjects' in data:
-                            for obj in data['stixobjects']:
+                    data = json.loads(response_text)
+                    logging.debug(f"Successfully parsed JSON. Type: {type(data)}")
+                    
+                    if isinstance(data, dict):
+                        if 'stixobjects' in data:
+                            stix_objects = data['stixobjects']
+                            logging.debug(f"Found 'stixobjects' array with {len(stix_objects)} items")
+                            for obj in stix_objects:
+                                parsed_any = True
                                 if handle_obj(obj):
                                     break
-                            parsed_any = True
-                        elif isinstance(data, list):
-                            for obj in data:
-                                if handle_obj(obj):
-                                    break
-                            parsed_any = True
                         else:
-                            raise ValueError(f"Unexpected response shape: {type(data)}")
-                    except Exception as e_fallback:
-                        logging.error(
-                            f"Failed to parse {indicator_type} data. Status={response.status_code}, "
-                            f"CT={response.headers.get('Content-Type')}, Error={e_fallback}"
-                        )
-                        raise
+                            logging.warning(f"Response is a dict but missing 'stixobjects' key. Keys: {list(data.keys())}")
+                    elif isinstance(data, list):
+                        logging.debug(f"Response is a list with {len(data)} items")
+                        for obj in data:
+                            parsed_any = True
+                            if handle_obj(obj):
+                                break
+                    else:
+                        raise ValueError(f"Unexpected response type: {type(data)}")
+                    
+                    if not parsed_any:
+                        logging.warning(f"No indicators were parsed from response")
+                        
+                except json.JSONDecodeError as jde:
+                    logging.error(f"JSON decode error for {indicator_type}: {jde}")
+                    logging.error(f"Response text (first 1000 chars): {response_text[:1000]}")
+                    raise
 
             except Exception as e:
                 logging.error(f"Error streaming {indicator_type} to blob: {e}")
@@ -357,7 +533,7 @@ class LumenSentinelUpdater:
         logging.debug(f"   • Confidence ≥{self.confidence_threshold}: {filtered_total:,} objects ({filter_rate:.1f}%)")
         logging.debug(f"   • Processing time: {processing_time:.1f}s")
         logging.debug(f"   • Chunks created: {len(chunks)}")
-        logging.debug(f"📊 SUMMARY: {filtered_total:,} of {total_downloaded:,} {indicator_type} indicators passed filtering in {len(chunks)} chunk(s)")
+        logging.info(f"📊 SUMMARY: {filtered_total:,} of {total_downloaded:,} {indicator_type} indicators passed filtering in {len(chunks)} chunk(s)")
 
         return chunks
 
@@ -377,7 +553,7 @@ class LumenSentinelUpdater:
         headers = {
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json',
-            'User-Agent': 'LumenSentinelConnector/4.0'
+            'User-Agent': 'LumenSentinelConnector/1.1'
         }
 
         params = {'api-version': '2024-02-01-preview'}
@@ -397,13 +573,17 @@ class LumenSentinelUpdater:
                 'sourcesystem': 'Lumen',
                 'stixobjects': chunk
             }
+            
+            # Log a sample indicator to verify format
+            if chunk_num == 1 and len(chunk) > 0:
+                logging.debug(f"Sample indicator being sent: {json.dumps(chunk[0], indent=2)[:500]}")
 
             max_retries = 3
             retry_delay = 0.5
 
             for attempt in range(max_retries):
                 try:
-                    logging.debug(
+                    logging.info(
                         f"Uploading chunk {chunk_num}/{total_chunks} {batch_info} "
                         f"({len(chunk)} indicators, attempt {attempt + 1})"
                     )
@@ -412,19 +592,21 @@ class LumenSentinelUpdater:
                         upload_url, json=payload, headers=headers, params=params, timeout=60
                     )
 
-                    # Log the response details (debug level to reduce noise)
-                    logging.debug(f"Sentinel API Response - Status: {response.status_code}")
+                    # Log the response details
+                    logging.info(f"Sentinel API Response - Status: {response.status_code}")
                     logging.debug(f"Sentinel API Response - Headers: {dict(response.headers)}")
-                    if response.status_code != 200:
+                    
+                    # ALWAYS log the response body for 200s to see what Sentinel says
+                    if response.status_code == 200:
+                        logging.debug(f"Sentinel API Response Body: {response.text[:1000]}")
+                    else:
                         logging.warning(
                             f"Sentinel API Error {response.status_code}: {response.text[:200]}..."
                         )
-                    else:
-                        logging.debug(f"Sentinel API Response - Body: {response.text[:500]}...")
 
                     if response.status_code == 200:
                         uploaded_count += len(chunk)
-                        logging.debug(
+                        logging.info(
                             f"✓ Chunk {chunk_num} uploaded successfully {batch_info} - {len(chunk)} indicators"
                         )
                         break
