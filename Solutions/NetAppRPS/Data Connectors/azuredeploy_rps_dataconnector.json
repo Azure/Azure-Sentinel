@@ -1,0 +1,173 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceResourceId": {
+			"type": "string",
+			"metadata": {
+				"description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
+			}
+		},
+		"principalId": {
+			"type": "string",
+			"metadata": {
+				"description": "Specifies the Object ID of the App registration to be used."
+			}
+		}
+	},
+	"resources": [
+		{
+			"type": "Microsoft.OperationalInsights/workspaces/tables",
+			"apiVersion": "2022-10-01",
+			"name": "[concat(parameters('workspaceResourceId'), '/rps_alerts_CL')]",
+			"properties": {
+				"description": "Custom log table for storing custom logs",
+				"retentionInDays": 30,
+				"schema": {
+					"name": "rps_alerts_CL",
+					"columns": [
+						{
+							"name": "TimeGenerated",
+							"type": "datetime"
+						},
+						{
+							"name": "description",
+							"type": "string"
+						},
+						{
+							"name": "severity",
+							"type": "string"
+						},
+						{
+							"name": "incident",
+							"type": "dynamic"
+						},
+						{
+							"name": "context",
+							"type": "dynamic"
+						}
+					]
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Insights/dataCollectionEndpoints",
+			"name": "rps-alerts-dce",
+			"location": "[resourceGroup().location]",
+			"apiVersion": "2021-04-01",
+			"properties": {
+				"networkAcls": {
+					"publicNetworkAccess": "Enabled"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Insights/dataCollectionRules",
+			"name": "rps-alerts-dcr",
+			"location": "[resourceGroup().location]",
+			"apiVersion": "2023-03-11",
+			"dependsOn": [
+				"[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceResourceId'), 'rps_alerts_CL')]",
+				"[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'rps-alerts-dce')]"
+			],
+			"properties": {
+				"dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'rps-alerts-dce')]",
+				"streamDeclarations": {
+					"Custom-MyTableRawData": {
+						"columns": [
+							{
+								"name": "TimeGenerated",
+								"type": "datetime"
+							},
+							{
+								"name": "description",
+								"type": "string"
+							},
+							{
+								"name": "severity",
+								"type": "string"
+							},
+							{
+								"name": "incident",
+								"type": "dynamic"
+							},
+							{
+								"name": "context",
+								"type": "dynamic"
+							}
+						]
+					}
+				},
+				"destinations": {
+					"logAnalytics": [
+						{
+							"workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceResourceId'))]",
+							"name": "[parameters('workspaceResourceId')]"
+						}
+					]
+				},
+				"dataFlows": [
+					{
+						"streams": [
+							"Custom-rps_alerts_CL"
+						],
+						"destinations": [
+							"[parameters('workspaceResourceId')]"
+						],
+						"transformKql": "source",
+						"outputStream": "Custom-rps_alerts_CL"
+					}
+				]
+			}
+		},
+		{
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2020-04-01-preview",
+			"name": "[guid(resourceGroup().id, 'rps-alerts-dce', parameters('principalId'), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb'))]",
+			"scope": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'rps-alerts-dce')]",
+			"properties": {
+				"roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+				"principalId": "[parameters('principalId')]"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'rps-alerts-dce')]"
+			]
+		},
+		{
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2020-04-01-preview",
+			"name": "[guid(resourceGroup().id, 'rps-alerts-dcr', parameters('principalId'), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb'))]",
+			"scope": "[resourceId('Microsoft.Insights/dataCollectionRules', 'rps-alerts-dcr')]",
+			"properties": {
+				"roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+				"principalId": "[parameters('principalId')]"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Insights/dataCollectionRules', 'rps-alerts-dcr')]"
+			]
+		},
+		{
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2020-04-01-preview",
+			"name": "[guid(resourceGroup().id, 'rps_alerts_CL', parameters('principalId'), subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb'))]",
+			"scope": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceResourceId'), 'rps_alerts_CL')]",
+			"properties": {
+				"roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+				"principalId": "[parameters('principalId')]"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceResourceId'), 'rps_alerts_CL')]"
+			]
+		}
+	],
+	"outputs": {
+		"dataCollectionEndpointIngestion": {
+			"type": "string",
+			"value": "[reference('Microsoft.Insights/dataCollectionEndpoints/rps-alerts-dce', '2021-04-01').logsIngestion.endpoint]"
+		},
+		"dataCollectionRuleImmutableId": {
+			"type": "string",
+			"value": "[reference('Microsoft.Insights/dataCollectionRules/rps-alerts-dcr', '2023-03-11').immutableId]"
+		}
+	}
+}
