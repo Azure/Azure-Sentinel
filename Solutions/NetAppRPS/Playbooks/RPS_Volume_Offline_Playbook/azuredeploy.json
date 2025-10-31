@@ -1,0 +1,544 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "NetApp RPS Volume Offline Playbook",
+    "description": "This playbook takes a NetApp volume offline using the updated NetApp RPS take-volume-offline API endpoint and optionally polls for completion.",
+    "prerequisites": [
+      "1. NetApp RPS Auth Playbook must be deployed first",
+      "2. NetApp RPS Async Poll Playbook must be deployed first",
+      "3. Valid NetApp RPS API credentials configured in the Auth Playbook",
+      "4. Caller must provide volume_id, agent_id, and system_id parameters"
+    ],
+    "postDeployment": [
+      "1. Ensure the Auth Playbook is working correctly",
+      "2. Ensure the Async Poll Playbook is working correctly",
+      "3. Test the volume offline functionality with valid volume_id, agent_id, and system_id",
+      "4. Verify the new take-volume-offline API endpoint is accessible"
+    ],
+    "lastUpdateTime": "2025-09-17T00:00:00.000Z",
+    "tags": [
+      "NetApp",
+      "RPS",
+      "Playbook",
+      "Volume",
+      "Offline"
+    ],
+    "support": {
+      "tier": "Community"
+    },
+    "author": {
+      "name": "NetApp"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "String",
+      "defaultValue": "NetAppRPS-Volume-Offline-Playbook",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    },
+    "NetAppRPSAuthPlaybookName": {
+      "type": "String",
+      "defaultValue": "NetAppRPS-Auth-Playbook",
+      "metadata": {
+        "description": "Name of the NetApp RPS authentication playbook"
+      }
+    },
+    "NetAppRPSAsyncPollPlaybookName": {
+      "type": "String",
+      "defaultValue": "NetAppRPS-Async-Poll-Playbook",
+      "metadata": {
+        "description": "Name of the NetApp RPS async poll playbook"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[parameters('location')]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "authPlaybookName": {
+              "defaultValue": "[parameters('NetAppRPSAuthPlaybookName')]",
+              "type": "String"
+            },
+            "asyncPollPlaybookName": {
+              "defaultValue": "[parameters('NetAppRPSAsyncPollPlaybookName')]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "volume_id": {
+                      "type": "string"
+                    },
+                    "agent_id": {
+                      "type": "string"
+                    },
+                    "system_id": {
+                      "type": "string"
+                    },
+                    "callbackData": {
+                      "type": "object"
+                    },
+                    "poll": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "volume_id",
+                    "agent_id",
+                    "system_id"
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Variables": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "VolumeId",
+                    "type": "string",
+                    "value": "@triggerBody()?['volume_id']"
+                  },
+                  {
+                    "name": "AgentId",
+                    "type": "string",
+                    "value": "@triggerBody()?['agent_id']"
+                  },
+                  {
+                    "name": "SystemId",
+                    "type": "string",
+                    "value": "@triggerBody()?['system_id']"
+                  },
+                  {
+                    "name": "CallbackData",
+                    "type": "object",
+                    "value": "@triggerBody()?['callbackData']"
+                  },
+                  {
+                    "name": "AccountId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "DoPoll",
+                    "type": "boolean",
+                    "value": "@coalesce(triggerBody()?['poll'], true)"
+                  },
+                  {
+                    "name": "Token",
+                    "type": "string"
+                  },
+                  {
+                    "name": "JobId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "JobAgentId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PollResponse",
+                    "type": "object",
+                    "value": {}
+                  },
+                  {
+                    "name": "SubmissionStatusCode",
+                    "type": "integer",
+                    "value": 0
+                  }
+                ]
+              }
+            },
+            "Call_Auth_Playbook": {
+              "runAfter": {
+                "Initialize_Variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('NetAppRPSAuthPlaybookName'), '/triggers/manual'), '2019-05-01').value]",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "caller_info": {
+                    "playbook_name": "@workflow().name",
+                    "correlation_id": "@workflow().run.name",
+                    "request_id": "@guid()"
+                  }
+                },
+                "retryPolicy": {
+                  "type": "exponential",
+                  "count": 3,
+                  "interval": "PT5S",
+                  "minimumInterval": "PT5S",
+                  "maximumInterval": "PT30S"
+                }
+              }
+            },
+            "Parse_Auth_Response": {
+              "runAfter": {
+                "Call_Auth_Playbook": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Call_Auth_Playbook')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "access_token": {
+                      "type": "string"
+                    },
+                    "account_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "access_token",
+                    "account_id"
+                  ]
+                }
+              }
+            },
+            "Set_Token": {
+              "runAfter": {
+                "Parse_Auth_Response": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "Token",
+                "value": "@body('Parse_Auth_Response')?['access_token']"
+              }
+            },
+            "Set_Account_ID": {
+              "runAfter": {
+                "Set_Token": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "AccountId",
+                "value": "@body('Parse_Auth_Response')?['account_id']"
+              }
+            },
+            "Submit_Volume_Offline": {
+              "runAfter": {
+                "Set_Account_ID": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "https://snapcenter.cloudmanager.cloud.netapp.com/rps/v1/account/@{variables('AccountId')}/storage/take-volume-offline",
+                "headers": {
+                  "Authorization": "Bearer @{variables('Token')}",
+                  "Content-Type": "application/json",
+                  "accept": "application/json"
+                },
+                "body": {
+                  "volume_id": "@variables('VolumeId')",
+                  "agent_id": "@variables('AgentId')",
+                  "system_id": "@variables('SystemId')"
+                },
+                "retryPolicy": {
+                  "type": "exponential",
+                  "count": 3,
+                  "interval": "PT5S",
+                  "minimumInterval": "PT5S",
+                  "maximumInterval": "PT30S"
+                }
+              }
+            },
+            "Capture_Submission_Status_Code": {
+              "runAfter": {
+                "Submit_Volume_Offline": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "SubmissionStatusCode",
+                "value": "@outputs('Submit_Volume_Offline')['statusCode']"
+              }
+            },
+            "Parse_Submission_Response": {
+              "runAfter": {
+                "Capture_Submission_Status_Code": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Submit_Volume_Offline')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "agent_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "Store_JobId": {
+              "runAfter": {
+                "Parse_Submission_Response": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "JobId",
+                "value": "@body('Parse_Submission_Response')?['job_id']"
+              }
+            },
+            "Store_Job_AgentId": {
+              "runAfter": {
+                "Store_JobId": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "JobAgentId",
+                "value": "@body('Parse_Submission_Response')?['agent_id']"
+              }
+            },
+            "Check_If_Should_Poll": {
+              "runAfter": {
+                "Store_Job_AgentId": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('DoPoll')",
+                      true
+                    ]
+                  },
+                  {
+                    "or": [
+                      {
+                        "equals": [
+                          "@variables('SubmissionStatusCode')",
+                          200
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@variables('SubmissionStatusCode')",
+                          201
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@variables('SubmissionStatusCode')",
+                          202
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "not": {
+                      "equals": [
+                        "@variables('JobId')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Call_Async_Poll_Playbook": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('NetAppRPSAsyncPollPlaybookName'), '/triggers/manual'), '2019-05-01').value]",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "job_id": "@variables('JobId')",
+                      "agent_id": "@variables('JobAgentId')",
+                      "system_id": "@variables('SystemId')",
+                      "source": "ontap",
+                      "caller_info": {
+                        "playbook_name": "@workflow().name",
+                        "correlation_id": "@workflow().run.name",
+                        "original_volume_id": "@variables('VolumeId')"
+                      }
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT5S",
+                      "minimumInterval": "PT5S",
+                      "maximumInterval": "PT30S"
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            },
+            "Parse_Poll_Response": {
+              "runAfter": {
+                "Check_If_Should_Poll": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Call_Async_Poll_Playbook')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "jobId": {
+                      "type": "string"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            },
+            "Store_Poll_Response": {
+              "runAfter": {
+                "Parse_Poll_Response": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "PollResponse",
+                "value": "@body('Parse_Poll_Response')"
+              }
+            },
+            "Return_Response": {
+              "runAfter": {
+                "Store_Poll_Response": [
+                  "Succeeded",
+                  "Skipped"
+                ],
+                "Check_If_Should_Poll": [
+                  "Succeeded"
+                ],
+                "Call_Auth_Playbook": [
+                  "Failed",
+                  "TimedOut"
+                ],
+                "Submit_Volume_Offline": [
+                  "Failed",
+                  "TimedOut"
+                ]
+              },
+              "type": "Response",
+              "kind": "Http",
+              "inputs": {
+                "statusCode": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 401, if(or(equals(actions('Submit_Volume_Offline')['status'], 'Failed'), equals(actions('Submit_Volume_Offline')['status'], 'TimedOut')), 500, if(or(equals(variables('SubmissionStatusCode'), 200), equals(variables('SubmissionStatusCode'), 201), equals(variables('SubmissionStatusCode'), 202)), 200, if(equals(variables('SubmissionStatusCode'), 0), 500, variables('SubmissionStatusCode')))))",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "success": "@and(not(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut'))), not(or(equals(actions('Submit_Volume_Offline')['status'], 'Failed'), equals(actions('Submit_Volume_Offline')['status'], 'TimedOut'))), or(equals(variables('SubmissionStatusCode'), 200), equals(variables('SubmissionStatusCode'), 201), equals(variables('SubmissionStatusCode'), 202)))",
+                  "error": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 'Authentication failed in auth playbook', if(or(equals(actions('Submit_Volume_Offline')['status'], 'Failed'), equals(actions('Submit_Volume_Offline')['status'], 'TimedOut')), 'Failed submitting volume offline request', null))",
+                  "stage": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 'auth', if(or(equals(actions('Submit_Volume_Offline')['status'], 'Failed'), equals(actions('Submit_Volume_Offline')['status'], 'TimedOut')), 'submit', 'success'))",
+                  "submission": {
+                    "statusCode": "@variables('SubmissionStatusCode')",
+                    "jobId": "@variables('JobId')",
+                    "raw": "@body('Submit_Volume_Offline')",
+                    "details": "@if(or(equals(actions('Submit_Volume_Offline')['status'], 'Failed'), equals(actions('Submit_Volume_Offline')['status'], 'TimedOut')), body('Submit_Volume_Offline'), null)"
+                  },
+                  "polling": {
+                    "invoked": "@and(variables('DoPoll'), not(empty(variables('JobId'))))",
+                    "playbook": "@parameters('asyncPollPlaybookName')",
+                    "jobFinalStatus": "@coalesce(variables('PollResponse')?['status'], 'unknown')",
+                    "jobResponse": "@variables('PollResponse')"
+                  },
+                  "callbackData": "@variables('CallbackData')",
+                  "timestamp": "@utcnow()"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookName": {
+      "type": "string",
+      "value": "[parameters('PlaybookName')]"
+    },
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookUrl": {
+      "type": "string",
+      "value": "[concat('https://portal.azure.com/#resource', resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')))]"
+    },
+    "TriggerUrl": {
+      "type": "string",
+      "value": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'), '/triggers/manual'), '2019-05-01').value]"
+    }
+  }
+}

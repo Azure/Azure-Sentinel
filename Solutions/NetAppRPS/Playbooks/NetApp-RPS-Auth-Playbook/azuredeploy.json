@@ -1,0 +1,341 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "NetApp RPS Authentication Playbook",
+        "description": "This playbook creates a shared Key Vault for NetApp RPS credentials and provides authentication services to all NetApp RPS playbooks in the solution.",
+        "prerequisites": [
+            "1. Valid client_id, client_secret, and account_id for NetApp RPS API authentication",
+            "2. API endpoint that accepts OAuth2 client credentials flow"
+        ],
+        "postDeployment": [
+            "1. Update the client_id, client_secret, and account_id values in the Key Vault",
+            "2. Test the Logic App to ensure proper token retrieval",
+            "3. The Key Vault created by this playbook will be shared across all NetApp RPS playbooks",
+            "4. Other playbooks will call this Auth playbook to obtain authentication tokens"
+        ],
+        "lastUpdateTime": "2025-09-17T00:00:00.000Z",
+        "tags": [
+            "NetApp",
+            "RPS",
+            "Playbook",
+            "Authentication"
+        ],
+        "support": {
+            "tier": "Community"
+        },
+        "author": {
+            "name": "NetApp"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "String",
+            "defaultValue": "NetAppRPS-Auth-Playbook",
+            "metadata": {
+                "description": "Name of the Logic App playbook to be created"
+            }
+        },
+        "KeyVaultName": {
+            "type": "String",
+            "defaultValue": "[concat('rpskv', uniqueString(resourceGroup().id))]",
+            "metadata": {
+                "description": "Name of the shared Key Vault to store NetApp RPS credentials"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[parameters('location')]",
+            "metadata": {
+                "description": "Location for all resources"
+            }
+        },
+        "ClientId": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Client ID for NetApp RPS API authentication"
+            }
+        },
+        "ClientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Client Secret for NetApp RPS API authentication"
+            }
+        },
+        "AccountId": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Account ID for NetApp RPS API authentication"
+            }
+        }
+    },
+    "variables": {
+        "KeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2019-09-01",
+            "name": "[parameters('KeyVaultName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 90,
+                "enableRbacAuthorization": false
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2019-09-01",
+            "name": "[concat(parameters('KeyVaultName'), '/client-id')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('ClientId')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2019-09-01",
+            "name": "[concat(parameters('KeyVaultName'), '/client-secret')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('ClientSecret')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2019-09-01",
+            "name": "[concat(parameters('KeyVaultName'), '/account-id')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('AccountId')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyVaultConnectionName')]",
+            "location": "[parameters('location')]",
+            "kind": "V1",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultName'))]"
+            ],
+            "properties": {
+                "displayName": "[variables('KeyVaultConnectionName')]",
+                "parameterValueSet": {
+                    "name": "oauthMI",
+                    "values": {
+                        "vaultName": {
+                            "value": "[parameters('KeyVaultName')]"
+                        }
+                    }
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "account_id": {
+                                            "type": "string"
+                                        },
+                                        "api_hostname": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Client_ID": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('client-id')}/value"
+                            }
+                        },
+                        "Get_Client_Secret": {
+                            "runAfter": {
+                                "Get_Client_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('client-secret')}/value"
+                            }
+                        },
+                        "Get_Account_ID": {
+                            "runAfter": {
+                                "Get_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('account-id')}/value"
+                            }
+                        },
+                        "HTTP_Token_Request": {
+                            "runAfter": {
+                                "Get_Account_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "uri": "https://netapp-cloud-account.auth0.com/oauth/token",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "body": "grant_type=client_credentials&client_id=@{body('Get_Client_ID')?['value']}&client_secret=@{body('Get_Client_Secret')?['value']}&audience=https://api.cloud.netapp.com"
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "HTTP_Token_Request": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 200,
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "body": {
+                                    "access_token": "@{body('HTTP_Token_Request')?['access_token']}",
+                                    "token_type": "@{body('HTTP_Token_Request')?['token_type']}",
+                                    "expires_in": "@{body('HTTP_Token_Request')?['expires_in']}",
+                                    "account_id": "@{body('Get_Account_ID')?['value']}"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                                "connectionName": "[variables('KeyVaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "apiVersion": "2019-09-01",
+            "name": "[concat(parameters('KeyVaultName'), '/add')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultName'))]"
+            ],
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "get"
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {
+        "PlaybookName": {
+            "type": "string",
+            "value": "[parameters('PlaybookName')]"
+        },
+        "PlaybookResourceId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "value": "[parameters('KeyVaultName')]"
+        },
+        "KeyVaultResourceId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultName'))]"
+        }
+    }
+}

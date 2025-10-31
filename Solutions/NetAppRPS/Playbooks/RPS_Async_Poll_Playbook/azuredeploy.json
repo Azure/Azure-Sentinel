@@ -1,0 +1,481 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "NetApp RPS Async Poll Playbook",
+    "description": "This playbook polls NetApp RPS job status asynchronously until completion or timeout using the updated job status API endpoint.",
+    "prerequisites": [
+      "1. NetApp RPS Auth Playbook must be deployed first",
+      "2. Valid NetApp RPS API credentials configured in the Auth Playbook",
+      "3. Caller must provide job_id, agent_id, system_id, and source parameters"
+    ],
+    "postDeployment": [
+      "1. Ensure the Auth Playbook is working correctly",
+      "2. Test the polling functionality with a valid job ID"
+    ],
+    "lastUpdateTime": "2025-09-17T00:00:00.000Z",
+    "tags": [
+      "NetApp",
+      "RPS",
+      "Playbook",
+      "Async",
+      "Polling"
+    ],
+    "support": {
+      "tier": "Community"
+    },
+    "author": {
+      "name": "NetApp"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "String",
+      "defaultValue": "NetAppRPS-Async-Poll-Playbook",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    },
+    "NetAppRPSAuthPlaybookName": {
+      "type": "String",
+      "defaultValue": "NetAppRPS-Auth-Playbook",
+      "metadata": {
+        "description": "Name of the NetApp RPS authentication playbook"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[parameters('location')]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "authPlaybookName": {
+              "defaultValue": "[parameters('NetAppRPSAuthPlaybookName')]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string",
+                      "description": "The NetApp RPS job ID to poll"
+                    },
+                    "agent_id": {
+                      "type": "string",
+                      "description": "NetApp agent ID"
+                    },
+                    "system_id": {
+                      "type": "string",
+                      "description": "System ID for the working environment"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "Job source type"
+                    },
+                    "caller_info": {
+                      "type": "object",
+                      "description": "Optional caller information for tracking"
+                    }
+                  },
+                  "required": [
+                    "job_id",
+                    "agent_id",
+                    "system_id",
+                    "source"
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "Initialize_variables": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "JobId",
+                    "type": "string",
+                    "value": "@triggerBody()?['job_id']"
+                  },
+                  {
+                    "name": "AgentId",
+                    "type": "string",
+                    "value": "@triggerBody()?['agent_id']"
+                  },
+                  {
+                    "name": "SystemId",
+                    "type": "string",
+                    "value": "@triggerBody()?['system_id']"
+                  },
+                  {
+                    "name": "Source",
+                    "type": "string",
+                    "value": "@triggerBody()?['source']"
+                  },
+                  {
+                    "name": "AccountId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PollCount",
+                    "type": "integer",
+                    "value": 0
+                  },
+                  {
+                    "name": "MaxPollAttempts",
+                    "type": "integer",
+                    "value": 10
+                  },
+                  {
+                    "name": "PollIntervalSeconds",
+                    "type": "integer",
+                    "value": 30
+                  },
+                  {
+                    "name": "JobStatus",
+                    "type": "string",
+                    "value": "pending"
+                  },
+                  {
+                    "name": "JobResponse",
+                    "type": "object",
+                    "value": {}
+                  }
+                ]
+              }
+            },
+            "Call_Auth_Playbook": {
+              "runAfter": {
+                "Initialize_variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('NetAppRPSAuthPlaybookName'), '/triggers/manual'), '2019-05-01').value]",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "caller_info": {
+                    "playbook_name": "@workflow().name",
+                    "correlation_id": "@workflow().run.name",
+                    "request_id": "@guid()"
+                  }
+                }
+              }
+            },
+            "Set_Account_ID": {
+              "runAfter": {
+                "Call_Auth_Playbook": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "AccountId",
+                "value": "@body('Call_Auth_Playbook')?['account_id']"
+              }
+            },
+            "Initial_Status_Check": {
+              "runAfter": {
+                "Set_Account_ID": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "https://snapcenter.cloudmanager.cloud.netapp.com/rps/v1/account/@{variables('AccountId')}/job/status?source=@{variables('Source')}&job_id=@{variables('JobId')}&agent_id=@{variables('AgentId')}&system_id=@{variables('SystemId')}",
+                "headers": {
+                  "Authorization": "Bearer @{body('Call_Auth_Playbook')?['access_token']}",
+                  "accept": "application/json"
+                },
+                "retryPolicy": {
+                  "type": "exponential",
+                  "count": 2,
+                  "interval": "PT5S",
+                  "minimumInterval": "PT5S",
+                  "maximumInterval": "PT10S"
+                },
+                "timeout": "PT30S"
+              }
+            },
+            "Update_Initial_Status": {
+              "runAfter": {
+                "Initial_Status_Check": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "JobStatus",
+                "value": "@body('Initial_Status_Check')?['status']"
+              }
+            },
+            "Update_Initial_Response": {
+              "runAfter": {
+                "Update_Initial_Status": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "JobResponse",
+                "value": "@body('Initial_Status_Check')"
+              }
+            },
+            "Polling_Loop": {
+              "runAfter": {
+                "Update_Initial_Response": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Until",
+              "expression": "@or(or(equals(variables('JobStatus'), 'SUCCESS'), equals(variables('JobStatus'), 'success')), or(equals(variables('JobStatus'), 'FAILED'), equals(variables('JobStatus'), 'failed')), greater(variables('PollCount'), variables('MaxPollAttempts')))",
+              "limit": {
+                "count": 10,
+                "timeout": "PT6M"
+              },
+              "actions": {
+                "Increment_Poll_Count": {
+                  "runAfter": {},
+                  "type": "IncrementVariable",
+                  "inputs": {
+                    "name": "PollCount",
+                    "value": 1
+                  }
+                },
+                "Check_Job_Status": {
+                  "runAfter": {
+                    "Increment_Poll_Count": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "https://snapcenter.cloudmanager.cloud.netapp.com/rps/v1/account/@{variables('AccountId')}/job/status?source=@{variables('Source')}&job_id=@{variables('JobId')}&agent_id=@{variables('AgentId')}&system_id=@{variables('SystemId')}",
+                    "headers": {
+                      "Authorization": "Bearer @{body('Call_Auth_Playbook')?['access_token']}",
+                      "accept": "application/json"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 2,
+                      "interval": "PT5S",
+                      "minimumInterval": "PT5S",
+                      "maximumInterval": "PT10S"
+                    },
+                    "timeout": "PT30S"
+                  }
+                },
+                "Update_Job_Status": {
+                  "runAfter": {
+                    "Check_Job_Status": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "JobStatus",
+                    "value": "@body('Check_Job_Status')?['status']"
+                  }
+                },
+                "Handle_Status_Check_Failure": {
+                  "runAfter": {
+                    "Check_Job_Status": [
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "JobStatus",
+                    "value": "failed"
+                  }
+                },
+                "Update_Job_Response": {
+                  "runAfter": {
+                    "Update_Job_Status": [
+                      "Succeeded"
+                    ],
+                    "Handle_Status_Check_Failure": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "JobResponse",
+                    "value": "@body('Check_Job_Status')"
+                  }
+                },
+                "Wait_If_Needed": {
+                  "runAfter": {
+                    "Update_Job_Response": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "If",
+                  "expression": {
+                    "not": {
+                      "or": [
+                        {
+                          "equals": [
+                            "@variables('JobStatus')",
+                            "SUCCESS"
+                          ]
+                        },
+                        {
+                          "equals": [
+                            "@variables('JobStatus')",
+                            "success"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "actions": {
+                    "Wait_Before_Retry": {
+                      "runAfter": {},
+                      "type": "Wait",
+                      "inputs": {
+                        "interval": {
+                          "count": "@variables('PollIntervalSeconds')",
+                          "unit": "Second"
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              }
+            },
+            "Check_Final_Status": {
+              "runAfter": {
+                "Polling_Loop": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "or": [
+                      {
+                        "equals": [
+                          "@variables('JobStatus')",
+                          "SUCCESS"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@variables('JobStatus')",
+                          "success"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Success_Response": {
+                  "runAfter": {},
+                  "type": "Response",
+                  "kind": "Http",
+                  "inputs": {
+                    "statusCode": 200,
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "success": true,
+                      "job_id": "@variables('JobId')",
+                      "status": "@variables('JobStatus')",
+                      "poll_count": "@variables('PollCount')",
+                      "data": "@variables('JobResponse')",
+                      "caller_info": "@triggerBody()?['caller_info']"
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Error_Response": {
+                    "runAfter": {},
+                    "type": "Response",
+                    "kind": "Http",
+                    "inputs": {
+                      "statusCode": 408,
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "success": false,
+                        "error": "Job polling timeout or failed",
+                        "job_id": "@variables('JobId')",
+                        "status": "@variables('JobStatus')",
+                        "poll_count": "@variables('PollCount')",
+                        "max_attempts": "@variables('MaxPollAttempts')",
+                        "data": "@variables('JobResponse')",
+                        "caller_info": "@triggerBody()?['caller_info']"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookName": {
+      "type": "string",
+      "value": "[parameters('PlaybookName')]"
+    },
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookUrl": {
+      "type": "string",
+      "value": "[concat('https://portal.azure.com/#resource', resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')))]"
+    },
+    "TriggerUrl": {
+      "type": "string",
+      "value": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'), '/triggers/manual'), '2019-05-01').value]"
+    }
+  }
+}
