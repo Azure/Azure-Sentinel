@@ -160,39 +160,62 @@ class BaseCollector:
                         consts.LOGS_STARTS_WITH, __method_name, self.function_name
                     )
                 )
-            response = requests.post(url, auth=auth, data=data, timeout=consts.API_TIMEOUT)
-
-            if response.status_code in [200, 201]:
-                token_data = response.json()
-                self.add_token_expiration_to_checkpoint_file(token_data, from_refresh_token)
-                self.update_checkpoint_of_disabling_function(make_count_zero=True)
-                applogger.debug(
-                    "{}(method={}) : {} : New access token generated successfully ".format(
-                        consts.LOGS_STARTS_WITH, __method_name, self.function_name
+            for _ in range(2):
+                response = requests.post(url, auth=auth, data=data, timeout=consts.API_TIMEOUT)
+                if response.status_code in [200, 201]:
+                    token_data = response.json()
+                    self.add_token_expiration_to_checkpoint_file(token_data, from_refresh_token)
+                    self.update_checkpoint_of_disabling_function(make_count_zero=True)
+                    applogger.debug(
+                        "{}(method={}) : {} : New access token generated successfully ".format(
+                            consts.LOGS_STARTS_WITH, __method_name, self.function_name
+                        )
                     )
-                )
-            elif response.status_code in [400, 401, 403, 404]:
-                self.update_checkpoint_of_disabling_function()
-                applogger.error(
-                    "{}(method={}) : {} : status code={}, reason={}".format(
-                        consts.LOGS_STARTS_WITH,
-                        __method_name,
-                        self.function_name,
-                        response.status_code,
-                        response.text
+                    return
+                elif response.status_code in [400, 401, 403, 404]:
+                    self.update_checkpoint_of_disabling_function()
+                    applogger.error(
+                        "{}(method={}) : {} : status code={}, reason={}".format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            self.function_name,
+                            response.status_code,
+                            response.text
+                        )
                     )
-                )
-                raise VectraException()
-            else:
-                applogger.error(
-                    "{}(method={}) : {} : Unknown status code: {} ".format(
-                        consts.LOGS_STARTS_WITH,
-                        __method_name,
-                        self.function_name,
-                        response.status_code,
+                    raise VectraException()
+                elif response.status_code == 429:
+                    sleep_count = int(response.headers.get("Retry-After", "30")) + 5
+                    applogger.error(
+                        self.log_format.format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            self.function_name,
+                            "Too Many Requests, Status code : {}, Sleeping for {} seconds".format(
+                                response.status_code, sleep_count
+                            ),
+                        )
                     )
+                    time.sleep(sleep_count)
+                else:
+                    applogger.error(
+                        "{}(method={}) : {} : Unknown status code: {} ".format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            self.function_name,
+                            response.status_code,
+                        )
+                    )
+                    raise VectraException()
+            applogger.error(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.function_name,
+                    "Max retries exceeded for generating access token."
                 )
-                raise VectraException()
+            )
+            raise VectraException()
         except VectraException:
             raise VectraException()
         except requests.exceptions.RequestException as err:
