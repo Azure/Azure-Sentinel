@@ -17,7 +17,7 @@ from ..SharedCode.mimecast_exception import MimecastException, MimecastTimeoutEx
 from ..SharedCode.logger import applogger
 from ..SharedCode.state_manager import StateManager
 from ..SharedCode.utils import Utils
-from ..SharedCode.sentinel import post_data_async
+from ..SharedCode.sentinel import async_send_data_to_sentinel
 from tenacity import RetryError
 
 
@@ -30,8 +30,6 @@ class MimecastCGToSentinel(Utils):
         self.check_environment_var_exist(
             [
                 {"Base_Url": consts.BASE_URL},
-                {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"Mimecast_Client_ID": consts.MIMECAST_CLIENT_ID},
                 {"Mimecast_Client_Secret": consts.MIMECAST_CLIENT_SECRET},
             ]
@@ -471,10 +469,8 @@ class MimecastCGToSentinel(Utils):
                         for data in response_json:
                             data["type"] = mapping_dict.get(data.get("type"))
 
-                        await post_data_async(
-                            index,
-                            json.dumps(response_json),
-                            session,
+                        await async_send_data_to_sentinel(
+                            response_json,
                             consts.TABLE_NAME["SEG_CG"],
                         )
                         return True

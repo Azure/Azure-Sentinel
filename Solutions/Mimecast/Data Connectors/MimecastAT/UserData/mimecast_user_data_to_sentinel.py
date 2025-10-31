@@ -5,7 +5,7 @@ from ..SharedCode import consts
 from ..SharedCode.mimecast_exception import MimecastException, MimecastTimeoutException
 from ..SharedCode.logger import applogger
 from ..SharedCode.utils import Utils
-from ..SharedCode.sentinel import post_data
+from ..SharedCode.sentinel import send_data_to_sentinel
 import json
 import time
 from tenacity import RetryError
@@ -20,8 +20,6 @@ class MimecastAwarenessUserData(Utils):
         self.check_environment_var_exist(
             [
                 {"BaseURL": consts.BASE_URL},
-                {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"MimecastClientID": consts.MIMECAST_CLIENT_ID},
                 {"MimecastClientSecret": consts.MIMECAST_CLIENT_SECRET},
                 {"ConnectionString": consts.CONN_STRING},
@@ -78,9 +76,9 @@ class MimecastAwarenessUserData(Utils):
                             ),
                         )
                     )
-                    post_data(
-                        json.dumps(user_data_items),
-                        log_type=consts.TABLE_NAME["USER_DATA"],
+                    send_data_to_sentinel(
+                        user_data_items,
+                        consts.TABLE_NAME["USER_DATA"],
                     )
                     next_page_token = user_data_response["meta"]["pagination"].get(
                         "next", ""
