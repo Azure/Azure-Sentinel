@@ -12,7 +12,10 @@ class KeyVaultSecretManage:
     def __init__(self) -> None:
         """Intialize instance variables for class."""
         self.keyvault_name = consts.KEYVAULT_NAME
-        self.keyvault_uri = "https://{}.vault.azure.net/".format(self.keyvault_name)
+        if ".us" in consts.SCOPE:
+            self.keyvault_uri = "https://{}.vault.usgovcloudapi.net/".format(self.keyvault_name)
+        else:
+            self.keyvault_uri = "https://{}.vault.azure.net/".format(self.keyvault_name)
         self.client = self.get_client()
 
     def get_client(self):
