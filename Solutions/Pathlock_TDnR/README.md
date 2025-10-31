@@ -1,5 +1,5 @@
 
-This project provides an ARM template to deploy the "Pathlock Threat Detection & Response (TD&R)" connector in Microsoft Sentinel. The deployment includes the following components:
+This project provides an ARM template to deploy the "Pathlock Threat Detection & Response (TD&R)" connector in Microsoft Sentinel Solution for SAP. The deployment includes the following components:
 - Connector
 - Workbook
 - Parser Function
