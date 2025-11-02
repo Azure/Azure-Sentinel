@@ -18,13 +18,14 @@ relevantTechniques:
   - T1529
 query: |
   // To Adapt to your environment
-  let triggerThreshold = 5;
+  let triggerThreshold = 10;
   VMwareESXi
   | where SyslogMessage has "sshd"
   | where SyslogMessage contains "authentication failure"
   | extend SrcUsername = extract(@'\[info\]\s+\[(.*?)\]', 1, SyslogMessage)
   | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
-  | summarize make_set(SrcUsername),count() by DstHostname
+  | extend SrcIpAddr = extract(@'root@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, SyslogMessage)
+  | summarize make_set(SrcUsername),count() by SrcIpAddr,DstHostname
   | where count_ >= triggerThreshold
   | extend HostCustomEntity = DstHostname
 entityMappings:
@@ -32,5 +33,9 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
 version: 1.0.0
 kind: Scheduled
