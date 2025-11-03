@@ -27,13 +27,35 @@
       "metadata": {
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
     "_solutionName": "Cyble Vision",
-    "_solutionVersion": "3.0.1",
+    "_solutionVersion": "3.0.2",
     "solutionId": "cybleinc1737472004964.cybleinc1737472004964-azure-sentinel-offerid",
     "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "CybleVisionAlerts",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "CybleVisionAlertsConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
     "IoC-Enrichment": "IoC-Enrichment",
     "_IoC-Enrichment": "[variables('IoC-Enrichment')]",
     "TemplateEmptyArray": "[json('[]')]",
@@ -42,7 +64,6 @@
     "_playbookContentId1": "[variables('playbookContentId1')]",
     "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
     "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
-    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
     "TI-Ingest": "TI-Ingest",
     "_TI-Ingest": "[variables('TI-Ingest')]",
@@ -58,13 +79,704 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Cyble Vision Alerts",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "title": "Cyble Vision Alerts",
+                  "publisher": "Cyble",
+                  "id": "CybleVisionAlerts",
+                  "descriptionMarkdown": "The Cyble Vision CCP connector allows the user to ingest Cyble Vision Alerts into Microsoft Sentinel.",
+                  "graphQueriesTableName": "CybleVisionAlerts_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Alerts received",
+                      "legend": "Alerts",
+                      "baseQuery": "{{graphQueriesTableName}} | summarize TotalAlerts = count()"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of Cyble Vision Alerts",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CybleVisionAlerts_CL",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Cyble Vision API token",
+                        "description": "An API Token from Cyble Vision Platform is required. See the [Cyble documentation]('') on how to create an API token."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "STEP 1 - Create a Cyble API token:",
+                      "description": "Follow the [Cyble documentation]('') for guidance on this step."
+                    },
+                    {
+                      "title": "STEP 3 - Enter your API Details:",
+                      "description": "Enter the API Token from Cyble Vision Platform below:",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Token",
+                            "placeholder": "Enter your API Token",
+                            "type": "password",
+                            "name": "ApiToken"
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "connect",
+                            "name": "connect"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Cyble Inc"
+                },
+                "support": {
+                  "name": "Cyble Support",
+                  "email": "csm@cyble.com",
+                  "tier": "Partner",
+                  "link": "https://cyble.com/talk-to-sales/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CloudflareDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-CybleVisionAlerts_CL": {
+                    "columns": [
+                      {
+                        "name": "created_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "updated_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "deleted_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "id",
+                        "type": "guid"
+                      },
+                      {
+                        "name": "data_id",
+                        "type": "guid"
+                      },
+                      {
+                        "name": "entity_id",
+                        "type": "guid"
+                      },
+                      {
+                        "name": "keyword_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "entity_type",
+                        "type": "int"
+                      },
+                      {
+                        "name": "service",
+                        "type": "string"
+                      },
+                      {
+                        "name": "company_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "assignee_id",
+                        "type": "guid"
+                      },
+                      {
+                        "name": "assignment_date",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "archive_date",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "updated_by_id",
+                        "type": "guid"
+                      },
+                      {
+                        "name": "created_by",
+                        "type": "string"
+                      },
+                      {
+                        "name": "user_severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "risk_score",
+                        "type": "string"
+                      },
+                      {
+                        "name": "bucket_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "filename",
+                        "type": "string"
+                      },
+                      {
+                        "name": "repository_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "owner_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "bucket_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "true_positive",
+                        "type": "string"
+                      },
+                      {
+                        "name": "llm_processed",
+                        "type": "string"
+                      },
+                      {
+                        "name": "llm_explanation",
+                        "type": "string"
+                      },
+                      {
+                        "name": "tags",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CybleVisionAlerts_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | project  TimeGenerated = now(), IncidentId=incident_id, IncidentName=incident_name, CreationTime=datetime(1970-01-01) + (creation_time * 1ms), ModificationTime=datetime(1970-01-01) + (modification_time * 1ms), DetectionTime=datetime(1970-01-01) + (detection_time * 1ms), Status=status, Severity=severity, Description=description, AssignedUserMail=assigned_user_mail, assignedUserPrettyName=assigned_user_pretty_name, AlertCount=alert_count, LowSeverityAlertCount=low_severity_alert_count, MedSeverityAlertCount=med_severity_alert_count, HighSeverityAlertCount=high_severity_alert_count, CriticalSeverityAlertCount=critical_severity_alert_count, UserCount=user_count, HostCount=host_count, Notes=notes, ResolveComment=resolve_comment, ResolvedTimestamp=datetime(1970-01-01) + (resolved_timestamp * 1ms), ManualSeverity=manual_severity, ManualDescription=manual_description, XdrUrl=xdr_url, Starred=starred, Hosts=todynamic(hosts), Users=todynamic(users), IncidentSources=todynamic(incident_sources), RuleBasedScore=rule_based_score, ManualScore=manual_score, WildfireHits=wildfire_hits, AlertsGroupingStatus=alerts_grouping_status, MitreTacticsIdsAndNames=todynamic(mitre_tactics_ids_and_names), MitreTechniquesIdsAndNames=todynamic(mitre_techniques_ids_and_names), AlertCategories=todynamic(alert_categories), OriginalTags=todynamic(original_tags), Tags=todynamic(tags)",
+                    "outputStream": "Custom-CybleVisionAlerts_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "StyxViewAlerts_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "CybleVisionAlerts_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Created at",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Updated at",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Deleted at",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Data ID",
+                      "type": "guid"
+                    },
+                    {
+                      "name": "Entity ID",
+                      "type": "guid"
+                    },
+                    {
+                      "name": "Keyword Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Entity Type",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Service",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Company id",
+                      "type": "guid"
+                    },
+                    {
+                      "name": "Description",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Assignee ID",
+                      "type": "guid"
+                    },
+                    {
+                      "name": "Assignment Date",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Archive Date",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Updated By",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Created By",
+                      "type": "string"
+                    },
+                    {
+                      "name": "User Severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Risk Score",
+                      "type": "float"
+                    },
+                    {
+                      "name": "Bucket ID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "File name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Repository Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Owner Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Bucket Name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "True-Positive",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LLM Processed",
+                      "type": "int"
+                    },
+                    {
+                      "name": "LLM Explanation",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Tags",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Cyble Vision Alerts",
+          "publisher": "Cyble",
+          "id": "CybleVisionAlerts",
+          "descriptionMarkdown": "The Cyble Vision CCP connector allows the user to ingest Cyble Vision Alerts into Microsoft Sentinel.",
+          "graphQueriesTableName": "CybleVisionAlerts_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total Alerts received",
+              "legend": "Alerts",
+              "baseQuery": "{{graphQueriesTableName}} | summarize TotalAlerts = count()"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of Cyble Vision Alerts",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CybleVisionAlerts_CL",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Cyble Vision API token",
+                "description": "An API Token from Cyble Vision Platform is required. See the [Cyble documentation]('') on how to create an API token."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "STEP 1 - Create a Cyble API token:",
+              "description": "Follow the [Cyble documentation]('') for guidance on this step."
+            },
+            {
+              "title": "STEP 3 - Enter your API Details:",
+              "description": "Enter the API Token from Cyble Vision Platform below:",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Token",
+                    "placeholder": "Enter your API Token",
+                    "type": "password",
+                    "name": "ApiToken"
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "connect",
+                    "name": "connect"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Cyble Inc"
+        },
+        "support": {
+          "name": "Cyble Support",
+          "email": "csm@cyble.com",
+          "tier": "Partner",
+          "link": "https://cyble.com/talk-to-sales/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Cyble Vision Alerts",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Cyble Vision Alerts",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "ApiToken": {
+              "defaultValue": "ApiToken",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Cyble Inc"
+                },
+                "support": {
+                  "name": "Cyble Support",
+                  "email": "csm@cyble.com",
+                  "tier": "Partner",
+                  "link": "https://cyble.com/talk-to-sales/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CybleVisionPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CybleVisionAlerts",
+                "dataType": "CybleVisionAlerts_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-CybleVisionAlerts_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('ApiToken')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "https://bifrost.cyble.ai/engine/api/v1/y/tpi/cortex/alerts",
+                  "httpMethod": "Post",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 1,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "queryParametersTemplate": "{\"limit\": 1000, \"start_time\": \"{last_run_time}\", \"end_time\": \"{current_time}\" }",
+                  "isPostPayloadJson": true
+                },
+                "response": {
+                  "format": "json",
+                  "eventsJsonPaths": [
+                    "$.items"
+                  ]
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageParaName": "cursor",
+                  "nextPageTokenJsonPath": "$.cursor",
+                  "hasNextFlagJsonPath": "$.has_more"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('playbookTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cyble-IOC-Enrichment-Playbook Playbook with template version 3.0.1",
+        "description": "Cyble-IOC-Enrichment-Playbook Playbook with template version 3.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -526,7 +1238,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cyble-TI-Ingest-Playbook Playbook with template version 3.0.1",
+        "description": "Cyble-TI-Ingest-Playbook Playbook with template version 3.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -1269,12 +1981,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.1",
+        "version": "3.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Cyble Vision",
         "publisherDisplayName": "Cyble Support",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cyble%20Vision/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>This solution provides playbooks for Cyble Vision Threat Intelligence ingestion and IOC enrichment, integrating Cyble APIs with Microsoft Sentinel.</p>\n<p><strong>Playbooks:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cyble%20Vision/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>This solution provides playbooks for Cyble Vision Threat Intelligence ingestion and IOC enrichment, integrating Cyble APIs with Microsoft Sentinel.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Playbooks:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -1298,6 +2010,11 @@
         "dependencies": {
           "operator": "AND",
           "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
             {
               "kind": "Playbook",
               "contentId": "[variables('_IoC-Enrichment')]",
