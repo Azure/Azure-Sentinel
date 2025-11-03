@@ -1,0 +1,318 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "BeyondTrust Privilege Management Cloud Data Connector",
+    "description": "This template creates an Azure Function App to collect data from BeyondTrust PM Cloud APIs and ingest into Microsoft Sentinel.",
+    "prerequisites": [
+      "1. BeyondTrust PM Cloud tenant with API access",
+      "2. OAuth Client ID and Client Secret for BeyondTrust PM Cloud API",
+      "3. Azure Log Analytics workspace for Microsoft Sentinel"
+    ],
+    "postDeployment": [
+      "1. Verify data ingestion in Microsoft Sentinel Log Analytics workspace",
+      "2. To change polling intervals after deployment, update BOTH the interval (minutes) AND cron expression app settings together"
+    ],
+    "lastUpdateTime": "2025-08-28T00:00:00.000Z",
+    "entities": [
+      "BeyondTrustPM_ActivityAudits_CL",
+      "BeyondTrustPM_ClientEvents_CL"
+    ],
+    "tags": [
+      "Data Connector",
+      "BeyondTrust",
+      "Privilege Management",
+      "Security"
+    ],
+    "author": {
+      "name": "BeyondTrust"
+    },
+    "support": {
+      "tier": "Partner"
+    }
+  },
+  "parameters": {
+    "FunctionAppName": {
+      "type": "string",
+      "defaultValue": "[concat('beyondtrust-pmcloud-', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Name of the Azure Function App"
+      }
+    },
+    "WorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Log Analytics Workspace ID (GUID format). Found in Azure Portal > Log Analytics workspaces > [Your workspace] > Overview > Workspace ID"
+      }
+    },
+    "WorkspaceKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Azure Log Analytics Workspace Primary Key (Base64 string). Found in Azure Portal > Log Analytics workspaces > [Your workspace] > Settings > Agents > Primary Key"
+      }
+    },
+    "BeyondTrustPMCloudBaseUrl": {
+      "type": "string",
+      "metadata": {
+        "displayName": "BeyondTrust PM Cloud URL",
+        "description": "BeyondTrust PM Cloud Base URL (e.g., https://yourcompany.beyondtrustcloud.com). The connector will automatically append '-services' and '/management-api' to build the full API URL."
+      }
+    },
+    "BeyondTrustClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "BeyondTrust PM Cloud OAuth Client ID"
+      }
+    },
+    "BeyondTrustClientSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "BeyondTrust PM Cloud OAuth Client Secret"
+      }
+    },
+    "ActivityAuditsPollingIntervalMinutes": {
+      "type": "int",
+      "defaultValue": 15,
+      "minValue": 1,
+      "maxValue": 1440,
+      "metadata": {
+        "description": "Polling interval for Activity Audits in minutes (1-1440). This generates the timer schedule (cron expression). To change after deployment, update BOTH 'BeyondTrust:ActivityAuditsPollingIntervalMinutes' AND 'BeyondTrust:ActivityAuditsCron' app settings. Consider API rate limits: 1000 requests per 100 seconds."
+      }
+    },
+    "ClientEventsPollingIntervalMinutes": {
+      "type": "int",
+      "defaultValue": 5,
+      "minValue": 1,
+      "maxValue": 1440,
+      "metadata": {
+        "displayName": "Client Events Polling Interval (Minutes)",
+        "description": "Polling interval for Client Events in minutes (1-1440). This generates the timer schedule (cron expression). To change after deployment, update BOTH 'BeyondTrust:ClientEventsPollingIntervalMinutes' AND 'BeyondTrust:ClientEventsCron' app settings. Consider API rate limits: 1000 requests per 100 seconds."
+      }
+    },
+    "LogLevel": {
+      "type": "string",
+      "defaultValue": "Information",
+      "allowedValues": [
+        "Critical",
+        "Error",
+        "Warning",
+        "Information",
+        "Debug",
+        "Trace"
+      ],
+      "metadata": {
+        "displayName": "Logging Level",
+        "description": "Log level for the Azure Function App"
+      }
+    },
+    "HistoricalDataTimeframe": {
+      "type": "string",
+      "defaultValue": "1d",
+      "metadata": {
+        "displayName": "Historical Data Timeframe",
+        "description": "Defines how far back the app will go to pull in events when it first runs. Format: number followed by 'd' (days), 'h' (hours), or 'm' (minutes). Examples: '7d' (7 days), '12h' (12 hours), '10m' (10 minutes). Use '0' to start from current time (no historical data). Default: '1d' (1 day)."
+      },
+      "allowedValues": [
+        "0",
+        "5m",
+        "10m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "3h",
+        "6h",
+        "12h",
+        "1d",
+        "2d",
+        "3d",
+        "4d",
+        "5d",
+        "6d",
+        "7d",
+        "10d",
+        "14d",
+        "30d"
+      ]
+    },
+    "HostingPlanSku": {
+      "type": "string",
+      "defaultValue": "Y1",
+      "allowedValues": [
+        "Y1",
+        "FC1",
+        "EP1",
+        "EP2",
+        "EP3"
+      ],
+      "metadata": {
+        "displayName": "Hosting Plan SKU",
+        "description": "Function App hosting plan SKU. Y1 = Consumption (Recommended), FC1 = Flex Consumption (Preview), EP1/EP2/EP3 = Elastic Premium"
+      }
+    },
+    "StorageAccountType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_ZRS"
+      ],
+      "metadata": {
+        "displayName": "Storage Account Type",
+        "description": "Storage account replication type. Standard_LRS is recommended for most scenarios."
+      }
+    }
+  },
+  "variables": {
+    "functionAppName": "[parameters('FunctionAppName')]",
+    "hostingPlanName": "[concat(parameters('FunctionAppName'), '-plan')]",
+    "storageAccountName": "[toLower(concat('bt', uniqueString(resourceGroup().id)))]",
+    "applicationInsightsName": "[concat(parameters('FunctionAppName'), '-insights')]",
+    "functionWorkerRuntime": "dotnet-isolated",
+    "isFlexConsumption": "[equals(parameters('HostingPlanSku'), 'FC1')]",
+    "isConsumption": "[equals(parameters('HostingPlanSku'), 'Y1')]",
+    "isPremium": "[or(equals(parameters('HostingPlanSku'), 'EP1'), or(equals(parameters('HostingPlanSku'), 'EP2'), equals(parameters('HostingPlanSku'), 'EP3')))]",
+    "skuTier": "[if(variables('isFlexConsumption'), 'FlexConsumption', if(variables('isConsumption'), 'Dynamic', 'ElasticPremium'))]",
+    "functionAppKind": "[if(variables('isFlexConsumption'), 'functionapp,linux', 'functionapp')]",
+    "reserved": "[variables('isFlexConsumption')]",
+    "settingPrefix": "[if(variables('isFlexConsumption'), 'BeyondTrust__', 'BeyondTrust:')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "[parameters('StorageAccountType')]"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "condition": "[variables('isFlexConsumption')]",
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2021-04-01",
+      "name": "[concat(variables('storageAccountName'), '/default/deployments')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "[parameters('HostingPlanSku')]",
+        "tier": "[variables('skuTier')]"
+      },
+      "kind": "[if(variables('isFlexConsumption'), 'linux', '')]",
+      "properties": {
+        "reserved": "[variables('reserved')]"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('applicationInsightsName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "Request_Source": "rest"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "[variables('functionAppKind')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "reserved": "[variables('reserved')]",
+        "siteConfig": {
+          "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('functionAppName'))))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'dotnet-isolated'))), createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'APPINSIGHTS_INSTRUMENTATIONKEY', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).InstrumentationKey), createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).ConnectionString), createObject('name', 'WorkspaceId', 'value', parameters('WorkspaceId')), createObject('name', 'WorkspaceKey', 'value', parameters('WorkspaceKey')), createObject('name', concat(variables('settingPrefix'), 'PMCloudBaseUrl'), 'value', parameters('BeyondTrustPMCloudBaseUrl')), createObject('name', concat(variables('settingPrefix'), 'ClientId'), 'value', parameters('BeyondTrustClientId')), createObject('name', concat(variables('settingPrefix'), 'ClientSecret'), 'value', parameters('BeyondTrustClientSecret')), createObject('name', concat(variables('settingPrefix'), 'ActivityAuditsPollingIntervalMinutes'), 'value', parameters('ActivityAuditsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'ClientEventsPollingIntervalMinutes'), 'value', parameters('ClientEventsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'HistoricalDataTimeframe'), 'value', parameters('HistoricalDataTimeframe')), createObject('name', 'ActivityAuditsCron', 'value', concat('0 */', string(parameters('ActivityAuditsPollingIntervalMinutes')), ' * * * *')), createObject('name', 'ClientEventsCron', 'value', concat('0 */', string(parameters('ClientEventsPollingIntervalMinutes')), ' * * * *')), createObject('name', if(variables('isFlexConsumption'), 'Logging__LogLevel__Default', 'Logging:LogLevel:Default'), 'value', parameters('LogLevel'))))]",
+          "ftpsState": "FtpsOnly",
+          "minTlsVersion": "1.2"
+        },
+        "httpsOnly": true,
+        "functionAppConfig": "[if(variables('isFlexConsumption'), createObject('deployment', createObject('storage', createObject('type', 'blobContainer', 'value', concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))).primaryEndpoints.blob, 'deployments'), 'authentication', createObject('type', 'SystemAssignedIdentity'))), 'scaleAndConcurrency', createObject('maximumInstanceCount', 100, 'instanceMemoryMB', 2048), 'runtime', createObject('name', 'dotnet-isolated', 'version', '8.0')), json('null'))]"
+      }
+    },
+    {
+      "condition": "[variables('isFlexConsumption')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-03-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-03-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {
+    "FunctionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppName')]"
+    },
+    "StorageAccountName": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    },
+    "HostingPlanName": {
+      "type": "string",
+      "value": "[variables('hostingPlanName')]"
+    },
+    "HostingPlanSku": {
+      "type": "string",
+      "value": "[parameters('HostingPlanSku')]"
+    },
+    "ApplicationInsightsName": {
+      "type": "string",
+      "value": "[variables('applicationInsightsName')]"
+    },
+    "FunctionAppUrl": {
+      "type": "string",
+      "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('functionAppName'))).defaultHostName)]"
+    }
+  }
+}
