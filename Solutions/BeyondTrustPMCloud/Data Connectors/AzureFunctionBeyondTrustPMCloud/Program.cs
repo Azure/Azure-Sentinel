@@ -93,15 +93,20 @@ var host = new HostBuilder()
 
         var logAnalyticsConfig = new LogAnalyticsConfiguration
         {
-            WorkspaceId = context.Configuration["WorkspaceId"] ?? throw new InvalidOperationException("WorkspaceId is required"),
-            WorkspaceKey = context.Configuration["WorkspaceKey"] ?? throw new InvalidOperationException("WorkspaceKey is required")
+            DataCollectionEndpoint = context.Configuration["DataCollectionEndpoint"] ?? throw new InvalidOperationException("DataCollectionEndpoint is required"),
+            ActivityAuditsDcrImmutableId = context.Configuration["ActivityAuditsDcrImmutableId"] ?? throw new InvalidOperationException("ActivityAuditsDcrImmutableId is required"),
+            ClientEventsDcrImmutableId = context.Configuration["ClientEventsDcrImmutableId"] ?? throw new InvalidOperationException("ClientEventsDcrImmutableId is required"),
+            ActivityAuditsStreamName = context.Configuration["ActivityAuditsStreamName"] ?? "Custom-BeyondTrustPM_ActivityAudits",
+            ClientEventsStreamName = context.Configuration["ClientEventsStreamName"] ?? "Custom-BeyondTrustPM_ClientEvents"
         };
         services.AddSingleton(logAnalyticsConfig);
 
-        // Register HTTP clients
+        // Register HTTP clients (for BeyondTrust API communication)
         services.AddHttpClient<IBeyondTrustAuthService, BeyondTrustAuthService>();
         services.AddHttpClient<IBeyondTrustApiService, BeyondTrustApiService>();
-        services.AddHttpClient<ILogAnalyticsService, LogAnalyticsService>();
+        
+        // Register Log Analytics service (uses Managed Identity - no HttpClient needed)
+        services.AddSingleton<ILogAnalyticsService, LogAnalyticsService>();
 
         // Register Table Storage
         var storageConnectionString = context.Configuration.GetConnectionString("AzureWebJobsStorage") ?? 

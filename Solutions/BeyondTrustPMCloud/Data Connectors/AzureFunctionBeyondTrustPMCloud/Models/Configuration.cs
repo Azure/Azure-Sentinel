@@ -95,8 +95,40 @@ public class BeyondTrustConfiguration
     }
 }
 
+/// <summary>
+/// Configuration for Azure Monitor Logs Ingestion API.
+/// Uses Data Collection Endpoints (DCE) and Data Collection Rules (DCR) for secure, 
+/// schema-controlled ingestion with Managed Identity authentication.
+/// </summary>
 public class LogAnalyticsConfiguration
 {
-    public string WorkspaceId { get; set; } = string.Empty;
-    public string WorkspaceKey { get; set; } = string.Empty;
+    /// <summary>
+    /// Data Collection Endpoint URL for log ingestion.
+    /// Example: https://myorg-dce-abcd.eastus-1.ingest.monitor.azure.com
+    /// </summary>
+    public string DataCollectionEndpoint { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Immutable ID of the Data Collection Rule for Activity Audits.
+    /// Format: dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    /// </summary>
+    public string ActivityAuditsDcrImmutableId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Immutable ID of the Data Collection Rule for Client Events.
+    /// Format: dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    /// </summary>
+    public string ClientEventsDcrImmutableId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Stream name for Activity Audits in the Data Collection Rule.
+    /// Must match the stream name defined in the DCR.
+    /// </summary>
+    public string ActivityAuditsStreamName { get; set; } = "Custom-BeyondTrustPM_ActivityAudits";
+    
+    /// <summary>
+    /// Stream name for Client Events in the Data Collection Rule.
+    /// Must match the stream name defined in the DCR.
+    /// </summary>
+    public string ClientEventsStreamName { get; set; } = "Custom-BeyondTrustPM_ClientEvents";
 }

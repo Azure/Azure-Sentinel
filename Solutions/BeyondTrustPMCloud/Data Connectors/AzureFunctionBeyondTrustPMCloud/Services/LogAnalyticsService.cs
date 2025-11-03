@@ -1,30 +1,46 @@
+using Azure;
+using Azure.Core;
+using Azure.Identity;
+using Azure.Monitor.Ingestion;
 using BeyondTrustPMCloud.Models;
 using Microsoft.Extensions.Logging;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace BeyondTrustPMCloud.Services;
 
+/// <summary>
+/// Service for ingesting logs into Azure Monitor using the Logs Ingestion API.
+/// Uses Managed Identity for secure authentication and Data Collection Rules for schema control.
+/// </summary>
 public interface ILogAnalyticsService
 {
     Task SendToLogAnalyticsAsync<T>(IEnumerable<T> data, string logType);
 }
 
+/// <summary>
+/// Implementation of log ingestion using Azure Monitor Logs Ingestion API.
+/// Replaces the deprecated HTTP Data Collector API with modern DCE/DCR-based ingestion.
+/// </summary>
 public class LogAnalyticsService : ILogAnalyticsService
 {
-    private readonly HttpClient _httpClient;
+    private readonly LogsIngestionClient _logsIngestionClient;
     private readonly LogAnalyticsConfiguration _config;
     private readonly ILogger<LogAnalyticsService> _logger;
 
     public LogAnalyticsService(
-        HttpClient httpClient,
         LogAnalyticsConfiguration config,
         ILogger<LogAnalyticsService> logger)
     {
-        _httpClient = httpClient;
         _config = config;
         _logger = logger;
+
+        // Use Managed Identity for authentication (no keys required!)
+        var credential = new ManagedIdentityCredential();
+        var endpoint = new Uri(_config.DataCollectionEndpoint);
+        
+        _logsIngestionClient = new LogsIngestionClient(endpoint, credential);
+        
+        _logger.LogInformation("Initialized LogsIngestionClient with DCE: {Endpoint}", _config.DataCollectionEndpoint);
     }
 
     public async Task SendToLogAnalyticsAsync<T>(IEnumerable<T> data, string logType)
@@ -40,43 +56,30 @@ public class LogAnalyticsService : ILogAnalyticsService
 
         try
         {
-            var json = JsonSerializer.Serialize(dataList, new JsonSerializerOptions
+            // Determine which DCR and stream to use based on log type
+            var (dcrImmutableId, streamName) = GetDcrAndStreamForLogType(logType);
+
+            // Convert data to BinaryData for ingestion
+            var binaryData = BinaryData.FromObjectAsJson(dataList);
+
+            // Send data using Logs Ingestion API
+            // Note: UploadAsync expects IEnumerable<BinaryData> where each item is a single log entry
+            // For batch upload, we use the entire array as one BinaryData
+            var response = await _logsIngestionClient.UploadAsync(
+                ruleId: dcrImmutableId,
+                streamName: streamName,
+                logs: new[] { binaryData },
+                cancellationToken: default);
+
+            if (response.IsError)
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-
-            var dateString = DateTime.UtcNow.ToString("r");
-            var jsonBytes = Encoding.UTF8.GetBytes(json);
-            var contentLength = jsonBytes.Length.ToString();
-
-            var stringToHash = $"POST\n{contentLength}\napplication/json\nx-ms-date:{dateString}\n/api/logs";
-            var hashedString = BuildSignature(stringToHash, _config.WorkspaceKey);
-            var signature = $"SharedKey {_config.WorkspaceId}:{hashedString}";
-
-            var uri = $"https://{_config.WorkspaceId}.ods.opinsights.azure.com/api/logs?api-version=2016-04-01";
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, uri);
-            request.Content = new ByteArrayContent(jsonBytes);
-            request.Headers.Add("Authorization", signature);
-            request.Headers.Add("Log-Type", logType);
-            request.Headers.Add("x-ms-date", dateString);
-            request.Headers.Add("time-generated-field", "TimeGenerated");
-            request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-
-            var response = await _httpClient.SendAsync(request);
-
-            if (response.IsSuccessStatusCode)
-            {
-                _logger.LogInformation("✅ Successfully sent {RecordCount} records to Log Analytics table {LogType}", 
-                    dataList.Count, logType);
+                _logger.LogError("❌ Failed to send data to Log Analytics. Status: {StatusCode}, Error: {Error}", 
+                    response.Status, response.ReasonPhrase);
+                throw new RequestFailedException($"Failed to send data to Log Analytics: {response.Status} - {response.ReasonPhrase}");
             }
-            else
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError("❌ Failed to send data to Log Analytics. Status: {StatusCode}, Response: {Response}", 
-                    response.StatusCode, errorContent);
-                throw new HttpRequestException($"Failed to send data to Log Analytics: {response.StatusCode}");
-            }
+
+            _logger.LogInformation("✅ Successfully sent {RecordCount} records to Log Analytics table {LogType} via DCR {DcrId}", 
+                dataList.Count, logType, dcrImmutableId);
         }
         catch (Exception ex)
         {
@@ -86,14 +89,20 @@ public class LogAnalyticsService : ILogAnalyticsService
         }
     }
 
-    private static string BuildSignature(string message, string secret)
+    /// <summary>
+    /// Maps the log type to the corresponding Data Collection Rule and stream name.
+    /// </summary>
+    private (string dcrImmutableId, string streamName) GetDcrAndStreamForLogType(string logType)
     {
-        var encoding = new ASCIIEncoding();
-        var keyByte = Convert.FromBase64String(secret);
-        var messageBytes = encoding.GetBytes(message);
-        
-        using var hmacsha256 = new HMACSHA256(keyByte);
-        var hash = hmacsha256.ComputeHash(messageBytes);
-        return Convert.ToBase64String(hash);
+        return logType.ToLowerInvariant() switch
+        {
+            "beyondtrustpm_activityaudits" or "beyondtrustpm_activityaudits_cl" => 
+                (_config.ActivityAuditsDcrImmutableId, _config.ActivityAuditsStreamName),
+            
+            "beyondtrustpm_clientevents" or "beyondtrustpm_clientevents_cl" => 
+                (_config.ClientEventsDcrImmutableId, _config.ClientEventsStreamName),
+            
+            _ => throw new ArgumentException($"Unknown log type: {logType}. Expected 'BeyondTrustPM_ActivityAudits' or 'BeyondTrustPM_ClientEvents'.", nameof(logType))
+        };
     }
 }

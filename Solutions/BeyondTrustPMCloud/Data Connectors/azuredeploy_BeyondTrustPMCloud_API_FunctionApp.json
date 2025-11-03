@@ -13,10 +13,10 @@
       "1. Verify data ingestion in Microsoft Sentinel Log Analytics workspace",
       "2. To change polling intervals after deployment, update BOTH the interval (minutes) AND cron expression app settings together"
     ],
-    "lastUpdateTime": "2025-08-28T00:00:00.000Z",
+    "lastUpdateTime": "2025-11-03T00:00:00.000Z",
     "entities": [
-      "BeyondTrustPM_ActivityAudits_CL",
-      "BeyondTrustPM_ClientEvents_CL"
+      "BeyondTrustPM_ActivityAudits",
+      "BeyondTrustPM_ClientEvents"
     ],
     "tags": [
       "Data Connector",
@@ -39,16 +39,10 @@
         "description": "Name of the Azure Function App"
       }
     },
-    "WorkspaceId": {
+    "WorkspaceResourceId": {
       "type": "string",
       "metadata": {
-        "description": "Azure Log Analytics Workspace ID (GUID format). Found in Azure Portal > Log Analytics workspaces > [Your workspace] > Overview > Workspace ID"
-      }
-    },
-    "WorkspaceKey": {
-      "type": "securestring",
-      "metadata": {
-        "description": "Azure Log Analytics Workspace Primary Key (Base64 string). Found in Azure Portal > Log Analytics workspaces > [Your workspace] > Settings > Agents > Primary Key"
+        "description": "Azure Log Analytics Workspace Resource ID. Format: /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}"
       }
     },
     "BeyondTrustPMCloudBaseUrl": {
@@ -169,6 +163,10 @@
     "hostingPlanName": "[concat(parameters('FunctionAppName'), '-plan')]",
     "storageAccountName": "[toLower(concat('bt', uniqueString(resourceGroup().id)))]",
     "applicationInsightsName": "[concat(parameters('FunctionAppName'), '-insights')]",
+    "dataCollectionEndpointName": "[concat(parameters('FunctionAppName'), '-dce')]",
+    "dataCollectionRuleActivityAuditsName": "[concat(parameters('FunctionAppName'), '-dcr-activityaudits')]",
+    "dataCollectionRuleClientEventsName": "[concat(parameters('FunctionAppName'), '-dcr-clientevents')]",
+    "workspaceName": "[last(split(parameters('WorkspaceResourceId'), '/'))]",
     "functionWorkerRuntime": "dotnet-isolated",
     "isFlexConsumption": "[equals(parameters('HostingPlanSku'), 'FC1')]",
     "isConsumption": "[equals(parameters('HostingPlanSku'), 'Y1')]",
@@ -204,6 +202,157 @@
       ],
       "properties": {
         "publicAccess": "None"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dataCollectionEndpointName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dataCollectionRuleActivityAuditsName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]",
+        "streamDeclarations": {
+          "Custom-BeyondTrustPM_ActivityAudits": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "eventId",
+                "type": "string"
+              },
+              {
+                "name": "eventType",
+                "type": "string"
+              },
+              {
+                "name": "username",
+                "type": "string"
+              },
+              {
+                "name": "action",
+                "type": "string"
+              },
+              {
+                "name": "details",
+                "type": "string"
+              },
+              {
+                "name": "ipAddress",
+                "type": "string"
+              },
+              {
+                "name": "timestamp",
+                "type": "datetime"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[parameters('WorkspaceResourceId')]",
+              "name": "sentinelWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-BeyondTrustPM_ActivityAudits"
+            ],
+            "destinations": [
+              "sentinelWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-BeyondTrustPM_ActivityAudits"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dataCollectionRuleClientEventsName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]",
+        "streamDeclarations": {
+          "Custom-BeyondTrustPM_ClientEvents": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "eventId",
+                "type": "string"
+              },
+              {
+                "name": "eventType",
+                "type": "string"
+              },
+              {
+                "name": "computerName",
+                "type": "string"
+              },
+              {
+                "name": "username",
+                "type": "string"
+              },
+              {
+                "name": "processName",
+                "type": "string"
+              },
+              {
+                "name": "details",
+                "type": "string"
+              },
+              {
+                "name": "timestamp",
+                "type": "datetime"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[parameters('WorkspaceResourceId')]",
+              "name": "sentinelWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-BeyondTrustPM_ClientEvents"
+            ],
+            "destinations": [
+              "sentinelWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-BeyondTrustPM_ClientEvents"
+          }
+        ]
       }
     },
     {
@@ -249,7 +398,7 @@
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
         "reserved": "[variables('reserved')]",
         "siteConfig": {
-          "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('functionAppName'))))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'dotnet-isolated'))), createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'APPINSIGHTS_INSTRUMENTATIONKEY', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).InstrumentationKey), createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).ConnectionString), createObject('name', 'WorkspaceId', 'value', parameters('WorkspaceId')), createObject('name', 'WorkspaceKey', 'value', parameters('WorkspaceKey')), createObject('name', concat(variables('settingPrefix'), 'PMCloudBaseUrl'), 'value', parameters('BeyondTrustPMCloudBaseUrl')), createObject('name', concat(variables('settingPrefix'), 'ClientId'), 'value', parameters('BeyondTrustClientId')), createObject('name', concat(variables('settingPrefix'), 'ClientSecret'), 'value', parameters('BeyondTrustClientSecret')), createObject('name', concat(variables('settingPrefix'), 'ActivityAuditsPollingIntervalMinutes'), 'value', parameters('ActivityAuditsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'ClientEventsPollingIntervalMinutes'), 'value', parameters('ClientEventsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'HistoricalDataTimeframe'), 'value', parameters('HistoricalDataTimeframe')), createObject('name', 'ActivityAuditsCron', 'value', concat('0 */', string(parameters('ActivityAuditsPollingIntervalMinutes')), ' * * * *')), createObject('name', 'ClientEventsCron', 'value', concat('0 */', string(parameters('ClientEventsPollingIntervalMinutes')), ' * * * *')), createObject('name', if(variables('isFlexConsumption'), 'Logging__LogLevel__Default', 'Logging:LogLevel:Default'), 'value', parameters('LogLevel'))))]",
+          "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('functionAppName'))))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'dotnet-isolated'))), createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'APPINSIGHTS_INSTRUMENTATIONKEY', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).InstrumentationKey), createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).ConnectionString), createObject('name', 'DataCollectionEndpoint', 'value', reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))).logsIngestion.endpoint), createObject('name', 'ActivityAuditsDcrImmutableId', 'value', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleActivityAuditsName'))).immutableId), createObject('name', 'ClientEventsDcrImmutableId', 'value', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleClientEventsName'))).immutableId), createObject('name', 'ActivityAuditsStreamName', 'value', 'Custom-BeyondTrustPM_ActivityAudits'), createObject('name', 'ClientEventsStreamName', 'value', 'Custom-BeyondTrustPM_ClientEvents'), createObject('name', concat(variables('settingPrefix'), 'PMCloudBaseUrl'), 'value', parameters('BeyondTrustPMCloudBaseUrl')), createObject('name', concat(variables('settingPrefix'), 'ClientId'), 'value', parameters('BeyondTrustClientId')), createObject('name', concat(variables('settingPrefix'), 'ClientSecret'), 'value', parameters('BeyondTrustClientSecret')), createObject('name', concat(variables('settingPrefix'), 'ActivityAuditsPollingIntervalMinutes'), 'value', parameters('ActivityAuditsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'ClientEventsPollingIntervalMinutes'), 'value', parameters('ClientEventsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'HistoricalDataTimeframe'), 'value', parameters('HistoricalDataTimeframe')), createObject('name', 'ActivityAuditsCron', 'value', concat('0 */', string(parameters('ActivityAuditsPollingIntervalMinutes')), ' * * * *')), createObject('name', 'ClientEventsCron', 'value', concat('0 */', string(parameters('ClientEventsPollingIntervalMinutes')), ' * * * *')), createObject('name', if(variables('isFlexConsumption'), 'Logging__LogLevel__Default', 'Logging:LogLevel:Default'), 'value', parameters('LogLevel'))))]",
           "ftpsState": "FtpsOnly",
           "minTlsVersion": "1.2"
         },
@@ -287,6 +436,36 @@
         "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-03-01', 'Full').identity.principalId]",
         "principalType": "ServicePrincipal"
       }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleActivityAuditsName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), '3913510d-42f4-4e42-8a64-420c390055eb')]",
+      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleActivityAuditsName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleActivityAuditsName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-03-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleClientEventsName')), resourceId('Microsoft.Web/sites', variables('functionAppName')), '3913510d-42f4-4e42-8a64-420c390055eb')]",
+      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleClientEventsName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleClientEventsName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2022-03-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
     }
   ],
   "outputs": {
@@ -313,6 +492,18 @@
     "FunctionAppUrl": {
       "type": "string",
       "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('functionAppName'))).defaultHostName)]"
+    },
+    "DataCollectionEndpointName": {
+      "type": "string",
+      "value": "[variables('dataCollectionEndpointName')]"
+    },
+    "DataCollectionRuleActivityAuditsName": {
+      "type": "string",
+      "value": "[variables('dataCollectionRuleActivityAuditsName')]"
+    },
+    "DataCollectionRuleClientEventsName": {
+      "type": "string",
+      "value": "[variables('dataCollectionRuleClientEventsName')]"
     }
   }
 }
