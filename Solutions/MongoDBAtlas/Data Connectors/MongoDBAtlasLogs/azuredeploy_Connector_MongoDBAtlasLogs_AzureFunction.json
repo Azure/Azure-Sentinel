@@ -2,18 +2,11 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "useExistingWorkspace": {
-            "type": "string" 
-        },
         "LogAnalyticsWorkspaceResourceID": {
             "type": "string",
-            "defaultValue": "/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx",
             "metadata": {
                 "description": "Azure Resource ID (NOT THE WORKSPACE ID) of the existing Log Analytics Workspace where you would like the MongoDB Atlas data and optional Function App Application Insights data to reside. This can be found by clicking the \"JSON View\" link within the Overview page of the Log Analytics workspace resource. The format is: \"/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx\""
             }
-        },
-        "newWorkspaceName": {
-            "type": "string", "defaultValue": "" 
         },
         "ConnectorSchedule": {
             "type": "string",
@@ -31,7 +24,7 @@
         "MongoDbClusterId": {
             "type": "string",
             "metadata": {
-                "description": "The MongoDB Atlas Cluster Id to which you will connect."
+                "description": "The list of MongoDB Atlas Cluster Id's to which you will connect."
             }
         },
         "MongoDbClientId": {
@@ -42,8 +35,9 @@
         },
         "MongoDbClientSecret": {
             "type": "securestring",
+            "defaultValue": "",
             "metadata": {
-                "description": "The MongoDB Atlas client secret which you can obtain from their portal."
+                "description": "Provide a Client Secret OR an existing Key Vault Name, but not both. If provided, a new Key Vault will be created to store this secret."
             }
         },
         "packageUri": {
@@ -91,108 +85,43 @@
             "metadata": {
                 "description": "Comma separated list of query IDs (Max 10) for which the log entries will be included or excluded from the uploaded to Microsoft Sentinel."
             }
+        },
+        "keyVaultName": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Provide an existing Key Vault Name OR a Client Secret, but not both. If provided, the function will use the 'mongodb-client-secret' from this vault."
+            }
+        },
+        "executorModel": {
+            "type": "string",
+            "defaultValue": "Multithreading",
+            "allowedValues": [
+                "Multithreading",
+                "Multiprocessing"
+            ],
+            "metadata": {
+                "description": "Select the concurrency model for the function. Multithreading is suitable for I/O-bound tasks, while Multiprocessing can be better for CPU-bound tasks."
+            }
         }
     },
     "variables": {
-        "deploymentVersion": "3.0.2",
+        "deploymentVersion": "3.0.7",
         "location": "[resourceGroup().location]",
         "roleIdStorageBlobDataOwner": "/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
         "storageSuffix": "[environment().suffixes.storage]",
         "FunctionAppName": "[format('fa-mdba-{0}', uniqueString(resourceGroup().id))]",
-        "KeyVaultName": "[format('kv-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "generatedKeyVaultName": "[format('kv-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "effectiveKeyVaultName": "[if(empty(parameters('keyVaultName')), variables('generatedKeyVaultName'), parameters('keyVaultName'))]",
         "StorageAccountName": "[format('samdba{0}', uniqueString(resourceGroup().id))]",
         "FunctionAppStorageAccountName": "[format('safamdba{0}', uniqueString(resourceGroup().id))]",
         "DataCollectionEndpointName": "[format('dce-mdba-{0}', uniqueString(resourceGroup().id))]",
-        "DataCollectionRuleName": "[format('dcr-mdba-{0}', uniqueString(resourceGroup().id))]"
+        "DataCollectionRuleName": "[format('dcr-mdba-{0}', uniqueString(resourceGroup().id))]",
+        "hasKeyVault": "[not(equals(parameters('keyVaultName'), ''))]",
+        "hasClientSecret": "[not(equals(parameters('MongoDbClientSecret'), ''))]",
+        "VALIDATION_ERROR_Provide_either_keyVaultName_OR_MongoDbClientSecret_not_both": "[if(and(variables('hasKeyVault'), variables('hasClientSecret')), div(1, 0), if(and(not(variables('hasKeyVault')), not(variables('hasClientSecret'))), div(1, 0), 1))]"
     },
     "resources": [
-        {
-            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
-            "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2022-09-01",
-            "name": "provisionWorkspace",
-            "properties": {
-                "expressionEvaluationOptions": {
-                    "scope": "inner"
-                },
-                "mode": "Incremental",
-                "parameters": {
-                    "LogAnalyticsWorkspaceResourceId": {
-                        "value": "[parameters('LogAnalyticsWorkspaceResourceID')]"
-                    },
-                    "useExistingWorkspace": {
-                        "value": "[parameters('useExistingWorkspace')]"
-                    },
-                    "newWorkspaceName": {
-                        "value": "[parameters('newWorkspaceName')]" 
-                    },
-                    "location": {
-                        "value": "[variables('location')]" 
-                    }
-                },
-                "template": {
-                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "useExistingWorkspace": {
-                            "type": "string" 
-                        },
-                        "LogAnalyticsWorkspaceResourceId": {
-                            "type": "string",
-                            "metadata": {
-                                "description": "Azure Resource Id of the Log Analytics Workspace where you like the data and optional Function App Application Insights data to reside. The format is: \"/subscriptions/xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx-xxxxxxxx/resourcegroups/xxxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxxx\""
-                            }
-                        },
-                        "newWorkspaceName": {
-                            "type": "string",
-                            "defaultValue": "" 
-                        },
-                        "location": {
-                            "type": "string",
-                            "defaultValue": ""
-                        }
-                    },
-                    "variables": {
-                        "workspaceName": "[if(equals(parameters('useExistingWorkspace'),'yes'), last(split(parameters('LogAnalyticsWorkspaceResourceId'), '/')), parameters('newWorkspaceName'))]"
-                    },
-                    "resources": [
-                        {
-                            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
-                            "type": "Microsoft.OperationalInsights/workspaces",
-                            "apiVersion": "2025-02-01",
-                            "name": "[variables('workspaceName')]",
-                            "location": "[parameters('location')]",
-                            "properties": {
-                                "sku": {
-                                "name": "PerGB2018"
-                                },
-                                "retentionInDays": 30,
-                                "publicNetworkAccessForIngestion": "Enabled",
-                                "publicNetworkAccessForQuery": "Enabled"
-                            }
-                        }
-                    ],
-                    "outputs": {
-                        "workspaceName": {
-                            "type": "string",
-                            "value": "[variables('workspaceName')]"
-                        },
-                        "workspaceSubscription": {
-                            "type": "string",
-                            "value": "[split(resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), '/')[2]]"
-                        },
-                        "workspaceResourceGroup": {
-                            "type": "string",
-                            "value": "[split(resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), '/')[4]]"
-                        },
-                        "workspaceResourceId": {
-                            "type": "string",
-                            "value": "[if(equals(parameters('useExistingWorkspace'),'no'), resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), parameters('LogAnalyticsWorkspaceResourceId'))]"
-                        }
-                    }
-                }
-            }
-        },
         {
             "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
             "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
@@ -224,10 +153,10 @@
             ]
         },
         {
-            "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
+            "condition": "[and(or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none'))), empty(parameters('keyVaultName')))]",
             "type": "Microsoft.KeyVault/vaults",
             "apiVersion": "2023-07-01",
-            "name": "[variables('KeyVaultName')]",
+            "name": "[variables('generatedKeyVaultName')]",
             "location": "[variables('location')]",
             "properties": {
                 "sku": {
@@ -260,6 +189,43 @@
             ]
         },
         {
+            "condition": "[and(or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none'))), not(empty(parameters('keyVaultName'))))]",
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "apiVersion": "2023-07-01",
+            "name": "[format('{0}/add', parameters('keyVaultName'))]",
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "objectId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2023-01-31').principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "get",
+                                "set",
+                                "list",
+                                "delete"
+                            ]
+                        },
+                        "tenantId": "[subscription().tenantId]"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
+            ]
+        },
+        {
+            "condition": "[and(or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none'))), not(empty(parameters('MongoDbClientSecret'))))]",
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2023-07-01",
+            "name": "[format('{0}/mongodb-client-secret', variables('effectiveKeyVaultName'))]",
+            "properties": {
+                "value": "[parameters('MongoDbClientSecret')]"
+            },
+            "dependsOn": [
+                "[if(empty(parameters('keyVaultName')), resourceId('Microsoft.KeyVault/vaults', variables('generatedKeyVaultName')), resourceId('Microsoft.KeyVault/vaults/accessPolicies', parameters('keyVaultName'), 'add'))]"
+            ]
+        },
+        {
             "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
@@ -276,53 +242,12 @@
             ]
         },
         {
-            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
-            "type": "Microsoft.Authorization/roleAssignments",
-            "apiVersion": "2022-04-01",
-            "name": "[guid(resourceGroup().id, variables('FunctionAppName'), 'Reader', deployment().name)]",
-            "dependsOn": [
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
-            ],
-            "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')]",
-                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName'))), '2018-11-30').principalId]",
-                "principalType": "ServicePrincipal",
-                "scope": "[resourceGroup().id]"
-            }
-        },
-        {
-            "condition": "[equals(parameters('useExistingWorkspace'), 'no')]",
-            "type": "Microsoft.Resources/deploymentScripts",
-            "apiVersion": "2020-10-01",
-            "name": "waitForWorkspaceActive",
-            "location": "[resourceGroup().location]",
-            "kind": "AzurePowerShell",
-            "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'provisionWorkspace')]",
-                "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, variables('FunctionAppName'), 'Reader', deployment().name))]"
-            ],
-            "identity": {
-                "type": "userAssigned",
-                "userAssignedIdentities": {
-                    "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]": {}
-                }
-            },
-            "properties": {
-                "azPowerShellVersion": "9.0",
-                "timeout": "PT10M",
-                "retentionInterval": "P1D",
-                "scriptContent": "param([string]$workspaceId, [string]$rgName, [string]$wsName)\nWrite-Output ('Waiting for workspace ' + $workspaceId + ' to become active...')\n$end = (Get-Date).AddMinutes(8)\ndo {\n    try {\n        $ws = Get-AzOperationalInsightsWorkspace -ResourceGroupName $rgName -Name $wsName -ErrorAction Stop\n        if ($ws.ProvisioningState -eq 'Succeeded') {\n            Write-Output 'Workspace is active.'\n            exit 0\n        } else {\n            Write-Output ('Provisioning state: ' + $($ws.ProvisioningState) + '. Retrying...')\n        }\n    } catch {\n        Write-Output 'Workspace not found yet. Retrying...'\n    }\n    Start-Sleep -Seconds 15\n} while ((Get-Date) -lt $end)\nthrow 'Timeout waiting for workspace to become active'",
-                "arguments": "[format('-workspaceId \"{0}\" -rgName \"{1}\" -wsName \"{2}\"', reference('provisionWorkspace').outputs.workspaceResourceId.value, reference('provisionWorkspace').outputs.workspaceResourceGroup.value, reference('provisionWorkspace').outputs.workspaceName.value)]"
-            }
-        },
-        {
             "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
             "type": "Microsoft.Resources/deployments",
             "apiVersion": "2022-09-01",
             "name": "createCustomTables",
             "dependsOn": [
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]",
-                "[resourceId('Microsoft.Resources/deploymentScripts', 'waitForWorkspaceActive')]"
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
             ],
             "properties": {
                 "expressionEvaluationOptions": {
@@ -334,7 +259,7 @@
                         "value": "[variables('location')]"
                     },
                     "LogAnalyticsWorkspaceResourceId": {
-                        "value": "[reference(resourceId('Microsoft.Resources/deployments', 'provisionWorkspace'), '2022-09-01').outputs.workspaceResourceId.value]"
+                        "value": "[parameters('LogAnalyticsWorkspaceResourceID')]"
                     },
                     "DataCollectionEndpointName": {
                         "value": "[variables('DataCollectionEndpointName')]"
@@ -417,6 +342,13 @@
                                                 "isDefaultDisplay": false,
                                                 "isHidden": false,
                                                 "description": "The time at which the data was generated."
+                                            },
+                                            {
+                                                "name": "clusterId",
+                                                "type": "string",
+                                                "isDefaultDisplay": false,
+                                                "isHidden": false,
+                                                "description": "The MongoDB cluster that is associated with this entry."
                                             },
                                             {
                                                 "name": "severity",
@@ -541,6 +473,10 @@
                                                 "type": "datetime"
                                             },
                                             {
+                                                "name": "clusterId",
+                                                "type": "string"
+                                            },
+                                            {
                                                 "name": "severity",
                                                 "type": "string"
                                             },
@@ -635,11 +571,8 @@
             "properties": {
                 "Application_Type": "web",
                 "Request_Source": "rest",
-                "WorkspaceResourceId": "[reference(resourceId('Microsoft.Resources/deployments', 'provisionWorkspace'), '2022-09-01').outputs.workspaceResourceId.value]"
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments', 'provisionWorkspace')]"
-            ]
+                "WorkspaceResourceId": "[parameters('LogAnalyticsWorkspaceResourceID')]"
+            }
         },
         {
             "condition": "[or(not(equals(parameters('accessLogsFilterType'), 'none')), not(equals(parameters('networkLogsFilterType'), 'none')), not(equals(parameters('queryLogsFilterType'), 'none')))]",
@@ -663,7 +596,9 @@
                 "[resourceId('Microsoft.Web/serverfarms', variables('FunctionAppName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionAppStorageAccountName'))]",
                 "[resourceId('Microsoft.Insights/components', format('appInsights-{0}', variables('FunctionAppName')))]",
-                "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]"
+                "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]",
+                "[if(empty(parameters('keyVaultName')), resourceId('Microsoft.KeyVault/vaults', variables('generatedKeyVaultName')), resourceId('Microsoft.KeyVault/vaults/accessPolicies', parameters('keyVaultName'), 'add'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]"
             ],
             "identity": {
                 "type": "UserAssigned",
@@ -678,6 +613,7 @@
                 "functionsExtensionVersion": "~4",
                 "siteConfig": {
                     "linuxFxVersion": "PYTHON|3.11",
+                    "keyVaultReferenceIdentity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('uami-{0}', variables('FunctionAppName')))]",
                     "appSettings": [
                         {
                             "name": "APPINSIGHTS_INSTRUMENTATIONKEY", 
@@ -744,8 +680,12 @@
                             "value": "[parameters('MongoDbClientId')]"
                         },
                         {
-                            "name": "MDBA_CLIENT_SECRET",
-                            "value": "[parameters('MongoDbClientSecret')]"
+                            "name": "KEY_VAULT_URI",
+                            "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('effectiveKeyVaultName')), '2023-07-01').vaultUri]"
+                        },
+                        {
+                            "name": "MDBA_SECRET_NAME",
+                            "value": "mongodb-client-secret"
                         },
                         {
                             "name": "MDBA_GROUP_ID",
@@ -785,6 +725,10 @@
                             "name": "MDBA_QUERY_LIST",
                             "value": "[parameters('queryIdFilterList')]"
 
+                        },
+                        {
+                            "name": "EXECUTOR_MODEL",
+                            "value": "[parameters('executorModel')]"
                         }
                     ],
                     "minTlsVersion": "1.2",
