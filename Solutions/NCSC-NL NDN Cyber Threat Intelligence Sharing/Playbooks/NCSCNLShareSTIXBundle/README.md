@@ -25,8 +25,8 @@ This playbook is inspired on the previous *ACSC* codecase and is enhanced with a
     * TAXII Server Url
     * TAXII Server API Key
     * Collection ID
-    * Orgnization (ID)
-    * Organization STIX Identity
+    * Organization Name
+    * Organization ID (UUID)
     * Microsoft Sentinel Workspace
     * Tag for indicators to be exported
     * Tag for indicators after export completion
