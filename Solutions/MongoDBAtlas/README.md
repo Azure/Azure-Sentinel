@@ -36,7 +36,7 @@ This custom data connector uses a Function App to pull MongoDB Atlas (MDBA) logs
     - Group ID
     - A list of up to 10 Cluster IDs, each on a separate line
     - Client ID
-    - Client Secret or a Key Vault name containing the Client Secret.
+    - Client Secret or a Key Vault name containing the Client Secret. Note the key vault, if used, should be created with a Vault Access Policy
 5. Review the MongoDB filters. Select logs from at least one category.
 6. Scheduling - this uses the [CRON syntax](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=python-v2%2Cisolated-process%2Cnodejs-v4&pivots=programming-language-csharp#ncrontab-expressions) to specify the rate at which the logs are collected. The MongoDB Atlas Administration API will publish new logs every 5 minutes.
 7. Click **Review and Create**.
