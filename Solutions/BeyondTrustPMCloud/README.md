@@ -20,7 +20,7 @@ The BeyondTrust PM Cloud solution provides comprehensive visibility into privile
 ## Connector Attributes
 | Connector attribute           | Description                                   |
 | ----------------------------- | --------------------------------------------- |
-| Azure function app code       | https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/BeyondTrustPMCloud/Data%20Connectors |
+| Azure function app code       | https://github.com/jamos-bt/Azure-Sentinel/tree/master/Solutions/BeyondTrustPMCloud/Data%20Connectors |
 | Log Analytics table(s)        | BeyondTrustPM_ActivityAudits_CL<br/>BeyondTrustPM_ClientEvents_CL |
 | Data collection rules support | Yes (Logs Ingestion API with DCRs)            |
 | Supported by                  | BeyondTrust                                   |
