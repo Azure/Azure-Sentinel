@@ -1,7 +1,7 @@
 # UEBA Essentials Solution - Changes Documentation
 
 **Date:** November 4, 2025  
-**Solution Version:** 3.0.1  
+**Solution Version:** 4.0  
 **Repository:** Azure-Sentinel  
 **Branch:** update-ueba-essentials  
 
@@ -79,18 +79,18 @@ This document provides a comprehensive overview of all changes made to the UEBA 
 ### 📦 **Package File Updates**
 
 1. **createUiDefinition.json**
-   - **Path:** `Package/3.0.1_extracted/createUiDefinition.json`
+   - **Path:** `Package/4.0_extracted/createUiDefinition.json`
    - **Changes:** 
      - Updated hunting query count description (23 → 26 queries)
      - Added resource providers for complete functionality
      - Enhanced UI definition structure
 
 2. **mainTemplate.json**
-   - **Path:** `Package/3.0.1_extracted/mainTemplate.json`
+   - **Path:** `Package/4.0_extracted/mainTemplate.json`
    - **Changes:**
      - Added template definitions for all 6 new hunting queries
      - Updated hunting query object variables
-     - Maintained version consistency (3.0.1)
+     - Maintained version consistency (4.0)
      - Added proper content IDs and template specifications
 
 ### 🧹 **File Cleanup Operations**
@@ -117,7 +117,7 @@ The new queries utilize the following data connectors:
 - **GCP Audit Logs** (for GCP activities)
 
 ### Version Management
-- **Solution Version:** 3.0.1 (maintained)
+- **Solution Version:** 4.0 (maintained)
 - **New Query Versions:** 2.0.0 (standardized)
 - **Content Schema Version:** 3.0.0
 
@@ -135,7 +135,7 @@ Solutions/UEBA Essentials/
 │   ├── [MODIFIED] Anomalous connection from highly privileged user.yaml
 │   ├── [MODIFIED] Dormant Local Admin Logon.yaml
 │   └── [EXISTING] 18 other hunting query files
-├── Package/3.0.1_extracted/
+├── Package/4.0_extracted/
 │   ├── [UPDATED] createUiDefinition.json
 │   └── [UPDATED] mainTemplate.json
 ├── Data/

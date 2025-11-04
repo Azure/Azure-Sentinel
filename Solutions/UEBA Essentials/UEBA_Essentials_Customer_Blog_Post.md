@@ -4,7 +4,7 @@
 
 We're excited to announce a major update to the **Microsoft Sentinel UEBA Essentials solution** that significantly expands your threat detection capabilities across multi-cloud environments. This update introduces six new hunting queries and enhanced detection coverage for AWS, Google Cloud Platform, and Okta, while strengthening your existing Azure security monitoring.
 
-## What's New in UEBA Essentials v3.0.1
+## What's New in UEBA Essentials v4.0
 
 ### 🌐 **Expanded Multi-Cloud Coverage**
 
