@@ -14,15 +14,13 @@ public abstract class AuthenticatedCovewareClientHandler : AuthenticatedClientHa
     private readonly ICovewareLoginApi _loginApi;
     protected readonly CovewareConfiguration _apiConfig;
 
-    public AuthenticatedCovewareClientHandler(string clientId, ISecretsManager secretsManager, ILogger logger)
+    public AuthenticatedCovewareClientHandler(string baseUrl, string clientId, ISecretsManager secretsManager, ILogger logger)
         : base(clientId, secretsManager, logger)
     {
         var authUrl = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.CovewareAuthUrlLabel) ?? throw new InvalidOperationException($"{EnvironmentVariablesConstants.CovewareAuthUrlLabel} environment variable is not set");
-        var baseUrl = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.CovewareBaseUrlLabel) ?? throw new InvalidOperationException($"{EnvironmentVariablesConstants.CovewareBaseUrlLabel} environment variable is not set");
         var earliestEventTime = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.CovewareEarliestEventTimeLabel) ?? throw new InvalidOperationException($"{EnvironmentVariablesConstants.CovewareEarliestEventTimeLabel} environment variable is not set");
-        var maxRiskLevel = Environment.GetEnvironmentVariable(EnvironmentVariablesConstants.CovewareMaxRiskLevelLabel) ?? throw new InvalidOperationException($"{EnvironmentVariablesConstants.CovewareMaxRiskLevelLabel} environment variable is not set");
 
-        _apiConfig = CreateApiConfig(baseUrl, authUrl, earliestEventTime, maxRiskLevel);
+        _apiConfig = CreateApiConfig(baseUrl, authUrl, earliestEventTime);
         _loginApi = new CovewareLoginApi(_apiConfig, logger);
     }
 
@@ -57,8 +55,6 @@ public abstract class AuthenticatedCovewareClientHandler : AuthenticatedClientHa
             }
         };
 
-        _logger.LogInformation($"AuthRequest: {authRequest.AuthParameters.Password}, {authRequest.AuthParameters.Username}, {authRequest.ClientId}");
-        
         var response = await _loginApi.CreateTokenAsync(authRequest);
 
         if (response?.AuthenticationResult == null)
@@ -78,29 +74,29 @@ public abstract class AuthenticatedCovewareClientHandler : AuthenticatedClientHa
     {
         _logger.LogInformation($"Try to update tokens using refresh_token for \"{_clientId}\"");
 
-        var oldTokens = await _secretsManager.GetCovewareTokensAsync(_clientId);
-        var credentials = await _secretsManager.GetCowareCredentialsAsync(_clientId);
-
-        if (string.IsNullOrEmpty(oldTokens.RefreshToken))
-            throw new InvalidOperationException("No refresh token available");
-
-        if (string.IsNullOrEmpty(credentials.ClientId))
-            throw new InvalidOperationException("ClientId not available for refresh token flow");
-
-        _logger.LogInformation($"Calling AWS Cognito InitiateAuth with REFRESH_TOKEN_AUTH for \"{_clientId}\"");
-
-        var refreshRequest = new CovewareRefreshTokenRequest
-        {
-            AuthFlow = CovewareAuthRequestType.RefreshTokenAuth,
-            ClientId = credentials.ClientId,
-            AuthParameters = new RefreshTokenAuthParameters
-            {
-                RefreshToken = oldTokens.RefreshToken
-            }
-        };
-
         try
         {
+            var oldTokens = await _secretsManager.GetCovewareTokensAsync(_clientId);
+            var credentials = await _secretsManager.GetCowareCredentialsAsync(_clientId);
+
+            if (string.IsNullOrEmpty(oldTokens.RefreshToken))
+                throw new InvalidOperationException("No refresh token available");
+
+            if (string.IsNullOrEmpty(credentials.ClientId))
+                throw new InvalidOperationException("ClientId not available for refresh token flow");
+
+            _logger.LogInformation($"Calling AWS Cognito InitiateAuth with REFRESH_TOKEN_AUTH for \"{_clientId}\"");
+
+            var refreshRequest = new CovewareRefreshTokenRequest
+            {
+                AuthFlow = CovewareAuthRequestType.RefreshTokenAuth,
+                ClientId = credentials.ClientId,
+                AuthParameters = new RefreshTokenAuthParameters
+                {
+                    RefreshToken = oldTokens.RefreshToken
+                }
+            };
+            
             var response = await _loginApi.CreateTokenAsync(refreshRequest);
 
             if (response?.AuthenticationResult == null)
@@ -110,7 +106,7 @@ public abstract class AuthenticatedCovewareClientHandler : AuthenticatedClientHa
 
             var newTokens = new CovewareTokens(
                 response.AuthenticationResult.AccessToken,
-                response.AuthenticationResult.RefreshToken,
+                oldTokens.RefreshToken,
                 response.AuthenticationResult.IdToken);
 
             _logger.LogInformation($"Successfully refreshed tokens for \"{_clientId}\"");
@@ -125,10 +121,10 @@ public abstract class AuthenticatedCovewareClientHandler : AuthenticatedClientHa
 
     protected override bool IsUnauthorizedException(Exception ex)
     {
-        return ex is ApiCovewareException;
+        return ex is ApiCovewareException { StatusCode: 401 };
     }
 
-    protected static CovewareConfiguration CreateApiConfig(string baseUrl, string authUrl, string earliestEventTime, string maxRiskLevel)
+    protected static CovewareConfiguration CreateApiConfig(string baseUrl, string authUrl, string earliestEventTime)
     {
         if (string.IsNullOrEmpty(baseUrl))
             throw new ArgumentNullException(nameof(baseUrl), "Base URL cannot be null or empty");
@@ -136,13 +132,10 @@ public abstract class AuthenticatedCovewareClientHandler : AuthenticatedClientHa
             throw new ArgumentNullException(nameof(authUrl), "Auth URL cannot be null or empty");
         if (string.IsNullOrEmpty(earliestEventTime))
             throw new ArgumentNullException(nameof(earliestEventTime), "Earliest event time cannot be null or empty");
-        if (string.IsNullOrEmpty(maxRiskLevel))
-            throw new ArgumentNullException(nameof(maxRiskLevel), "Max risk level cannot be null or empty");
-
+      
         var apiConfig = new CovewareConfiguration
         {
             EarliestEventTime = earliestEventTime,
-            MaxRiskLevel = maxRiskLevel,
             AuthBasePath = authUrl,
             DataBasePath = baseUrl
         };

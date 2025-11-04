@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.6       | 23-10-2025                     | Updated the solution to be compatible with tool changes for the connection name.            |
 | 3.0.5       | 21-08-2024                     | **Data Connector** [Sophos Endpoint Protection (using REST API)] Globally Available|
 | 3.0.4       | 01-07-2024                     | Update files for CCP Connector to fix the connectivity|
 | 3.0.3       | 25-04-2024                     | Repackaged for parser issue with old names       |

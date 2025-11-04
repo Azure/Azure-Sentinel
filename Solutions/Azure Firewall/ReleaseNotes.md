@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                       |
 |-------------|--------------------------------|------------------------------------------------------------------------------------------|
+| 3.0.6       | 28-10-2025                     | Enhanced the Azure Firewall analytic rule to extend Fqdn from DestinationIp for improved detection of Multiple Sources Affected by the Same TI Destination. |
 | 3.0.5       | 26-07-2024                     | Updated **Analytical Rule** for missing TTP	                                          |
 | 3.0.4       | 12-02-2024                     | Updated **Analytical Rule**	                                          |
 | 3.0.3       | 17-01-2024                     | Updated Azure Firewall **Data Connector**  to support resource specific logs.            |

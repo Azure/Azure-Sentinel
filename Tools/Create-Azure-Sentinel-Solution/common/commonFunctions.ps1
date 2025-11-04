@@ -1928,6 +1928,15 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         if ($templateSpecConnectorData.id -and $templateSpecConnectorData.title) {
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "uiConfigId$global:connectorCounter" -NotePropertyValue $templateSpecConnectorData.id
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_uiConfigId$global:connectorCounter" -NotePropertyValue "[variables('uiConfigId$global:connectorCounter')]"
+                        } else {
+                            if (-not $templateSpecConnectorData.id) {
+                                Write-Host "Error: Missing required field 'id' in connector data for file: $file" -ForegroundColor Red
+                            }
+                            if (-not $templateSpecConnectorData.title) {
+                                Write-Host "Error: Missing required field 'title' in connector data for file: $file" -ForegroundColor Red
+                            }
+
+                            exit 1;
                         }
                         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorContentId$global:connectorCounter" -NotePropertyValue $templateSpecConnectorData.id
                         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$global:connectorCounter" -NotePropertyValue "[variables('dataConnectorContentId$global:connectorCounter')]"

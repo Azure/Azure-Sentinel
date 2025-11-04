@@ -1,0 +1,218 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "FunctionName": {
+      "type": "string",
+      "defaultValue": "LumenFeed",
+      "minLength": 1,
+      "maxLength": 24,
+      "metadata": {
+        "description": "Name prefix (11 character limit) for the Function App (will be lowercased and uniqued)."
+      }
+    },
+    "WORKSPACE_ID": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Sentinel Workspace ID"
+      }
+    },
+    "LUMEN_API_KEY": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Lumen API Key"
+      }
+    },
+    "LUMEN_BASE_URL": {
+      "type": "string",
+      "defaultValue": "https://microsoft-sentinel-api.us1.mss.lumen.com/v1/reputation-get-data",
+      "metadata": {
+        "description": "Lumen API base URL"
+      }
+    },
+    "TENANT_ID": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Tenant ID"
+      }
+    },
+    "CLIENT_ID": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure App Registration Client ID"
+      }
+    },
+    "CLIENT_SECRET": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Azure App Registration Client Secret"
+      }
+    },
+    "AppInsightsWorkspaceResourceID": {
+      "type": "string",
+      "metadata": {
+        "description": "(Optional) Log Analytics Workspace Resource ID for Application Insights linkage. If empty, classic (standalone) App Insights is created." 
+      },
+      "defaultValue": ""
+    },
+    "BlobContainerName": {
+      "type": "string",
+      "defaultValue": "lumenthreatfeed",
+      "metadata": {
+        "description": "Blob container name to store staged indicator JSONL files."
+      }
+    }
+  },
+  "variables": {
+    "uniqueFuncName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+    "storageAccountName": "[toLower(variables('uniqueFuncName'))]",
+    "appInsightsName": "[variables('uniqueFuncName')]",
+    "hostingPlanName": "[variables('uniqueFuncName')]",
+    "storageApiVersion": "2023-01-01",
+    "insightsApiVersion": "2020-02-02"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "[variables('insightsApiVersion')]",
+      "name": "[variables('appInsightsName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "ApplicationId": "[variables('appInsightsName')]",
+        "WorkspaceResourceId": "[if(equals(parameters('AppInsightsWorkspaceResourceID'), ''), json('null'), parameters('AppInsightsWorkspaceResourceID'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "[variables('storageApiVersion')]",
+      "name": "[variables('storageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "encryption": {
+          "services": {
+            "file": { "keyType": "Account", "enabled": true },
+            "blob": { "keyType": "Account", "enabled": true }
+          },
+          "keySource": "Microsoft.Storage"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "[variables('storageApiVersion')]",
+      "name": "[concat(variables('storageAccountName'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "[variables('storageApiVersion')]",
+      "name": "[concat(variables('storageAccountName'), '/default/', parameters('BlobContainerName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "kind": "functionapp",
+      "properties": {
+        "computeMode": "Dynamic",
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('uniqueFuncName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "httpsOnly": true,
+        "reserved": true,
+        "siteConfig": {
+          "minTlsVersion": "1.2",
+          "linuxFxVersion": "Python|3.11",
+          "functionAppScaleLimit": 200,
+          "appSettings": [
+            { "name": "FUNCTIONS_EXTENSION_VERSION", "value": "~4" },
+            { "name": "FUNCTIONS_WORKER_RUNTIME", "value": "python" },
+            { "name": "AzureWebJobsStorage", "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('storageApiVersion')).keys[0].value, ';EndpointSuffix=', environment().suffixes.storage)]" },
+            { "name": "WEBSITE_RUN_FROM_PACKAGE", "value": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Lumen%20Defender%20Threat%20Feed/Data%20Connectors/LumenThreatFeed/LumenThreatFeedConnector.zip" },
+            { "name": "LUMEN_API_KEY", "value": "[parameters('LUMEN_API_KEY')]" },
+            { "name": "LUMEN_BASE_URL", "value": "[parameters('LUMEN_BASE_URL')]" },
+            { "name": "WORKSPACE_ID", "value": "[parameters('WORKSPACE_ID')]" },
+            { "name": "TENANT_ID", "value": "[parameters('TENANT_ID')]" },
+            { "name": "CLIENT_ID", "value": "[parameters('CLIENT_ID')]" },
+            { "name": "CLIENT_SECRET", "value": "[parameters('CLIENT_SECRET')]" },
+            { "name": "LUMEN_BLOB_CONTAINER", "value": "[parameters('BlobContainerName')]" },
+            { "name": "LUMEN_BLOB_CONNECTION_STRING", "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('storageApiVersion')).keys[0].value, ';EndpointSuffix=', environment().suffixes.storage)]" },
+            { "name": "LUMEN_ENABLE_IPV4", "value": "true" },
+            { "name": "LUMEN_ENABLE_DOMAIN", "value": "true" },
+            { "name": "APPINSIGHTS_INSTRUMENTATIONKEY", "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').InstrumentationKey]" },
+            { "name": "APPLICATIONINSIGHTS_CONNECTION_STRING", "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]" },
+            { "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('storageApiVersion')).keys[0].value, ';EndpointSuffix=', environment().suffixes.storage)]" },
+            { "name": "WEBSITE_CONTENTSHARE", "value": "[toLower(variables('uniqueFuncName'))]" }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "FunctionAppName": { 
+      "type": "string", 
+      "value": "[variables('uniqueFuncName')]",
+      "metadata": {
+        "description": "The name of the deployed Function App"
+      }
+    },
+    "StorageAccountName": { 
+      "type": "string", 
+      "value": "[variables('storageAccountName')]",
+      "metadata": {
+        "description": "The name of the storage account used for blob storage"
+      }
+    },
+    "BlobContainerName": { 
+      "type": "string", 
+      "value": "[parameters('BlobContainerName')]",
+      "metadata": {
+        "description": "The name of the blob container for indicator staging"
+      }
+    },
+    "FunctionAppUrl": {
+      "type": "string",
+      "value": "[concat('https://', variables('uniqueFuncName'), '.azurewebsites.net')]",
+      "metadata": {
+        "description": "The URL of the deployed Function App"
+      }
+    }
+  }
+}

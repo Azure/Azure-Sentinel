@@ -1,0 +1,162 @@
+Parser:
+  Title: Network Session ASIM parser for NTANetAnalytics
+  Version: '0.1.0'
+  LastUpdated: Sep 25, 2025
+Product:
+  Name: Azure NTANetAnalytics
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the Traffic Analytics records for Flowlog enriched data to the ASIM NetworkSession normalized schema.
+ParserName: ASimNetworkSessionNTANetAnalytics
+EquivalentBuiltInParser: _ASim_NetworkSession_NTANetAnalytics
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    disabled: bool = false
+  ) {
+  let DvcActionLookup=datatable(FlowStatus:string, DvcAction:string, EventResult: string, EventSeverity: string)
+  [
+      "Allowed", "Allow", "Success", "Informational",
+      "Denied", "Deny", "Failure", "Low",
+  ];
+  let ProtocolLookup=datatable(L4Protocol:string, NetworkProtocol:string)
+  [
+      "T", "TCP",
+      "U", "UDP",
+      "TCP", "TCP",
+      "UDP", "UDP",
+      "ICMP", "ICMP",
+  ];
+  NTANetAnalytics
+  | where not(disabled)
+  | where SubType == "FlowLog"
+  // Pre-filter DvcAction
+  | lookup DvcActionLookup on FlowStatus
+  | extend
+      SrcHostname = case(isnotempty(SrcVm), extract(@"([^/]+)$", 1, SrcVm),""),
+      DstHostname = case(isnotempty(DestVm), extract(@"([^/]+)$", 1, SrcVm),""),
+      SrcPortNumber = toint(split(SrcPorts, "|")[0])
+  | lookup ProtocolLookup on L4Protocol
+  | extend
+      EventCount = toint(iif(CompletedFlows != 0, CompletedFlows, 1)),
+      EventType = "Flow",
+      EventSchema = "NetworkSession",
+      EventSchemaVersion = "0.2.6",
+      EventProduct = "Azure NSG flows",
+      EventVendor = "Microsoft",
+      Dvc = "Azure NSG flows"
+  | project-rename
+      EventStartTime = FlowStartTime,
+      EventEndTime = FlowEndTime,
+      SrcIpAddr = SrcIp,
+      DstIpAddr = DestIp,
+      DstPortNumber = DestPort,
+      SrcBytes = BytesSrcToDest,
+      DstBytes = BytesDestToSrc,
+      SrcPackets = PacketsSrcToDest,
+      DstPackets = PacketsDestToSrc,
+      SrcGeoCountry = Country,
+      NetworkDirection = FlowDirection,
+      SrcSubscriptionId = SrcSubscription,
+      DstSubscriptionId = DestSubscription,
+      EventUid = _ItemId,
+      NetworkRuleName = AclRule,
+      SrcInterfaceName = SrcNic,
+      DstInterfaceName = DestNic
+  // Map other values
+  | extend 
+      NetworkPackets = SrcPackets + DstPackets,
+      NetworkBytes = SrcBytes + DstBytes,
+      EventOriginalResultDetails = case(
+          FlowType == "Malicious", "Malicious",
+          FlowType == "Unknown", "Unknown",
+          FlowType == "Unknown Private", "Unknown",
+          ""),
+      DstHostname = coalesce(DstHostname, DstIpAddr),
+      SrcHostname = coalesce(SrcHostname, SrcIpAddr),
+      NetworkApplicationProtocol = toupper(L7Protocol),
+      Src = coalesce(SrcHostname, SrcIpAddr),
+      Dst = coalesce(DstHostname, DstIpAddr),
+      DstDvcScopeId = DstSubscriptionId,
+      SrcDvcScopeId = SrcSubscriptionId,
+      SrcZone = case(
+          FlowType == "IntraVNet", "Internal",
+          FlowType == "ExternalPublic", "Internet",
+          FlowType == "AzurePublic", "Azure",
+          FlowType == "InterVNet", "Internal",
+          FlowType == "S2S", "S2S",
+          FlowType == "P2S", "P2S",
+          "Unknown"
+      ),
+      DstDvcId = case(NetworkDirection == "Inbound", TargetResourceId, ""),
+      DstDvcIdType = case(NetworkDirection == "Inbound", "AzureResourceId", ""),
+      SrcDvcId = case(NetworkDirection == "Outbound", TargetResourceId, ""),
+      SrcDvcIdType = case(NetworkDirection == "Outbound", "AzureResourceId", ""),
+      DstMacAddr = case(NetworkDirection == "Inbound", MacAddress, ""),
+      SrcMacAddr = case(NetworkDirection == "Outbound", MacAddress, ""),
+      Hostname = DstHostname,
+      IpAddr = SrcIpAddr
+  | project 
+      EventStartTime,
+      EventEndTime,
+      EventSchema,
+      TimeGenerated,
+      SrcIpAddr,
+      DstIpAddr,
+      SrcHostname,
+      DstHostname,
+      DstPortNumber,
+      NetworkDirection,
+      SrcSubscriptionId,
+      DstSubscriptionId,
+      DstDvcScopeId = DstSubscriptionId,
+      DstDvcScope = DstSubscriptionId,
+      SrcDvcScopeId = SrcSubscriptionId,
+      SrcDvcScope = SrcSubscriptionId,
+      SrcInterfaceName,
+      DstInterfaceName,
+      SrcGeoCountry,
+      DstPackets,
+      SrcPackets,
+      NetworkPackets,
+      DstBytes,
+      SrcBytes,
+      NetworkBytes,
+      NetworkRuleName,
+      Type,
+      EventUid,
+      DvcAction,
+      EventResult,
+      EventSeverity,
+      SrcPortNumber,
+      NetworkProtocol,
+      EventCount,
+      EventType,
+      EventSchemaVersion,
+      EventProduct,
+      EventVendor,
+      Dvc,
+      NetworkApplicationProtocol,
+      Src,
+      Dst,
+      DstMacAddr,
+      SrcMacAddr,
+      Hostname,
+      IpAddr,
+      DstDvcId,
+      DstDvcIdType,
+      SrcDvcId,
+      SrcDvcIdType,
+      SrcZone
+  };
+  parser(disabled=disabled)

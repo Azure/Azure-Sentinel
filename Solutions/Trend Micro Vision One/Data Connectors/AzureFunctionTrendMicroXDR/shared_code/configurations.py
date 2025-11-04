@@ -5,7 +5,7 @@ import os
 
 from shared_code.models.oat import RiskLevel
 
-VERSION = '1.2.5'
+VERSION = '1.2.6'
 SIEM_NAME = 'SentinelAddon'
 XDR_HOSTS = {
     'us': 'https://api.xdr.trendmicro.com',
@@ -14,8 +14,8 @@ XDR_HOSTS = {
     'jp': 'https://api.xdr.trendmicro.co.jp',
     'sg': 'https://api.sg.xdr.trendmicro.com',
     'au': 'https://api.au.xdr.trendmicro.com',
-    'uae': 'https://api.uae.xdr.trendmicro.com/',
     'mea': 'https://api.mea.xdr.trendmicro.com',
+    'uk': 'https://api.uk.xdr.trendmicro.com',
 }
 
 
@@ -35,13 +35,14 @@ def get_api_tokens():
     )
     if is_key_vault_enabled:
         # get tokens from key vault
-        from azure.identity import DefaultAzureCredential
+        from azure.identity import ManagedIdentityCredential
         from azure.keyvault.secrets import SecretClient
 
         clp_ids = set(filter(None, os.getenv('clpIds').split(',')))
-        credential = DefaultAzureCredential(
-            managed_identity_client_id=os.getenv('keyVaultIdentityClientId')
-        )
+
+        managed_identity_client_id = os.getenv('keyVaultIdentityClientId')
+        credential = ManagedIdentityCredential(client_id=managed_identity_client_id)
+
         client = SecretClient(vault_url=os.getenv('keyVaultUrl'), credential=credential)
 
         tokens = []

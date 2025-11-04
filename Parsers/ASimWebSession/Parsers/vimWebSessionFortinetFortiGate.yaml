@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM filtering parser for Fortinet FortiGate
-  Version: '0.2.1'
-  LastUpdated: Jun 26, 2025
+  Version: '0.3.0'
+  LastUpdated: Sep 12, 2025
 Product:
   Name: Fortinet FortiGate
 Normalization:
@@ -97,7 +97,7 @@ ParserQuery: |
     | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime)
     | where DeviceVendor == "Fortinet" 
       and DeviceProduct  startswith "Fortigate"
-      and Activity has_all ('webfilter', 'utm')
+      and (Activity has_all ('webfilter', 'utm') or Activity has_all ('ips', 'utm'))
     | where (array_length(url_has_any) == 0 or RequestURL has_any (remove_protocol_from_list(url_has_any)))
     | where (array_length(httpuseragent_has_any) == 0 or AdditionalExtensions has_any(httpuseragent_has_any))
     | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP,src_or_any)
@@ -110,10 +110,10 @@ ParserQuery: |
         "No match") 
     | where ASimMatchingIpAddr != "No match" 
     | project-away temp_*
-    | where (array_length(eventresultdetails_in) == 0)
+    | where (array_length(eventresultdetails_in) == 0) 
     | lookup EventLookup on DeviceAction 
     | where (eventresult == '*' or EventResult =~ eventresult)
-    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName, ASimMatchingIpAddr, ApplicationProtocol
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName, ASimMatchingIpAddr , ApplicationProtocol
     | project-rename 
       Url                     = RequestURL
       , UrlCategory           = RequestContext
@@ -124,84 +124,132 @@ ParserQuery: |
       , DvcHostname           = Computer
       , EventMessage          = Activity
       , EventOriginalSeverity = LogSeverity
-      , EventProduct          = DeviceProduct
       , EventProductVersion   = DeviceVersion
       , SrcBytes              = SentBytes
       , SrcInterfaceName      = DeviceInboundInterface
       , SrcIpAddr             = SourceIP
       , SrcPortNumber         = SourcePort
-      , NetworkApplicationProtocol = ApplicationProtocol
       , DvcId                 = DeviceExternalID
       , EventUid              = _ItemId
+      , DstHostname           = DestinationHostName
       , SrcHostname           = SourceHostName
       , SrcUsername           = SourceUserName
       , DstUsername           = DestinationUserName
+      , NetworkApplicationProtocol = ApplicationProtocol
     | invoke _ASIM_ResolveNetworkProtocol ('Protocol')
     | extend 
         DstUsernameType = _ASIM_GetUsernameType(DstUsername),
         SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
     | project-rename DvcOriginalAction = DeviceAction
     | parse-kv AdditionalExtensions as (
-            FortinetFortiGatestart:datetime,
-            FortinetFortiGatesrcintfrole:string,
-            FortinetFortiGatedstintfrole:string,
-            FortinetFortiGateexternalID:string,
-            FortinetFortiGatepolicyid:int,
-            FortinetFortiGatedstcountry:string,
-            FortinetFortiGatesrccountry:string,
-            FortinetFortiGatecrscore:string,
-            FortinetFortiGateduration:int,
-            FortinetFortiGatesentpkt:long,
-            FortinetFortiGatercvdpkt:long,
-            ['ad.referralurl']:string,
-            ['ad.httpmethod']:string,
-            ['ad.agent']:string
-        ) with (pair_delimiter=';', kv_delimiter='=')
+          start:datetime,
+          srcintfrole:string,
+          dstintfrole:string,
+          externalID:string,
+          policyid:int,
+          dstcountry:string,
+          srccountry:string,
+          crscore:string,
+          duration:int,
+          sentpkt:long,
+          rcvdpkt:long,
+          ['ad.referralurl']:string,
+          ['ad.httpmethod']:string,
+          ['ad.agent']:string,
+          deviceSeverity:string,
+          ref:string,
+          msg:string,
+          profile:string,
+          incidentserialno:string,
+          policytype:string,
+          attack:string,
+          attackid:string,
+          logid:string,
+          direction:string,
+          subtype:string,
+          severity: string,
+          vd:string,
+          FTNTFGTattack:string,
+          FTNTFGTattackid:string,
+          FTNTFGTlogid:string,
+          FTNTFGTsubtype:string,
+          FTNTFGTvd:string,
+          FTNTFGTstart:datetime,
+          FTNTFGTsrcintfrole:string,
+          FTNTFGTdstintfrole:string,
+          FTNTFGTexternalID:string,
+          FTNTFGTpolicyid:int,
+          FTNTFGTdstcountry:string,
+          FTNTFGTsrccountry:string,
+          FTNTFGTcrscore:string,
+          FTNTFGTduration:int,
+          FTNTFGTsentpkt:long,
+          FTNTFGTrcvdpkt:long
+      ) with (pair_delimiter=';', kv_delimiter='=')
     | parse AdditionalExtensions with * "x-forwarded-for=" HttpRequestXff:string ";" *
-    | invoke _ASIM_ResolveDstFQDN('DestinationHostName')
-    | project-rename
-        HttpReferrer            = ['ad.referralurl'],
-        HttpRequestMethod       = ['ad.httpmethod'],
-        HttpUserAgent           = ['ad.agent'],
-        EventStartTime          = FortinetFortiGatestart,
-        SrcZone                 = FortinetFortiGatesrcintfrole,
-        DstZone                 = FortinetFortiGatedstintfrole,
-        NetworkSessionId        = FortinetFortiGateexternalID,
-        RuleNumber              = FortinetFortiGatepolicyid,
-        NetworkDuration         = FortinetFortiGateduration,
-        DstGeoCountry           = FortinetFortiGatedstcountry,
-        SrcGeoCountry           = FortinetFortiGatesrccountry,
-        ThreatOriginalRiskLevel = FortinetFortiGatecrscore,
-        SrcPackets              = FortinetFortiGatesentpkt,
-        DstPackets              = FortinetFortiGatercvdpkt
+    | project-rename 
+      HttpReferrer              =  ['ad.referralurl'],
+      HttpRequestMethod         = ['ad.httpmethod'],
+      HttpUserAgent             = ['ad.agent']
     | extend 
-        temp_HttpRequestMethod = extract(@"rawdata=.*?Method=(.*?)(?:\||\;|$)", 1, AdditionalExtensions),
-        temp_HttpUserAgent = extract(@"rawdata=.*?User-Agent=(.*?)(?:\||\;|$)", 1, AdditionalExtensions)
+      ThreatName              = coalesce(attack,FTNTFGTattack),
+      ThreatId                = coalesce(attackid,FTNTFGTattackid),
+      EventOriginalUid        = coalesce(logid,FTNTFGTlogid),
+      EventOriginalSubType    = coalesce(subtype,FTNTFGTsubtype),
+      EventStartTime          = coalesce(start,FTNTFGTstart),
+      SrcZone                 = coalesce(srcintfrole,FTNTFGTsrcintfrole),
+      DstZone                 = coalesce(dstintfrole,FTNTFGTdstintfrole),
+      NetworkSessionId        = coalesce(externalID,FTNTFGTexternalID),
+      RuleNumber              = coalesce(policyid,FTNTFGTpolicyid),
+      NetworkDuration         = coalesce(duration, FTNTFGTduration),
+      DstGeoCountry           = coalesce(dstcountry,FTNTFGTdstcountry),
+      SrcGeoCountry           = coalesce(srccountry,FTNTFGTsrccountry),
+      ThreatOriginalRiskLevel = coalesce(crscore,FTNTFGTcrscore),
+      SrcPackets              = coalesce(sentpkt,FTNTFGTsentpkt),
+      DstPackets              = coalesce(rcvdpkt,FTNTFGTrcvdpkt)
+    | project-away FTNTFGT*, attack, attackid, logid, subtype, start, srcintfrole, dstintfrole, externalID, policyid, dstcountry, srccountry, crscore, duration, sentpkt, rcvdpkt
+    | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
     | extend 
         HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
         HttpUserAgent = coalesce(temp_HttpUserAgent,HttpUserAgent)
     | project-away temp_*
-    | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any(httpuseragent_has_any))
+    | extend AdditionalFields =  bag_pack(
+                                "incidentserialno",incidentserialno, 
+                                "policytype",policytype,
+                                "profile",profile,
+                                "ref",ref,
+                                "vd",vd,
+                                "Message",msg,
+                                "deviceSeverity", deviceSeverity,
+                                "direction", direction)
     | extend 
-        EventCount               = int(1)
-        , EventSchema            = "WebSession"
-        , EventSchemaVersion     = "0.2.6"
-        , EventType              = "HTTPsession"
-        , EventVendor            = "Fortinet"
-        , EventProduct           = "Fortigate"
-        , DvcIdType              = "Other"
-        , NetworkBytes           = DstBytes + SrcBytes
-        , EventEndTime           = TimeGenerated
-        , EventStartTime         = coalesce(EventStartTime, TimeGenerated)
-        , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
-            , DstIpAddr contains ":", "IPv6"
-            , "")
-        , NetworkPackets         = DstPackets + SrcPackets
-        , UserAgent              = HttpUserAgent
-        , Dvc                    = DvcHostname
-        , User                   = SrcUsername
-        , Hostname               = DstHostname
+      EventCount               = int(1)
+      , EventSchema            = "WebSession"
+      , EventSchemaVersion     = "0.2.6"
+      , EventType              = "HTTPsession"
+      , EventVendor            = "Fortinet"
+      , EventProduct = "Fortigate"
+      , DvcIdType              = "Other"
+      , NetworkBytes           = DstBytes + SrcBytes
+      , EventEndTime           = TimeGenerated
+      , EventStartTime         = coalesce(EventStartTime, TimeGenerated)
+      , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
+          , DstIpAddr contains ":", "IPv6"
+          , "")
+      , NetworkPackets         = DstPackets + SrcPackets
+      , UserAgent              = HttpUserAgent
+      , Dvc                    = DvcHostname
+      , User                   = SrcUsername
+      , Hostname               = DstHostname
     | lookup SeverityLookup on EventOriginalSeverity
+    | extend ipsseverity = case(
+        severity == "low", "Low",
+        severity == "high", "High",
+        severity == "medium", "Medium",
+        severity == "info", "Informational",
+        ""
+        )
+    | extend EventSeverity = iff(EventMessage has_all ('ips', 'utm'), ipsseverity, EventSeverity)
     | extend 
         Src       = SrcIpAddr,
         Dst       = DstIpAddr,
@@ -209,6 +257,10 @@ ParserQuery: |
         IpAddr    = SrcIpAddr,
         Duration  = NetworkDuration,
         Rule      = tostring(RuleNumber)
-    | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber
+    | extend NetworkDirection = case(
+        direction == "incoming", "Inbound",
+        direction == "outgoing", "Outbound",
+        "")
+    | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber, severity, incidentserialno, policytype, profile, ref, msg, deviceSeverity, direction, vd, ipsseverity
   };
-  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled) 
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)

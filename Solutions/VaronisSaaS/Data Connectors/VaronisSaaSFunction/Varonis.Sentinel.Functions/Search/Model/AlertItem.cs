@@ -35,6 +35,6 @@ namespace Varonis.Sentinel.Functions.Search.Model
         public string EscalationType { get; set; }
         public string MitreTacticName { get; set; }
         public string ClosedBy { get; set; }
-        public DateTime? IngestTime { get; set; }
+        public DateTime IngestTime { get; set; }
     }
 }

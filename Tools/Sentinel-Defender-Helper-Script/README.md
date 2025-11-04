@@ -32,12 +32,13 @@ The script outputs the findings. <br>
 The findings are printed to the [shell](https://github.com/mariocuomo/Sentinel-Transition-To-Defender-Helper-Script/blob/main/resources/output.png) or exported to a [PDF file](https://github.com/mariocuomo/Sentinel-Transition-To-Defender-Helper-Script/blob/main/resources/report.pdf).
 
 ``` powershell
-.\SentinelTransitionHelper.ps1 -FileName "Report.pdf -EnviromentsFile ".\sentinelEnvironments.json"
+.\SentinelTransitionHelper.ps1 -FileName "Report.pdf" -EnvironmentsFile ".\sentinelEnvironments.json"
 ```
 
 ## Reference
 The script is developed by [Mario Cuomo](https://www.linkedin.com/in/mariocuomo/), Cloud Solution Architect at Microsoft. <br>
 All the different versions of the script are available [here](https://github.com/mariocuomo/Sentinel-Transition-To-Defender-Helper-Script/tree/main)
+
 
 
 

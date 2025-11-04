@@ -181,8 +181,7 @@ To call the Microsoft Sentinel Management API from ServiceNow, we must configure
 
 ### Verify the “Sentinel Severity to ServiceNow” table mapping
 
-This table is used to map the Sentinel severity to the ServiceNow value, when creating or updating AzureSentinel incidents.  
-Note that in our case, because Sentinel has four different severities values, while we have only three in ServiceNow, both _“Informational”_ and _“Low”_ have been assigned the value **3**:
+This table is used to map the Sentinel severity to the ServiceNow value, when creating or updating AzureSentinel incidents. Note that in our case, because Sentinel has four different severities values, while we have only three in ServiceNow, both _“Informational”_ and _“Low”_ have been assigned the value **3**:
 
 ![Sentinel severity to ServiceNow](media/sentinelToSnowSev01.png)
 
@@ -192,10 +191,14 @@ You can view your environment's values using the following technique:
 
 <br/>
 
+**NOTE**: There should not be any duplicate entries for HIGH, MEDIUM, LOW, or INFORMATIONAL. In other words, avoid having two records assigned to the same category.
+
+
 ### Verify the “Sentinel State to ServiceNow” table mapping
 
 This table is used to map the Sentinel state/status to the ServiceNow value, when creating or updating Microsoft Sentinel incidents.  
-Note that Sentinel has probably less states than ServiceNow, so you must select the initial ServiceNow value used by the application.
+Note that Sentinel has probably less states than ServiceNow, so you must select the initial ServiceNow value used by the application. <br/>
+**NOTE**: There should not be any duplicate entries for State field. In other words, avoid having two records assigned to the same category.
 
 ![Sentinel state to ServiceNow](media/sentinelToSnowState01.png)
 
@@ -240,9 +243,11 @@ The available properties are:
 
 - **incidentUniqueKey**: ServiceNow incident property used to uniquely map incidents between Sentinel and ServiceNow. By default, the app uses “_correlation_id_”. If you are already using this property, you should specify or create another one.
 
-- **severityField**: incident property to store the incident severity. By default, the app uses _“impact”_. Verify what is used in your environment.
+- **severityField**: incident property to store the incident severity. By default, the app uses _“impact”_. Verify what is used in your environment. ServiceNow also has _“severity”_ field which you can use instead of _"impact"_ but using _"severity"_ field which is independent field will not update _"urgency"_ and _"priority"_ field.<br/>
+**NOTE**: Please avoid using the _“priority”_ field here, as in ServiceNow this field is calculated based on the values of “impact” and “urgency”. When the _"impact"_ field is set, the app automatically assigns the _“urgency”_ value as "2" (Medium). If you need to change the _"urgency"_ field, you will have to update the existing logic code, as the app currently does not support changing urgency directly. On how to update existing code file, refer to [Technical FAQs](#technical-faqs) session [point 17](#17-how-to-modify-microsoft-sentinel-app-code) at the bottom of this page.
 
-- **statusField**: incident property to store the incident state. By default, the app uses “_state”_. Verify what is used in your environment.
+- **statusField**: incident property to store the incident state. By default, the app uses “_state”_. Verify what is used in your environment. 
+**NOTE**: If you select a field name other than the default provided by the app, please remember to update this field in the business rules under "update changes to Sentinel." Otherwise, any changes made to the State field will not sync data from ServiceNow to Sentinel.
 
 - **Max length length for entities**: The Entities table is displayed in the ServiceNow worknotes, with a default character limit of 5000 for the text within the table. This limit can be modified to a different value. If the specified character limit is exceeded, the message "CONTENT TRUNCATED (max char length) ..." will be displayed.. 
 <br/>

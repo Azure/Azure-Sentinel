@@ -25,8 +25,10 @@ At a high level, these scripts do the following:
 You must have PowerShell and the AWS CLI installed before using these scripts.
 
 - PowerShell [Installation instructions](https://docs.microsoft.com/powershell/scripting/install/installing-powershell?view=powershell-7.1)
+  - Please ensure you're not using Windows Powershell (is version 5 - will not work), use a version of powershell >= 7  
 - AWS CLI [Installation instructions](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
   - Run from PowerShell `aws configure`. For more details please see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
+  - Please install the latest version as older versions (e.g 2.0.9) have failed to work with these scripts
 
 ## Using the scripts
 For Microsoft Azure, please download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer.

@@ -1,0 +1,2173 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "functionAppName": {
+        "type": "string",
+        "metadata": {
+            "description": "Name of the Function App. This must be unique across Azure, since each instance requires its own Function App (e.g., BloodHoundEnterprise-Maple)."
+        }
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the existing Log Analytics Workspace where you want to create a Data Collection Endpoint (DCE) and Data Collection Rule (DCR) for custom tables."
+      }
+    },
+    "bloodhoundTenantDomain": {
+      "type": "string",
+      "metadata": {
+        "description": "The URL for the BloodHound Enterprise tenant domain."
+      }
+    },
+    "Bloodhound-Token-Id-Secret-Value": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The value for the BloodHound token ID. This value will be stored in an Azure Key Vault secret."
+      }
+    },
+    "Bloodhound-Token-Key-Secret-Value": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The value for the BloodHound token key. This value will be stored in an Azure Key Vault secret."
+      }
+    },
+    "microsoftEntraIdApplicationAppId": {
+      "type": "string",
+      "metadata": {
+        "description": "The unique identifier for the Microsoft Entra ID application. This ID, also known as the Client ID, is used to authenticate your application to the Microsoft identity platform."
+      }
+    },
+    "microsoftEntraIdApplicationAppSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "A confidential secret generated for your Microsoft Entra ID application. This secret, also known as the Client Secret, is used along with the App ID to prove the application's identity when requesting an access token."
+      }
+    },
+    "selectedBloodhoundEnvironments": {
+      "type": "string",
+      "defaultValue": "All",
+      "metadata": {
+        "description": "The selected BloodHound environments from which you want to fetch data. These should be provided as comma-separated values (e.g., Ghost.Corp, Phantom.Corp). The default value is All."
+      }
+    },
+    "selectedFindingTypes": {
+      "type": "string",
+      "defaultValue": "All",
+      "metadata": {
+        "description": "The selected finding types."
+      }
+    }
+  },
+  "variables": {
+    "storageAccountName": "[concat(toLower(parameters('functionAppName')), 'sa')]",
+    "appServicePlanName": "[concat(parameters('functionAppName'), 'plan')]",
+    "attackPathsTable": "BHEAttackPathsData_CL",
+    "attackPathsTimelineTable": "BHEAttackPathsTimelineData_CL",
+    "auditLogsTable": "BHEAuditLogsData_CL",
+    "findingTrendsTable": "BHEFindingTrendsData_CL",
+    "postureHistoryTable": "BHEPostureHistoryData_CL",
+    "tierZeroAssetsTable": "BHETierZeroAssetsData_CL",
+    "bheAttackPathsTable": "BHEAttackPathsData_CL",
+    "bheAuditLogsTable": "BHEAuditLogsData_CL",
+    "bheFindingTrendsTable": "BHEFindingTrendsData_CL",
+    "bhePostureHistoryTable": "BHEPostureHistoryData_CL",
+    "bheTierZeroAssetsTable": "BHETierZeroAssetsData_CL",
+    "bheAttackPathsTimelineTable": "BHEAttackPathsTimelineData_CL",
+    "microsoftEntraIdApplicationAppId": "[parameters('microsoftEntraIdApplicationAppId')]",
+    "microsoftEntraIdApplicationAppSecret": "[parameters('microsoftEntraIdApplicationAppSecret')]",
+    "applicationInsightsName": "[parameters('functionAppName')]",
+    "subscriptionId": "[subscription().subscriptionId]",
+    "logAnalyticsWorkspaceLocation": "[resourceGroup().location]",
+    "logAnalyticsWorkspaceResourceGroupName": "[resourceGroup().name]", 
+    "tenantId": "[subscription().tenantId]",
+    "storageAccountType": "Standard_LRS",
+    "keyVaultName": "[concat('kv-', toLower(parameters('functionAppName')))]",
+    "bloodhoundTokenIdSecretName": "Bloodhound-Token-Id-Secret-Value",
+    "bloodhoundTokenKeySecretName": "Bloodhound-Token-Key-Secret-Value",
+    "dceName": "BloodHoundDCE",
+    "dcrName": "BloodHoundDCR"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAttackPathsTable'))]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "properties": {
+        "schema": {
+          "name": "[variables('bheAttackPathsTable')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "NonTierZeroPrincipal",
+              "type": "string"
+            },
+            {
+              "name": "ImpactedPrincipal",
+              "type": "string"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            },
+            {
+              "name": "NonTierZeroPrincipalProps",
+              "type": "dynamic"
+            },
+            {
+              "name": "NonTierZeroPrincipalKind",
+              "type": "string"
+            },
+            {
+              "name": "ImpactedPrincipalProps",
+              "type": "dynamic"
+            },
+            {
+              "name": "ImpactedPrincipalKind",
+              "type": "string"
+            },
+            {
+              "name": "RelProps",
+              "type": "dynamic"
+            },
+            {
+              "name": "ComboGraphRelationID",
+              "type": "int"
+            },
+            {
+              "name": "Finding",
+              "type": "string"
+            },
+            {
+              "name": "DomainSID",
+              "type": "string"
+            },
+            {
+              "name": "PrincipalHash",
+              "type": "string"
+            },
+            {
+              "name": "ImpactPercentage",
+              "type": "string"
+            },
+            {
+              "name": "ImpactCount",
+              "type": "int"
+            },
+            {
+              "name": "ExposurePercentage",
+              "type": "string"
+            },
+            {
+              "name": "ExposureCount",
+              "type": "int"
+            },
+            {
+              "name": "Severity",
+              "type": "string"
+            },
+            {
+              "name": "AcceptedUntil",
+              "type": "string"
+            },
+            {
+              "name": "Accepted",
+              "type": "boolean"
+            },
+            {
+              "name": "Environment",
+              "type": "string"
+            },
+            {
+              "name": "NonTierZeroPrincipalName",
+              "type": "string"
+            },
+            {
+              "name": "ImpactedPrincipalName",
+              "type": "string"
+            },
+            {
+              "name": "IsInherited",
+              "type": "string"
+            },
+            {
+              "name": "NonTierZeroPrincipalEnvironment",
+              "type": "string"
+            },
+            {
+              "name": "NonTierZeroPrincipalEnvironmentID",
+              "type": "string"
+            },
+            {
+              "name": "ImpactedPrincipalEnvironment",
+              "type": "string"
+            },
+            {
+              "name": "ImpactedPrincipalEnvironmentID",
+              "type": "string"
+            },
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "created_at",
+              "type": "string"
+            },
+            {
+              "name": "updated_at",
+              "type": "string"
+            },
+            {
+              "name": "deleted_at",
+              "type": "dynamic"
+            },
+            {
+              "name": "tenant_url",
+              "type": "string"
+            },
+            {
+              "name": "Remediation",
+              "type": "string"
+            },
+            {
+              "name": "PathTitle",
+              "type": "string"
+            },
+            {
+              "name": "ShortDescription",
+              "type": "string"
+            },
+            {
+              "name": "ShortRemediation",
+              "type": "string"
+            },
+            {
+              "name": "LongRemediation",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAuditLogsTable'))]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "properties": {
+        "schema": {
+          "name": "[variables('bheAuditLogsTable')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "created_at",
+              "type": "datetime"
+            },
+            {
+              "name": "actor_id",
+              "type": "string"
+            },
+            {
+              "name": "actor_name",
+              "type": "string"
+            },
+            {
+              "name": "actor_email",
+              "type": "string"
+            },
+            {
+              "name": "action",
+              "type": "string"
+            },
+            {
+              "name": "fields",
+              "type": "dynamic"
+            },
+            {
+              "name": "request_id",
+              "type": "string"
+            },
+            {
+              "name": "source_ip_address",
+              "type": "string"
+            },
+            {
+              "name": "status",
+              "type": "string"
+            },
+            {
+              "name": "commit_id",
+              "type": "string"
+            },
+            {
+              "name": "tenant_url",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheFindingTrendsTable'))]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "properties": {
+        "schema": {
+          "name": "[variables('bheFindingTrendsTable')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "composite_risk",
+              "type": "string"
+            },
+            {
+              "name": "display_title",
+              "type": "string"
+            },
+            {
+              "name": "display_type",
+              "type": "string"
+            },
+            {
+              "name": "environment_id",
+              "type": "string"
+            },
+            {
+              "name": "exposure_count",
+              "type": "int"
+            },
+            {
+              "name": "finding",
+              "type": "string"
+            },
+            {
+              "name": "finding_count_decrease",
+              "type": "int"
+            },
+            {
+              "name": "finding_count_end",
+              "type": "int"
+            },
+            {
+              "name": "finding_count_increase",
+              "type": "int"
+            },
+            {
+              "name": "finding_count_start",
+              "type": "int"
+            },
+            {
+              "name": "impact_count",
+              "type": "int"
+            },
+            {
+              "name": "tenant_url",
+              "type": "string"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            },
+            {
+              "name": "start_date",
+              "type": "datetime"
+            },
+            {
+              "name": "end_date",
+              "type": "datetime"
+            },
+            {
+              "name": "period",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bhePostureHistoryTable'))]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "properties": {
+        "schema": {
+          "name": "[variables('bhePostureHistoryTable')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "metric_date",
+              "type": "datetime"
+            },
+            {
+              "name": "value",
+              "type": "string"
+            },
+            {
+              "name": "start_time",
+              "type": "datetime"
+            },
+            {
+              "name": "end_time",
+              "type": "datetime"
+            },
+            {
+              "name": "domain_id",
+              "type": "string"
+            },
+            {
+              "name": "data_type",
+              "type": "string"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            },
+            {
+              "name": "tenant_url",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheTierZeroAssetsTable'))]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",  
+      "apiVersion": "2022-10-01",
+      "properties": {
+        "schema": {
+          "name": "[variables('bheTierZeroAssetsTable')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "nodeId",
+              "type": "string"
+            },
+            {
+              "name": "label",
+              "type": "string"
+            },
+            {
+              "name": "kindType",
+              "type": "string"
+            },
+            {
+              "name": "objectId",
+              "type": "string"
+            },
+            {
+              "name": "isTierZero",
+              "type": "boolean"
+            },
+            {
+              "name": "isOwnedObject",
+              "type": "boolean"
+            },
+            {
+              "name": "lastSeen",
+              "type": "datetime"
+            },
+            {
+              "name": "tenant_url",
+              "type": "string"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "properties",
+              "type": "dynamic"
+            },
+            {
+              "name": "displayname",
+              "type": "string"
+            },
+            {
+              "name": "description",
+              "type": "string"
+            },
+            {
+              "name": "distinguishedname",
+              "type": "string"
+            },
+            {
+              "name": "samaccountname",
+              "type": "string"
+            },
+            {
+              "name": "userprincipalname",
+              "type": "string"
+            },
+            {
+              "name": "email",
+              "type": "string"
+            },
+            {
+              "name": "Title",
+              "type": "string"
+            },
+            {
+              "name": "domain",
+              "type": "string"
+            },
+            {
+              "name": "domainsid",
+              "type": "string"
+            },
+            {
+              "name": "tenantid",
+              "type": "string"
+            },
+            {
+              "name": "ownersid",
+              "type": "string"
+            },
+            {
+              "name": "functionallevel",
+              "type": "string"
+            },
+            {
+              "name": "admincount",
+              "type": "boolean"
+            },
+            {
+              "name": "isaclprotected",
+              "type": "boolean"
+            },
+            {
+              "name": "sensitive",
+              "type": "boolean"
+            },
+            {
+              "name": "enabled",
+              "type": "boolean"
+            },
+            {
+              "name": "isbuiltin",
+              "type": "boolean"
+            },
+            {
+              "name": "isassignabletorole",
+              "type": "boolean"
+            },
+            {
+              "name": "securityenabled",
+              "type": "boolean"
+            },
+            {
+              "name": "securityidentifier",
+              "type": "string"
+            },
+            {
+              "name": "dontreqpreauth",
+              "type": "boolean"
+            },
+            {
+              "name": "passwordnotreqd",
+              "type": "boolean"
+            },
+            {
+              "name": "pwdneverexpires",
+              "type": "boolean"
+            },
+            {
+              "name": "passwordexpired",
+              "type": "boolean"
+            },
+            {
+              "name": "pwdlastset",
+              "type": "int"
+            },
+            {
+              "name": "lastlogon",
+              "type": "int"
+            },
+            {
+              "name": "lastlogontimestamp",
+              "type": "int"
+            },
+            {
+              "name": "unicodepassword",
+              "type": "string"
+            },
+            {
+              "name": "unixpassword",
+              "type": "string"
+            },
+            {
+              "name": "userpassword",
+              "type": "string"
+            },
+            {
+              "name": "sfupassword",
+              "type": "string"
+            },
+            {
+              "name": "operatingsystem",
+              "type": "datetime"
+            },
+            {
+              "name": "isdc",
+              "type": "boolean"
+            },
+            {
+              "name": "haslaps",
+              "type": "boolean"
+            },
+            {
+              "name": "unconstraineddelegation",
+              "type": "boolean"
+            },
+            {
+              "name": "trustedtoauth",
+              "type": "boolean"
+            },
+            {
+              "name": "lockedout",
+              "type": "boolean"
+            },
+            {
+              "name": "webclientrunning",
+              "type": "boolean"
+            },
+            {
+              "name": "certificatemappingmethods",
+              "type": "dynamic"
+            },
+            {
+              "name": "certificatemappingmethodsraw",
+              "type": "int"
+            },
+            {
+              "name": "strongcertificatebindingenforcement",
+              "type": "string"
+            },
+            {
+              "name": "strongcertificatebindingenforcementraw",
+              "type": "int"
+            },
+            {
+              "name": "supportedencryptiontypes",
+              "type": "dynamic"
+            },
+            {
+              "name": "serviceprincipalnames",
+              "type": "dynamic"
+            },
+            {
+              "name": "clientallowedntlmservers",
+              "type": "dynamic"
+            },
+            {
+              "name": "ntlmminclientsec",
+              "type": "int"
+            },
+            {
+              "name": "ntlmminserversec",
+              "type": "int"
+            },
+            {
+              "name": "lmcompatibilitylevel",
+              "type": "int"
+            },
+            {
+              "name": "smbsigning",
+              "type": "boolean"
+            },
+            {
+              "name": "enablesecuritysignature",
+              "type": "boolean"
+            },
+            {
+              "name": "requiresecuritysignature",
+              "type": "boolean"
+            },
+            {
+              "name": "restrictoutboundntlm",
+              "type": "boolean"
+            },
+            {
+              "name": "restrictreceivingntmltraffic",
+              "type": "boolean"
+            },
+            {
+              "name": "ldapavailable",
+              "type": "boolean"
+            },
+            {
+              "name": "ldapsavailable",
+              "type": "boolean"
+            },
+            {
+              "name": "ldapsepa",
+              "type": "boolean"
+            },
+            {
+              "name": "ldapsigning",
+              "type": "boolean"
+            },
+            {
+              "name": "blocksinheritance",
+              "type": "boolean"
+            },
+            {
+              "name": "gpcpath",
+              "type": "string"
+            },
+            {
+              "name": "appid",
+              "type": "string"
+            },
+            {
+              "name": "appdescription",
+              "type": "string"
+            },
+            {
+              "name": "appdisplayname",
+              "type": "string"
+            },
+            {
+              "name": "appownerorganizationid",
+              "type": "string"
+            },
+            {
+              "name": "serviceprincipaltype",
+              "type": "string"
+            },
+            {
+              "name": "publisherdomain",
+              "type": "string"
+            },
+            {
+              "name": "signinaudience",
+              "type": "string"
+            },
+            {
+              "name": "loginurl",
+              "type": "string"
+            },
+            {
+              "name": "onpremid",
+              "type": "datetime"
+            },
+            {
+              "name": "onpremsyncenabled",
+              "type": "boolean"
+            },
+            {
+              "name": "usertype",
+              "type": "string"
+            },
+            {
+              "name": "templateid",
+              "type": "datetime"
+            },
+            {
+              "name": "gmsa",
+              "type": "boolean"
+            },
+            {
+              "name": "hasspn",
+              "type": "boolean"
+            },
+            {
+              "name": "whencreated",
+              "type": "int"
+            },
+            {
+              "name": "collected",
+              "type": "boolean"
+            },
+            {
+              "name": "Date",
+              "type": "datetime"
+            },
+            {
+              "name": "homedirectory",
+              "type": "string"
+            },
+            {
+              "name": "logonscript",
+              "type": "string"
+            },
+            {
+              "name": "logonscriptenabled",
+              "type": "boolean"
+            },
+            {
+              "name": "sidhistory",
+              "type": "dynamic"
+            },
+            {
+              "name": "usedeskeyonly",
+              "type": "boolean"
+            },
+            {
+              "name": "usemachineid",
+              "type": "boolean"
+            },
+            {
+              "name": "encryptedtextpwdallowed",
+              "type": "boolean"
+            },
+            {
+              "name": "doesanyacegrantownerrights",
+              "type": "boolean"
+            },
+            {
+              "name": "doesanyinheritedacegrantownerrights",
+              "type": "boolean"
+            },
+            {
+              "name": "composite_azure_users",
+              "type": "int"
+            },
+            {
+              "name": "composite_computers",
+              "type": "int"
+            },
+            {
+              "name": "composite_principals",
+              "type": "int"
+            },
+            {
+              "name": "composite_risk_assets",
+              "type": "int"
+            },
+            {
+              "name": "composite_sps",
+              "type": "int"
+            },
+            {
+              "name": "composite_users",
+              "type": "int"
+            },
+            {
+              "name": "composite_vms",
+              "type": "int"
+            },
+            {
+              "name": "descendent_count",
+              "type": "int"
+            },
+            {
+              "name": "owner_objectid",
+              "type": "string"
+            },
+            {
+              "name": "principal_count",
+              "type": "int"
+            },
+            {
+              "name": "tier_zero_active_assets_count",
+              "type": "int"
+            },
+            {
+              "name": "tier_zero_exposure_percent",
+              "type": "real"
+            },
+            {
+              "name": "tier_zero_total_assets_count",
+              "type": "int"
+            },
+            {
+              "name": "system_tags",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAttackPathsTimelineTable'))]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables", 
+      "apiVersion": "2022-10-01",
+      "properties": {
+        "schema": {
+          "name": "[variables('bheAttackPathsTimelineTable')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "IngestionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "CompositeRisk",
+              "type": "string"
+            },
+            {
+              "name": "domain_name",
+              "type": "string"
+            },
+            {
+              "name": "tenant_url",
+              "type": "string"
+            },
+            {
+              "name": "FindingCount",
+              "type": "int"
+            },
+            {
+              "name": "ExposureCount",
+              "type": "int"
+            },
+            {
+              "name": "ImpactCount",
+              "type": "int"
+            },
+            {
+              "name": "ImpactedAssetCount",
+              "type": "int"
+            },
+            {
+              "name": "DomainSID",
+              "type": "string"
+            },
+            {
+              "name": "Finding",
+              "type": "string"
+            },
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "path_title",
+              "type": "string"
+            },
+            {
+              "name": "created_at",
+              "type": "datetime"
+            },
+            {
+              "name": "updated_at",
+              "type": "datetime"
+            },
+            {
+              "name": "deleted_at",
+              "type": "dynamic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsWorkspaceName'), variables('bheAttackPathsTable'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsWorkspaceName'), variables('bheAuditLogsTable'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsWorkspaceName'), variables('bheFindingTrendsTable'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsWorkspaceName'), variables('bhePostureHistoryTable'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsWorkspaceName'), variables('bheTierZeroAssetsTable'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsWorkspaceName'), variables('bheAttackPathsTimelineTable'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId(subscription().subscriptionId, variables('logAnalyticsWorkspaceResourceGroupName'),'Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "Custom-BHEAttackPathsData_CL": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "NonTierZeroPrincipal",
+                "type": "string"
+              },
+              {
+                "name": "ImpactedPrincipal",
+                "type": "string"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              },
+              {
+                "name": "NonTierZeroPrincipalProps",
+                "type": "dynamic"
+              },
+              {
+                "name": "NonTierZeroPrincipalKind",
+                "type": "string"
+              },
+              {
+                "name": "ImpactedPrincipalProps",
+                "type": "dynamic"
+              },
+              {
+                "name": "ImpactedPrincipalKind",
+                "type": "string"
+              },
+              {
+                "name": "RelProps",
+                "type": "dynamic"
+              },
+              {
+                "name": "ComboGraphRelationID",
+                "type": "int"
+              },
+              {
+                "name": "Finding",
+                "type": "string"
+              },
+              {
+                "name": "DomainSID",
+                "type": "string"
+              },
+              {
+                "name": "PrincipalHash",
+                "type": "string"
+              },
+              {
+                "name": "ImpactPercentage",
+                "type": "string"
+              },
+              {
+                "name": "ImpactCount",
+                "type": "int"
+              },
+              {
+                "name": "ExposurePercentage",
+                "type": "string"
+              },
+              {
+                "name": "ExposureCount",
+                "type": "int"
+              },
+              {
+                "name": "Severity",
+                "type": "string"
+              },
+              {
+                "name": "AcceptedUntil",
+                "type": "string"
+              },
+              {
+                "name": "Accepted",
+                "type": "boolean"
+              },
+              {
+                "name": "Environment",
+                "type": "string"
+              },
+              {
+                "name": "NonTierZeroPrincipalName",
+                "type": "string"
+              },
+              {
+                "name": "ImpactedPrincipalName",
+                "type": "string"
+              },
+              {
+                "name": "IsInherited",
+                "type": "string"
+              },
+              {
+                "name": "NonTierZeroPrincipalEnvironment",
+                "type": "string"
+              },
+              {
+                "name": "NonTierZeroPrincipalEnvironmentID",
+                "type": "string"
+              },
+              {
+                "name": "ImpactedPrincipalEnvironment",
+                "type": "string"
+              },
+              {
+                "name": "ImpactedPrincipalEnvironmentID",
+                "type": "string"
+              },
+              {
+                "name": "id",
+                "type": "int"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "deleted_at",
+                "type": "dynamic"
+              },
+              {
+                "name": "tenant_url",
+                "type": "string"
+              },
+              {
+                "name": "Remediation",
+                "type": "string"
+              },
+              {
+                "name": "PathTitle",
+                "type": "string"
+              },
+              {
+                "name": "ShortDescription",
+                "type": "string"
+              },
+              {
+                "name": "ShortRemediation",
+                "type": "string"
+              },
+              {
+                "name": "LongRemediation",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-BHEAuditLogsData_CL": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "id",
+                "type": "int"
+              },
+              {
+                "name": "created_at",
+                "type": "datetime"
+              },
+              {
+                "name": "actor_id",
+                "type": "string"
+              },
+              {
+                "name": "actor_name",
+                "type": "string"
+              },
+              {
+                "name": "actor_email",
+                "type": "string"
+              },
+              {
+                "name": "action",
+                "type": "string"
+              },
+              {
+                "name": "fields",
+                "type": "dynamic"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "source_ip_address",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "commit_id",
+                "type": "string"
+              },
+              {
+                "name": "tenant_url",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-BHEFindingTrendsData_CL": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "composite_risk",
+                "type": "string"
+              },
+              {
+                "name": "display_title",
+                "type": "string"
+              },
+              {
+                "name": "display_type",
+                "type": "string"
+              },
+              {
+                "name": "environment_id",
+                "type": "string"
+              },
+              {
+                "name": "exposure_count",
+                "type": "int"
+              },
+              {
+                "name": "finding",
+                "type": "string"
+              },
+              {
+                "name": "finding_count_decrease",
+                "type": "int"
+              },
+              {
+                "name": "finding_count_end",
+                "type": "int"
+              },
+              {
+                "name": "finding_count_increase",
+                "type": "int"
+              },
+              {
+                "name": "finding_count_start",
+                "type": "int"
+              },
+              {
+                "name": "impact_count",
+                "type": "int"
+              },
+              {
+                "name": "tenant_url",
+                "type": "string"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              },
+              {
+                "name": "start_date",
+                "type": "datetime"
+              },
+              {
+                "name": "end_date",
+                "type": "datetime"
+              },
+              {
+                "name": "period",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-BHEPostureHistoryData_CL": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "metric_date",
+                "type": "datetime"
+              },
+              {
+                "name": "value",
+                "type": "string"
+              },
+              {
+                "name": "start_time",
+                "type": "datetime"
+              },
+              {
+                "name": "end_time",
+                "type": "datetime"
+              },
+              {
+                "name": "domain_id",
+                "type": "string"
+              },
+              {
+                "name": "data_type",
+                "type": "string"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              },
+              {
+                "name": "tenant_url",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-BHETierZeroAssetsData_CL": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "nodeId",
+                "type": "string"
+              },
+              {
+                "name": "label",
+                "type": "string"
+              },
+              {
+                "name": "kindType",
+                "type": "string"
+              },
+              {
+                "name": "objectId",
+                "type": "string"
+              },
+              {
+                "name": "isTierZero",
+                "type": "boolean"
+              },
+              {
+                "name": "isOwnedObject",
+                "type": "boolean"
+              },
+              {
+                "name": "lastSeen",
+                "type": "datetime"
+              },
+              {
+                "name": "tenant_url",
+                "type": "string"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              },
+              {
+                "name": "properties",
+                "type": "dynamic"
+              },
+              {
+                "name": "displayname",
+                "type": "string"
+              },
+              {
+                "name": "description",
+                "type": "string"
+              },
+              {
+                "name": "distinguishedname",
+                "type": "string"
+              },
+              {
+                "name": "samaccountname",
+                "type": "string"
+              },
+              {
+                "name": "userprincipalname",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "Title",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "domainsid",
+                "type": "string"
+              },
+              {
+                "name": "tenantid",
+                "type": "string"
+              },
+              {
+                "name": "ownersid",
+                "type": "string"
+              },
+              {
+                "name": "functionallevel",
+                "type": "string"
+              },
+              {
+                "name": "admincount",
+                "type": "boolean"
+              },
+              {
+                "name": "isaclprotected",
+                "type": "boolean"
+              },
+              {
+                "name": "sensitive",
+                "type": "boolean"
+              },
+              {
+                "name": "enabled",
+                "type": "boolean"
+              },
+              {
+                "name": "isbuiltin",
+                "type": "boolean"
+              },
+              {
+                "name": "isassignabletorole",
+                "type": "boolean"
+              },
+              {
+                "name": "securityenabled",
+                "type": "boolean"
+              },
+              {
+                "name": "securityidentifier",
+                "type": "string"
+              },
+              {
+                "name": "dontreqpreauth",
+                "type": "boolean"
+              },
+              {
+                "name": "passwordnotreqd",
+                "type": "boolean"
+              },
+              {
+                "name": "pwdneverexpires",
+                "type": "boolean"
+              },
+              {
+                "name": "passwordexpired",
+                "type": "boolean"
+              },
+              {
+                "name": "pwdlastset",
+                "type": "int"
+              },
+              {
+                "name": "lastlogon",
+                "type": "int"
+              },
+              {
+                "name": "lastlogontimestamp",
+                "type": "int"
+              },
+              {
+                "name": "unicodepassword",
+                "type": "string"
+              },
+              {
+                "name": "unixpassword",
+                "type": "string"
+              },
+              {
+                "name": "userpassword",
+                "type": "string"
+              },
+              {
+                "name": "sfupassword",
+                "type": "string"
+              },
+              {
+                "name": "operatingsystem",
+                "type": "datetime"
+              },
+              {
+                "name": "isdc",
+                "type": "boolean"
+              },
+              {
+                "name": "haslaps",
+                "type": "boolean"
+              },
+              {
+                "name": "unconstraineddelegation",
+                "type": "boolean"
+              },
+              {
+                "name": "trustedtoauth",
+                "type": "boolean"
+              },
+              {
+                "name": "lockedout",
+                "type": "boolean"
+              },
+              {
+                "name": "webclientrunning",
+                "type": "boolean"
+              },
+              {
+                "name": "certificatemappingmethods",
+                "type": "dynamic"
+              },
+              {
+                "name": "certificatemappingmethodsraw",
+                "type": "int"
+              },
+              {
+                "name": "strongcertificatebindingenforcement",
+                "type": "string"
+              },
+              {
+                "name": "strongcertificatebindingenforcementraw",
+                "type": "int"
+              },
+              {
+                "name": "supportedencryptiontypes",
+                "type": "dynamic"
+              },
+              {
+                "name": "serviceprincipalnames",
+                "type": "dynamic"
+              },
+              {
+                "name": "clientallowedntlmservers",
+                "type": "dynamic"
+              },
+              {
+                "name": "ntlmminclientsec",
+                "type": "int"
+              },
+              {
+                "name": "ntlmminserversec",
+                "type": "int"
+              },
+              {
+                "name": "lmcompatibilitylevel",
+                "type": "int"
+              },
+              {
+                "name": "smbsigning",
+                "type": "boolean"
+              },
+              {
+                "name": "enablesecuritysignature",
+                "type": "boolean"
+              },
+              {
+                "name": "requiresecuritysignature",
+                "type": "boolean"
+              },
+              {
+                "name": "restrictoutboundntlm",
+                "type": "boolean"
+              },
+              {
+                "name": "restrictreceivingntmltraffic",
+                "type": "boolean"
+              },
+              {
+                "name": "ldapavailable",
+                "type": "boolean"
+              },
+              {
+                "name": "ldapsavailable",
+                "type": "boolean"
+              },
+              {
+                "name": "ldapsepa",
+                "type": "boolean"
+              },
+              {
+                "name": "ldapsigning",
+                "type": "boolean"
+              },
+              {
+                "name": "blocksinheritance",
+                "type": "boolean"
+              },
+              {
+                "name": "gpcpath",
+                "type": "string"
+              },
+              {
+                "name": "appid",
+                "type": "string"
+              },
+              {
+                "name": "appdescription",
+                "type": "string"
+              },
+              {
+                "name": "appdisplayname",
+                "type": "string"
+              },
+              {
+                "name": "appownerorganizationid",
+                "type": "string"
+              },
+              {
+                "name": "serviceprincipaltype",
+                "type": "string"
+              },
+              {
+                "name": "publisherdomain",
+                "type": "string"
+              },
+              {
+                "name": "signinaudience",
+                "type": "string"
+              },
+              {
+                "name": "loginurl",
+                "type": "string"
+              },
+              {
+                "name": "onpremid",
+                "type": "datetime"
+              },
+              {
+                "name": "onpremsyncenabled",
+                "type": "boolean"
+              },
+              {
+                "name": "usertype",
+                "type": "string"
+              },
+              {
+                "name": "templateid",
+                "type": "datetime"
+              },
+              {
+                "name": "gmsa",
+                "type": "boolean"
+              },
+              {
+                "name": "hasspn",
+                "type": "boolean"
+              },
+              {
+                "name": "whencreated",
+                "type": "int"
+              },
+              {
+                "name": "collected",
+                "type": "boolean"
+              },
+              {
+                "name": "Date",
+                "type": "datetime"
+              },
+              {
+                "name": "homedirectory",
+                "type": "string"
+              },
+              {
+                "name": "logonscript",
+                "type": "string"
+              },
+              {
+                "name": "logonscriptenabled",
+                "type": "boolean"
+              },
+              {
+                "name": "sidhistory",
+                "type": "dynamic"
+              },
+              {
+                "name": "usedeskeyonly",
+                "type": "boolean"
+              },
+              {
+                "name": "usemachineid",
+                "type": "boolean"
+              },
+              {
+                "name": "encryptedtextpwdallowed",
+                "type": "boolean"
+              },
+              {
+                "name": "doesanyacegrantownerrights",
+                "type": "boolean"
+              },
+              {
+                "name": "doesanyinheritedacegrantownerrights",
+                "type": "boolean"
+              },
+              {
+                "name": "composite_azure_users",
+                "type": "int"
+              },
+              {
+                "name": "composite_computers",
+                "type": "int"
+              },
+              {
+                "name": "composite_principals",
+                "type": "int"
+              },
+              {
+                "name": "composite_risk_assets",
+                "type": "int"
+              },
+              {
+                "name": "composite_sps",
+                "type": "int"
+              },
+              {
+                "name": "composite_users",
+                "type": "int"
+              },
+              {
+                "name": "composite_vms",
+                "type": "int"
+              },
+              {
+                "name": "descendent_count",
+                "type": "int"
+              },
+              {
+                "name": "owner_objectid",
+                "type": "string"
+              },
+              {
+                "name": "principal_count",
+                "type": "int"
+              },
+              {
+                "name": "tier_zero_active_assets_count",
+                "type": "int"
+              },
+              {
+                "name": "tier_zero_exposure_percent",
+                "type": "real"
+              },
+              {
+                "name": "tier_zero_total_assets_count",
+                "type": "int"
+              },
+              {
+                "name": "system_tags",
+                "type": "string"
+              }
+            ]
+          },
+          "Custom-BHEAttackPathsTimelineData_CL": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "IngestionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "CompositeRisk",
+                "type": "string"
+              },
+              {
+                "name": "domain_name",
+                "type": "string"
+              },
+              {
+                "name": "tenant_url",
+                "type": "string"
+              },
+              {
+                "name": "FindingCount",
+                "type": "int"
+              },
+              {
+                "name": "ExposureCount",
+                "type": "int"
+              },
+              {
+                "name": "ImpactCount",
+                "type": "int"
+              },
+              {
+                "name": "ImpactedAssetCount",
+                "type": "int"
+              },
+              {
+                "name": "DomainSID",
+                "type": "string"
+              },
+              {
+                "name": "Finding",
+                "type": "string"
+              },
+              {
+                "name": "id",
+                "type": "int"
+              },
+              {
+                "name": "path_title",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "datetime"
+              },
+              {
+                "name": "updated_at",
+                "type": "datetime"
+              },
+              {
+                "name": "deleted_at",
+                "type": "dynamic"
+              }
+            ]
+          }
+        },
+        "dataSources": {},
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[resourceId(variables('SubscriptionId'), variables('logAnalyticsWorkspaceResourceGroupName'), 'Microsoft.OperationalInsights/Workspaces', parameters('logAnalyticsWorkspaceName'))]",
+              "name": "[parameters('logAnalyticsWorkspaceName')]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-BHEAttackPathsData_CL"
+            ],
+            "destinations": [
+              "[parameters('logAnalyticsWorkspaceName')]"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(updated_at), IngestionTime = now()\n",
+            "outputStream": "[concat('Custom-', variables('attackPathsTable'))]"
+          },
+          {
+            "streams": [
+              "Custom-BHEAuditLogsData_CL"
+            ],
+            "destinations": [
+              "[parameters('logAnalyticsWorkspaceName')]"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(created_at), IngestionTime = now()\n",
+            "outputStream": "[concat('Custom-', variables('auditLogsTable'))]"
+          },
+          {
+            "streams": [
+              "Custom-BHEFindingTrendsData_CL"
+            ],
+            "destinations": [
+              "[parameters('logAnalyticsWorkspaceName')]"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = now()\n",
+            "outputStream": "[concat('Custom-', variables('findingTrendsTable'))]"
+          },
+          {
+            "streams": [
+              "Custom-BHEPostureHistoryData_CL"
+            ],
+            "destinations": [
+              "[parameters('logAnalyticsWorkspaceName')]"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(metric_date), IngestionTime = now()\n",
+            "outputStream": "[concat('Custom-', variables('postureHistoryTable'))]"
+          },
+          {
+            "streams": [
+              "Custom-BHETierZeroAssetsData_CL"
+            ],
+            "destinations": [
+              "[parameters('logAnalyticsWorkspaceName')]"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = now()\n",
+            "outputStream": "[concat('Custom-', variables('tierZeroAssetsTable'))]"
+          },
+          {
+            "streams": [
+              "Custom-BHEAttackPathsTimelineData_CL"
+            ],
+            "destinations": [
+              "[parameters('logAnalyticsWorkspaceName')]"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(created_at), IngestionTime = now()\n",
+            "outputStream": "[concat('Custom-', variables('attackPathsTimelineTable'))]"
+          }
+        ],
+        "provisioningState": "Succeeded"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('applicationInsightsName')]",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "tags": {
+        "[format('hidden-link:{0}', resourceId('Microsoft.Web/sites', parameters('functionAppName')))]": "Resource"
+      },
+      "properties": {
+        "Application_Type": "web"
+      },
+      "kind": "web"
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "kind": "functionapp,linux",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "reserved": true,
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').keys[0].value)]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "https://github.com/metron-labs/Azure-Sentinel/blob/bloodhound/Solutions/BloodHound%20Enterprise/Data%20Connectors/BloodHoundDataConnector/BloodHoundAzureFunction.zip?raw=true"
+            },
+            {
+              "name": "BLOODHOUND_TENANT_DOMAIN",
+              "value": "[parameters('bloodhoundTenantDomain')]"
+            },
+            {
+              "name": "BLOODHOUND_TOKEN_ID_SECRET_NAME",
+              "value": "[variables('bloodhoundTokenIdSecretName')]"
+            },
+            {
+              "name": "BLOODHOUND_TOKEN_KEY_SECRET_NAME",
+              "value": "[variables('bloodhoundTokenKeySecretName')]"
+            },
+            {
+              "name": "MICROSOFT_ENTRA_ID_APPLICATION_TENANT_ID",
+              "value": "[variables('tenantId')]"
+            },
+            {
+              "name": "MICROSOFT_ENTRA_ID_APPLICATION_APP_ID",
+              "value": "[variables('microsoftEntraIdApplicationAppId')]"
+            },
+            {
+              "name": "MICROSOFT_ENTRA_ID_APPLICATION_APP_SECRET",
+              "value": "[variables('microsoftEntraIdApplicationAppSecret')]"
+            },
+            {
+              "name": "DCE_URI",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2023-03-11').logsIngestion.endpoint]"
+            },
+            {
+              "name": "DCR_IMMUTABLE_ID",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2023-03-11').immutableId]"
+            },
+            {
+              "name": "AUDIT_LOGS_TABLE_NAME",
+              "value": "[variables('auditLogsTable')]"
+            },
+            {
+              "name": "FINDING_TRENDS_TABLE_NAME",
+              "value": "[variables('findingTrendsTable')]"
+            },
+            {
+              "name": "POSTURE_HISTORY_TABLE_NAME",
+              "value": "[variables('postureHistoryTable')]"
+            },
+            {
+              "name": "ATTACK_PATHS_TABLE_NAME",
+              "value": "[variables('attackPathsTable')]"
+            },
+            {
+              "name": "ATTACK_PATHS_TIMELINE_TABLE_NAME",
+              "value": "[variables('attackPathsTimelineTable')]"
+            },
+            {
+              "name": "TIER_ZERO_ASSETS_TABLE_NAME",
+              "value": "[variables('tierZeroAssetsTable')]"
+            },
+            {
+              "name": "KEY_VAULT_URL",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2021-06-01-preview').vaultUri]"
+            },
+            {
+              "name": "SELECTED_BLOODHOUND_ENVIRONMENTS",
+              "value": "[parameters('selectedBloodhoundEnvironments')]"
+            },
+            {
+              "name": "SELECTED_FINDING_TYPES",
+              "value": "[parameters('selectedFindingTypes')]"
+            }
+          ],
+          "cors": {
+            "allowedOrigins": [
+              "https://portal.azure.com"
+            ]
+          },
+          "linuxFxVersion": "Python|3.12",
+          "ftpsState": "Disabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "kind": "functionapp",
+      "properties": {
+            "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "sku": {
+        "name": "[variables('storageAccountType')]"
+      },
+      "kind": "StorageV2",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2021-06-01-preview",
+      "name": "[variables('keyVaultName')]",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "Standard"
+        },
+        "tenantId": "[variables('tenantId')]",
+        "enableSoftDelete": true,
+        "enableRbacAuthorization": true,
+        "enabledForTemplateDeployment": true,
+        "accessPolicies": []
+      },
+      "dependsOn": [],
+      "resources": [
+        {
+          "type": "secrets",
+          "apiVersion": "2021-06-01-preview",
+          "name": "[variables('bloodhoundTokenIdSecretName')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+          ],
+          "properties": {
+            "value": "[parameters('Bloodhound-Token-Id-Secret-Value')]"
+          }
+        },
+        {
+          "type": "secrets",
+          "apiVersion": "2021-06-01-preview",
+          "name": "[variables('bloodhoundTokenKeySecretName')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+          ],
+          "properties": {
+            "value": "[parameters('Bloodhound-Token-Key-Secret-Value')]"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, 'KeyVaultSecretsUser', parameters('functionAppName'))]",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'Full').identity.principalId]"
+      }
+    }
+  ]
+}
