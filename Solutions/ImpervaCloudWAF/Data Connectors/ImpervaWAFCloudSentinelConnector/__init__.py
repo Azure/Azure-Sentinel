@@ -95,8 +95,6 @@ class ImpervaFilesHandler:
                 if self.files_array is not None:
                     current_file = self.files_array[-1]
                     state.post(current_file)
-                    logging.info("The current file point is: {}".format(current_file))
-                logging.info("The current file point is: {}".format(current_file))
                 return files_arr
         except Exception as err:
             logging.error("Last point file detection error. Exception error text: {}".format(err))
