@@ -199,7 +199,7 @@ public class ClientEvent
 
     // Additional properties that might be present
     [JsonPropertyName("process")]
-    public object? Process { get; set; }
+    public ProcessDetails? Process { get; set; }
 
     [JsonPropertyName("network")]
     public object? Network { get; set; }
@@ -355,6 +355,57 @@ public class FileDetails
 
     [JsonPropertyName("hash")]
     public FileHash Hash { get; set; } = new();
+
+    [JsonPropertyName("pe")]
+    public FilePe? Pe { get; set; }
+
+    [JsonPropertyName("code_signature")]
+    public CodeSignature? CodeSignature { get; set; }
+
+    [JsonPropertyName("bundle")]
+    public FileBundle? Bundle { get; set; }
+
+    [JsonPropertyName("size")]
+    public long? Size { get; set; }
+}
+
+public class FilePe
+{
+    [JsonPropertyName("file_version")]
+    public string FileVersion { get; set; } = string.Empty;
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("product")]
+    public string Product { get; set; } = string.Empty;
+}
+
+public class CodeSignature
+{
+    [JsonPropertyName("exists")]
+    public bool Exists { get; set; }
+
+    [JsonPropertyName("subject_name")]
+    public string SubjectName { get; set; } = string.Empty;
+
+    [JsonPropertyName("valid")]
+    public bool Valid { get; set; }
+}
+
+public class FileBundle
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("infodescription")]
+    public string InfoDescription { get; set; } = string.Empty;
+
+    [JsonPropertyName("identifier")]
+    public string Identifier { get; set; } = string.Empty;
+
+    [JsonPropertyName("version")]
+    public string Version { get; set; } = string.Empty;
 }
 
 public class FileHash
@@ -442,6 +493,9 @@ public class RelatedDetails
 
     [JsonPropertyName("hosts")]
     public List<string> Hosts { get; set; } = new();
+
+    [JsonPropertyName("hash")]
+    public List<string> Hash { get; set; } = new();
 }
 
 public class UserDetails
@@ -460,6 +514,54 @@ public class UserDetails
 
     [JsonPropertyName("DomainNetBIOSName")]
     public string DomainNetBIOSName { get; set; } = string.Empty;
+}
+
+public class ParentProcess
+{
+    [JsonPropertyName("pid")]
+    public int? Pid { get; set; }
+
+    [JsonPropertyName("command_line")]
+    public string CommandLine { get; set; } = string.Empty;
+
+    [JsonPropertyName("executable")]
+    public string Executable { get; set; } = string.Empty;
+
+    [JsonPropertyName("working_directory")]
+    public string WorkingDirectory { get; set; } = string.Empty;
+}
+
+public class ProcessDetails
+{
+    [JsonPropertyName("pid")]
+    public int? Pid { get; set; }
+
+    [JsonPropertyName("entity_id")]
+    public string EntityId { get; set; } = string.Empty;
+
+    [JsonPropertyName("command_line")]
+    public string CommandLine { get; set; } = string.Empty;
+
+    [JsonPropertyName("executable")]
+    public string Executable { get; set; } = string.Empty;
+
+    [JsonPropertyName("start")]
+    public DateTime? Start { get; set; }
+
+    [JsonPropertyName("working_directory")]
+    public string WorkingDirectory { get; set; } = string.Empty;
+
+    [JsonPropertyName("ElevationRequired")]
+    public bool? ElevationRequired { get; set; }
+
+    [JsonPropertyName("user")]
+    public UserDetails? User { get; set; }
+
+    [JsonPropertyName("parent")]
+    public ParentProcess? Parent { get; set; }
+
+    [JsonPropertyName("HostedFile")]
+    public FileDetails? HostedFile { get; set; }
 }
 
 public class EPMWinMacDetails

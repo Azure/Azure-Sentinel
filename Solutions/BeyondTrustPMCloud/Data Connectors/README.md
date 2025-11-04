@@ -27,31 +27,23 @@ The connector creates two custom tables in your Log Analytics workspace:
 
 1. **BeyondTrust PM Cloud tenant** with API access enabled
 2. **OAuth Client Credentials** for BeyondTrust PM Cloud Management API
-3. **Azure Log Analytics workspace** configured for Microsoft Sentinel
-4. **Azure subscription** with permissions to deploy Azure Functions
+3. **Azure Log Analytics workspace** configured for Microsoft Sentinel (must be in the same resource group as the deployment)
+4. **Azure subscription** with permissions to deploy Azure Functions and Data Collection Rules
 
 ### 📋 **Information You'll Need Before Deployment**
 
 Before starting deployment, gather these required values:
 
-#### **From Azure Log Analytics Workspace:**
-1. **Workspace ID** (GUID format):
+#### **From Azure:**
+1. **Resource Group Name**: The resource group containing your Log Analytics workspace (deployment will create resources here)
+2. **Workspace Name**: Your Log Analytics workspace name (not the GUID - just the name)
    - Navigate to: Azure Portal → Log Analytics workspaces → [Your workspace] → Overview
-   - Copy the **Workspace ID** field (e.g., `12345678-1234-1234-1234-123456789012`)
-
-2. **Workspace Key** (Base64 string):
-   - Navigate to: Azure Portal → Log Analytics workspaces → [Your workspace] → Settings → Agents
-   - Copy the **Primary Key** field (long base64 string)
+   - Copy the workspace name (e.g., `beyondtrust-pmcloud`)
 
 #### **From BeyondTrust PM Cloud:**
-1. **PM Cloud Base URL**: Your tenant URL (e.g., `https://yourcompany.beyondtrustcloud.com`)
+1. **Tenant Name**: Your BeyondTrust PM Cloud tenant name (e.g., if your URL is `https://yourcompany.beyondtrustcloud.com`, use `yourcompany`)
 2. **OAuth Client ID**: From Configuration → API Clients
 3. **OAuth Client Secret**: From Configuration → API Clients
-
-💡 **Pro Tip**: Use the included `Get-WorkspaceInfo.ps1` script to automatically retrieve workspace information:
-```powershell
-.\Get-WorkspaceInfo.ps1 -WorkspaceName "YourWorkspaceName" -ResourceGroupName "YourResourceGroup"
-```
 
 ## Deployment
 
@@ -62,9 +54,8 @@ Before starting deployment, gather these required values:
    [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FBeyondTrustPMCloud%2Fazuredeploy_BeyondTrustPMCloud.json)
 
 2. Fill in the required parameters:
-   - **WorkspaceId**: Your Azure Log Analytics Workspace ID
-   - **WorkspaceKey**: Your Azure Log Analytics Workspace Primary Key
-   - **BeyondTrustPMCloudBaseUrl**: Your BeyondTrust PM Cloud base URL (e.g., https://yourcompany.beyondtrustcloud.com)
+   - **WorkspaceName**: Your Azure Log Analytics workspace name (e.g., `beyondtrust-pmcloud`)
+   - **BeyondTrustTenantName**: Your BeyondTrust PM Cloud tenant name (e.g., `yourcompany`)
    - **BeyondTrustClientId**: OAuth Client ID from BeyondTrust PM Cloud
    - **BeyondTrustClientSecret**: OAuth Client Secret from BeyondTrust PM Cloud
    - **ActivityAuditsPollingIntervalMinutes**: Polling interval for Activity Audits (default: 15)
@@ -76,6 +67,8 @@ Before starting deployment, gather these required values:
 
 3. Click "Review + create" and then "Create"
 
+> **Note:** The deployment automatically creates the custom tables (`BeyondTrustPM_ActivityAudits_CL` and `BeyondTrustPM_ClientEvents_CL`) and Data Collection Rules (DCRs) for log ingestion. No pre-deployment scripts are required.
+
 ### Option 2: Azure CLI
 
 ```bash
@@ -85,11 +78,10 @@ az group create --name "rg-beyondtrust-pmcloud" --location "East US"
 # Deploy the template
 az deployment group create `
   --resource-group "rg-beyondtrust-pmcloud" `
-  --template-file "azuredeploy_BeyondTrustPMCloud.json" `
+  --template-file "azuredeploy_BeyondTrustPMCloud_API_FunctionApp.json" `
   --parameters `
-    WorkspaceId="your-workspace-id" `
-    WorkspaceKey="your-workspace-key" `
-    BeyondTrustPMCloudBaseUrl="https://yourcompany.beyondtrustcloud.com" `
+    WorkspaceName="your-workspace-name" `
+    BeyondTrustTenantName="yourcompany" `
     BeyondTrustClientId="your-client-id" `
     BeyondTrustClientSecret="your-client-secret" `
     HistoricalDataTimeframe="1d"
@@ -159,32 +151,112 @@ The connector will automatically:
 
 ### BeyondTrustPM_ActivityAudits_CL
 
+The Activity Audits table captures administrative and configuration changes in BeyondTrust PM Cloud with comprehensive audit details.
+
+**Core Fields:**
 | Field | Type | Description |
 |-------|------|-------------|
 | TimeGenerated | datetime | Log Analytics ingestion timestamp |
-| Id | int | Unique audit record ID |
-| Details | string | Description of the activity |
-| User | string | User who performed the action |
-| Entity | string | Type of entity modified |
-| EntityName | string | Name of the entity |
-| AuditType | string | Type of audit action |
-| Created | datetime | When the activity occurred |
-| ChangedBy | string | Source of the change |
+| id | int | Unique audit record ID |
+| details | string | Description of the activity |
+| userId | int | Numeric user ID |
+| user | string | User who performed the action |
+| entity | string | Type of entity modified |
+| entityName | string | Name of the entity |
+| auditType | string | Type of audit action |
+| created | datetime | When the activity occurred |
+| changedBy | string | Source of the change |
+| timeTransmitted | datetime | When transmitted to Azure |
+
+**Audit Detail Fields (dynamic type for complex nested data):**
+- `apiClientDataAuditing`, `computerDataAuditing`, `groupDataAuditing`, `installationKeyDataAuditing`
+- `policyDataAuditing`, `policyRevisionDataAuditing`, `settingsDataAuditing`, `userDataAuditing`
+- `mapToIdentityProviderGroupAuditing`, `openIdConfigDataAuditing`, `mmcRemoteClientDataAuditing`
+- `computerPolicyDataAuditing`, `azureADIntegrationDataAuditing`, `authorizationRequestDataAuditing`
+- `reputationSettingsDataAuditing`, `securitySettingsDataAuditing`, `siemIntegration*` (multiple)
+- `agentDataAuditing`, `managementRuleDataAuditing`, `autoUpdate*` (multiple)
+- `permissionGroupDataAuditing`, `identityProviderGroupDataAuditing`
+
+> **Note:** Total ~40 columns. Dynamic fields contain detailed JSON objects with before/after state for configuration changes.
 
 ### BeyondTrustPM_ClientEvents_CL
 
+The Client Events table captures endpoint security events in Elastic Common Schema (ECS) format with comprehensive context.
+
+**Event Fields:**
 | Field | Type | Description |
 |-------|------|-------------|
 | TimeGenerated | datetime | Log Analytics ingestion timestamp |
-| EventId | string | Unique event identifier |
-| EventCode | string | Event type code |
-| EventAction | string | Action performed |
-| EventOutcome | string | Success/failure outcome |
-| HostHostname | string | Source hostname |
-| UserName | string | User involved in event |
-| FileName | string | File involved (if applicable) |
-| FilePath | string | Full file path |
-| EventReason | string | Reason for the event |
+| eventId | string | Unique event identifier |
+| eventCode | string | Event type code |
+| eventKind | string | Event kind (event, alert, etc.) |
+| eventCategory | string | Event category |
+| eventAction | string | Action performed |
+| eventOutcome | string | Success/failure outcome |
+| eventType | string | Event type classification |
+| eventProvider | string | Event source provider |
+| eventIngested | datetime | When event was ingested |
+| eventReason | string | Reason for the event |
+
+**Host Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| hostHostname | string | Source hostname |
+| hostName | string | Host name |
+| hostId | string | Unique host identifier |
+| hostIp | string | Host IP address |
+| hostArchitecture | string | System architecture |
+| hostDomain | string | Domain name |
+| hostOsType | string | OS type (Windows, Linux, etc.) |
+| hostOsPlatform | string | OS platform |
+| hostOsName | string | OS name |
+| hostOsVersion | string | OS version |
+
+**User & Identity Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| userId | string | User identifier |
+| userName | string | Username |
+| userDomain | string | User domain |
+
+**File Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| fileName | string | File name |
+| filePath | string | Full file path |
+| fileHashMd5 | string | MD5 hash |
+| fileHashSha1 | string | SHA1 hash |
+| fileHashSha256 | string | SHA256 hash |
+
+**Process Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| processPid | int | Process ID |
+| processExecutable | string | Process executable path |
+| processCommandLine | string | Command line arguments |
+
+**EPM-Specific Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| epmSchemaVersion | string | EPM schema version |
+| epmGroupId | int | EPM group ID |
+| epmTenantId | int | EPM tenant ID |
+| epmEventAction | string | EPM-specific action |
+| epmEventType | string | EPM-specific event type |
+
+**Additional Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| ecsVersion | string | ECS version |
+| tags | string | Event tags |
+| timestamp | datetime | Original event timestamp |
+| timeTransmitted | datetime | When transmitted to Azure |
+
+**Complex Data Fields (dynamic type for nested JSON):**
+- `hostData`, `userData`, `fileData`, `processData`, `epmConfigurationData`
+- `networkData`, `destinationData`, `sourceData`, `relatedData`
+
+> **Note:** Total ~50+ columns. Dynamic fields contain detailed nested objects with full context for security analysis.
 
 ## Sample Queries
 

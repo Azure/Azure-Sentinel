@@ -2,6 +2,7 @@ using BeyondTrustPMCloud.Models;
 using BeyondTrustPMCloud.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace BeyondTrustPMCloud.Functions;
 
@@ -96,99 +97,100 @@ public class ClientEventsFunction
 
             if (allEvents.Any())
             {
-                // Transform data for Log Analytics (add TimeGenerated field and flatten structure)
+                // Transform data for Log Analytics using hybrid schema:
+                // - Extract 42 key fields to discrete columns for fast querying
+                // - Serialize 9 complex structures to dynamic JSON columns for complete data capture
                 var transformedEvents = allEvents.Select(evt => new
                 {
-                    TimeGenerated = evt.Timestamp,
-                    Timestamp = evt.Timestamp,
-                    EventId = evt.Event.Id,
-                    EventCode = evt.Event.Code,
-                    EventKind = evt.Event.Kind,
-                    EventCategory = string.Join(",", evt.Event.Category),
-                    EventAction = evt.Event.Action,
-                    EventOutcome = evt.Event.Outcome,
-                    EventType = string.Join(",", evt.Event.Type),
-                    EventProvider = evt.Event.Provider,
-                    EventIngested = evt.Event.Ingested,
-                    EventReason = evt.Event.Reason,
-                    EventReceivedAt = evt.Event.ReceivedAt,
+                    // Core timestamp fields
+                    TimeGenerated = evt.Event.Ingested,
+                    timestamp = evt.Timestamp,
                     
-                    // Agent information
-                    AgentVersion = evt.Agent.Version,
-                    AgentId = evt.Agent.Id,
-                    AgentEphemeralId = evt.Agent.EphemeralId,
+                    // Event fields (10 discrete columns)
+                    eventId = evt.Event.Id,
+                    eventCode = evt.Event.Code,
+                    eventKind = evt.Event.Kind,
+                    eventCategory = string.Join(",", evt.Event.Category),
+                    eventAction = evt.Event.Action,
+                    eventOutcome = evt.Event.Outcome,
+                    eventType = string.Join(",", evt.Event.Type),
+                    eventProvider = evt.Event.Provider,
+                    eventIngested = evt.Event.Ingested,  // Critical for API filtering
+                    eventReason = evt.Event.Reason,
                     
-                    // Host information
-                    HostHostname = evt.Host.Hostname,
-                    HostName = evt.Host.Name,
-                    HostId = evt.Host.Id,
-                    HostIp = string.Join(",", evt.Host.Ip),
-                    HostUptime = evt.Host.Uptime,
-                    HostArchitecture = evt.Host.Architecture,
-                    HostDomain = evt.Host.Domain,
-                    HostDomainIdentifier = evt.Host.DomainIdentifier,
-                    HostNetBIOSName = evt.Host.NetBIOSName,
-                    HostDomainNetBIOSName = evt.Host.DomainNetBIOSName,
-                    HostChassisType = evt.Host.ChassisType,
-                    HostOsType = evt.Host.Os.Type,
-                    HostOsPlatform = evt.Host.Os.Platform,
-                    HostOsName = evt.Host.Os.Name,
-                    HostOsFull = evt.Host.Os.Full,
-                    HostOsFamily = evt.Host.Os.Family,
-                    HostOsVersion = evt.Host.Os.Version,
-                    HostOsProductType = evt.Host.Os.ProductType,
+                    // Agent fields (2 discrete columns)
+                    agentVersion = evt.Agent.Version,
+                    agentId = evt.Agent.Id,
                     
-                    // User information
-                    UserId = evt.User.Id,
-                    UserName = evt.User.Name,
-                    UserDomain = evt.User.Domain,
-                    UserDomainIdentifier = evt.User.DomainIdentifier,
-                    UserDomainNetBIOSName = evt.User.DomainNetBIOSName,
+                    // Host key fields (8 discrete columns)
+                    hostHostname = evt.Host.Hostname,
+                    hostName = evt.Host.Name,
+                    hostId = evt.Host.Id,
+                    hostIp = string.Join(",", evt.Host.Ip),
+                    hostArchitecture = evt.Host.Architecture,
+                    hostDomain = evt.Host.Domain,
+                    hostOsType = evt.Host.Os.Type,
+                    hostOsPlatform = evt.Host.Os.Platform,
+                    hostOsName = evt.Host.Os.Name,
+                    hostOsVersion = evt.Host.Os.Version,
                     
-                    // File information (if present)
-                    FileName = evt.File?.Name,
-                    FileAttributes = evt.File != null ? string.Join(",", evt.File.Attributes) : null,
-                    FileDirectory = evt.File?.Directory,
-                    FileDriveLetter = evt.File?.DriveLetter,
-                    FilePath = evt.File?.Path,
-                    FileExtension = evt.File?.Extension,
-                    FileUid = evt.File?.Uid,
-                    FileOwner = evt.File?.OwnerAsString,
-                    FileOwnerIdentifier = evt.File?.OwnerAsDetails?.Identifier,
-                    FileOwnerDomain = evt.File?.OwnerAsDetails?.DomainName,
-                    FileOwnerDomainIdentifier = evt.File?.OwnerAsDetails?.DomainIdentifier,
-                    FileOwnerDomainNetBIOSName = evt.File?.OwnerAsDetails?.DomainNetBIOSName,
-                    FileCreated = evt.File?.Created,
-                    FileDriveType = evt.File?.DriveType,
-                    FileProductVersion = evt.File?.ProductVersion,
-                    FileHashMd5 = evt.File?.Hash.Md5,
-                    FileHashSha1 = evt.File?.Hash.Sha1,
-                    FileHashSha256 = evt.File?.Hash.Sha256,
+                    // Host complete data (dynamic column) - includes all OS details, NetBIOS, chassis, uptime, etc.
+                    hostData = JsonSerializer.Serialize(evt.Host),
                     
-                    // EPM specific information
-                    EPMSchemaVersion = evt.EPMWinMac.SchemaVersion,
-                    EPMGroupId = evt.EPMWinMac.GroupId,
-                    EPMTenantId = evt.EPMWinMac.TenantId,
-                    EPMEventAction = evt.EPMWinMac.Event.Action,
-                    EPMEventType = evt.EPMWinMac.Event.Type,
-                    EPMConfigurationIdentifier = evt.EPMWinMac.Configuration.Identifier,
+                    // User key fields (3 discrete columns)
+                    userId = evt.User.Id,
+                    userName = evt.User.Name,
+                    userDomain = evt.User.Domain,
                     
-                    // Related information
-                    RelatedIp = string.Join(",", evt.Related.Ip),
-                    RelatedUser = string.Join(",", evt.Related.User),
-                    RelatedHosts = string.Join(",", evt.Related.Hosts),
+                    // User complete data (dynamic column) - includes domain identifiers, NetBIOS names, etc.
+                    userData = JsonSerializer.Serialize(evt.User),
                     
-                    // ECS information
-                    EcsVersion = evt.Ecs.Version,
+                    // File key fields (6 discrete columns)
+                    fileName = evt.File?.Name,
+                    filePath = evt.File?.Path,
+                    fileHashMd5 = evt.File?.Hash.Md5,
+                    fileHashSha1 = evt.File?.Hash.Sha1,
+                    fileHashSha256 = evt.File?.Hash.Sha256,
                     
-                    // Tags
-                    Tags = string.Join(",", evt.Tags),
+                    // File complete data (dynamic column) - includes pe, code_signature, Owner, bundle, attributes, etc.
+                    fileData = evt.File != null ? JsonSerializer.Serialize(evt.File) : null,
                     
-                    // Additional properties (as JSON strings for complex objects)
-                    ProcessData = evt.Process,
-                    NetworkData = evt.Network,
-                    DestinationData = evt.Destination,
-                    SourceData = evt.Source
+                    // Process key fields (3 discrete columns)
+                    processPid = evt.Process?.Pid,
+                    processExecutable = evt.Process?.Executable,
+                    processCommandLine = evt.Process?.CommandLine,
+                    
+                    // Process complete data (dynamic column) - includes ElevationRequired, user, parent, HostedFile
+                    processData = evt.Process != null ? JsonSerializer.Serialize(evt.Process) : null,
+                    
+                    // EPM key fields (5 discrete columns)
+                    epmSchemaVersion = evt.EPMWinMac.SchemaVersion,
+                    epmGroupId = evt.EPMWinMac.GroupId,
+                    epmTenantId = evt.EPMWinMac.TenantId,
+                    epmEventAction = evt.EPMWinMac.Event.Action,
+                    epmEventType = evt.EPMWinMac.Event.Type,
+                    
+                    // EPM complete configuration (dynamic column) - deep nested config structure
+                    epmConfigurationData = JsonSerializer.Serialize(evt.EPMWinMac.Configuration),
+                    
+                    // Network complete data (dynamic column)
+                    networkData = evt.Network != null ? JsonSerializer.Serialize(evt.Network) : null,
+                    
+                    // Destination complete data (dynamic column)
+                    destinationData = evt.Destination != null ? JsonSerializer.Serialize(evt.Destination) : null,
+                    
+                    // Source complete data (dynamic column)
+                    sourceData = evt.Source != null ? JsonSerializer.Serialize(evt.Source) : null,
+                    
+                    // Related complete data (dynamic column) - includes hash, ip, user, hosts arrays
+                    relatedData = JsonSerializer.Serialize(evt.Related),
+                    
+                    // ECS and tags
+                    ecsVersion = evt.Ecs.Version,
+                    tags = string.Join(",", evt.Tags),
+                    
+                    // Transmission timestamp (set at time of sending to Log Analytics)
+                    timeTransmitted = DateTime.UtcNow
                 }).ToList();
 
                 await _logAnalyticsService.SendToLogAnalyticsAsync(transformedEvents, "BeyondTrustPM_ClientEvents");

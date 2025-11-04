@@ -22,22 +22,26 @@ The BeyondTrust PM Cloud solution provides comprehensive visibility into privile
 | ----------------------------- | --------------------------------------------- |
 | Azure function app code       | https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/BeyondTrustPMCloud/Data%20Connectors |
 | Log Analytics table(s)        | BeyondTrustPM_ActivityAudits_CL<br/>BeyondTrustPM_ClientEvents_CL |
-| Data collection rules support | Not currently supported                       |
+| Data collection rules support | Yes (Logs Ingestion API with DCRs)            |
 | Supported by                  | BeyondTrust                                   |
 
 ## Data Tables
 
-The connector creates two custom tables in your Log Analytics workspace:
+The connector automatically creates two custom tables in your Log Analytics workspace during deployment:
 
-- `BeyondTrustPM_ActivityAudits_CL` - Management activities, policy changes, user management
-- `BeyondTrustPM_ClientEvents_CL` - Endpoint security events (process execution, authentication, etc.)
+- **`BeyondTrustPM_ActivityAudits_CL`** (~40 columns) - Administrative activities, policy changes, user management, configuration audits
+- **`BeyondTrustPM_ClientEvents_CL`** (~50+ columns) - Endpoint security events in Elastic Common Schema (ECS) format with comprehensive host, user, file, and process context
 
 The data connector retrieves data from two primary API endpoints:
 
 1. **Activity Audits** (`/v3/ActivityAudits/Details`) - Administrative and configuration activities
 2. **Client Events** (`/v3/Events/FromStartDate`) - Endpoint security events in ECS format
 
-The connector uses OAuth 2.0 client credentials flow for authentication and implements rate limiting to comply with BeyondTrust API limits (1000 requests per 100 seconds).
+The connector uses:
+- **Authentication:** OAuth 2.0 client credentials flow
+- **Ingestion:** Azure Monitor Logs Ingestion API with Data Collection Rules (DCRs)
+- **Rate Limiting:** Compliance with BeyondTrust API limits (1000 requests per 100 seconds)
+- **State Management:** Azure Table Storage for incremental data retrieval
 
 ## Query Samples
 
@@ -80,14 +84,15 @@ Quick deployment using ARM template:
 
 1. Click the **Deploy to Azure** button:\
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FBeyondTrustPMCloud%2FData%2520Connectors%2Fazuredeploy_BeyondTrustPMCloud_API_FunctionApp.json)
-2. Select the preferred **Subscription**, **Resource Group**, and **Location**.
+2. Select the preferred **Subscription**, **Resource Group** (containing your Log Analytics workspace), and **Location**.
 3. Enter the required parameters:
-   - **Workspace ID**: Your Log Analytics Workspace ID
-   - **Workspace Key**: Your Log Analytics Workspace Key
-   - **BeyondTrust Tenant Name**: Your BeyondTrust PM Cloud tenant name
+   - **Workspace Name**: Your Log Analytics workspace name (must be in the same resource group)
+   - **BeyondTrust Tenant Name**: Your BeyondTrust PM Cloud tenant name (e.g., `yourcompany`)
    - **BeyondTrust Client ID**: OAuth Client ID
    - **BeyondTrust Client Secret**: OAuth Client Secret
 4. Click **Review + Create**, then **Create**.
+
+> **Note:** The deployment automatically creates the custom tables and Data Collection Rules. No pre-deployment scripts are required. Data ingestion begins within 5-15 minutes after deployment completes.
 
 ## Next Steps
 
