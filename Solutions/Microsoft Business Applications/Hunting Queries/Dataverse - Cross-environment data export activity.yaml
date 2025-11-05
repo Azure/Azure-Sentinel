@@ -1,0 +1,54 @@
+id: 74a48db8-dc1d-414e-9709-39fa3f8a2246
+name: Dataverse - Cross-environment data export activity
+description: This query searches for data export activity across a predetermined number
+  of Dataverse instances. Data export activity across multiple environments could
+  indicate suspicious activity as users typically work on a small number of environments.
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1567
+  - T1409
+query: |
+  //Modify environment_count_threshold to scale number of Dataverse instances to omit before including in results
+  let environment_count_threshold = 2;
+  let export_events = dynamic(['ExportToExcel', 'ExportPdfDocument', 'ExportWordDocument', 'ExecutePowerBISql']);
+  DataverseActivity
+  | where Message in (export_events)
+  | summarize InstanceCount = dcount(InstanceUrl) by UserId
+  | where InstanceCount > environment_count_threshold
+  | join kind=inner (DataverseActivity
+      | where Message in (export_events))
+      on UserId
+  | summarize FirstEvent = min(TimeGenerated), LastEvent = max(TimeGenerated) by UserId, InstanceCount, InstanceUrl, Message, ClientIp
+  | extend CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      FirstEvent,
+      LastEvent,
+      UserId,
+      Message,
+      ClientIp,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - columnName: UPNSuffix
+        identifier: UPNSuffix
+      - columnName: AccountName
+        identifier: Name
+  - entityType: CloudApplication
+    fieldMappings:
+      - columnName: InstanceUrl
+        identifier: InstanceName
+      - columnName: CloudAppId
+        identifier: AppId
+version: 3.2.0

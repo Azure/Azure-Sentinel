@@ -2,7 +2,7 @@
 
 require "logstash/sentinel_la/logAnalyticsClient"
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
-
+require "excon"
 # LogStashAutoResizeBuffer class setting a resizable buffer which is flushed periodically
 # The buffer resize itself according to Azure Loganalytics  and configuration limitations
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
@@ -59,34 +59,35 @@ class LogStashEventsBatcher
                     return
                 else
                     @logger.trace("Rest client response ['#{response}']")
-                    @logger.error("#{api_name} request failed. Error code: #{response.code} #{try_get_info_from_error_response(response)}")
+                    @logger.error("#{api_name} request failed. Error code: #{response.pree} #{try_get_info_from_error_response(response)}")
                 end
-            rescue RestClient::Exceptions::Timeout => eto
-                @logger.trace("Timeout exception ['#{eto.display}'] when posting data to #{api_name}. Rest client response ['#{eto.response.display}']. [amount_of_documents=#{amount_of_documents}]")
-                @logger.error("Timeout exception while posting data to #{api_name}. [Exception: '#{eto}'] [amount of documents=#{amount_of_documents}]'")
-                force_retry = true
+                rescue Excon::Error::HTTPStatus => ewr
+                    response = ewr.response
+                    @logger.trace("Exception in posting data to #{api_name}. Rest client response ['#{response}']. [amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")
+                    @logger.error("Exception when posting data to #{api_name}. [Exception: '#{ewr.class}'] #{try_get_info_from_error_response(ewr.response)} [amount of documents=#{amount_of_documents}]'")
 
-            rescue RestClient::ExceptionWithResponse => ewr
-                response = ewr.response
-                @logger.trace("Exception in posting data to #{api_name}. Rest client response ['#{ewr.response}']. [amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")
-                @logger.error("Exception when posting data to #{api_name}. [Exception: '#{ewr}'] #{try_get_info_from_error_response(ewr.response)} [amount of documents=#{amount_of_documents}]'")
+                    if ewr.class ==  Excon::Error::BadRequest
+                        @logger.info("Not trying to resend since exception http code is 400")
+                        return                
+                    elsif ewr.class ==  Excon::Error::RequestTimeout
+                        force_retry = true
+                    elsif ewr.class ==  Excon::Error::TooManyRequests
+                        # throttling detected, backoff before resending
+                        parsed_retry_after = response.data[:headers].include?('Retry-After') ? response.data[:headers]['Retry-After'].to_i : 0
+                        seconds_to_sleep = parsed_retry_after > 0 ? parsed_retry_after : 30
 
-                if ewr.http_code.to_f == 400
-                    @logger.info("Not trying to resend since exception http code is #{ewr.http_code}")
-                    return                
-                elsif ewr.http_code.to_f == 408
+                        #force another retry even if the next iteration of the loop will be after the retransmission_timeout
+                        force_retry = true
+                    end               
+                rescue Excon::Error::Socket => ex
+                    @logger.trace("Exception: '#{ex.class.name}]#{ex} in posting data to #{api_name}. [amount_of_documents=#{amount_of_documents}]'")
                     force_retry = true
-                elsif ewr.http_code.to_f == 429
-                    # thrutteling detected, backoff before resending
-                    parsed_retry_after = response.headers.include?(:retry_after) ? response.headers[:retry_after].to_i : 0
-                    seconds_to_sleep = parsed_retry_after > 0 ? parsed_retry_after : 30
-
-                    #force another retry even if the next iteration of the loop will be after the retransmission_timeout
+                rescue Excon::Error::Timeout => ex
+                    @logger.trace("Exception: '#{ex.class.name}]#{ex} in posting data to #{api_name}. [amount_of_documents=#{amount_of_documents}]'")
                     force_retry = true
-                end
-            rescue Exception => ex
-                @logger.trace("Exception in posting data to #{api_name}.[amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")       
-                @logger.error("Exception in posting data to #{api_name}. [Exception: '#{ex}, amount of documents=#{amount_of_documents}]'")
+                rescue Exception => ex
+                    @logger.trace("Exception in posting data to #{api_name}.[amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")       
+                    @logger.error("Exception in posting data to #{api_name}. [Exception: '[#{ex.class.name}]#{ex}, amount of documents=#{amount_of_documents}]'")
             end
             is_retry = true
             @logger.info("Retrying transmission to #{api_name} in #{seconds_to_sleep} seconds.")
@@ -110,8 +111,8 @@ class LogStashEventsBatcher
     def get_request_id_from_response(response)
         output =""
         begin
-            if !response.nil? && response.headers.include?(:x_ms_request_id)
-                output += response.headers[:x_ms_request_id]
+            if !response.nil? && response.data[:headers].include?("x-ms-request-id")
+                output += response.data[:headers]["x-ms-request-id"]
             end
         rescue Exception => ex
             @logger.debug("Error while getting reqeust id from success response headers: #{ex.display}")
@@ -124,12 +125,13 @@ class LogStashEventsBatcher
         begin
             output = ""
             if !response.nil?                
-                if response.headers.include?(:x_ms_error_code)
-                    output += " [ms-error-code header: #{response.headers[:x_ms_error_code]}]"
+                if response.data[:headers].include?("x-ms-error-code")
+                    output += " [ms-error-code header: #{response.data[:headers]["x-ms-error-code"]}]"
             end
-            if response.headers.include?(:x_ms_request_id)
-                output += " [x-ms-request-id header: #{response.headers[:x_ms_request_id]}]"
+            if response.data[:headers].include?("x-ms-request-id")
+                output += " [x-ms-request-id header: #{response.data[:headers]["x-ms-request-id"]}]"
             end
+            output += " [response body: #{response.data[:body]}]"            
         end        
             return output
         rescue Exception => ex

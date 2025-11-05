@@ -1,0 +1,809 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Styx Intelligence - support.team@styxintel.com",
+    "comments": "Solution template for Styx Intelligence"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support.team@styxintel.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Styx Intelligence",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "styx_intelligence.microsoft-sentinel-solution-styxintelligence",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "StyxViewEndpointConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "StyxViewEndpointConnectorDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "StyxView Alerts (via Codeless Connector Platform)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "StyxViewEndpointConnectorDefinition",
+                  "title": "StyxView Alerts (via Codeless Connector Platform)",
+                  "publisher": "Styx Intelligence",
+                  "descriptionMarkdown": "The [StyxView Alerts](https://styxintel.com/) data connector enables seamless integration between the StyxView Alerts platform and Microsoft Sentinel. This connector ingests alert data from the StyxView Alerts API, allowing organizations to centralize and correlate actionable threat intelligence directly within their Microsoft Sentinel workspace.",
+                  "graphQueriesTableName": "StyxViewAlerts_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total alerts received",
+                      "legend": "StyxView Alert logs",
+                      "baseQuery": "StyxViewAlerts_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get a sample of StyxView Alert logs",
+                      "query": "StyxViewAlerts_CL\n| take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "StyxViewAlerts_CL",
+                      "lastDataReceivedQuery": "StyxViewAlerts_CL\n|summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "StyxView Alert API access",
+                        "description": "Access to the StyxView Alerts API through an API key is required."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Contact Styx Intelligence Support (support.team@styxintel.com) to get access to an API key.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Token",
+                            "placeholder": "API Token",
+                            "type": "password",
+                            "name": "APIKey"
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ],
+                      "title": "Connect to StyxView Alerts API to start collecting alert logs in Microsoft Sentinel"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Styx Intelligence",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "Styx Intelligence",
+                  "email": "support.team@styxintel.com",
+                  "link": "https://www.styxintel.com/contact-us/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "StyxViewEndpointDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-StyxViewAlerts_CL": {
+                    "columns": [
+                      {
+                        "name": "alert_id_original",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_account_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_account_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_solution_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_solution_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_project_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_project_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_client_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_client_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_datetime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "alert_ticket_number",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_entity_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_entity_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_entity_category_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_entity_category_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_alert_status_id",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_status_value",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_severity",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_entity_description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_entity_details",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_entity_impact",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_uuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_timestamp_original",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "alert_notification_sent",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_read",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alert_content",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_l3_page_link",
+                        "type": "string"
+                      },
+                      {
+                        "name": "alert_id",
+                        "type": "int"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-StyxViewAlerts_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = now(), AlertIdOriginal = alert_id_original, AlertAccountId = alert_account_id, AlertAccountName = alert_account_name, AlertSolutionId = alert_solution_id, AlertSolutionName = alert_solution_name, AlertProjectId = alert_project_id, AlertProjectName = alert_project_name, AlertClientId = alert_client_id, AlertClientName = alert_client_name, AlertTicketNumber = alert_ticket_number, AlertEntityId = alert_entity_id, AlertEntityName = alert_entity_name, AlertEntityCategoryId = alert_entity_category_id, AlertEntityCategoryName = alert_entity_category_name, AlertAlertStatusId = alert_alert_status_id, AlertStatusValue = alert_status_value, AlertSeverity = alert_severity, AlertEntityDescription = alert_entity_description, AlertEntityDetails = alert_entity_details, AlertEntityImpact = alert_entity_impact, AlertUuid = alert_uuid, AlertTimestampOriginal = alert_timestamp_original, AlertNotificationSent = alert_notification_sent, AlertRead = alert_read, AlertContent = alert_content, AlertL3PageLink = alert_l3_page_link, AlertId = alert_id",
+                    "outputStream": "Custom-StyxViewAlerts_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "StyxViewAlerts_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "StyxViewAlerts_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "AlertIdOriginal",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertAccountId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertAccountName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertSolutionId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertSolutionName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertProjectId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertProjectName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertClientId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertClientName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertDateTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AlertTicketNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertEntityId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertEntityName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertEntityCategoryId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertEntityCategoryName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertAlertStatusId",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertStatusValue",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertSeverity",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertEntityDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertEntityDetails",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertEntityImpact",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertUuid",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertTimestampOriginal",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AlertNotificationSent",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertRead",
+                      "type": "int"
+                    },
+                    {
+                      "name": "AlertContent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertL3PageLink",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertId",
+                      "type": "int"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "StyxViewEndpointConnectorDefinition",
+          "title": "StyxView Alerts (via Codeless Connector Platform)",
+          "publisher": "Styx Intelligence",
+          "descriptionMarkdown": "The [StyxView Alerts](https://styxintel.com/) data connector enables seamless integration between the StyxView Alerts platform and Microsoft Sentinel. This connector ingests alert data from the StyxView Alerts API, allowing organizations to centralize and correlate actionable threat intelligence directly within their Microsoft Sentinel workspace.",
+          "graphQueriesTableName": "StyxViewAlerts_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total alerts received",
+              "legend": "StyxView Alert logs",
+              "baseQuery": "StyxViewAlerts_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get a sample of StyxView Alert logs",
+              "query": "StyxViewAlerts_CL\n| take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "StyxViewAlerts_CL",
+              "lastDataReceivedQuery": "StyxViewAlerts_CL\n|summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "StyxView Alert API access",
+                "description": "Access to the StyxView Alerts API through an API key is required."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Contact Styx Intelligence Support (support.team@styxintel.com) to get access to an API key.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Token",
+                    "placeholder": "API Token",
+                    "type": "password",
+                    "name": "APIKey"
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ],
+              "title": "Connect to StyxView Alerts API to start collecting alert logs in Microsoft Sentinel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Styx Intelligence",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Partner",
+          "name": "Styx Intelligence",
+          "email": "support.team@styxintel.com",
+          "link": "https://www.styxintel.com/contact-us/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "StyxView Alerts (via Codeless Connector Platform)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "string"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "APIKey": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 4
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "StyxView Alerts (via Codeless Connector Platform)",
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Styx Intelligence",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "Styx Intelligence",
+                  "email": "support.team@styxintel.com",
+                  "link": "https://www.styxintel.com/contact-us/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'StyxViewAlerts', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "StyxViewEndpointConnectorDefinition",
+                "dataType": "StyxViewAlerts_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-StyxViewAlerts_CL"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('APIKey')]",
+                  "ApiKeyName": "x-api-key"
+                },
+                "request": {
+                  "apiEndpoint": "https://integration.styxview.com/v1/alerts",
+                  "rateLimitQPS": 10,
+                  "queryTimeFormat": "yyyy-MM-dd",
+                  "queryWindowInMin": 5,
+                  "httpMethod": "GET",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json"
+                  },
+                  "StartTimeAttributeName": "start-date",
+                  "EndTimeAttributeName": "end-date"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.next_cursor",
+                  "hasNextFlagJsonPath": "$.has_more",
+                  "nextPageParaName": "cursor"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.items[*]"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Styx Intelligence",
+        "publisherDisplayName": "Styx Intelligence",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Styx%20Intelligence/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://styxintel.com/\">StyxView Alerts</a> data connector provides the capability to ingest StyxView alerts into Microsoft Sentinel.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/styx-logo-black.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Styx Intelligence",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Styx Intelligence",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Styx Intelligence",
+          "email": "support.team@styxintel.com",
+          "tier": "Partner",
+          "link": "https://www.styxintel.com/contact-us/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-02-07",
+        "providers": [
+          "Styx Intelligence"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Security - Automation (SOAR)"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -51,6 +51,14 @@ while [[ $# -gt 0 ]]; do
 		CONTAINERNAMES+=("$2")
 		shift 2
 		;;
+	--appid)
+		APPID="$2"
+		shift 2
+		;;
+	--appsecret)
+		APPSECRET="$2"
+		shift 2
+		;;
 	--devmode)
 		DEVMODE=1
 		shift 1
@@ -200,7 +208,7 @@ while IFS= read -r contname; do
 			# Image is on preview, and no newer version is available
 			log "Current agent is in preview branch, and release branch has an older build (current release id is $containerreleaseid, latest is $imagereleaseid). Not updating this agent"
 		else
-			log_update "Agent image for agent $contname is newer than the one in the container registry. Agent release id $containerreleaseid, release id of image available in container registry: $imagereleaseid. Not updating this agent"
+			log "Agent image for agent $contname is newer than the one in the container registry. Agent release id $containerreleaseid, release id of image available in container registry: $imagereleaseid. Not updating this agent"
 		fi
 		continue
 	elif [ "$imagereleaseid" -gt "$containerreleaseid" ] || [ "$FORCE" == 1 ]; then	
@@ -222,6 +230,12 @@ while IFS= read -r contname; do
 		envstring=""
 		cmdparams=""
 		for variable in "${containervariables[@]}"; do
+			# Check if we set the APPID and APPSECRET, if we do, we need to update the container with the new values
+			if [[ -n $APPID && -n $APPSECRET ]]; then
+				[[ $variable == AZURE_CLIENT_ID=* ]] && variable="AZURE_CLIENT_ID=$APPID"
+				[[ $variable == AZURE_CLIENT_SECRET=* ]] && variable="AZURE_CLIENT_SECRET=$APPSECRET"
+			fi
+
 			if [[ ! $variable == PATH=* ]] &&
 				[[ ! $variable == LANG=* ]] &&
 				[[ ! $variable == GPG_KEY=* ]] &&

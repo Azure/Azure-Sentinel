@@ -1,15 +1,13 @@
 id: 5b72f527-e3f6-4a00-9908-8e4fee14da9f
 name: CloudNGFW By Palo Alto Networks - possible internal to external port scanning
 description: |
-  'Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which
-  results in an "app = incomplete" designation. The server resets coupled with an "Incomplete" app designation can be an indication
-  of internal to external port scanning or probing attack.
-  References: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK and
+  'Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which results in an "app = incomplete" designation. The server resets coupled with an "Incomplete" app designation can be an indication of internal to external port scanning or probing attack.
+  References: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK
   https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK'
 severity: Low
 status: Available
 requiredDataConnectors:
-  - connectorId: CloudNgfwByPAN
+  - connectorId: AzureCloudNGFWByPaloAltoNetworks
     dataTypes:
       - fluentbit_CL
 queryFrequency: 1h
@@ -23,32 +21,40 @@ relevantTechniques:
 query: |
   fluentbit_CL
   | where ident_s == "TRAFFIC"
-  | extend DestinationPort = tostring(parse_json(Message).dport)
-  | where isnotempty(DestinationPort) and parse_json(Message).action !in ("reset-both", "deny")
-  | where DestinationPort !in ("443", "53", "389", "80", "0", "880", "8888", "8080")
-  | where parse_json(Message).app == "incomplete"
-  | where toint(DestinationPort) !between (49512 .. 65535)
   | where isnotempty(FirewallName_s)
-  | where parse_json(Message).dst_ip !startswith "10."
-  | extend Reason = coalesce(
-                                column_ifexists("Reason", ""),
-                                parse_json(Message).session_end_reason,
-                                ""
-                            )
+  | extend message = parse_json(Message)
+  | extend DestinationPort = tostring(message.dport)
+  | extend SourceIP = tostring(message.src_ip)
+  | extend DestinationIP = tostring(message.dst_ip)
+  | extend Application = tostring(message.app)
+  | extend Protocol = tostring(message.proto)
+  | extend Action = tostring(message.action)
+  | where isnotempty(DestinationPort) and message.action !in ("reset-both", "deny")
+  | where DestinationPort !in ("443", "53", "389", "80", "0", "880", "8888", "8080")
+  | where message.app == "incomplete"
+  | where toint(DestinationPort) !between (49512 .. 65535)
+  | where message.dst_ip !startswith "10."
+  | extend Reason = coalesce(column_ifexists("Reason", ""), tostring(message.session_end_reason), "")
   | where Reason !has "aged-out"
   | where Reason !has "tcp-fin"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).app), Reason, DestinationPort, tostring(parse_json(Message).proto), ident_s, tostring(parse_json(Message).action), tostring(parse_json(Message).dst_ip),Message
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by FirewallName_s, SourceIP, Application, Reason, DestinationPort, Protocol, ident_s, Action, DestinationIP
   | where count_ >= 10
-  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), makeset(parse_json(Message).dst_ip), totalcount = sum(count_) by FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).app), Reason, DestinationPort, tostring(parse_json(Message).proto), ident_s, tostring(parse_json(Message).action),Message
-  | extend timestamp = StartTimeUtc, IPCustomEntity = parse_json(Message).src_ip, HostCustomEntity = FirewallName_s
+  | summarize StartTime = min(StartTime), EndTime = max(EndTime), makeset(DestinationIP), totalcount = sum(count_) by FirewallName_s, SourceIP, Application, Reason, DestinationPort, Protocol, ident_s, Action
+  | extend IPAddress = SourceIP
+  | extend HostName = tostring(split(FirewallName_s, ".")[0]), DomainIndex = toint(indexof(FirewallName_s, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(FirewallName_s, DomainIndex + 1), FirewallName_s)
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: FirewallName_s
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.2
+        columnName: IPAddress
+version: 1.0.6
 kind: Scheduled

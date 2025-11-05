@@ -34,7 +34,8 @@ query: |
   | where TimeGenerated > ago(timeframe)
   // Look for build process starts
   | where FileName has_any (build_processes)
-  | summarize by BuildParentProcess=InitiatingProcessFileName, BuildProcess=FileName, BuildAccount = AccountName, DeviceName, BuildCommand=ProcessCommandLine, timekey= bin(TimeGenerated, time_window), BuildProcessTime=TimeGenerated
+  | summarize by BuildParentProcess=InitiatingProcessFileName, BuildProcess=FileName, BuildAccount = AccountName, DeviceName, BuildCommand=ProcessCommandLine, 
+  timekey= bin(TimeGenerated, time_window), BuildProcessTime=TimeGenerated
   | join kind=inner(
   DeviceFileEvents
   | where TimeGenerated > ago(timeframe)
@@ -42,20 +43,29 @@ query: |
   | where ActionType == "FileCreated"  or ActionType == "FileModified"
   // Look for code files, edit this to include file extensions used in build.
   | where FileName endswith ".cs" or FileName endswith ".cpp"
-  | summarize by FileEditParentProcess=InitiatingProcessParentFileName, FileEditAccount = InitiatingProcessAccountName, DeviceName, FileEdited=FileName, FileEditProcess=InitiatingProcessFileName, timekey= bin(TimeGenerated, time_window), FileEditTime=TimeGenerated)
+  | summarize by FileEditParentProcess=InitiatingProcessParentFileName, FileEditAccount = InitiatingProcessAccountName, FileEditDomain = InitiatingProcessAccountDomain, FileEditUpn = InitiatingProcessAccountUpn, 
+  DeviceName, FileEdited=FileName, FileEditProcess=InitiatingProcessFileName, timekey= bin(TimeGenerated, time_window), FileEditTime=TimeGenerated)
   // join where build processes and file modifications seen at same time on same host
   on timekey, DeviceName
   // Limit to only where the file edit happens after the build process starts
   | where BuildProcessTime <= FileEditTime
-  | summarize make_set(FileEdited), make_set(FileEditProcess), make_set(FileEditAccount) by timekey, DeviceName, BuildParentProcess, BuildProcess
-  | extend HostName = iff(DeviceName has '.', substring(DeviceName,0,indexof(DeviceName,'.')),DeviceName)
-  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName,indexof(DeviceName,'.')+1),"")
+  | summarize make_set(FileEdited), make_set(FileEditProcess) by timekey, DeviceName, BuildParentProcess, BuildProcess, FileEditAccount, FileEditDomain, FileEditUpn
+  | extend HostName = tostring(split(DeviceName, ".")[0]), DomainIndex = toint(indexof(DeviceName, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)
 entityMappings:
   - entityType: Host
     fieldMappings:
-      - identifier: HostName
-        columnName: HostName
-      - identifier: DnsDomain
-        columnName: DnsDomain
-version: 1.0.1
+    - identifier: HostName
+      columnName: HostName
+    - identifier: DnsDomain
+      columnName: HostNameDomain
+  - entityType: Account
+    fieldMappings:
+    - identifier: FullName
+      columnName: FileEditUpn
+    - identifier: Name
+      columnName: FileEditAccount
+    - identifier: UPNSuffix
+      columnName: FileEditDomain
+version: 1.1.0
 kind: Scheduled

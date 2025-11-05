@@ -21,14 +21,16 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1071
 query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let AuditEvents = materialize(AuditLogs
     | where TimeGenerated >= ago(dt_lookBack)
     // Extract the URL that is contained within the JSON data
-    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,tostring(TargetResources))
+    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,tostring(TargetResources))
     | where isnotempty(Url)
     | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
     | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName)
@@ -47,19 +49,29 @@ query: |
   | summarize Audit_TimeGenerated = arg_max(Audit_TimeGenerated, *) by IndicatorId, Url
   | project Audit_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
   OperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url
-  | extend timestamp = Audit_TimeGenerated, AccountCustomEntity = userPrincipalName, HostCustomEntity = TargetResourceDisplayName, URLCustomEntity = Url
+  | extend AccountName = tostring(split(userPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(userPrincipalName, "@")[1])
+  | extend HostName = tostring(split(TargetResourceDisplayName, ".")[0]), DomainIndex = toint(indexof(TargetResourceDisplayName, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(TargetResourceDisplayName, DomainIndex + 1), TargetResourceDisplayName)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: userPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: TargetResourceDisplayName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.2.5
+        columnName: Url
+version: 1.2.8
 kind: Scheduled

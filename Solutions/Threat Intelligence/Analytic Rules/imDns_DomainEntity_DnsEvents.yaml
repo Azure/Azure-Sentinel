@@ -43,7 +43,9 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1071
 tags:
   - Id: 85aca4d1-5d15-4001-abd9-acb86ca1786a
     version: 1.0.0
@@ -67,21 +69,30 @@ query: |
         | extend DNS_TimeGenerated = TimeGenerated
   ) on $left.DomainName==$right.DnsQuery
   | where DNS_TimeGenerated < ExpirationDateTime
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, DnsQuery, DnsQueryType
-  | extend timestamp = DNS_TimeGenerated, HostCustomEntity = Dvc, IPCustomEntity = SrcIpAddr, URLCustomEntity = Url
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, Domain, DnsQuery, DnsQueryType
+  | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Dvc
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SrcIpAddr
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
+        columnName: Url
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain        
 customDetails:
   LatestIndicatorTime: LatestIndicatorTime
   Description: Description
@@ -94,5 +105,5 @@ customDetails:
   SourceIPAddress: SrcIpAddr
   DnsQuery: DnsQuery
   QueryType: DnsQueryType
-version: 1.1.5
+version: 1.1.8
 kind: Scheduled

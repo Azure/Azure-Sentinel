@@ -4,14 +4,11 @@
     "metadata": {
         "title": "AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP", 
         "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will look up Microsoft Entra ID users associated with the incident account entities and revoke their sessions. A comment noting the affected users will be added to the Incident.",
-        "prerequisites": "1. An App Registration with User.ReadWrite.All permissions granted on Microsoft Graph API. 2. A client secret for the App Registration must be generated. 3. An Azure Key Vault Secret to hold the client secret. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Revoke-Azure-AD-User-Session-From-Incident",
+        "prerequisites": "1. An App Registration with User.ReadWrite.All permissions granted on Microsoft Graph API. 2. A client secret for the App Registration must be generated. 3. An Azure Key Vault Secret to hold the client secret. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-IAM-Master-Playbook/tree/main/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP",
         "postDeployment": ["Access to the Azure Key Vault must be granted to the playbook","The Microsoft Sentinel Contributor role must be applied to the playbook"],
-        "lastUpdateTime": "2023-12-07T3:17:47Z",
+        "lastUpdateTime": "2024-05-22T23:40:50Z",
         "entities": ["Account"], 
-        "tags": ["Microsoft Sentinel", "Incident", "Microsoft Entra ID", "Revoke User Sessions"],
-        "source":  {
-            "kind": "Community"
-        },
+        "tags": ["Microsoft Sentinel", "Incident", "Microsoft Entra ID", "Revoke User Sessions"], 
         "support": {
             "tier": "partner"
         },
@@ -210,63 +207,86 @@
                         "For_each_-_Account": {
                             "foreach": "@triggerBody()",
                             "actions": {
-                                "Condition_-_Check_for_aadUserId": {
+                                "Condition_-_Set_UPN": {
                                     "actions": {
-                                        "Condition_-_User_session_successfully_revoked": {
-                                            "actions": {
-                                                "Append_to_string_variable_-_Affected_Microsoft_Entra_ID_Users": {
-                                                    "runAfter": {},
-                                                    "type": "AppendToStringVariable",
-                                                    "inputs": {
-                                                        "name": "Affected Microsoft Entra ID Users",
-                                                        "value": "@{items('For_each_-_Account')?['Name']} [@{items('For_each_-_Account')?['aadUserId']}]\n"
-                                                    }
-                                                }
-                                            },
-                                            "runAfter": {
-                                                "HTTP_-_Revoke_user_sign_in_sessions": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "expression": {
-                                                "and": [
-                                                    {
-                                                        "equals": [
-                                                            "@outputs('HTTP_-_Revoke_user_sign_in_sessions')['statusCode']",
-                                                            200
-                                                        ]
-                                                    }
-                                                ]
-                                            },
-                                            "type": "If"
-                                        },
-                                        "HTTP_-_Revoke_user_sign_in_sessions": {
+                                        "Set_variable_-_Concatenate": {
                                             "runAfter": {},
-                                            "type": "Http",
+                                            "type": "SetVariable",
                                             "inputs": {
-                                                "headers": {
-                                                    "Authorization": "Bearer @{body('Parse_JSON_-_Access_token')?['access_token']}",
-                                                    "Host": "graph.microsoft.com"
-                                                },
-                                                "method": "POST",
-                                                "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_each_-_Account')?['aadUserId']}/revokeSignInSessions"
+                                                "name": "UPN",
+                                                "value": "@{concat(items('For_each_-_Account')?['accountName'], '@', items('For_each_-_Account')?['upnSuffix'])}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_-_aadUserID": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "UPN",
+                                                    "value": "@items('For_each_-_Account')['aadUserId']"
+                                                }
                                             }
                                         }
                                     },
                                     "expression": {
                                         "and": [
                                             {
-                                                "not": {
-                                                    "equals": [
-                                                        "@{items('For_each_-_Account')?['aadUserId']}",
-                                                        ""
-                                                    ]
-                                                }
+                                                "equals": [
+                                                    "@items('For_each_-_Account')['aadUserId']",
+                                                    "@null"
+                                                ]
                                             }
                                         ]
                                     },
-                                    "runAfter": {},
                                     "type": "If"
+                                },
+                                "Condition_-_User_session_successfully_revoked": {
+                                    "actions": {
+                                        "Append_to_string_variable_-_Affected_Microsoft_Entra_ID_Users": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Affected Microsoft Entra ID Users",
+                                                "value": "@{items('For_each_-_Account')?['Name']} [@{variables('UPN')}]\n"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_-_Revoke_user_sign_in_sessions": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP_-_Revoke_user_sign_in_sessions')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP_-_Revoke_user_sign_in_sessions": {
+                                    "runAfter": {
+                                        "Condition_-_Set_UPN": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Parse_JSON_-_Access_token')?['access_token']}",
+                                            "Content-Type": "application/json",
+                                            "Host": "graph.microsoft.com"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{variables('UPN')}/revokeSignInSessions"
+                                    }
                                 }
                             },
                             "runAfter": {
@@ -291,7 +311,7 @@
                         },
                         "HTTP_-_Authenticate": {
                             "runAfter": {
-                                "Initialize_variable_-_Affected_Microsoft_Entra_ID_Users": [
+                                "Initialize_variable_-_UPN": [
                                     "Succeeded"
                                 ]
                             },
@@ -317,6 +337,22 @@
                                 "variables": [
                                     {
                                         "name": "Affected Microsoft Entra ID Users",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_UPN": {
+                            "runAfter": {
+                                "Initialize_variable_-_Affected_Microsoft_Entra_ID_Users": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "UPN",
                                         "type": "string"
                                     }
                                 ]

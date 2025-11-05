@@ -17,12 +17,13 @@ tactics:
 relevantTechniques:
   - T1486
 query: |
+    let kmsActions = dynamic(["kms:Encrypt", "kms:*"]); //Add other overly permissive APIs to this list.
     AWSCloudTrail
     | where EventName in ("CreateKey","PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
     | extend Statement = parse_json(tostring((parse_json(RequestParameters).policy))).Statement
     | mvexpand Statement
     | extend Action = tostring(parse_json(Statement).Action), Effect = tostring(parse_json(Statement).Effect), Principal = iff(isnotempty(tostring(parse_json(Statement).Principal.AWS)),tostring(parse_json(Statement).Principal.AWS), tostring(parse_json(Statement).Principal))
-    | where Effect =~ "Allow" and (Action == "kms:Encrypt" or Action == "kms:*") and Principal == "*"
+    | where Effect =~ "Allow" and Action has_any (kmsActions) and Principal == "*" 
     | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
     | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
     | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
@@ -42,5 +43,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.2
+version: 1.0.4
 kind: Scheduled

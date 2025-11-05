@@ -64,6 +64,19 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
  * Version: Version to be used during package creation. Default version will be 3.0.0. This tool supports package creation for 2.x.x(Template Spec) and 3.x.x(contentPackages). Based on variable 'defaultPackageVersion' and given Version input. If the defaultPackageVersion is 3.0.0 and Data file input version is 2.0.1 then it package generated is of 3.0.0 i.e which ever is higher takes precedence. Here we are also verifying the catalogAPI to check version deployed in PartnerCenter. If 'defaultPackageVersion' is 2.0.0 and data input file version is 2.0.4 but in PartnerCenter catalogAPI version installed is 2.0.2 then package generated is of 2.0.3 i.e it will increment the package version based on catalogAPI.
  * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
  * TemplateSpec: Boolean value used to determine whether the package should be generated as a template spec
+ * dependentDomainSolutionIds: (Optional property) If a solution is dependent on other domain solutions then use its solution id. This solutionId is a combination of publisherId.offerId. If there are multiple domain solutions then specify in comma separated values like below.
+  eg: "dependentDomainSolutionIds": [ "azuresentinel.azure-sentinel-solution-paloaltopanos",
+    "azuresentinel.azure-sentinel-solution-squidproxy"]
+  * StaticDataConnectorIds: Optional Array Property: Specify which data connector should be of StaticUI connector kind. If this property is not present then by default it will treat data connector as GenericUI kind. If you want to create a StaticUI data connector then specify the value of "id" property from data connector in this array property.
+  eg 1 For single static data connector: 
+    "StaticDataConnectorIds": [ "AzureActivity" ]
+  eg 2 For multiple static data connector:  
+  "StaticDataConnectorIds": [
+    "ThreatIntelligenceTaxii",
+		"ThreatIntelligence",
+		"ThreatIntelligenceUploadIndicatorsAPI",
+		"MicrosoftDefenderThreatIntelligence"
+  ]
  */
 {
   "Name": "{SolutionName}",
@@ -83,18 +96,20 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "SavedSearches": [],
   "Hunting Queries": [],
   "Data Connectors": [],
+  "SummaryRules": [],  
   "Watchlists": [],
   "WatchlistDescription": [],
+  "dependentDomainSolutionIds": [],
   "BasePath": "{Path to Solution Content}",
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": true, // Default should be true
-  "Is1PConnector": false
+  "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify. 
 }
 
 ```
 
-#### **Example of Input File: Solution_McAfeePO.json**
+#### **Example of Input File: Solution_CiscoUmbrella.json**
 
 ```json
 {
@@ -140,6 +155,9 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
     "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaRequestBlocklistedFileType.yaml",
     "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaURIContainsIPAddress.yaml"
   ],
+  "SummaryRules": [
+    "SummaryRules/yourSummaryRuleFile.yaml"
+  ],
   "Workbooks": [
     "Solutions/CiscoUmbrella/Workbooks/CiscoUmbrella.json"
   ],
@@ -148,7 +166,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
     "Playbooks/CiscoUmbrellaInvestigateAPIConnector/azuredeploy.json",
     "Playbooks/CiscoUmbrellaManagementAPIConnector/azuredeploy.json",
     "Playbooks/CiscoUmbrellaNetworkDeviceManagementAPIConnector/azuredeploy.json",
-	"Playbooks/Playbooks/CiscoUmbrella-AddIpToDestinationList/azuredeploy.json",
+    "Playbooks/Playbooks/CiscoUmbrella-AddIpToDestinationList/azuredeploy.json",
     "Playbooks/Playbooks/CiscoUmbrella-AssignPolicyToIdentity/azuredeploy.json",
     "Playbooks/Playbooks/CiscoUmbrella-BlockDomain/azuredeploy.json",
     "Playbooks/Playbooks/CiscoUmbrella-GetDomainInfo/azuredeploy.json"
@@ -157,7 +175,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "SolutionMetadata.json",
   "TemplateSpec": true, // Default should be true
-  "Is1PConnector": false
+  "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify.
 }
 ```
 
@@ -249,7 +267,9 @@ These files will be created in the solution's `Package` folder with respect to t
 
 Upon package creation, the automation will automatically import and run validation on the generated files using the Azure Toolkit / TTK CLI tool.
 
-#### *<span style="color:blue">Note:</span> <span style="color:green"> To create a CCP based connector refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCP_README.md).</span>*
+#### *<span style="color:blue">Note:</span> <span style="color:green"> To create a CCF based connector refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCF_README.md).</span>*
+
+#### *<span style="color:blue">Note:</span> <span style="color:green"> For Summary Rules refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/SUMMARYRULE_README.md).</span>*
 
 ### Azure Toolkit Validation
 

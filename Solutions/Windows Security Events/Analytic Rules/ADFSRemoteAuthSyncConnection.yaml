@@ -1,15 +1,11 @@
 id: 2f4165a6-c4fb-4e94-861e-37f1b4d6c0e6
 name: AD FS Remote Auth Sync Connection
 description: |
-  'This detection uses Security events from the "AD FS Auditing" provider to detect suspicious authentication events on an AD FS server. The results then get
-  correlated with events from the Windows Filtering Platform (WFP) to detect suspicious incoming network traffic on port 80 on the AD FS server.
-  This could be a sign of a threat actor trying to use replication services on the AD FS server to get its configuration settings and extract
-  sensitive information such as AD FS certificates.
-  In order to use this query you need to enable AD FS auditing on the AD FS Server.
-  References: 
+  'This detection uses Security events from the "AD FS Auditing" provider to detect suspicious authentication events on an AD FS server. The results then get correlated with events from the Windows Filtering Platform (WFP) to detect suspicious incoming network traffic on port 80 on the AD FS server.
+  This could be a sign of a threat actor trying to use replication services on the AD FS server to get its configuration settings and extract sensitive information such as AD FS certificates. In order to use this query you need to enable AD FS auditing on the AD FS Server.
+  References:
   https://docs.microsoft.com/windows-server/identity/ad-fs/troubleshooting/ad-fs-tshoot-logging
-  https://twitter.com/OTR_Community/status/1387038995016732672
-  '
+  https://twitter.com/OTR_Community/status/1387038995016732672'
 severity: Medium
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -84,23 +80,33 @@ query: |
             SourcePort = column_ifexists("SourcePort", "")
       // Look for inbound connections from endpoints on port 80
       | where DestPort == 80 and Direction == '%%14592' and Application == 'System'
-      | where DestAddress !in ('::1','0:0:0:0:0:0:0:1') 
+      | where DestAddress !in ('::1','0:0:0:0:0:0:0:1')
   )
   on $left.Computer == $right.Computer
   | project TimeGenerated, Computer, ClaimsName, SourceAddress, SourcePort
-  | extend HostCustomEntity = Computer, AccountCustomEntity = ClaimsName, IPCustomEntity = SourceAddress
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(ClaimsName, @'\')[1]), AccountNTDomain = tostring(split(ClaimsName, @'\')[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: ClaimsName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.1
+        columnName: SourceAddress
+version: 1.0.4
 kind: Scheduled

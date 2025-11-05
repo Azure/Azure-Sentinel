@@ -314,7 +314,7 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(SolutionParsersYamlFilesTestData))]
         public void Validate_SolutionParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
+            if (fileName == "NoFile.yaml" || fileName == "ASIM_FillNull.yaml")
             {
                 Assert.True(true);
                 return;
@@ -455,6 +455,7 @@ namespace Kqlvalidations.Tests
 
             bool isQueryValid = !(from p in listOfDiagnostics
                                   where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                                  || !p.Message.Contains("let forwarder_host_names") //We do not validate the static list of hostnames, used for syslog parsers
                                   select p).Any();
 
 

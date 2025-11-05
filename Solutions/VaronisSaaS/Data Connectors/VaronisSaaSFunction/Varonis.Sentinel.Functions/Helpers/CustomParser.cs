@@ -1,49 +1,55 @@
-﻿using System;
+﻿using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
+using CsvHelper;
+using CsvHelper.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Varonis.Sentinel.Functions.Helpers
 {
-    internal static class CustomParser
+    public class CustomParser(ILogger logger)
     {
-        public static DateTime ParseDate(string dateRange)
+        private readonly ILogger _logger = logger;
+
+        public string[] ParseCsvToArray(string propValue)
         {
-            if (DateTime.TryParse(dateRange, out var date))
-            { 
-                return date;
-            }
-
-            var rangeArr = dateRange.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            if (rangeArr.Length != 2 || !int.TryParse(rangeArr[0], out var number))
+            if (string.IsNullOrWhiteSpace(propValue))
             {
-                goto FormatException;
+                return [];
             }
 
-            var sufix = rangeArr[1];
-            var now = DateTime.UtcNow;
+            using var reader = new StringReader(propValue);
+            var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                HasHeaderRecord = false,
+                IgnoreBlankLines = true,
+                TrimOptions = TrimOptions.Trim,
+            };
+            using var csvReader = new CsvReader(reader, config);
 
-            if (sufix.StartsWith("sec")) return now.AddSeconds(-number);
-            if (sufix.StartsWith("min")) return now.AddMinutes(-number);
-            if (sufix.StartsWith("hour")) return now.AddHours(-number);
-            if (sufix.StartsWith("day")) return now.AddDays(-number);
-            if (sufix.StartsWith("week")) return now.AddDays(-number*7);
-            if (sufix.StartsWith("month")) return now.AddMonths(-number);
-            if (sufix.StartsWith("year")) return now.AddYears(-number);
+            if (!csvReader.Read())
+                return [];
 
-            FormatException:
-                throw new FormatException($"{dateRange} is not valid date.");
+            try
+            {
+                var row = Enumerable.Range(0, csvReader.ColumnCount)
+                    .Select(csvReader.GetField)
+                    .Select(x => x?.Trim())
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .ToArray();
+
+                return row;
+            }
+            catch (CsvHelperException ex)
+            {
+                _logger.LogError(ex, "Error parsing CSV data: {Message}", ex.Message);
+            }
+
+            return [];
         }
 
-        public static string[] ParseArrayFromCSV(string propValue)
-        {
-            return propValue
-                ?.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                ?.Select(x => x.Trim())
-                ?.ToArray() ?? Array.Empty<string>();
-        }
-
-        public static (string token, string token_type, int expiresIn)? ParseTokenInfo(string json)
+        public (string token, string token_type, int expiresIn)? ParseTokenInfo(string json)
         {
             var jelement = JsonSerializer.Deserialize<JsonElement>(json);
 

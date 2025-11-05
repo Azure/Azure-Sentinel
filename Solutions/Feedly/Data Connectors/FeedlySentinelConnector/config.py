@@ -18,22 +18,18 @@ class PascalCaseSchema(Schema):
 @dataclass(base_schema=PascalCaseSchema)
 class FeedlySentinelConfig:
     azure_web_jobs_storage: str
-    sentinel_workspace_id: str
-    sentinel_workspace_key: str
-    sentinel_log_analytics_uri: str = field(
-        metadata={"validate": Regexp(r"^https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$")}
-    )
+    data_collection_endpoint: str
+    dcr_immutable_id: str
+    dcr_stream_name: str
+    
+    azure_tenant_id: str
+    azure_client_id: str
+    azure_client_secret: str
 
     feedly_api_key: str
     feedly_stream_ids: str
 
     days_to_backfill: int = 7
-
-    @pre_load
-    def make_default_log_analytics_uri(self, data: dict, **kwargs) -> dict:
-        if "SentinelLogAnalyticsUri" not in data:
-            data["SentinelLogAnalyticsUri"] = "https://" + data["SentinelWorkspaceId"] + ".ods.opinsights.azure.com"
-        return data
 
     @staticmethod
     def from_env() -> "FeedlySentinelConfig":

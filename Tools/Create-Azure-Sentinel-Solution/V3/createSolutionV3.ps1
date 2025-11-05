@@ -1,5 +1,16 @@
+
+param(
+    [string]$SolutionDataFolderPath = $null
+)
+
 Write-Host '=======Starting Package Creation using V3 tool========='
-$path = Read-Host "Enter solution data file path "
+if ($null -eq $SolutionDataFolderPath -or $SolutionDataFolderPath -eq '') {
+    $path = Read-Host "Enter solution data folder path "
+} else {
+    $path = $SolutionDataFolderPath
+    Write-Host "Solution Data folder path specified is : $path"
+}
+
 $defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
@@ -34,7 +45,7 @@ else {
     $hasDataFolder = $path -like '*/data'
     if ($hasDataFolder) {
         # DATA FOLDER PRESENT
-        $dataFolderIndex = $path.IndexOf("/data", [StringComparison]"CurrentCultureIgnoreCase")
+        $dataFolderIndex = $path.LastIndexOf("/data", [StringComparison]"CurrentCultureIgnoreCase")
 
         if ($dataFolderIndex -le 0) {
             Write-Host "Given path is not from Solutions data folders. Please provide data file path from Solution"
@@ -83,6 +94,16 @@ try {
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
         #$inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
         $contentToImport = Get-Content -Raw $inputFile | Out-String | ConvertFrom-Json
+
+        $has1PConnectorProperty = [bool]($contentToImport.PSobject.Properties.Name -match "Is1PConnector")
+        if ($has1PConnectorProperty) {
+            $Is1PConnectorPropertyValue = [bool]($contentToImport.Is1PConnector)
+            if ($Is1PConnectorPropertyValue) {
+                # when true we terminate package creation.
+                Write-Host "ERROR: Is1PConnector property is deprecated. Please use StaticDataConnector property. Refer link https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md for more details!"
+                exit 1;
+            }
+        }
 
         $basePath = $(if ($solutionBasePath) { $solutionBasePath } else { "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/" })
         $metadataAuthor = $contentToImport.Author.Split(" - ");
@@ -165,7 +186,7 @@ try {
         Write-Host "isCCPConnector $isCCPConnector"
         $ccpConnectorCodeExecutionCounter = 1;
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
-            if ($objectProperties.Value -is [System.Array]) {
+            if ($objectProperties.Value -is [System.Array] -and $objectProperties.Name.ToLower() -ne 'dependentdomainsolutionids' -and $objectProperties.Name.ToLower() -ne 'staticdataconnectorids') {
                 foreach ($file in $objectProperties.Value) {
                     $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
                     $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")
@@ -239,6 +260,10 @@ try {
                             $objectKeyLowercase = $objectProperties.Name.ToLower()
                             if ($objectKeyLowercase -eq "hunting queries") {
                                 GetHuntingDataMetadata -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
+                            } elseif ($objectKeyLowercase -eq "summary rules" -or $objectKeyLowercase -eq "summaryrules") {
+                                $summaryRuleFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/summaryRules.ps1"
+                                . $summaryRuleFilePath
+                                GenerateSummaryRules -solutionName $solutionName -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
                             }
                             else {
                                 GenerateAlertRule -file $file -contentResourceDetails $contentResourceDetails
@@ -292,12 +317,18 @@ try {
 		$global:parserCounter -= 1
 		$global:huntingQueryCounter -= 1
 		$global:watchlistCounter -= 1
-		updateDescriptionCount $global:connectorCounter                                "**Data Connectors:** "                     "{{DataConnectorCount}}"            $(checkResourceCounts $global:parserCounter, $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:parserCounter                                   "**Parsers:** "                             "{{ParserCount}}"                   $(checkResourceCounts $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:workbookCounter                                 "**Workbooks:** "                           "{{WorkbookCount}}"                 $(checkResourceCounts $global:analyticRuleCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:analyticRuleCounter                             "**Analytic Rules:** "                      "{{AnalyticRuleCount}}"             $(checkResourceCounts $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:huntingQueryCounter                             "**Hunting Queries:** "                     "{{HuntingQueryCount}}"             $(checkResourceCounts $global:playbookCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:watchlistCounter                                "**Watchlists:** "                          "{{WatchlistCount}}"                $(checkResourceCounts @($global:playbookCounter))
+        $global:summaryRuleCounter -= 1
+
+		updateDescriptionCount $global:connectorCounter                                "**Data Connectors:** "                     "{{DataConnectorCount}}"            $(checkResourceCounts $global:parserCounter, $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+		updateDescriptionCount $global:parserCounter                                   "**Parsers:** "                             "{{ParserCount}}"                   $(checkResourceCounts $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+		updateDescriptionCount $global:workbookCounter                                 "**Workbooks:** "                           "{{WorkbookCount}}"                 $(checkResourceCounts $global:analyticRuleCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+		updateDescriptionCount $global:analyticRuleCounter                             "**Analytic Rules:** "                      "{{AnalyticRuleCount}}"             $(checkResourceCounts $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+		updateDescriptionCount $global:huntingQueryCounter                             "**Hunting Queries:** "                     "{{HuntingQueryCount}}"             $(checkResourceCounts $global:playbookCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+
+		updateDescriptionCount $global:watchlistCounter                                "**Watchlists:** "                          "{{WatchlistCount}}"                $(checkResourceCounts $global:playbookCounter, $global:summaryRuleCounter)
+        
+        updateDescriptionCount $global:summaryRuleCounter                           "**Summary Rules:** "                       "{{SummaryRuleCount}}"             $(checkResourceCounts @($global:playbookCounter))
+
 		updateDescriptionCount $global:customConnectorsList.Count                      "**Custom Azure Logic Apps Connectors:** "  "{{LogicAppCustomConnectorCount}}"  $(checkResourceCounts @($global:playbookCounter))
 		updateDescriptionCount $global:functionAppList.Count                           "**Function Apps:** "                       "{{FunctionAppsCount}}"             $(checkResourceCounts @($global:playbookCounter))
         updateDescriptionCount ($global:playbookCounter - $global:customConnectorsList.Count - $global:functionAppList.Count)  "**Playbooks:** "   "{{PlaybookCount}}"       $false
@@ -310,5 +341,5 @@ try {
     }
 }
 catch {
-    Write-Host "Error occured in catch of createSolutionV3 file Error details are $_"
+    Write-Host "Error occurred in catch of createSolutionV3 file Error details are $_" -ForegroundColor Red
 }

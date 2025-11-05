@@ -1,7 +1,7 @@
 Parser:
   Title: File event ASIM filtering parser for Windows Sysmon
-  Version: "0.4.1"
-  LastUpdated: Nov 14 2023
+  Version: "0.5.1"
+  LastUpdated: Jul 19, 2024
 Product:
   Name: Windows Sysmon
 Normalization:
@@ -12,7 +12,8 @@ References:
     Link: https://aka.ms/ASimFileEventDoc
   - Title: ASIM
     Link: https://aka.ms/AboutASIM
-Description: This ASIM parser supports normalizing Sysmon event 11, 23, and 26, stored in either the Event or WindowsEvent tables, to the ASIM file event schema.
+Description: 
+  This ASIM parser supports normalizing Sysmon logs ingested in 'Event' table to the ASIM file event schema.
 ParserName: vimFileEventMicrosoftSysmon
 EquivalentBuiltInParser: _Im_FileEvent_MicrosoftSysmon
 ParserParams:
@@ -73,7 +74,8 @@ ParserQuery: |
             _ResourceId,
             _SubscriptionId,
             Source,
-            Type // , _ItemId 
+            Type, 
+            _ItemId 
         | where Source == "Microsoft-Windows-Sysmon" and EventID in (11, 23, 26)
         | project-away Source
         // pre-filtering
@@ -106,50 +108,9 @@ ParserQuery: |
             ((array_length(targetfilepath_has_any) == 0) or (TargetFilePath has_any (targetfilepath_has_any)))
         | project-away EventData
   };
-      //
-      // -- WindowsEvent parser
-      let WindowsEventParser=() {
-      WindowsEvent 
-          | where not(disabled)
-          | where (isnull(starttime) or TimeGenerated >= starttime) 
-              and (isnull(endtime) or TimeGenerated <= endtime)
-          | project
-              EventID,
-              EventData,
-              Computer,
-              TimeGenerated,
-              _ResourceId,
-              _SubscriptionId,
-              Provider,
-              Type // , _ItemId 
-          | where Provider == "Microsoft-Windows-Sysmon" and EventID in (11, 23, 26)
-          | project-away Provider
-          // pre-filtering
-          | where ((array_length(eventtype_in) == 0 or (iff (EventID == 11, 'FileCreated', 'FileDeleted') in~ (eventtype_in)))) and
-              (array_length(srcipaddr_has_any_prefix) == 0) and
-              ((array_length(actorusername_has_any) == 0) or (tostring(EventData.User) has_any (actorusername_has_any))) and
-              ((array_length(targetfilepath_has_any) == 0) or (tostring(EventData.TargetFilename) has_any (targetfilepath_has_any))) and
-              ((array_length(srcfilepath_has_any) == 0)) and
-              ((array_length(dvchostname_has_any) == 0) or Computer has_any (dvchostname_has_any))
-          | extend 
-              TargetFileCreationTime=todatetime(EventData.CreationUtcTime),
-              TargetFilePath=tostring(EventData.TargetFilename),
-              ActingProcessName = tostring(EventData.Image),
-              ActingProcessId = tostring(EventData.ProcessId),
-              ActingProcessGuid = tostring(EventData.ProcessGuid),
-              ActorUsername = tostring(EventData.User),
-              EventStartTime = todatetime(EventData.UtcTime),
-              RuleName = tostring(EventData.RuleName),
-              Hashes = tostring(EventData.Hashes)
-          | parse ActingProcessGuid with "{" ActingProcessGuid "}"
-          | project-away EventData
-  };
-      union isfuzzy=true 
-          WindowsEventParser,
-          EventParser 
+      EventParser 
       | project-rename
           DvcHostname = Computer,
-          //EventUid = _ItemId,
           DvcScopeId = _SubscriptionId,
           DvcId = _ResourceId
       | extend
@@ -168,7 +129,8 @@ ParserQuery: |
           EventOriginalType = tostring(EventID),
           TargetFileName = tostring(split(TargetFilePath, '\\')[-1]),
           ActorUsernameType = iff(isnotempty(ActorUsername), 'Windows', ''),
-          RuleName = iff (RuleName == "-", "", RuleName)
+          RuleName = iff (RuleName == "-", "", RuleName),
+          EventUid = _ItemId
       | parse-kv Hashes as (
           MD5: string,
           SHA1: string,
@@ -200,7 +162,7 @@ ParserQuery: |
           FilePath = TargetFilePath,
           FileName = TargetFileName,
           User = ActorUsername
-      | project-away EventID, Hashes
+      | project-away EventID, Hashes,ActorWindowsUsername,TargetFileIMPHASH
   };
   parser (
       starttime=starttime, 

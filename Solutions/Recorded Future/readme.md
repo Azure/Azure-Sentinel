@@ -1,7 +1,7 @@
 [<img alt="Recorded Future" src="Playbooks/Enrichment/RecordedFuture-IOC_Enrichment/images/RecordedFuture.png"  />](https://www.recordedfuture.com/)
 # Recorded Future Intelligence for Microsoft Sentinel
 
-Instructions how to install and use Recorded Future Solution for Microsoft Sentinel or how to install individual playbooks kan be found in the main [readme.md](Playbooks/readme.md) in the Playbook sub directory in this repository.
+Instructions how to install and use Recorded Future Solution for Microsoft Sentinel or how to install individual playbooks can be found in the main [readme.md](Playbooks/readme.md) in the Playbook sub directory in this repository.
 
 Recorded Future also provide standalone Playbooks in this repository for EntraID (identity) and Defender for endpoints.
 
@@ -14,9 +14,6 @@ Recorded Future also provide standalone Playbooks in this repository for EntraID
 
 **Recorded Future for Identity**
 - [Recorded Future Identity](../Recorded%20Future%20Identity/Playbooks/readme.md)
-
-# Best practices / quick start
-[Enrichment quick start guide](Playbooks/Enrichment/quickstart.md).
 
 # About Recorded Future
 
@@ -32,7 +29,7 @@ Recorded Future is the world's largest provider of intelligence for enterprise s
 
 [Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here!](https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta)
 
-
+<a id="keyfeatures"></a>
 # Key Features
 Recorded Future for Microsoft Sentinel offers a range of powerful intelligence capabilities, some of the key features include:
 ## **IOC Detection (Detect)**
@@ -59,19 +56,19 @@ To increase the visibility and availability of Recorded Future Alerts. Import Re
 ## **Recorded Future Automated Threat Hunt (Threat Hunt)**
 Threat hunting is the proactive and iterative process of searching for and detecting cyber threats that have evaded traditional security measures, such as firewalls, antivirus software, and intrusion detection systems. It involves using a combination of manual and automated techniques to identify and investigate potential security breaches and intrusions within an organization's network.
 
-[More about Threat Hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires login)
+[More about Threat Hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires Recorded Future login)
 
 ## Recorded Future Risk Lists
 Risk Lists are curated lists that contain Indicators of Compromise (IOCs), such as IP addresses, domains, file hashes, or URLs associated with malicious activity. These lists are generated based on a wide array of Recorded Future intelligence sources, including open web, dark web, and other technical sources. 
 
 * [Manage Risk Lists](https://www.recordedfuture.com/support/install-configure-manage-risk-lists)
-* [About Risk Lists](https://support.recordedfuture.com/hc/en-us/articles/115000897248-Recorded-Future-Risk-Lists) (requires login)
-* [Risk List Download Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (requires login)
+* [About Risk Lists](https://support.recordedfuture.com/hc/en-us/articles/115000897248-Recorded-Future-Risk-Lists) (requires Recorded Future login)
+* [Risk List Download Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (requires Recorded Future login)
 
 ## Automatic Threat Hunt
 
 Threat hunting is the proactive and iterative process of searching for and detecting cyber threats that have evaded traditional security measures, such as firewalls, antivirus software, and intrusion detection systems. It involves using a combination of manual and automated techniques to identify and investigate potential security breaches and intrusions within an organization's network.
 
-* [More about Automated threat hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires login)
+* [More about Automated threat hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires Recorded Future login)
 * [ThreatHunting](Playbooks/ThreatHunting/readme.md)
 

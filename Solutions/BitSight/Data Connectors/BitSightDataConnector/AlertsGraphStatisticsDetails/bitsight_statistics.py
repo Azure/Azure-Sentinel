@@ -19,7 +19,7 @@ from ..SharedCode.consts import (
     ALERTS_DATA_TABLE,
     COMPANIES,
     ENDPOINTS,
-    ALERT_GRAPH_STATISTICS_FUNC_NAME,
+    ALERT_GRAPH_STATISTICS_FUNC_NAME
 )
 
 
@@ -96,7 +96,7 @@ class BitSightStatistics(BitSight):
             data_to_post = []
             risk_vector_data = []
             checkpoint_key = "{}".format(company_guid)
-            checkpoint_data = self.checkpoint_obj.get_last_data(state)
+            checkpoint_data = self.checkpoint_obj.get_last_data(state, table_name=table_name)
             last_data = self.checkpoint_obj.get_endpoint_last_data(
                 checkpoint_data, endpoint, checkpoint_key
             )
@@ -124,9 +124,8 @@ class BitSightStatistics(BitSight):
                 self.send_data_to_sentinel(
                     risk_vector_data, table_name, company_name, endpoint
                 )
-            # data_to_post = str(data_to_post)
             self.checkpoint_obj.save_checkpoint(
-                state, checkpoint_data, endpoint, checkpoint_key, data_to_post
+                state, checkpoint_data, endpoint, "{}_{}".format(table_name, "Checkpoint"), checkpoint_key, data_to_post
             )
         except BitSightException:
             raise BitSightException()
@@ -183,7 +182,7 @@ class BitSightStatistics(BitSight):
             post_data = []
             checkpoint_key = "{}".format(company_guid)
             checkpoint_data = self.checkpoint_obj.get_last_data(
-                self.diligence_historical_statistics_state
+                self.diligence_historical_statistics_state, table_name=DILIGENCE_HISTORICAL_STATISTICS_TABLE
             )
             last_data = self.checkpoint_obj.get_endpoint_last_data(
                 checkpoint_data, "diligence_historical-statistics", company_guid
@@ -218,11 +217,11 @@ class BitSightStatistics(BitSight):
                     company_name,
                     "diligence historical statistics",
                 )
-            # checkpoint_data_to_post = str(checkpoint_data_to_post)
             self.checkpoint_obj.save_checkpoint(
                 self.diligence_historical_statistics_state,
                 checkpoint_data,
                 "diligence_historical-statistics",
+                "{}_{}".format(DILIGENCE_HISTORICAL_STATISTICS_TABLE, "Checkpoint"),
                 checkpoint_key,
                 checkpoint_data_to_post,
             )
@@ -254,7 +253,7 @@ class BitSightStatistics(BitSight):
             rating_diff = None
             last_date = None
             checkpoint_key = "{}".format(company_guid)
-            checkpoint_data = self.checkpoint_obj.get_last_data(self.graph_state)
+            checkpoint_data = self.checkpoint_obj.get_last_data(self.graph_state, table_name=GRAPH_DATA_TABLE)
             last_data = self.checkpoint_obj.get_endpoint_last_data(
                 checkpoint_data, "graph_data", company_guid
             )
@@ -307,6 +306,7 @@ class BitSightStatistics(BitSight):
                 self.graph_state,
                 checkpoint_data,
                 "graph_data",
+                "{}_{}".format(GRAPH_DATA_TABLE, "Checkpoint"),
                 checkpoint_key,
                 data_to_post,
             )
@@ -340,7 +340,7 @@ class BitSightStatistics(BitSight):
         try:
             data_to_post = None
             checkpoint_key = "{}".format(company_guid)
-            checkpoint_data = self.checkpoint_obj.get_last_data(self.alerts_state)
+            checkpoint_data = self.checkpoint_obj.get_last_data(self.alerts_state, table_name=ALERTS_DATA_TABLE)
             last_date = self.checkpoint_obj.get_endpoint_last_data(
                 checkpoint_data, "alerts_data", company_guid
             )
@@ -354,6 +354,7 @@ class BitSightStatistics(BitSight):
             next_link = response.get("links").get("next")
             alerts_data = []
             c_data = {}
+            query_parameter["offset"] = 0
             while next_link:
                 query_parameter["offset"] += query_parameter.get("limit")
                 c_data["next1"] = self.get_bitsight_data(url, query_parameter)
@@ -403,6 +404,7 @@ class BitSightStatistics(BitSight):
                 self.alerts_state,
                 checkpoint_data,
                 "alerts_data",
+                "{}_{}".format(ALERTS_DATA_TABLE, "Checkpoint"),
                 checkpoint_key,
                 data_to_post,
             )
@@ -422,7 +424,7 @@ class BitSightStatistics(BitSight):
             company_names (list): List of company names.
         """
         fetching_index = self.get_last_data_index(
-            company_names, self.checkpoint_obj, self.company_state
+            company_names, self.checkpoint_obj, self.company_state, table_name="{}_{}".format(ALERTS_DATA_TABLE, "Statistics")
         )
         for company_index in range(fetching_index + 1, len(logs_data)):
             company_name = logs_data[company_index].get("name_s")
@@ -443,6 +445,7 @@ class BitSightStatistics(BitSight):
                 self.company_state,
                 company_name,
                 "statisctics_company",
+                "{}_{}".format(ALERTS_DATA_TABLE, "Statistics_Company_Checkpoint"),
                 company_name_flag=True,
             )
 

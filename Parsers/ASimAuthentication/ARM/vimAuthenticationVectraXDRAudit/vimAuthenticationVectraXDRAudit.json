@@ -18,29 +18,19 @@
   },
   "resources": [
     {
-      "type": "Microsoft.OperationalInsights/workspaces",
-      "apiVersion": "2017-03-15-preview",
-      "name": "[parameters('Workspace')]",
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/vimAuthenticationVectraXDRAudit')]",
       "location": "[parameters('WorkspaceRegion')]",
-      "resources": [
-        {
-          "type": "savedSearches",
-          "apiVersion": "2020-08-01",
-          "name": "vimAuthenticationVectraXDRAudit",
-          "dependsOn": [
-            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
-          ],
-          "properties": {
-            "etag": "*",
-            "displayName": "Authentication ASIM filtering parser for Vectra XDR Audit Logs Event",
-            "category": "ASIM",
-            "FunctionAlias": "vimAuthenticationVectraXDRAudit",
-            "query": "let parser = (disabled:bool = false, starttime:datetime=datetime(null), endtime:datetime=datetime(null))\n{\n  Audits_Data_CL\n  | where not(disabled) and event_action_s in (\"login\",\"logout\") and (isnull(starttime) or event_timestamp_t >= starttime) and (isnull(endtime) or event_timestamp_t <= endtime)\n  | extend\n        EventCount = int(1),\n        EventEndTime = event_timestamp_t,\n        EventProduct = 'Vectra XDR',\n        EventResult = case(result_status_s==\"success\", \"Success\", result_status_s==\"failure\", \"Failure\",\"NA\"),\n        EventSchema = \"Authentication\",\n        EventSchemaVersion = \"0.1.3\",\n        EventStartTime = event_timestamp_t,\n        EventType = case(event_action_s==\"login\", \"Logon\", event_action_s==\"logout\", \"Logoff\",\"\"),\n        EventVendor = 'Vectra',\n        ActorUserId = tostring(toint(user_id_d)),\n        ActorUserIdType = \"VectraUserId\",\n        ActorUsernameType = \"UPN\",\n        EventUid = tostring(toint(id_d))\n  | project-rename\n        DvcIpAddr = source_ip_s,\n        ActorOriginalUserType = user_type_s,\n        ActorUsername = username_s,\n        EventMessage = Message,\n        EventProductVersion = version_s\n  | extend\n        User = ActorUsername,\n        Dvc = DvcIpAddr\n  | project-away\n        *_d, *_s, event_timestamp_t, api_client_id_g, TenantId, _ResourceId, RawData, SourceSystem, Computer, MG, ManagementGroupName\n};\nparser (disabled=disabled, starttime=starttime, endtime=endtime)",
-            "version": 1,
-            "functionParameters": "disabled:bool=False,starttime:datetime=datetime(null),endtime:datetime=datetime(null)"
-          }
-        }
-      ]
+      "properties": {
+        "etag": "*",
+        "displayName": "Authentication ASIM filtering parser for Vectra XDR Audit Logs Event",
+        "category": "ASIM",
+        "FunctionAlias": "vimAuthenticationVectraXDRAudit",
+        "query": "let parser = (\n    starttime: datetime=datetime(null), \n    endtime: datetime=datetime(null), \n    username_has_any: dynamic = dynamic([]),\n    targetappname_has_any: dynamic = dynamic([]),\n    srcipaddr_has_any_prefix: dynamic = dynamic([]),\n    srchostname_has_any: dynamic = dynamic([]),\n    eventtype_in: dynamic = dynamic([]),\n    eventresultdetails_in: dynamic = dynamic([]),\n    eventresult: string = '*',\n    disabled: bool=false\n    ) {\n    Audits_Data_CL\n    | where not(disabled)\n        and event_action_s in (\"login\", \"logout\")\n        and (isnull(starttime) or event_timestamp_t >= starttime)\n        and (isnull(endtime) or event_timestamp_t <= endtime)\n        and ((array_length(username_has_any) == 0) or username_s has_any (username_has_any))\n        and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source\n        and (array_length(srcipaddr_has_any_prefix) == 0) // SrcIpAddr not available in source\n        and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source\n        and ((array_length(eventtype_in) == 0) or (\"Logon\" in~ (eventtype_in)) or (\"Logoff\" in~ (eventtype_in)))\n        and (array_length(eventresultdetails_in) == 0) // EventResultDetails not available in source\n    // eventresult filtering done later in the parser\n    | extend\n        EventCount = int(1),\n        EventEndTime = event_timestamp_t,\n        EventProduct = 'Vectra XDR',\n        EventResult = case(result_status_s == \"success\", \"Success\", result_status_s == \"failure\", \"Failure\", \"NA\"),\n        EventSchema = \"Authentication\",\n        EventSchemaVersion = \"0.1.3\",\n        EventStartTime = event_timestamp_t,\n        EventType = case(event_action_s == \"login\", \"Logon\", event_action_s == \"logout\", \"Logoff\", \"\"),\n        EventVendor = 'Vectra',\n        ActorUserId = tostring(toint(user_id_d)),\n        ActorUserIdType = \"VectraUserId\",\n        ActorUsernameType = \"UPN\",\n        EventUid = tostring(toint(id_d))\n    // Post-filtering on eventtype_in and eventresult\n    | where ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))\n        and ((eventresult == \"*\") or (EventResult == eventresult))\n    | project-rename\n        DvcIpAddr = source_ip_s,\n        ActorOriginalUserType = user_type_s,\n        ActorUsername = username_s,\n        EventMessage = Message,\n        EventProductVersion = version_s\n    // mapping ASimMatchingUsername\n    | extend temp_isMatchActorUsername=ActorUsername has_any(username_has_any)\n    // TargetUsername not coming from source. Hence, not mapped.\n    | extend ASimMatchingUsername = case\n        (\n                                    array_length(username_has_any) == 0,\n                                    \"-\",\n                                    temp_isMatchActorUsername,\n                                    \"ActorUsername\",\n                                    \"No match\"\n                                )\n    | extend\n        User = ActorUsername,\n        Dvc = DvcIpAddr\n    | project-away\n        *_d,\n        *_s,\n        event_timestamp_t,\n        api_client_id_g,\n        TenantId,\n        _ResourceId,\n        RawData,\n        SourceSystem,\n        Computer,\n        MG,\n        ManagementGroupName\n};\nparser (\n  starttime=starttime,\n  endtime=endtime,\n  username_has_any=username_has_any,\n  targetappname_has_any=targetappname_has_any,\n  srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,\n  srchostname_has_any=srchostname_has_any,\n  eventtype_in=eventtype_in,\n  eventresultdetails_in=eventresultdetails_in,\n  eventresult=eventresult,\n  disabled=disabled\n)",
+        "version": 1,
+        "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),username_has_any:dynamic=dynamic([]),targetappname_has_any:dynamic=dynamic([]),srcipaddr_has_any_prefix:dynamic=dynamic([]),srchostname_has_any:dynamic=dynamic([]),eventtype_in:dynamic=dynamic([]),eventresultdetails_in:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False"
+      }
     }
   ]
 }
