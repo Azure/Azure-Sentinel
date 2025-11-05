@@ -52,7 +52,7 @@ namespace Varonis.Sentinel.Functions.Helpers
                     EscalationType = row[AlertAttributes.ActionTypeName],
                     MitreTacticName = row[AlertAttributes.MitreTacticName],
                     ClosedBy = row[AlertAttributes.ClosedByName],
-                    IngestTime = GetDateValue(row, AlertAttributes.IngestTime),
+                    IngestTime = GetDateValue(row, AlertAttributes.IngestTime).Value,
                 };
                 return alertItem;
             }
