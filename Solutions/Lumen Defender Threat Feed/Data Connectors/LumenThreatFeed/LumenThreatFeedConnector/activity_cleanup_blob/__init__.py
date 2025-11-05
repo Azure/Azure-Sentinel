@@ -23,7 +23,7 @@ def _get_blob_container():
     try:
         if not container_client.exists():
             container_client.create_container()
-            logging.info(f"Created blob container: {container_name}")
+            logging.debug(f"Created blob container: {container_name}")
     except ResourceExistsError:
         pass  # Container already exists (race)
     except Exception as e:
