@@ -1,198 +1,232 @@
-{
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-        "workspace": { "type": "string" },
-        "workspace-location": { "type": "string" },
-        "dcrConfig": { "type": "object" },
-        "username": { "type": "string" },
-        "password": { "type": "securestring" },
-        "connectorDefinitionName": { "type": "string", "defaultValue": "CyeraDSPMCCF" },
-        "solutionId": { "type": "string" },
-        "solutionName": { "type": "string" },
-        "email": { "type": "string" },
-        "dataConnectorCCPVersion": { "type": "string" },
-        "dataConnectorContentIdConnections1": { "type": "string" }
-    },
-    "variables": {
-        "_solutionId": "[parameters('solutionId')]",
-        "_solutionName": "[parameters('solutionName')]",
-        "_email": "[parameters('email')]",
-        "_dataConnectorCCPVersion": "[parameters('dataConnectorCCPVersion')]",
-        "_dataConnectorContentIdConnections1": "[parameters('dataConnectorContentIdConnections1')]"
-    },
-    "resources": [
-        {
-            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
-            "apiVersion": "2022-01-01-preview",
-            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-            "properties": {
-                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
-                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
-                "kind": "ResourcesDataConnector",
-                "version": "[variables('_dataConnectorCCPVersion')]",
-                "source": { "sourceId": "[variables('_solutionId')]", "name": "[variables('_solutionName')]", "kind": "Solution" },
-                "author": { "name": "Microsoft", "email": "[variables('_email')]" },
-                "support": { "name": "Microsoft Corporation", "email": "support@microsoft.com", "tier": "Microsoft", "link": "https://support.microsoft.com" }
+[{
+    "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CyeraDSPMPollerClassifications')]",
+    "apiVersion": "2023-02-01-preview",
+    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+    "location": "[parameters('workspace-location')]",
+    "kind": "RestApiPoller",
+    "properties": {
+        "connectorDefinitionName": "CyeraDSPMCCF",
+        "dcrConfig": {
+            "streamName": "Custom-CyeraClassifications_SRC",
+            "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+            "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+        },
+        "dataType": "CyeraClassifications_CL",
+        "auth": {
+            "type": "JwtToken",
+            "userName": {
+                "key": "clientId",
+                "value": "[[parameters('username')]"
+            },
+            "password": {
+                "key": "secret",
+                "value": "[[parameters('password')]"
+            },
+            "TokenEndpoint": "https://api.cyera.io/v1/login",
+            "Headers": {
+                "Accept": "application/json"
+            },
+            "IsCredentialsInHeaders": false,
+            "IsJsonRequest": true,
+            "JwtTokenJsonPath": "$.jwt",
+            "RequestTimeoutInSeconds": 30
+        },
+        "request": {
+            "apiEndpoint": "https://api.cyera.io/v1/classifications",
+            "httpMethod": "GET",
+            "queryParameters": {
+                "offset": 0,
+                "limit": 100
+            },
+            "queryWindowInMin": 5,
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
+            "rateLimitQps": 1,
+            "retryCount": 3,
+            "timeoutInSeconds": 120,
+            "headers": {
+                "Accept": "application/json",
+                "User-Agent": "cyera-sentinel-connector/1.6.1"
             }
         },
-        {
-            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CyeraDSPMPollerClassifications')]",
-            "apiVersion": "2023-02-01-preview",
-            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-            "location": "[parameters('workspace-location')]",
-            "kind": "RestApiPoller",
-            "properties": {
-                "connectorDefinitionName": "[parameters('connectorDefinitionName')]",
-                "dcrConfig": {
-                    "streamName": "Custom-CyeraClassifications_SRC",
-                    "dataCollectionEndpoint": "[parameters('dcrConfig').dataCollectionEndpoint]",
-                    "dataCollectionRuleImmutableId": "[parameters('dcrConfig').dataCollectionRuleImmutableId]"
-                },
-                "dataType": "CyeraClassifications_CL",
-                "auth": {
-                    "type": "JwtToken",
-                    "userName": { "key": "clientId", "value": "[parameters('username')]" },
-                    "password": { "key": "secret", "value": "[parameters('password')]" },
-                    "TokenEndpoint": "https://api.cyera.io/v1/login",
-                    "Headers": { "Accept": "application/json" },
-                    "IsCredentialsInHeaders": false,
-                    "IsJsonRequest": true,
-                    "JwtTokenJsonPath": "$.jwt",
-                    "RequestTimeoutInSeconds": 30
-                },
-                "request": {
-                    "apiEndpoint": "https://api.cyera.io/v1/classifications",
-                    "httpMethod": "GET",
-                    "queryParameters": { "offset": 0, "limit": 100 },
-                    "queryWindowInMin": 5,
-                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
-                    "rateLimitQps": 1,
-                    "retryCount": 3,
-                    "timeoutInSeconds": 120,
-                    "headers": { "Accept": "application/json", "User-Agent": "cyera-sentinel-connector/1.6.1" }
-                },
-                "response": { "eventsJsonPaths": [ "$.results" ], "format": "json" }
-            }
-        },
-        {
-            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CyeraDSPMPollerAssets')]",
-            "apiVersion": "2023-02-01-preview",
-            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-            "location": "[parameters('workspace-location')]",
-            "kind": "RestApiPoller",
-            "properties": {
-                "connectorDefinitionName": "[parameters('connectorDefinitionName')]",
-                "dcrConfig": {
-                    "streamName": "Custom-CyeraAssets_SRC",
-                    "dataCollectionEndpoint": "[parameters('dcrConfig').dataCollectionEndpoint]",
-                    "dataCollectionRuleImmutableId": "[parameters('dcrConfig').dataCollectionRuleImmutableId]"
-                },
-                "dataType": "CyeraAssets_CL",
-                "auth": {
-                    "type": "JwtToken",
-                    "userName": { "key": "clientId", "value": "[parameters('username')]" },
-                    "password": { "key": "secret", "value": "[parameters('password')]" },
-                    "TokenEndpoint": "https://api.cyera.io/v1/login",
-                    "Headers": { "Accept": "application/json" },
-                    "IsCredentialsInHeaders": false,
-                    "IsJsonRequest": true,
-                    "JwtTokenJsonPath": "$.jwt",
-                    "RequestTimeoutInSeconds": 30
-                },
-                "request": {
-                    "apiEndpoint": "https://api.cyera.io/v2/datastores",
-                    "httpMethod": "GET",
-                    "queryParameters": { "offset": 0, "limit": 1000 },
-                    "queryWindowInMin": 5,
-                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
-                    "rateLimitQps": 1,
-                    "retryCount": 3,
-                    "timeoutInSeconds": 120,
-                    "headers": { "Accept": "application/json", "User-Agent": "cyera-sentinel-connector/1.6.1" }
-                },
-                "response": { "eventsJsonPaths": [ "$.results" ], "format": "json" }
-            }
-        },
-        {
-            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CyeraDSPMPollerIssues')]",
-            "apiVersion": "2023-02-01-preview",
-            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-            "location": "[parameters('workspace-location')]",
-            "kind": "RestApiPoller",
-            "properties": {
-                "connectorDefinitionName": "[parameters('connectorDefinitionName')]",
-                "dcrConfig": {
-                    "streamName": "Custom-CyeraIssues_SRC",
-                    "dataCollectionEndpoint": "[parameters('dcrConfig').dataCollectionEndpoint]",
-                    "dataCollectionRuleImmutableId": "[parameters('dcrConfig').dataCollectionRuleImmutableId]"
-                },
-                "dataType": "CyeraIssues_CL",
-                "auth": {
-                    "type": "JwtToken",
-                    "userName": { "key": "clientId", "value": "[parameters('username')]" },
-                    "password": { "key": "secret", "value": "[parameters('password')]" },
-                    "TokenEndpoint": "https://api.cyera.io/v1/login",
-                    "Headers": { "Accept": "application/json" },
-                    "IsCredentialsInHeaders": false,
-                    "IsJsonRequest": true,
-                    "JwtTokenJsonPath": "$.jwt",
-                    "RequestTimeoutInSeconds": 30
-                },
-                "request": {
-                    "apiEndpoint": "https://api.cyera.io/v3/issues",
-                    "httpMethod": "GET",
-                    "queryParameters": { "offset": 0, "limit": 100 },
-                    "queryWindowInMin": 5,
-                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
-                    "rateLimitQps": 1,
-                    "retryCount": 3,
-                    "timeoutInSeconds": 120,
-                    "headers": { "Accept": "application/json", "User-Agent": "cyera-sentinel-connector/1.6.1" }
-                },
-                "response": { "eventsJsonPaths": [ "$.results" ], "format": "json" }
-            }
-        },
-        {
-            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CyeraDSPMPollerIdentities')]",
-            "apiVersion": "2023-02-01-preview",
-            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-            "location": "[parameters('workspace-location')]",
-            "kind": "RestApiPoller",
-            "properties": {
-                "connectorDefinitionName": "[parameters('connectorDefinitionName')]",
-                "dcrConfig": {
-                    "streamName": "Custom-CyeraIdentities_SRC",
-                    "dataCollectionEndpoint": "[parameters('dcrConfig').dataCollectionEndpoint]",
-                    "dataCollectionRuleImmutableId": "[parameters('dcrConfig').dataCollectionRuleImmutableId]"
-                },
-                "dataType": "CyeraIdentities_CL",
-                "auth": {
-                    "type": "JwtToken",
-                    "userName": { "key": "clientId", "value": "[parameters('username')]" },
-                    "password": { "key": "secret", "value": "[parameters('password')]" },
-                    "TokenEndpoint": "https://api.cyera.io/v1/login",
-                    "Headers": { "Accept": "application/json" },
-                    "IsCredentialsInHeaders": false,
-                    "IsJsonRequest": true,
-                    "JwtTokenJsonPath": "$.jwt",
-                    "RequestTimeoutInSeconds": 30
-                },
-                "request": {
-                    "apiEndpoint": "https://api.cyera.io/v1/identities",
-                    "httpMethod": "GET",
-                    "queryParameters": { "offset": 0, "limit": 100 },
-                    "queryWindowInMin": 5,
-                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
-                    "rateLimitQps": 1,
-                    "retryCount": 3,
-                    "timeoutInSeconds": 120,
-                    "headers": { "Accept": "application/json", "User-Agent": "cyera-sentinel-connector/1.6.1" }
-                },
-                "response": { "eventsJsonPaths": [ "$.results" ], "format": "json" }
-            }
+        "response": {
+            "eventsJsonPaths": [
+                "$.results"
+            ],
+            "format": "json"
         }
-    ]
-}
-
-
+    }
+},
+{
+    "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CyeraDSPMPollerAssets')]",
+    "apiVersion": "2023-02-01-preview",
+    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+    "location": "[parameters('workspace-location')]",
+    "kind": "RestApiPoller",
+    "properties": {
+        "connectorDefinitionName": "CyeraDSPMCCF",
+        "dcrConfig": {
+            "streamName": "Custom-CyeraAssets_SRC",
+            "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+            "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+        },
+        "dataType": "CyeraAssets_CL",
+        "auth": {
+            "type": "JwtToken",
+            "userName": {
+                "key": "clientId",
+                "value": "[[parameters('username')]"
+            },
+            "password": {
+                "key": "secret",
+                "value": "[[parameters('password')]"
+            },
+            "TokenEndpoint": "https://api.cyera.io/v1/login",
+            "Headers": {
+                "Accept": "application/json"
+            },
+            "IsCredentialsInHeaders": false,
+            "IsJsonRequest": true,
+            "JwtTokenJsonPath": "$.jwt",
+            "RequestTimeoutInSeconds": 30
+        },
+        "request": {
+            "apiEndpoint": "https://api.cyera.io/v2/datastores",
+            "httpMethod": "GET",
+            "queryParameters": {
+                "offset": 0,
+                "limit": 1000
+            },
+            "queryWindowInMin": 5,
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
+            "rateLimitQps": 1,
+            "retryCount": 3,
+            "timeoutInSeconds": 120,
+            "headers": {
+                "Accept": "application/json",
+                "User-Agent": "cyera-sentinel-connector/1.6.1"
+            }
+        },
+        "response": {
+            "eventsJsonPaths": [
+                "$.results"
+            ],
+            "format": "json"
+        }
+    }
+},
+{
+    "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CyeraDSPMPollerIssues')]",
+    "apiVersion": "2023-02-01-preview",
+    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+    "location": "[parameters('workspace-location')]",
+    "kind": "RestApiPoller",
+    "properties": {
+        "connectorDefinitionName": "CyeraDSPMCCF",
+        "dcrConfig": {
+            "streamName": "Custom-CyeraIssues_SRC",
+            "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+            "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+        },
+        "dataType": "CyeraIssues_CL",
+        "auth": {
+            "type": "JwtToken",
+            "userName": {
+                "key": "clientId",
+                "value": "[[parameters('username')]"
+            },
+            "password": {
+                "key": "secret",
+                "value": "[[parameters('password')]"
+            },
+            "TokenEndpoint": "https://api.cyera.io/v1/login",
+            "Headers": {
+                "Accept": "application/json"
+            },
+            "IsCredentialsInHeaders": false,
+            "IsJsonRequest": true,
+            "JwtTokenJsonPath": "$.jwt",
+            "RequestTimeoutInSeconds": 30
+        },
+        "request": {
+            "apiEndpoint": "https://api.cyera.io/v3/issues",
+            "httpMethod": "GET",
+            "queryParameters": {
+                "offset": 0,
+                "limit": 100
+            },
+            "queryWindowInMin": 5,
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
+            "rateLimitQps": 1,
+            "retryCount": 3,
+            "timeoutInSeconds": 120,
+            "headers": {
+                "Accept": "application/json",
+                "User-Agent": "cyera-sentinel-connector/1.6.1"
+            }
+        },
+        "response": {
+            "eventsJsonPaths": [
+                "$.results"
+            ],
+            "format": "json"
+        }
+    }
+},
+{
+    "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CyeraDSPMPollerIdentities')]",
+    "apiVersion": "2023-02-01-preview",
+    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+    "location": "[parameters('workspace-location')]",
+    "kind": "RestApiPoller",
+    "properties": {
+        "connectorDefinitionName": "CyeraDSPMCCF",
+        "dcrConfig": {
+            "streamName": "Custom-CyeraIdentities_SRC",
+            "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+            "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+        },
+        "dataType": "CyeraIdentities_CL",
+        "auth": {
+            "type": "JwtToken",
+            "userName": {
+                "key": "clientId",
+                "value": "[[parameters('username')]"
+            },
+            "password": {
+                "key": "secret",
+                "value": "[[parameters('password')]"
+            },
+            "TokenEndpoint": "https://api.cyera.io/v1/login",
+            "Headers": {
+                "Accept": "application/json"
+            },
+            "IsCredentialsInHeaders": false,
+            "IsJsonRequest": true,
+            "JwtTokenJsonPath": "$.jwt",
+            "RequestTimeoutInSeconds": 30
+        },
+        "request": {
+            "apiEndpoint": "https://api.cyera.io/v1/identities",
+            "httpMethod": "GET",
+            "queryParameters": {
+                "offset": 0,
+                "limit": 100
+            },
+            "queryWindowInMin": 5,
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
+            "rateLimitQps": 1,
+            "retryCount": 3,
+            "timeoutInSeconds": 120,
+            "headers": {
+                "Accept": "application/json",
+                "User-Agent": "cyera-sentinel-connector/1.6.1"
+            }
+        },
+        "response": {
+            "eventsJsonPaths": [
+                "$.results"
+            ],
+            "format": "json"
+        }
+    }
+}]
