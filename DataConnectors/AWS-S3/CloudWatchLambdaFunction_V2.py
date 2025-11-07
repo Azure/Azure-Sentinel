@@ -101,7 +101,7 @@ def lambda_handler(event, context):
                                 fileToS3 = df
                                 try:                
                                     # Export data to temporary file in the right format, which will be deleted as soon as the session ends
-                                    fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
+                                    fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', doublequote=False, quoting=csv.QUOTE_NONE)
                                 
                                     # Upload data to desired folder in bucket
                                     s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')

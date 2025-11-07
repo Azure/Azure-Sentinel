@@ -67,7 +67,7 @@ def lambda_handler(event, context):
             sanitized_stream_name = log_stream_name.replace('/', '_')
             
             # Export data to temporary file in the right format, which will be deleted as soon as the session ends
-            fileToS3.to_csv( f'/tmp/{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
+            fileToS3.to_csv( f'/tmp/{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz', index=False, header=False, compression='gzip', doublequote=False, quoting=csv.QUOTE_NONE)
             
             # Upload data to desired folder in bucket
             s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz', f'{BUCKET_PREFIX}{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz')
