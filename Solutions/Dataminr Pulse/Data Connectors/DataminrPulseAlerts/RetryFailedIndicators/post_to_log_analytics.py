@@ -1,130 +1,74 @@
-"""This file contains methods for creating microsoft indicator and custom log table."""
-import inspect
-import base64
-import hashlib
-import hmac
-import datetime
-import requests
-from ..shared_code.logger import applogger
-from ..shared_code.dataminrpulse_exception import DataminrPulseException
-from ..shared_code import consts
+"""Module with DataminrPulse class for interacting with DataminrPulse APIs and posting data to Sentinel."""
+from azure.identity import AzureAuthorityHosts, ClientSecretCredential
+from azure.monitor.ingestion import LogsIngestionClient
+from azure.core.exceptions import HttpResponseError, ClientAuthenticationError
+from shared_code.consts import (DCR_RULE_ID, AZURE_DATA_COLLECTION_ENDPOINT, SCOPE,
+                                AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET)
+from shared_code.logger import applogger
+from shared_code.dataminrpulse_exception import DataminrPulseException
 
 
-def build_signature(
-    date,
-    content_length,
-    method,
-    content_type,
-    resource,
-):
-    """To build signature which is required in header."""
-    x_headers = "x-ms-date:" + date
-    string_to_hash = (
-        method
-        + "\n"
-        + str(content_length)
-        + "\n"
-        + content_type
-        + "\n"
-        + x_headers
-        + "\n"
-        + resource
-    )
-    bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-    decoded_key = base64.b64decode(consts.WORKSPACE_KEY)
-    encoded_hash = base64.b64encode(
-        hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()
-    ).decode()
-    authorization = "SharedKey {}:{}".format(consts.WORKSPACE_ID, encoded_hash)
-    return authorization
-
-
-def post_data(body, log_type):
-    """Build and send a request to the POST API.
+def send_data_to_sentinel(data, data_table):
+    """
+    Post data to Azure Sentinel via the ingestion API.
 
     Args:
-        body (str): Data to post into Sentinel log analytics workspace
-        log_type (str): Custom log table name in which data wil be added.
+        data (dict or list): Data to be ingested into Sentinel.
+        data_table (str): Log type/table name for ingestion.
 
-    Returns:
-        status_code: Returns the response status code got while posting data to sentinel.
+    Raises:
+        DataminrPulseException: For any error during data upload to Sentinel.
     """
-    __method_name = inspect.currentframe().f_code.co_name
-    method = "POST"
-    content_type = "application/json"
-    resource = "/api/logs"
-    rfc1123date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
-    content_length = len(body)
     try:
-        signature = build_signature(
-            rfc1123date,
-            content_length,
-            method,
-            content_type,
-            resource,
-        )
-    except Exception as err:
-        applogger.error(
-            "{}(method={}) : {} : Error occurred: {}".format(
-                consts.LOGS_STARTS_WITH,
-                __method_name,
-                consts.RETRY_FAILED_INDICATORS,
-                err,
-            )
-        )
-        raise DataminrPulseException(
-            "Error while generating signature for posting data into log analytics."
-        )
-    uri = (
-        consts.LOG_ANALYTICS_URL
-        + resource
-        + "?api-version=2016-04-01"
-    )
-    applogger.debug("uri: {}".format(uri))
-
-    headers = {
-        "content-type": content_type,
-        "Authorization": signature,
-        "Log-Type": log_type,
-        "x-ms-date": rfc1123date,
-    }
-    try:
-        response = requests.post(uri, data=body, headers=headers)
-        if response.status_code >= 200 and response.status_code <= 299:
-            applogger.debug(
-                "{}(method={}) : {} : Status_code: {} Accepted: Data Posted Successfully to azure sentinel.".format(
-                    consts.LOGS_STARTS_WITH,
-                    __method_name,
-                    consts.RETRY_FAILED_INDICATORS,
-                    response.status_code,
+        # Determine appropriate Azure credentials
+        if ".us" in SCOPE:
+            creds = ClientSecretCredential(
+                    client_id=AZURE_CLIENT_ID,
+                    client_secret=AZURE_CLIENT_SECRET,
+                    tenant_id=AZURE_TENANT_ID,
+                    authority=AzureAuthorityHosts.AZURE_GOVERNMENT
                 )
-            )
-            return response.status_code
         else:
-            raise DataminrPulseException(
-                "Response code: {} from posting data to log analytics.\nError: {}".format(
-                    response.status_code, response.content
-                )
+            creds = ClientSecretCredential(
+                client_id=AZURE_CLIENT_ID,
+                client_secret=AZURE_CLIENT_SECRET,
+                tenant_id=AZURE_TENANT_ID
             )
-    except DataminrPulseException as error:
+
+        azure_client = LogsIngestionClient(
+            AZURE_DATA_COLLECTION_ENDPOINT,
+            credential=creds,
+            credential_scopes=[SCOPE]
+        )
+
+        # Ensure data is a list for ingestion
+        if not isinstance(data, list):
+            data = [data] if isinstance(data, dict) else list(data)
+
+        dcr_stream = f"Custom-{data_table}"
+        azure_client.upload(rule_id=DCR_RULE_ID, stream_name=dcr_stream, logs=data)
+
+    except ClientAuthenticationError as error:
         applogger.error(
-            "{}(method={}) : {} : Error: {}".format(
-                consts.LOGS_STARTS_WITH,
-                __method_name,
-                consts.RETRY_FAILED_INDICATORS,
-                error,
+                "DataminrPulse: Authentication error while uploading data to Sentinel. "
+                f"Error: {error}"
             )
+        raise DataminrPulseException(
+            f"Authentication error while uploading data to Sentinel: {error}"
+        )
+    except HttpResponseError as error:
+        applogger.error(
+            "DataminrPulse: HTTP response error while uploading data to Sentinel. "
+            f"Error: {error}"
         )
         raise DataminrPulseException(
-            "DataminrPulseException: Error while posting data to sentinel."
+            f"HTTP response error while uploading data to Sentinel: {error}"
         )
     except Exception as error:
         applogger.error(
-            "{}(method={}) : {} : Error: {}".format(
-                consts.LOGS_STARTS_WITH,
-                __method_name,
-                consts.RETRY_FAILED_INDICATORS,
-                error,
-            )
+            "DataminrPulse: Unexpected error while uploading data to Sentinel. "
+            f"Error: {error}"
         )
-        raise DataminrPulseException("Exception: Error while posting data to sentinel.")
+        raise DataminrPulseException(
+            f"Unexpected error while uploading data to Sentinel: {error}"
+        )
