@@ -1,0 +1,42 @@
+id: 8fe88892-3a55-4220-9141-939a8e7a15c5
+name: Devices with Log4j vulnerability alerts and additional other alert related context
+description: |
+  Microsoft has observed threat actors exploiting vulnerabilities associated with Log4J.
+description-detailed: |
+  Microsoft has observed threat actors exploiting vulnerabilities associated with Log4J. This query will return devices with Log4j vulnerability alerts and additional other alert related context.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - AlertInfo
+      - AlertEvidence
+tactics:
+  - InitialAccess
+  - Execution 
+query: |
+  // Get any devices with Log4J related Alert Activity
+  let DevicesLog4JAlerts = AlertInfo
+  | where Title in~('Suspicious script launched',
+  'Exploitation attempt against Log4j (CVE-2021-44228)',
+  'Suspicious process executed by a network service',
+  'Possible target of Log4j exploitation (CVE-2021-44228)',
+  'Possible target of Log4j exploitation',
+  'Possible Log4j exploitation',
+  'Network connection seen in CVE-2021-44228 exploitation',
+  'Log4j exploitation detected',
+  'Possible exploitation of CVE-2021-44228',
+  'Possible target of Log4j vulnerability (CVE-2021-44228) scanning',
+  'Possible source of Log4j exploitation'
+  'Log4j exploitation attempt via cloud application', // Previously titled Exploitation attempt against Log4j
+  'Log4j exploitation attempt via email' // Previously titled Log4j Exploitation Attempt
+  )
+  // Join in evidence information
+  | join kind=innerunique AlertEvidence on AlertId
+  | where DeviceId != ""
+  | summarize by DeviceId, Title;
+  // Get additional alert activity for each device
+  AlertEvidence
+  | where DeviceId in(DevicesLog4JAlerts)
+  // Add additional info
+  | join kind=leftouter AlertInfo on AlertId
+  | summarize DeviceAlerts = make_set(Title, 100000), AlertIDs = make_set(AlertId, 100000) by DeviceId, bin(TimeGenerated, 1d)
+version: 1.0.0

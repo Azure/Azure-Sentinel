@@ -25,37 +25,59 @@ query: |
     | where TimeGenerated between(ago(14d)..ago(1d))
     | where OperationName =~ "Invite external user"
     | where Result =~ "success"
-    | extend invitingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | where isnotempty(invitingUser)
-    | summarize by invitingUser);
+    | extend InitiatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | where isnotempty(InitiatingUserPrincipalName)
+    | summarize by InitiatingUserPrincipalName);
     AuditLogs
     | where TimeGenerated > ago(1d)
     | where OperationName =~ "Invite external user"
     | where Result =~ "success"
-    | extend invitingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | where isnotempty(invitingUser) and invitingUser !in (inviting_users)
-    | extend invitedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
-    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+    | extend InitiatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | where isnotempty(InitiatingUserPrincipalName) and InitiatingUserPrincipalName !in (inviting_users)
+    | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+    | extend TargetAadUserId = tostring(TargetResources[0].id)
+    | extend invitingUser = InitiatingUserPrincipalName, invitedUserPrincipalName = TargetUserPrincipalName
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, OperationName, Result, TargetUserPrincipalName, TargetAadUserId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: invitingUser
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: invitedUserPrincipalName
+        columnName: TargetUserPrincipalName
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetAadUserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ipAddress
-version: 1.0.1
+        columnName: InitiatingIPAddress
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

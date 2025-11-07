@@ -1,0 +1,745 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageAccount": {
+            "type": "object"
+        },
+        "virtualMachinePrincipalId": {
+            "type": "string"
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]"
+        },
+        "sentinelWorkspaceResourceId": {
+            "type": "string"
+        },
+        "playbookName": {
+            "type": "string",
+            "defaultValue": "DisruptUsingQueueDynamicAlertProperties"
+        },
+        "automationRuleName": {
+            "type": "string",
+            "defaultValue": "Run Disrupt on Incident Update"
+        }
+    },
+    "variables": {
+        "azurequeuesConnectionName": "[concat('Azurequeues-', parameters('playbookName'))]",
+        "microsoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('playbookName'))]",
+        "storageAccountResourceId": "[concat(subscription().id, '/resourceGroups/', parameters('storageAccount').resourceGroup, '/providers/Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+        "storageAccountName": "[parameters('storageAccount').name]",
+        "storageQueueDataContributorRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
+        "storageQueueMessageDataProcessorRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8a0f0c08-91a1-4084-bc3d-661d67233fed')]"
+    },
+    "resources": [
+        {
+            "condition": "[equals(parameters('storageAccount').newOrExisting, 'new')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2022-09-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "[parameters('storageAccount').type]"
+            },
+            "kind": "[parameters('storageAccount').kind]"
+        },
+        {
+            "condition": "[equals(parameters('storageAccount').newOrExisting, 'new')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "apiVersion": "2022-04-01",
+            "name": "[guid(parameters('virtualMachinePrincipalId'), variables('storageAccountName'))]",
+            "properties": {
+                "roleDefinitionId": "[variables('storageQueueMessageDataProcessorRoleDefinitionId')]",
+                "principalId": "[parameters('virtualMachinePrincipalId')]",
+                "principalType": "ServicePrincipal"
+            },
+            "scope": "[variables('storageAccountResourceId')]"
+        },
+        {
+            "condition": "[equals(parameters('storageAccount').newOrExisting, 'new')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Logic/workflows', parameters('playbookName'))]"
+            ],
+            "apiVersion": "2022-04-01",
+            "name": "[guid(parameters('playbookName'), variables('storageAccountName'))]",
+            "properties": {
+                "roleDefinitionId": "[variables('storageQueueDataContributorRoleDefinitionId')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('playbookName')), '2019-05-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            },
+            "scope": "[variables('storageAccountResourceId')]"
+        },
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "P_StorageAccount": {
+                            "defaultValue": "[variables('storageAccountName')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alerts_from_incident_creation_or_incident_update": {
+                            "runAfter": {
+                                "Initialize_variable_sid_queue_exist": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AlertsObject",
+                                        "type": "array",
+                                        "value": "@coalesce(triggerBody()?['incidentUpdates']?['alerts'],triggerBody()?['object']?['properties']?['Alerts'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@variables('AlertsObject')",
+                            "actions": {
+                                "For_each_remediation_step": {
+                                    "foreach": "@body('Parse_alert')?['properties']?['remediationSteps']",
+                                    "actions": {
+                                        "If_remediation_step_is_a_disrupt_one": {
+                                            "actions": {
+                                                "Capture_the_disrupt_action": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "DisruptAction",
+                                                        "value": "@{items('For_each_remediation_step')}"
+                                                    }
+                                                },
+                                                "Set_System_GUID": {
+                                                    "runAfter": {
+                                                        "Capture_the_disrupt_action": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "sap_sid_guid",
+                                                        "value": "@{json(variables('DisruptAction'))[0]?['SystemGUID']}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@items('For_each_remediation_step')",
+                                                            "ActionType"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_alert": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_alert": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each')",
+                                        "schema": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "kind": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "properties": {
+                                                    "properties": {
+                                                        "additionalData": {
+                                                            "properties": {
+                                                                "Alert generation status": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Analytic Rule Ids": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Analytic Rule Name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Analytics Template Id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Correlation Id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Custom Details": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Data Sources": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Event Grouping": {
+                                                                    "type": "string"
+                                                                },
+                                                                "OriginalQuery": {
+                                                                    "type": "string"
+                                                                },
+                                                                "ProcessedBySentinel": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Query": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Query End Time UTC": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Query Period": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Query Start Time UTC": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Search Query Results Overall Count": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Trigger Operator": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Trigger Threshold": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "alertDisplayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "alertType": {
+                                                            "type": "string"
+                                                        },
+                                                        "confidenceLevel": {
+                                                            "type": "string"
+                                                        },
+                                                        "description": {
+                                                            "type": "string"
+                                                        },
+                                                        "endTimeUtc": {
+                                                            "type": "string"
+                                                        },
+                                                        "friendlyName": {
+                                                            "type": "string"
+                                                        },
+                                                        "processingEndTime": {
+                                                            "type": "string"
+                                                        },
+                                                        "productComponentName": {
+                                                            "type": "string"
+                                                        },
+                                                        "productName": {
+                                                            "type": "string"
+                                                        },
+                                                        "providerAlertId": {
+                                                            "type": "string"
+                                                        },
+                                                        "remediationSteps": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "resourceIdentifiers": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "workspaceId": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "type",
+                                                                    "workspaceId"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "severity": {
+                                                            "type": "string"
+                                                        },
+                                                        "startTimeUtc": {
+                                                            "type": "string"
+                                                        },
+                                                        "status": {
+                                                            "type": "string"
+                                                        },
+                                                        "systemAlertId": {
+                                                            "type": "string"
+                                                        },
+                                                        "tactics": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "timeGenerated": {
+                                                            "type": "string"
+                                                        },
+                                                        "vendorName": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "type": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Alerts_from_incident_creation_or_incident_update": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "If_disrupt_action_found": {
+                            "actions": {
+                                "List_queues_(V2)": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azurequeues']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('P_StorageAccount')))}/queues/list"
+                                    }
+                                },
+                                "Put_a_message_on_a_queue_(V2)_2": {
+                                    "runAfter": {
+                                        "was_queue_found": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{string(variables('DisruptAction'))}",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azurequeues']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('P_StorageAccount')))}/queues/@{encodeURIComponent(variables('sap_sid_guid'))}/messages"
+                                    }
+                                },
+                                "Terminate_when_disrupt_succeeded": {
+                                    "runAfter": {
+                                        "Update_incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                },
+                                "Update_incident": {
+                                    "runAfter": {
+                                        "Put_a_message_on_a_queue_(V2)_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                    {
+                                                        "Tag": "@{concat('\"',variables('sap_sid_guid'),'\": \"', variables('DisruptAction'),'\"')}"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                },
+                                "search_for_existing_queue": {
+                                    "foreach": "@body('List_queues_(V2)')",
+                                    "actions": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Set_variable": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "sid_queue_exist",
+                                                        "value": "@true"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@item()",
+                                                            "@variables('sap_sid_guid')"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "List_queues_(V2)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "was_queue_found": {
+                                    "actions": {
+                                        "Create_a_new_queue_(V2)": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azurequeues']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('P_StorageAccount')))}/queues/putQueue",
+                                                "queries": {
+                                                    "queueName": "@variables('sap_sid_guid')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "search_for_existing_queue": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('sid_queue_exist')",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_When_no_disrupt_action_found": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Cancelled"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@variables('DisruptAction')",
+                                                "None"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_variable_DisruptAction": {
+                            "runAfter": {
+                                "Initialize_variable_sap_sid_guid": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DisruptAction",
+                                        "type": "string",
+                                        "value": "None"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_sap_sid_guid": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sap_sid_guid",
+                                        "type": "string",
+                                        "value": "WorkspaceQueue"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_sid_queue_exist": {
+                            "runAfter": {
+                                "Initialize_variable_DisruptAction": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "sid_queue_exist",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azurequeues": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azurequeuesConnectionName'))]",
+                                "connectionName": "[variables('azurequeuesConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/Azurequeues')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('microsoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('microsoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('playbookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[parameters('location')]",
+            "tags": {},
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2019-05-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azurequeuesConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('microsoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azurequeuesConnectionName')]",
+            "location": "[parameters('location')]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('azurequeuesConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueSet": {
+                    "name": "managedIdentityAuth",
+                    "values": {}
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/Azurequeues')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('microsoftSentinelConnectionName')]",
+            "location": "[parameters('location')]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('microsoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.SecurityInsights/automationRules",
+            "name": "[guid(parameters('automationRuleName'))]",
+            "scope": "[parameters('sentinelWorkspaceResourceId')]",
+            "apiVersion": "2023-02-01-preview",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('playbookName'))]"
+            ],
+            "properties": {
+                "displayName": "Run Disrupt on Incident Update",
+                "order": 1,
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "triggersOn": "Incidents",
+                    "triggersWhen": "Updated",
+                    "conditions": [
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentProviderName",
+                                "operator": "Equals",
+                                "propertyValues": [
+                                    "Microsoft 365 Defender"
+                                ]
+                            }
+                        },
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentTitle",
+                                "operator": "Contains",
+                                "propertyValues": [
+                                    "[[DisruptSAP]"
+                                ]
+                            }
+                        },
+                        {
+                            "conditionType": "PropertyArrayChanged",
+                            "conditionProperties": {
+                                "arrayType": "Alerts",
+                                "changeType": "Added"
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 1,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('playbookName'))]",
+                            "tenantId": "[subscription().tenantId]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "condition": "[equals(parameters('storageAccount').newOrExisting, 'existing')]",
+            "type": "Microsoft.Resources/deployments",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('playbookName'))]"
+            ],
+            "apiVersion": "2019-10-01",
+            "name": "roleAssignmentToExistingStorageAccount",
+            "resourceGroup": "[parameters('storageAccount').resourceGroup]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "type": "Microsoft.Authorization/roleAssignments",
+                            "apiVersion": "2022-04-01",
+                            "name": "[guid(parameters('virtualMachinePrincipalId'), variables('storageAccountName'))]",
+                            "properties": {
+                                "roleDefinitionId": "[variables('storageQueueMessageDataProcessorRoleDefinitionId')]",
+                                "principalId": "[parameters('virtualMachinePrincipalId')]",
+                                "principalType": "ServicePrincipal"
+                            },
+                            "scope": "[variables('storageAccountResourceId')]"
+                        },
+                        {
+                            "type": "Microsoft.Authorization/roleAssignments",
+                            "apiVersion": "2022-04-01",
+                            "name": "[guid(parameters('playbookName'), variables('storageAccountName'))]",
+                            "properties": {
+                                "roleDefinitionId": "[variables('storageQueueDataContributorRoleDefinitionId')]",
+                                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('playbookName')), '2019-05-01', 'full').identity.principalId]",
+                                "principalType": "ServicePrincipal"
+                            },
+                            "scope": "[variables('storageAccountResourceId')]"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

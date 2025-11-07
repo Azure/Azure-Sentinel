@@ -1,0 +1,33 @@
+id: dbc2438a-0d16-4890-aaae-cbe0dc433b08
+name: RecordedFuture Threat Hunting URL All Actors
+description: |
+  'Recorded Future  URL  Threat Actor Hunt.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+tags:
+  - RecordedFuture
+query: |
+  // The source table (_Im_WebSession) is a ASIM parser table, but can be replaced by any infrastructure table containing Url data.
+  // The following workbook: Recorded Future - Url Correlation will help researching available data and selecting tables and columns
+  _Im_WebSession
+  | where isnotempty(Url)
+  | join kind=inner (
+  ThreatIntelIndicators
+  // Only look for IOCs
+  | where ObservableKey == 'url:value'
+  | where isnotempty(ObservableValue)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Data.description startswith "Recorded Future - Threat Hunt"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  ) on $left.Url == $right.ObservableValue
+  | project Url
+  | extend URL_0_Url = Url
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url

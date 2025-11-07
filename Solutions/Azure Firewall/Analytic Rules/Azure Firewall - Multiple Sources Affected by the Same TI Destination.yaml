@@ -21,12 +21,14 @@ triggerThreshold: 1
 tactics:
   - Exfiltration
   - CommandAndControl
-relevantTechniques: []
+relevantTechniques:
+  - T1041
+  - T1071
 query: |
   let RunTime = 1d; 
   let StartRunTime = 1d; 
   let EndRunTime = StartRunTime - RunTime; 
-  let MinAffectedThershold = 5; 
+  let MinAffectedThreshold = 5;
   union isfuzzy=true
   (AzureDiagnostics 
   | where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))
@@ -34,8 +36,11 @@ query: |
   | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int  "." * "Action: Deny. " ThreatDescription),
   (AZFWThreatIntel
   | where TimeGenerated between (ago(StartRunTime) .. ago(EndRunTime)))
-  | summarize TiTrafficCount = count(), dCountSourceIps = dcount(SourceIp), AffectedIps = make_set(SourceIp, 10000) by Fqdn, ThreatDescription,SourceIp 
-  | where array_length(AffectedIps) > MinAffectedThershold | order by TiTrafficCount desc
+  | extend Fqdn = DestinationIp
+  | summarize TiTrafficCount = count(), dCountSourceIps = dcount(SourceIp), AffectedIps = make_set(SourceIp, 10000) by Fqdn, ThreatDescription
+  | where array_length(AffectedIps) > MinAffectedThreshold
+  | mv-expand SourceIp = AffectedIps
+  | order by TiTrafficCount desc, Fqdn asc, parse_ipv4(tostring(SourceIp)) asc
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -45,5 +50,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Fqdn
-version: 1.1.1
+version: 1.1.4
 kind: Scheduled

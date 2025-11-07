@@ -1,0 +1,379 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Okta-Terminate-User-Sessions-HTTP", 
+        "description": "This playbook is intended to be triggered from an Azure Logic App master playbook. It will match Okta users against the account entities on the incident and then terminate all sessions of the matched users in Okta.",
+        "prerequisites": "1. An Okta admin account is needed, along with an API token. 2. A Microsoft Azure key vault containing the Okta API token must also be set up. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Okta-Terminate-User-Sessions",
+        "lastUpdateTime": "2023-02-23T14:29:33Z",
+        "entities": ["Account"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Okta", "User Session"],
+        "source":  {
+            "kind": "Community"
+        },
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Okta-Terminate-User-Sessions-HTTP",
+            "type": "string"
+        },
+        "OktaSubdomain": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the subdomain (tenant) in the Okta Org URL"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Key Vault that stores the Okta API token"
+            }
+        },
+        "SecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault Secret that contains the value of the Okta API token"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "IncidentID": {
+                                                "type": "string"
+                                            },
+                                            "aadUserId": {
+                                                "type": "string"
+                                            },
+                                            "accountName": {
+                                                "type": "string"
+                                            },
+                                            "upnSuffix": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "IncidentID",
+                                            "aadUserId",
+                                            "accountName",
+                                            "upnSuffix"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Any_successful_session_terminations": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Response_-_200": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@{triggerBody()[0]?['IncidentID']}",
+                                            "message": "<p>Terminated the following Okta user sessions:<br>\n@{variables('Affected Okta Users')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Response_-_200": {
+                                    "runAfter": {},
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "statusCode": 200
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_-_Account": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Response_-_400": {
+                                        "runAfter": {},
+                                        "type": "Response",
+                                        "kind": "Http",
+                                        "inputs": {
+                                            "statusCode": 400
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('Affected Okta Users'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_each_-_Account": {
+                            "foreach": "@triggerBody()",
+                            "actions": {
+                                "Condition_-_Check_for_account_data": {
+                                    "actions": {
+                                        "Condition_-_Check_for_Results": {
+                                            "actions": {
+                                                "Condition_-_Users_Successfully_Terminated": {
+                                                    "actions": {
+                                                        "Append_to_string_variable": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "Affected Okta Users",
+                                                                "value": "@{items('For_each_-_Account')?['Name']} [@{body('HTTP_-_Get_Okta_User_Account')?[0]?['id']}]\n"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "HTTP-_Terminate_User_Sessions": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@outputs('HTTP-_Terminate_User_Sessions')['statusCode']",
+                                                                    204
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "HTTP-_Terminate_User_Sessions": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "headers": {
+                                                            "Accept": "application/json",
+                                                            "Authorization": "SSWS @{body('Get_Secret')?['value']}",
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "method": "DELETE",
+                                                        "uri": "[concat('https://', parameters('OktaSubdomain') , '.okta.com/api/v1/users/@{body(''HTTP_-_Get_Okta_User_Account'')?[0]?[''id'']}/sessions')]"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_Get_Okta_User_Account": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('HTTP_-_Get_Okta_User_Account'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_Get_Okta_User_Account": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Accept": "application/json",
+                                                    "Authorization": "SSWS @{body('Get_Secret')?['value']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "[concat('https://', parameters('OktaSubdomain') , '.okta.com/api/v1/users?search=profile.email%20eq%20%22@{concat(replace(encodeUriComponent(items(''For_each_-_Account'')?[''accountName'']),''.'',''%2E''), ''%40'', replace(encodeUriComponent(items(''For_each_-_Account'')?[''upnSuffix'']),''.'',''%2E''))}%22')]"
+                                            },
+                                            "description": "Matching on Microsoft incident account email = Okta user account email"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_-_Account')['upnSuffix']",
+                                                        ""
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_-_Account')['accountName']",
+                                                        ""
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_Affected_Okta_Users": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Secret": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Initialize_variable_-_Affected_Okta_Users": {
+                            "runAfter": {
+                                "Get_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Affected Okta Users",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

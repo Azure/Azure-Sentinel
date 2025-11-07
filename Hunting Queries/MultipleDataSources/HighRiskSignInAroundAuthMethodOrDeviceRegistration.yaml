@@ -1,0 +1,62 @@
+
+id: d61c3213-77ba-4998-8818-1da2f85dacdf
+name: High Risk Sign In Around Authentication Method Added or Device Registration
+description: |
+  This query shows authentication methods being added and devices registered around the time of a high risk sign in which could indicate an attempt to establish persistence on a compromised account. The threshold can be changed to a wider timeframe if needed.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1556
+query: |
+  let Lookback = 1d; 
+  let TimeDeltaThreshold = 5min; 
+  SigninLogs 
+  | where TimeGenerated >= ago(Lookback) 
+  //Only interested in successful sign ins 
+  | where ResultType == 0  
+  //Look for high risk level sign ins only 
+  | where RiskLevelDuringSignIn == "high"  
+  //Exclude activity from Entra Named Locations and from trusted/registered devices 
+  | where NetworkLocationDetails == "[]" and DeviceDetail.deviceId == "" 
+  | summarize FirstRiskySignIn = min(TimeGenerated), RiskEvents = make_set_if(RiskEventTypes_V2, RiskEventTypes_V2!= "[]"), RiskySignInAppDisplayNames = make_set(AppDisplayName) by UserPrincipalName, RiskySignInIP=IPAddress, RiskySignInLocation=Location, UserId, RiskLevelDuringSignIn 
+  //Check for authentication methods being registered and bring in details
+  | join kind=leftouter ( 
+      AuditLogs 
+      | where TimeGenerated >= ago(Lookback) 
+      | where Category != "ProvisioningManagement" 
+      | where OperationName == "User registered security info" and Result == "success" 
+      | project AuthMethodAddedTime=TimeGenerated, ResultReason, InitiatedBy, TargetResources, OperationName, Result, UserId=tostring(InitiatedBy.user.id), AuthMethodIP=tostring(InitiatedBy.user.ipAddress) 
+      ) on UserId 
+  //Check for device registrations and bring in details
+  | join kind=leftouter ( 
+      AuditLogs 
+      | where TimeGenerated >= ago(Lookback) 
+      | where Category != "ProvisioningManagement" 
+      | where OperationName == "Register device" and Result == "success" 
+      | extend UserId = tostring(InitiatedBy.user.id), DeviceRegistrationIP = tostring(InitiatedBy.user.ipAddress) 
+      | where UserId != "" 
+      | project DeviceRegisteredTime=TimeGenerated, UserId, DeviceRegistrationIP, AdditionalDetails, OperationName, Result 
+      | mv-apply AdditionalDetails on (  
+          summarize by AdditionalDetails=tostring(bag_pack(tostring(AdditionalDetails.key),AdditionalDetails.value)) 
+          | summarize make_bag(todynamic(AdditionalDetails)) 
+      ) 
+      | extend RegisteredDeviceId = bag_AdditionalDetails.["Device Id"], RegisteredDeviceOS = bag_AdditionalDetails.["Device OS"], RegisteredDeviceTrustType = bag_AdditionalDetails.["Device Trust Type"] 
+      ) on UserId 
+  | extend AuthTimeDelta = abs(AuthMethodAddedTime - FirstRiskySignIn), DeviceTimeDelta = abs(DeviceRegisteredTime - FirstRiskySignIn) 
+  | where AuthTimeDelta <= TimeDeltaThreshold or DeviceTimeDelta <= TimeDeltaThreshold 
+  | project FirstRiskySignIn, UserPrincipalName, RiskySignInIP, RiskySignInLocation, RiskEvents, RiskySignInAppDisplayNames, AuthMethodAddedTime, AuthTimeDelta, ResultReason, AuthMethodIP, DeviceRegisteredTime, DeviceTimeDelta, RegisteredDeviceId, RegisteredDeviceOS, RegisteredDeviceTrustType, DeviceRegistrationIP, UserId 
+  | order by FirstRiskySignIn asc 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RiskySignInIP

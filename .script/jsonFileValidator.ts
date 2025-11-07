@@ -1,7 +1,7 @@
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
 import fs from "fs";
-import * as logger from "./utils/logger";
+import * as logger from "./utils/logger.js";
 
 export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
   JSON.parse(fs.readFileSync(filePath, "utf8"));

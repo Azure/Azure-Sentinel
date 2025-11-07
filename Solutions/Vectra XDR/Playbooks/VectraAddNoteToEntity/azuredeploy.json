@@ -1,0 +1,1465 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Vectra Add Note To Entity",
+        "description": "This playbook extracts notes from incident comments and adds them to Vectra Entity if comment added in proper structure, otherwise it prompts the user for input to add note to the Vectra Entity.",
+        "prerequisites": [
+            "1. The Vectra XDR data connector should be configured to create alerts and generate an incident based on entity data in Microsoft Sentinel.",
+            "2. Obtain keyvault name and tenantId where client credentials are stored using which access token will be generated.",
+            "a. Create a Key Vault with unique name",
+            "b. Go to Keyvaults → <your keyvault> → Overview and copy DirectoryID which will be used as tenantId",
+            "NOTE: Make sure the Permission model in the Access Configuration of Keyvault is selected to the Vault access policy. If not then change it to 'Vault access policy'",
+            "3. Obtain Teams GroupId and ChannelId",
+            "a. Create a Team with public channel.",
+            "b. Click on three dots (...) present on right side of the your newly created teams channel and Get link to the channel.",
+            "c. copy the text from the link between /channel and /, decode it using online url decoder and copy it to use as channelId.",
+            "d. copy the text of groupId parameter from link to use as groupId. ",
+            "4. Make sure that VectraGenerateAccessToken playbook is deployed before deploying VectraAddNoteToEntity playbook."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Go to your logic app → API connections → Select keyvault connection resource",
+            "2. Go to General → edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**b. Add Access policy in Keyvault**",
+            "Add access policy for the playbook's managed identity and authorized user to read, and write secrets of key vault.",
+            "1. Go to logic app → <your logic app> → identity → System assigned Managed identity and copy Object (principal) ID.",
+            "2. Go to keyvaults → <your keyvault> → Access policies → create.",
+            "3. Select all keys & secrets permissions. Click next.",
+            "4. In the principal section, search by copied object ID. Click next.",
+            "5. Click review + create.",
+            "6. Repeat the above step 2 to 5 to add access policy for the user account using which connection is authorized.",
+            "**c. Configurations in Microsoft Sentinel**",
+            "1. In Microsoft sentinel, analytical rule should be configured to trigger an incident based on data ingested from Vectra. Incident should have Entity mapping.",
+            "2. To manually run the playbook on a particular incident follow the below steps:",
+            "a. Go to Microsoft Sentinel → <your workspace> → Incidents",
+            "b. Select an incident.",
+            "c. In the right pane, click on Actions, and from the dropdown select the 'Run Playbook' option.",
+            "d. click on the Run button beside this playbook."
+        ],
+        "entities": ["Account", "Host"],
+        "tags": ["Vectra", "Add", "Note", "Entity"],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Vectra"
+        },
+        "lastUpdateTime": "2024-09-02T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "VectraAddNoteToEntity",
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Please do not keep 'PlaybookName' parameter empty, else you will receive validation failure"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1
+        },
+        "BaseURL": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter baseurl of your vectra account.(e.g. https://host.portal.vectra.ai)"
+            }
+        },
+        "TeamsGroupId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Group where the adaptive card will be posted"
+            }
+        },
+        "TeamsChannelId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Channel where the adaptive card will be posted"
+            }
+        },
+        "GenerateAccessCredPlaybookName": {
+            "type": "string",
+            "metadata": {
+                "description": "Playbook name that you have given while deployment of playbook VectraGenerateAccessToken(e.g.VectraGenerateAccessToken)"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', trim(parameters('PlaybookName')))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', trim(parameters('PlaybookName')))]",
+        "TeamsConnectionName": "[concat('Teams-', trim(parameters('PlaybookName')))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_To_Send_Adaptive_Card_If_No_Comment_Found_With_Proper_Structure": {
+                            "actions": {
+                                "Append_To_Entity_Note_From_User_Input_For_No_Note_Extracted": {
+                                    "runAfter": {
+                                        "Post_Adaptive_Card_For_No_Structured_Comment_Found_And_Wait_For_Response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "entity_note",
+                                        "value": "@body('Post_Adaptive_Card_For_No_Structured_Comment_Found_And_Wait_For_Response')?['data']?['note']"
+                                    }
+                                },
+                                "Post_Adaptive_Card_For_No_Structured_Comment_Found_And_Wait_For_Response": {
+                                    "runAfter": {},
+                                    "type": "ApiConnectionWebhook",
+                                    "inputs": {
+                                        "body": {
+                                            "body": {
+                                                "messageBody": "{\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.3\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"large\",\n            \"weight\": \"bolder\",\n            \"text\": \"Add Note To Vectra Entity\",\n            \"horizontalAlignment\": \"center\",\n            \"style\": \"heading\",\n            \"color\": \"accent\",\n            \"fontType\": \"Default\",\n            \"wrap\": true,\n            \"id\": \"heading\"\n        },\n       {\n            \"type\": \"TextBlock\",\n            \"text\": \"Entity ID =  @{variables('entity_id')}\\n\\nEntity Type= @{variables('entity_type')}\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"accent\",\n            \"separator\": true,\n            \"id\": \"x\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"No Comment found with proper structure, enter a value of note to add into Vectra Entity explicitly.\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"warning\",\n            \"separator\": true,\n            \"id\": \"info\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"label\": \"Enter a note you want to add to the Vectra entity\",\n            \"style\": \"text\",\n            \"id\": \"note\",\n            \"isRequired\": true,\n            \"errorMessage\": \"Note is required\",\n            \"placeholder\": \"Enter a note\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Submit Answer\",\n            \"id\": \"submit\",\n            \"style\": \"positive\"\n        }\n    ]\n}\n",
+                                                "recipient": {
+                                                    "channelId": "[trim(parameters('TeamsChannelId'))]",
+                                                    "groupId": "[trim(parameters('TeamsGroupId'))]"
+                                                },
+                                                "updateMessage": "Thanks for your response!"
+                                            },
+                                            "notificationUrl": "@{listCallbackUrl()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Verify_That_Comments_Exist_Which_Contains_Note": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@empty(variables('entity_note'))",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_Execution_If_No_Alerts_Found": {
+                            "actions": {
+                                "Terminate_Due_To_No_Alerts_Found": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "No Alerts Found associated with this Incident."
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Retry_Count": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@length(triggerBody()?['object']?['properties']?['Alerts'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_Error_Occurred_While_Adding_Note_To_Vectra_Entity": {
+                            "actions": {
+                                "Terminate_Due_To_Failure_While_Adding_Note_To_Vectra_Entity": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "message": "Error occurred while adding note to vectra entity ID: @{variables('entity_id')} and Type: @{variables('entity_type')}"
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Available_Note_To_Add_In_Vectra_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('note_add_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_Error_Occurred_While_Fetching_Note_To_Vectra_Entity": {
+                            "actions": {
+                                "Terminate_Due_To_Failure_While_Fetching_Notes": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "code": "@{outputs('HTTP_Request_to_Retrieve_Notes_For_an_Entity')['statusCode']}",
+                                            "message": "@{body('HTTP_Request_to_Retrieve_Notes_For_an_Entity')}"
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Until_Retry_Count_Zero_For_Fetching_Notes_For_An_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('note_fetch_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_Error_Occurred_While_Generating_Token": {
+                            "actions": {
+                                "Terminate_Due_To_Failure_While_Generating_Access_Token": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "Error occurred while generating access token for adding note to vectra entity."
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Terminate_If_Error_Occurred_While_Adding_Note_To_Vectra_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('access_token_generate_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_Error_While_Generating_Token_While_Fetching_Notes": {
+                            "actions": {
+                                "Terminate_Due_To_Failure_While_Generating_Token_For_Fetching_Available_Notes": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "Error while generating access token"
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Terminate_If_Error_Occurred_While_Fetching_Note_To_Vectra_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('access_token_generate_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Verify_Any_Note_Available_To_Add_Or_Not": {
+                            "actions": {
+                                "Condition_To_Verify_Whether_User_Entered_Any_Value_For_Note_Or_Not": {
+                                    "actions": {
+                                        "Append_To_Notes_To_Add_From_User_Input": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "notes_to_add",
+                                                "value": "@body('Post_Adaptive_Card_For_No_Note_Available_To_Add_And_Wait_For_Response')?['data']?['note']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Post_Adaptive_Card_For_No_Note_Available_To_Add_And_Wait_For_Response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Post_Adaptive_Card_For_No_Note_Available_To_Add_And_Wait_For_Response')?['data']?['note']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Post_Adaptive_Card_For_No_Note_Available_To_Add_And_Wait_For_Response": {
+                                    "runAfter": {},
+                                    "type": "ApiConnectionWebhook",
+                                    "inputs": {
+                                        "body": {
+                                            "body": {
+                                                "messageBody": "{\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.3\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"large\",\n            \"weight\": \"bolder\",\n            \"text\": \"Add Note To Vectra  Entity\",\n            \"horizontalAlignment\": \"center\",\n            \"style\": \"heading\",\n            \"color\": \"accent\",\n            \"fontType\": \"Default\",\n            \"wrap\": true,\n            \"id\": \"heading\"\n        },\n       {\n            \"type\": \"TextBlock\",\n            \"text\": \"Entity ID =  @{variables('entity_id')}\\n\\nEntity Type= @{variables('entity_type')}\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"accent\",\n            \"separator\": true,\n            \"id\": \"x\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"All Notes are already available, please provide note if you want to add explicitly.\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"warning\",\n            \"separator\": true,\n            \"id\": \"info\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"label\": \"Enter a note you want to add into Vectra Entity\",\n            \"style\": \"text\",\n            \"id\": \"note\",\n            \"placeholder\": \"Enter a note\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Submit Answer\",\n            \"id\": \"submit\",\n            \"style\": \"positive\"\n        }\n    ]\n}",
+                                                "recipient": {
+                                                    "channelId": "[trim(parameters('TeamsChannelId'))]",
+                                                    "groupId": "[trim(parameters('TeamsGroupId'))]"
+                                                },
+                                                "updateMessage": "Thanks for your response!"
+                                            },
+                                            "notificationUrl": "@{listCallbackUrl()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Note_Extracted_From_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@empty(variables('notes_to_add'))",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Verify_That_Comments_Exist_Which_Contains_Note": {
+                            "actions": {
+                                "For_Each_Loop_To_Extract_Comment_Values": {
+                                    "foreach": "@body('Filter_Comments_That_Contains_Note')",
+                                    "actions": {
+                                        "Condition_To_Check_That_Note_Is_Extracted_For_Curly_Braces": {
+                                            "actions": {
+                                                "Append_Extracted_Note_To_Array": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "entity_note",
+                                                        "value": "@outputs('Extract_Note_Written_In_Curly_Braces')"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Extract_Note_Written_In_Curly_Braces": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Condition_To_Check_That_Note_Is_Extracted_For_Square_Braces": {
+                                                        "actions": {
+                                                            "Append_to_array_variable": {
+                                                                "runAfter": {},
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "entity_note",
+                                                                    "value": "@outputs('Extract_Note_Written_In_Square_Braces')"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "not": {
+                                                                        "equals": [
+                                                                            "@outputs('Extract_Note_Written_In_Square_Braces')",
+                                                                            "@null"
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@outputs('Extract_Note_Written_In_Curly_Braces')",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Extract_Note_Written_In_Curly_Braces": {
+                                            "runAfter": {
+                                                "Extract_Note_Written_In_Square_Braces": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@if(and(startsWith(variables('incident_note'),'{'),contains(variables('incident_note'),'}')),split(string(split(variables('incident_note'),'{')[1]),'}')[0],null)"
+                                        },
+                                        "Extract_Note_Written_In_Square_Braces": {
+                                            "runAfter": {
+                                                "Set_Incident_Note": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@if(and(startsWith(variables('incident_note'),'['),contains(variables('incident_note'),']')),split(string(split(variables('incident_note'),'[')[1]),']')[0],null)"
+                                        },
+                                        "Set_Incident_Note": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "incident_note",
+                                                "value": "@{string(split(string(items('For_Each_Loop_To_Extract_Comment_Values')?['properties']?['message']), 'note: ')[1])}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_Comments_That_Contains_Note": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Append_To_Entity_Note_Array_From_User_Input": {
+                                        "runAfter": {
+                                            "Post_Adaptive_Card_to_Get_Note_Value_From_User_And_Wait_For_A_Response": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "AppendToArrayVariable",
+                                        "inputs": {
+                                            "name": "entity_note",
+                                            "value": "@body('Post_Adaptive_Card_to_Get_Note_Value_From_User_And_Wait_For_A_Response')?['data']?['Note']"
+                                        }
+                                    },
+                                    "Post_Adaptive_Card_to_Get_Note_Value_From_User_And_Wait_For_A_Response": {
+                                        "runAfter": {},
+                                        "type": "ApiConnectionWebhook",
+                                        "inputs": {
+                                            "body": {
+                                                "body": {
+                                                    "messageBody": "{\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.3\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"large\",\n            \"weight\": \"bolder\",\n            \"text\": \"Add Note To Vectra Entity\",\n            \"horizontalAlignment\": \"center\",\n            \"style\": \"heading\",\n            \"color\": \"accent\",\n            \"fontType\": \"Default\",\n            \"wrap\": true,\n            \"id\": \"heading\"\n        },\n       {\n            \"type\": \"TextBlock\",\n            \"text\": \"Entity ID =  @{variables('entity_id')}\\n\\nEntity Type= @{variables('entity_type')}\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"accent\",\n            \"separator\": true,\n            \"id\": \"x\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"label\": \"Enter a note you want to add to the Vectra entity\",\n            \"style\": \"text\",\n            \"id\": \"Note\",\n            \"separator\": true,\n            \"isRequired\": true,\n            \"errorMessage\": \"Note is required\",\n            \"placeholder\": \"Enter a note\"\n        }\n    ],\n    \"actions\": [\n        {\n           \"type\": \"Action.Submit\",\n            \"title\": \"Submit Answer\",\n            \"id\": \"submit\",\n            \"style\": \"positive\"\n        }\n    ]\n}",
+                                                    "recipient": {
+                                                        "channelId": "[trim(parameters('TeamsChannelId'))]",
+                                                        "groupId": "[trim(parameters('TeamsGroupId'))]"
+                                                    },
+                                                    "updateMessage": "Thanks for your response!"
+                                                },
+                                                "notificationUrl": "@{listCallbackUrl()}"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['teams']['connectionId']"
+                                                }
+                                            },
+                                            "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@empty(body('Filter_Comments_That_Contains_Note'))",
+                                            "@false"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Filter_Comments_That_Contains_Note": {
+                            "runAfter": {
+                                "Set_Entity_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@triggerBody()?['object']?['properties']?['Comments']",
+                                "where": "@contains(item()?['properties']?['message'], 'note: ')"
+                            }
+                        },
+                        "For_Each_Available_Note_To_Add_In_Vectra_Entity": {
+                            "foreach": "@variables('notes_to_add')",
+                            "actions": {
+                                "Set_Retry_Count_For_Notes_To_Add_In_Vectra_Entity": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "retry_count",
+                                        "value": 2
+                                    }
+                                },
+                                "Until_Retry_Count_is_Zero": {
+                                    "actions": {
+                                        "Condition_To_Verify_Note_Added_To_Vectra_Entity_Successfully": {
+                                            "actions": {
+                                                "Set_Retry_Count_As_Zero": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "retry_count",
+                                                        "value": 0
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_Request_To_Add_Note_To_Vectra_Entity": [
+                                                    "Succeeded",
+                                                    "TimedOut",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Condition_To_Generate_New_Access_Token": {
+                                                        "actions": {
+                                                            "Condition_To_Verify_Access_Token_Generated_Successfully": {
+                                                                "actions": {
+                                                                    "Decrement_Retry_Count": {
+                                                                        "runAfter": {},
+                                                                        "type": "DecrementVariable",
+                                                                        "inputs": {
+                                                                            "name": "retry_count",
+                                                                            "value": 1
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "GenerateAccessTokenVectra": [
+                                                                        "Succeeded",
+                                                                        "TimedOut",
+                                                                        "Failed"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "Decrement_Retry_Count_For_Error_While_Generating_Access_Token": {
+                                                                            "runAfter": {
+                                                                                "Set_Error_True_While_Generating_Access_Token": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "DecrementVariable",
+                                                                            "inputs": {
+                                                                                "name": "retry_count",
+                                                                                "value": 1
+                                                                            }
+                                                                        },
+                                                                        "Set_Error_True_While_Generating_Access_Token": {
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "access_token_generate_error",
+                                                                                "value": "@true"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "equals": [
+                                                                                "@body('GenerateAccessTokenVectra')?['status']",
+                                                                                "success"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            },
+                                                            "GenerateAccessTokenVectra": {
+                                                                "runAfter": {},
+                                                                "type": "Workflow",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "triggerName": "manual",
+                                                                        "workflow": {
+                                                                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('GenerateAccessCredPlaybookName')))]"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "else": {
+                                                            "actions": {
+                                                                "Set_Error_True_While_Adding_Note_To_Vectra_Entity": {
+                                                                    "runAfter": {},
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "note_add_error",
+                                                                        "value": "@true"
+                                                                    }
+                                                                },
+                                                                "Set_Retry_Count_As_Zero_For_Error_While_Adding_Note_To_Vectra_Entity": {
+                                                                    "runAfter": {
+                                                                        "Set_Error_True_While_Adding_Note_To_Vectra_Entity": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "retry_count",
+                                                                        "value": 0
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@outputs('HTTP_Request_To_Add_Note_To_Vectra_Entity')['statusCode']",
+                                                                        401
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@outputs('HTTP_Request_To_Add_Note_To_Vectra_Entity')['statusCode']",
+                                                            201
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Get_Access_Token": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/secrets/@{encodeURIComponent('Vectra-Access-Token')}/value"
+                                            },
+                                            "runtimeConfiguration": {
+                                                "secureData": {
+                                                    "properties": [
+                                                        "inputs",
+                                                        "outputs"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "HTTP_Request_To_Add_Note_To_Vectra_Entity": {
+                                            "runAfter": {
+                                                "Get_Access_Token": [
+                                                    "Succeeded",
+                                                    "Failed",
+                                                    "TimedOut"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": {
+                                                    "note": "@items('For_Each_Available_Note_To_Add_In_Vectra_Entity')"
+                                                },
+                                                "headers": {
+                                                    "Authorization": "Bearer @{body('Get_Access_Token')?['value']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "queries": {
+                                                    "type": "@variables('entity_type')"
+                                                },
+                                                "uri": "@{variables('base_url')}/api/@{variables('api_version')}/entities/@{int(variables('entity_id'))}/notes"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_Retry_Count_For_Notes_To_Add_In_Vectra_Entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": "@equals(variables('retry_count'), 0)",
+                                    "limit": {
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Verify_Any_Note_Available_To_Add_Or_Not": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "For_Each_Note_Extracted_From_Comment": {
+                            "foreach": "@variables('entity_note')",
+                            "actions": {
+                                "Condition_To_Check_Whether_Note_is_Already_Available": {
+                                    "actions": {},
+                                    "runAfter": {
+                                        "Filter_Note_From_Existing_Note_Array": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_Note_To_Notes_To_Add_In_Vectra_Entity": {
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "notes_to_add",
+                                                    "value": "@items('For_Each_Note_Extracted_From_Comment')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Filter_Note_From_Existing_Note_Array'))",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Filter_Note_From_Existing_Note_Array": {
+                                    "runAfter": {},
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('Parse_JSON_For_Notes_Data')",
+                                        "where": "@equals(item()?['note'], items('For_Each_Note_Extracted_From_Comment'))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Terminate_If_Error_While_Generating_Token_While_Fetching_Notes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_API_Version": {
+                            "runAfter": {
+                                "Initialize_Notes_To_Add_In_Vectra_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "api_version",
+                                        "type": "string",
+                                        "value": "v3.3"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Base_URL": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "[trim(parameters('BaseURL'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entity_ID": {
+                            "runAfter": {
+                                "Initialize_Base_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entity_id",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entity_Note": {
+                            "runAfter": {
+                                "Initialize_Incident_Note": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entity_note",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entity_Type": {
+                            "runAfter": {
+                                "Initialize_Entity_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entity_type",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_False_While_Generating_Access_Token": {
+                            "runAfter": {
+                                "Initialize_Error_While_Adding_Note_To_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "access_token_generate_error",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_While_Adding_Note_To_Entity": {
+                            "runAfter": {
+                                "Initialize_Error_While_Fetching_Notes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "note_add_error",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_While_Fetching_Notes": {
+                            "runAfter": {
+                                "Initialize_API_Version": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "note_fetch_error",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Incident_Note": {
+                            "runAfter": {
+                                "Initialize_Entity_Type": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_note",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Notes_To_Add_In_Vectra_Entity": {
+                            "runAfter": {
+                                "Initialize_Entity_Note": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "notes_to_add",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Retry_Count": {
+                            "runAfter": {
+                                "Initialize_Error_False_While_Generating_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "retry_count",
+                                        "type": "integer",
+                                        "value": 2
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_For_Custom_Entities_Mapping_Data": {
+                            "runAfter": {
+                                "Condition_To_Terminate_Execution_If_No_Alerts_Found": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['Alerts'][0]?['properties']?['additionalData']?['Custom Details']",
+                                "schema": {
+                                    "properties": {
+                                        "entity_id": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "entity_type": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "tags": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "attack_profile": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "entity_importance": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "ip_address": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "detection_id": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "mitre_techniques": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "required": [
+                                        "entity_id",
+                                        "entity_type"
+                                    ],
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Set_Entity_ID": {
+                            "runAfter": {
+                                "Set_Entity_Type": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "entity_id",
+                                "value": "@{split(body('Parse_JSON_For_Custom_Entities_Mapping_Data')?['entity_id'][0], '.')[0]}"
+                            }
+                        },
+                        "Set_Entity_Type": {
+                            "runAfter": {
+                                "Parse_JSON_For_Custom_Entities_Mapping_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "entity_type",
+                                "value": "@{body('Parse_JSON_For_Custom_Entities_Mapping_Data')?['entity_type'][0]}"
+                            }
+                        },
+                        "Terminate_Due_To_Playbook_Triggered_From_Wrong_Incident": {
+                            "runAfter": {
+                                "Parse_JSON_For_Custom_Entities_Mapping_Data": [
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runError": {
+                                    "message": "Playbook Triggered from Wrong Incident."
+                                },
+                                "runStatus": "Failed"
+                            }
+                        },
+                        "Until_Retry_Count_Zero_For_Fetching_Notes_For_An_Entity": {
+                            "actions": {
+                                "Condition_to_Verify_Notes_Data_Fetched_Successfully": {
+                                    "actions": {
+                                        "Parse_JSON_For_Notes_Data": {
+                                            "runAfter": {},
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_Request_to_Retrieve_Notes_For_an_Entity')",
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "created_by": {
+                                                                "type": "string"
+                                                            },
+                                                            "date_created": {
+                                                                "type": "string"
+                                                            },
+                                                            "date_modified": {},
+                                                            "id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "modified_by": {},
+                                                            "note": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        },
+                                        "Set_Retry_Count_To_Zero_For_Notes_Data": {
+                                            "runAfter": {
+                                                "Parse_JSON_For_Notes_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "retry_count",
+                                                "value": 0
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_Request_to_Retrieve_Notes_For_an_Entity": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Condition_To_Generate_New_Access_Token_For_Notes_Data": {
+                                                "actions": {
+                                                    "Condition_To_Verify_Access_Token_Generated_Successfully_For_Notes_Data": {
+                                                        "actions": {
+                                                            "Decrement_Retry_Count_For_Notes_Data": {
+                                                                "runAfter": {},
+                                                                "type": "DecrementVariable",
+                                                                "inputs": {
+                                                                    "name": "retry_count",
+                                                                    "value": 1
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "GenerateAccessTokenVectra_2": [
+                                                                "Succeeded",
+                                                                "TimedOut",
+                                                                "Failed"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Decrement_Retry_Count_For_Error_While_Generating_Token_For_Notes_Data": {
+                                                                    "runAfter": {
+                                                                        "Set_Error_True_While_Generating_Token_For_Notes_Data": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "DecrementVariable",
+                                                                    "inputs": {
+                                                                        "name": "retry_count",
+                                                                        "value": 1
+                                                                    }
+                                                                },
+                                                                "Set_Error_True_While_Generating_Token_For_Notes_Data": {
+                                                                    "runAfter": {},
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "access_token_generate_error",
+                                                                        "value": "@true"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@body('GenerateAccessTokenVectra_2')?['status']",
+                                                                        "success"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "GenerateAccessTokenVectra_2": {
+                                                        "runAfter": {},
+                                                        "type": "Workflow",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "triggerName": "manual",
+                                                                "workflow": {
+                                                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('GenerateAccessCredPlaybookName')))]"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "else": {
+                                                    "actions": {
+                                                        "Set_Error_True_While_Fetching_Notes_Data": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "note_fetch_error",
+                                                                "value": "@true"
+                                                            }
+                                                        },
+                                                        "Set_Retry_Count_As_Zero_For_Error_While_Fetching_Notes_Data": {
+                                                            "runAfter": {
+                                                                "Set_Error_True_While_Fetching_Notes_Data": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "retry_count",
+                                                                "value": 0
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@outputs('HTTP_Request_to_Retrieve_Notes_For_an_Entity')['statusCode']",
+                                                                401
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP_Request_to_Retrieve_Notes_For_an_Entity')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_Access_Token_To_Retrieve_Available_Notes": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/secrets/@{encodeURIComponent('Vectra-Access-Token')}/value"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "HTTP_Request_to_Retrieve_Notes_For_an_Entity": {
+                                    "runAfter": {
+                                        "Get_Access_Token_To_Retrieve_Available_Notes": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Get_Access_Token_To_Retrieve_Available_Notes')?['value']}"
+                                        },
+                                        "method": "GET",
+                                        "queries": {
+                                            "type": "@variables('entity_type')"
+                                        },
+                                        "uri": "@{variables('base_url')}/api/@{variables('api_version')}/entities/@{int(variables('entity_id'))}/notes"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Send_Adaptive_Card_If_No_Comment_Found_With_Proper_Structure": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(variables('retry_count'), 0)",
+                            "limit": {
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "VectraAddNoteToEntity",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[trim(parameters('TenantId'))]",
+                    "token:grantType": "code",
+                    "vaultName": "[trim(parameters('KeyVaultName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

@@ -7,22 +7,20 @@ status: Available
 requiredDataConnectors:
   - connectorId: JamfProtect
     dataTypes: 
-      - jamfprotect_CL
+      - jamfprotectalerts_CL
 suppressionDuration: PT5H
 suppressionEnabled: false
 tactics:
 relevantTechniques:
 query: |
-  JamfProtect
-  | where EventProduct == "Jamf Protect - Alerts"
-      and isnotempty(EventSeverity)
+  jamfprotectalerts_CL
   | extend
       algorithm = "SHA256",
       Host_IPs = tostring(parse_json(DvcIpAddr)[0]),
-      Tags = tostring(Match_facts[0].tags),
-      Tactics = case(Match_tags has "Execution", "Execution", Match_tags has "Visibility", "Visibility", Match_tags has "Persistence", "Persistence", Match_tags has "LateralMovement", "LateralMovement", Match_tags has "CredentialAccess", "CredentialAcccess", Match_tags has "DefenseEvasion", "DefenseEvasion", Match_tags has "PrivilegeEscalation", "PrivilegeEscalation", Match_tags has "Impact", "Impact", Match_tags has "CommandAndControl", "CommandandControl", Match_tags has "Discovery", "Discovery", Match_tags has "InitialAccess", "InitialAccess", ""),
-      Techniques = pack_array(extract(@"[A-Za-z]\d{4}", 0, tostring(Match_tags))),
-      JamfPro = case(Match_actions has "SmartGroup", "Workflow with Jamf Pro", Match_actions has "Prevented", "No workflow, Prevented by Protect", "No workflow")
+      Tags = parse_json(tostring(parse_json(tostring(input.match)).tags)),
+      Tactics = case(input.match.tags has "Execution", "Execution", input.match.tags has "Visibility", "Visibility", input.match.tags has "Persistence", "Persistence", input.match.tags has "LateralMovement", "LateralMovement", input.match.tags has "CredentialAccess", "CredentialAcccess", input.match.tags has "DefenseEvasion", "DefenseEvasion", input.match.tags has "PrivilegeEscalation", "PrivilegeEscalation", input.match.tags has "Impact", "Impact", input.match.tags has "CommandAndControl", "CommandandControl", input.match.tags has "Discovery", "Discovery", input.match.tags has "InitialAccess", "InitialAccess", ""),
+      Techniques = pack_array(extract(@"[A-Za-z]\d{4}", 0, tostring(input.match.tags))),
+      JamfPro = case(input.match.actions has "SmartGroup", "Workflow with Jamf Pro", input.match.actions has "Prevented", "No workflow, Prevented by Protect", "No workflow")
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -34,12 +32,10 @@ eventGroupingSettings:
   aggregationKind: AlertPerResult
 alertDetailsOverride:
   alertDisplayNameFormat: "{{EventMessage}} detected on {{DvcHostname}}"
-  alertDescriptionFormat: "{{EventDescription}} - Please investigate"
+  alertDescriptionFormat: "{{EventResultMessage}} - Please investigate"
   alertTacticsColumnName: Tactics
   alertSeverityColumnName: EventSeverity
   alertDynamicProperties:
-    - alertProperty: AlertLink
-      value: EventReportUrl
     - alertProperty: ProviderName
       value: EventVendor
     - alertProperty: ProductName
@@ -69,10 +65,6 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: Host_IPs
-  - entityType: Account
-    fieldMappings:
-      - identifier: Name
-        columnName: TargetUsername
   - entityType: Process
     fieldMappings:
       - identifier: CommandLine
@@ -85,5 +77,5 @@ entityMappings:
         columnName: algorithm
       - identifier: Value
         columnName: TargetBinarySHA256
-version: 1.0.5
+version: 1.0.6
 kind: NRT

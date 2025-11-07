@@ -41,8 +41,8 @@ This function app connects to Fortinet service end point and fetch the details o
 * Open created function app, follow below steps or refer steps documented [Function app setting](https://docs.microsoft.com/azure/logic-apps/logic-apps-azure-functions#enable-authentication-for-functions)
      - Go to Authentication / Authorization option   
      - Enable App Service Authentication
-     - Select "Login with Azure Active Directory" for Action to take when request is not authenticated
-     - Select Azure Active Directory as Authentication Providers
+     - Select "Login with Microsoft Entra ID" for Action to take when request is not authenticated
+     - Select Microsoft Entra ID as Authentication Providers
      - Select advanced option from the management mode and fill details 
      - UserIdentity object id as client ID (ex: b1fd400b-e34b-40c0-996f506d8a98)
      - Issuer url (format should be https://sts.windows.net/<tenentID>), refer for to get tenentID [Get tenentID](https://ms.portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/Overview)

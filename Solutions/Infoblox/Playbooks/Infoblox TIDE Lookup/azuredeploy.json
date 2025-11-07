@@ -1,0 +1,686 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Infoblox-TIDE-Lookup",
+    "description": "The playbook fetches TIDE lookup data for the provided entity type and value.",
+    "prerequisites": "User must provide valid Infoblox API Key.",
+    "postDeployment": [
+      "**a. Authorize connections**",
+      "Once deployment is complete, authorize each connection.",
+      "1. Go to your logic app -> API connections -> Select azuremonitorlogs connection resource",
+      "2. Go to General -> edit API connection",
+      "3. Click Authorize",
+      "4. Sign in",
+      "5. Click Save",
+      "6. Repeat steps for other connections"
+    ],
+    "entities": [ "Host", "IP", "Hash", "URL" ],
+    "tags": [ "Infoblox", "TIDE", "Lookup" ],
+    "lastUpdateTime": "2024-07-19T16:15:48.355Z",
+    "support": {
+      "tier": "Community",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "Infoblox"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Infoblox-TIDE-Lookup",
+      "minLength": 1,
+      "type": "string",
+      "metadata": {
+        "description": "Please keep the 'Playbook Name' parameter unchanged. Otherwise, you will need to manually adjust the 'Playbook Name' in the 'Infoblox Lookup Workbook' in edit mode"
+      }
+    },
+    "Infoblox API Key": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Enter Infoblox API Key"
+      }
+    },
+    "Infoblox Base Url": {
+      "type": "String",
+      "defaultValue": "https://csp.infoblox.com",
+      "minLength": 1,
+      "metadata": {
+        "description": "Enter Base URL for your infoblox account. (e.g. https://csp.infoblox.com)"
+      }
+    },
+    "Workspace Name": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter name of Log Analytics Workspace"
+      }
+    }
+  },
+  "variables": {
+    "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-',  parameters('PlaybookName'))]",
+    "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-',  parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "properties": {
+        "provisioningState": "Succeeded",
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "API Key": {
+              "type": "String",
+              "defaultValue": "[trim(parameters('Infoblox API Key'))]"
+            },
+            "BaseUrl": {
+              "type": "String",
+              "defaultValue": "[trim(parameters('Infoblox Base Url'))]"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "method": "POST"
+              }
+            }
+          },
+          "actions": {
+            "Condition_To_Check_If_All_Parameters_Are_Available": {
+              "actions": {
+                "Condition_To_Check_If_IOCs_Of_Provided_Type_and_Target_Are_Not_Available": {
+                  "actions": {
+                    "Condition_To_Check_Threat_Data_Fetched_Successfully": {
+                      "actions": {
+                        "Condition_To_Check_If_Threat_Data_Available_Using_API": {
+                          "actions": {
+                            "For_Each_Threat": {
+                              "foreach": "@variables('threat_data')",
+                              "actions": {
+                                "Condition_To_Check_If_Threat_Data_Is_Available": {
+                                  "actions": {
+                                    "Send_Data_To_Log_Table": {
+                                      "runAfter": {},
+                                      "type": "ApiConnection",
+                                      "inputs": {
+                                        "body": "@{items('For_Each_Threat')}",
+                                        "headers": {
+                                          "Log-Type": "tide_lookup_data"
+                                        },
+                                        "host": {
+                                          "connection": {
+                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                          }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                      }
+                                    }
+                                  },
+                                  "runAfter": {},
+                                  "expression": {
+                                    "and": [
+                                      {
+                                        "not": {
+                                          "equals": [
+                                            "@length(items('For_Each_Threat'))",
+                                            0
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "type": "If"
+                                }
+                              },
+                              "runAfter": {
+                                "Set_Threat_Data": [ "Succeeded" ]
+                              },
+                              "type": "Foreach",
+                              "runtimeConfiguration": {
+                                "concurrency": {
+                                  "repetitions": 50
+                                }
+                              }
+                            },
+                            "Response_For_Successfully_Ingesting_Data": {
+                              "runAfter": {
+                                "For_Each_Threat": [ "Succeeded" ]
+                              },
+                              "type": "Response",
+                              "kind": "Http",
+                              "inputs": {
+                                "body": {
+                                  "message": "Successfully Ingested The TIDE Lookup Data For @{body('Parse_JSON_For_Query_Parameters')?['type']}-@{body('Parse_JSON_For_Query_Parameters')?['target']}",
+                                  "status": "success"
+                                },
+                                "statusCode": 200
+                              }
+                            },
+                            "Set_Threat_Data": {
+                              "runAfter": {},
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "threat_data",
+                                "value": "@chunk(body('Parse_JSON_For_Threat_Data')?['threat'],1000)"
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Parse_JSON_For_Threat_Data": [ "Succeeded" ]
+                          },
+                          "else": {
+                            "actions": {
+                              "Response_To_Indicate_Success_If_No_Data_Found_For_Target": {
+                                "runAfter": {},
+                                "type": "Response",
+                                "kind": "Http",
+                                "inputs": {
+                                  "body": {
+                                    "message": "No Data Found For @{body('Parse_JSON_For_Query_Parameters')?['type']}-@{body('Parse_JSON_For_Query_Parameters')?['target']}",
+                                    "status": "success"
+                                  },
+                                  "statusCode": 200
+                                }
+                              }
+                            }
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@body('Parse_JSON_For_Threat_Data')?['record_count']",
+                                    0
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        },
+                        "Parse_JSON_For_Threat_Data": {
+                          "runAfter": {},
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@body('HTTP_Request_To_Fetch_Threat_Data')",
+                            "schema": {
+                              "properties": {
+                                "record_count": {
+                                  "type": "integer"
+                                },
+                                "threat": {
+                                  "items": {
+                                    "properties": {
+                                      "batch_id": {
+                                        "type": "string"
+                                      },
+                                      "class": {
+                                        "type": "string"
+                                      },
+                                      "confidence": {
+                                        "type": "integer"
+                                      },
+                                      "confidence_score": {
+                                        "type": "number"
+                                      },
+                                      "confidence_score_rating": {
+                                        "type": "string"
+                                      },
+                                      "confidence_score_vector": {
+                                        "type": "string"
+                                      },
+                                      "detected": {
+                                        "type": "string"
+                                      },
+                                      "dga": {
+                                        "type": [ "string", "boolean" ]
+                                      },
+                                      "domain": {
+                                        "type": "string"
+                                      },
+                                      "email": {
+                                        "type": "string"
+                                      },
+                                      "expiration": {
+                                        "type": "string"
+                                      },
+                                      "extended": {
+                                        "properties": {
+                                          "attack_chain": {
+                                            "type": "string"
+                                          },
+                                          "cyberint_guid": {
+                                            "type": "string"
+                                          },
+                                          "notes": {
+                                            "type": "string"
+                                          },
+                                          "protocol": {
+                                            "type": "string"
+                                          },
+                                          "references": {
+                                            "type": "string"
+                                          },
+                                          "sample_sha256": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "type": "object"
+                                      },
+                                      "hash": {
+                                        "type": "string"
+                                      },
+                                      "hash_type": {
+                                        "type": "string"
+                                      },
+                                      "host": {
+                                        "type": "string"
+                                      },
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "imported": {
+                                        "type": "string"
+                                      },
+                                      "ip": {
+                                        "type": "string"
+                                      },
+                                      "profile": {
+                                        "type": "string"
+                                      },
+                                      "property": {
+                                        "type": "string"
+                                      },
+                                      "received": {
+                                        "type": "string"
+                                      },
+                                      "risk_score": {
+                                        "type": "number"
+                                      },
+                                      "risk_score_rating": {
+                                        "type": "string"
+                                      },
+                                      "risk_score_vector": {
+                                        "type": "string"
+                                      },
+                                      "threat_level": {
+                                        "type": "integer"
+                                      },
+                                      "threat_score": {
+                                        "type": "number"
+                                      },
+                                      "threat_score_rating": {
+                                        "type": "string"
+                                      },
+                                      "threat_score_vector": {
+                                        "type": "string"
+                                      },
+                                      "tld": {
+                                        "type": "string"
+                                      },
+                                      "type": {
+                                        "type": "string"
+                                      },
+                                      "up": {
+                                        "type": [ "string", "boolean" ]
+                                      },
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [ "id", "type" ],
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "HTTP_Request_To_Fetch_Threat_Data": [
+                          "Succeeded",
+                          "TimedOut",
+                          "Failed"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Response_To_Indicate_Failure_While_Fetching_Threat_Data": {
+                            "runAfter": {},
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                              "body": {
+                                "message": "Error Occurred While Fetching Threat Data With Status Code:@{outputs('HTTP_Request_To_Fetch_Threat_Data')['statusCode']}",
+                                "status": "failure"
+                              },
+                              "statusCode": "@outputs('HTTP_Request_To_Fetch_Threat_Data')['statusCode']"
+                            }
+                          },
+                          "Terminate_Due_To_Error_While_Fetching_Threat_Data": {
+                            "runAfter": {
+                              "Response_To_Indicate_Failure_While_Fetching_Threat_Data": [
+                                "Succeeded",
+                                "Skipped"
+                              ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                              "runError": {
+                                "code": "@{outputs('HTTP_Request_To_Fetch_Threat_Data')['statusCode']}",
+                                "message": "Error Occurred While Fetching Threat Data With Status Code: @{outputs('HTTP_Request_To_Fetch_Threat_Data')['statusCode']}\nError: @{body('HTTP_Request_To_Fetch_Threat_Data')}"
+                              },
+                              "runStatus": "Failed"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@outputs('HTTP_Request_To_Fetch_Threat_Data')['statusCode']",
+                              200
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "HTTP_Request_To_Fetch_Threat_Data": {
+                      "runAfter": {},
+                      "type": "Http",
+                      "inputs": {
+                        "headers": {
+                          "Authorization": "Token @{parameters('API Key')}"
+                        },
+                        "method": "GET",
+                        "queries": {
+                          "@{body('Parse_JSON_For_Query_Parameters')?['type']}": "@{body('Parse_JSON_For_Query_Parameters')?['target']}",
+                          "fields": "@variables('fields')",
+                          "rlimit": "@{variables('rlimit')}",
+                          "type": "@{body('Parse_JSON_For_Query_Parameters')?['type']}"
+                        },
+                        "uri": "@{variables('base_url')}/tide/api/data/threats"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Set_Response_Count": [ "Succeeded" ]
+                  },
+                  "else": {
+                    "actions": {
+                      "Response_To_Indicate_Success_If_Threat_Data_Available_In_Log_Table": {
+                        "runAfter": {},
+                        "type": "Response",
+                        "kind": "Http",
+                        "inputs": {
+                          "body": {
+                            "message": "Data already available of TIDE Lookup for @{body('Parse_JSON_For_Query_Parameters')?['type']}-@{body('Parse_JSON_For_Query_Parameters')?['target']}",
+                            "status": "success"
+                          },
+                          "statusCode": 200
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [ "@variables('response_count')", 0 ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Run_Query_For_Caching_Mechanism": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": "let dummyschema = datatable(TimeGenerated:datetime, @{body('Parse_JSON_For_Query_Parameters')?['type']}_s:string, type_s:string, Count:int)[];\nunion isfuzzy=true  dummyschema,\ntide_lookup_data_CL\n| where type_s =~ \"@{body('Parse_JSON_For_Query_Parameters')?['type']}\" and @{body('Parse_JSON_For_Query_Parameters')?['type']}_s == \"@{body('Parse_JSON_For_Query_Parameters')?['target']}\"\n| count ",
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/queryData",
+                    "queries": {
+                      "resourcegroups": "[resourceGroup().name]",
+                      "resourcename": "[parameters('Workspace Name')]",
+                      "resourcetype": "Log Analytics Workspace",
+                      "subscriptions": "[subscription().subscriptionId]",
+                      "timerange": "Last 24 hours"
+                    }
+                  }
+                },
+                "Set_Response_Count": {
+                  "runAfter": {
+                    "Run_Query_For_Caching_Mechanism": [ "Succeeded" ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "response_count",
+                    "value": "@body('Run_Query_For_Caching_Mechanism')?['value']?[0]?['Count']"
+                  }
+                }
+              },
+              "runAfter": {
+                "Initialize_Response_Count": [ "Succeeded" ]
+              },
+              "else": {
+                "actions": {
+                  "Response_To_Indicate_Failure_Due_To_Absence_Of_Parameters": {
+                    "runAfter": {},
+                    "type": "Response",
+                    "kind": "Http",
+                    "inputs": {
+                      "body": {
+                        "message": "Target Type or Target Parameter Not Found.",
+                        "status": "failure"
+                      },
+                      "statusCode": 400
+                    }
+                  },
+                  "Terminate_Due_To_Required_Query_Parameters_Not_Found": {
+                    "runAfter": {
+                      "Response_To_Indicate_Failure_Due_To_Absence_Of_Parameters": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Terminate",
+                    "inputs": {
+                      "runError": {
+                        "code": "400",
+                        "message": "Target Type or Target Parameter Not Found."
+                      },
+                      "runStatus": "Failed"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@empty(body('Parse_JSON_For_Query_Parameters')?['type'])",
+                      "@false"
+                    ]
+                  },
+                  {
+                    "equals": [
+                      "@empty(body('Parse_JSON_For_Query_Parameters')?['target'])",
+                      "@false"
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "Initialize_Base_URL": {
+              "runAfter": {
+                "Parse_JSON_For_Query_Parameters": [ "Succeeded" ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "base_url",
+                    "type": "string",
+                    "value": "@parameters('BaseUrl')"
+                  }
+                ]
+              }
+            },
+            "Initialize_Fields": {
+              "runAfter": {
+                "Initialize_Base_URL": [ "Succeeded" ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "fields",
+                    "type": "string",
+                    "value": "id,type,ip,url,tld,email,hash,hash_type,host,domain,profile,property,class,threat_level,confidence,detected,received,imported,expiration,dga,up,extended"
+                  }
+                ]
+              }
+            },
+            "Initialize_Response_Count": {
+              "runAfter": {
+                "Initialize_Threat_Data": [ "Succeeded" ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "response_count",
+                    "type": "integer"
+                  }
+                ]
+              }
+            },
+            "Initialize_Rlimit": {
+              "runAfter": {
+                "Initialize_Fields": [ "Succeeded" ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "rlimit",
+                    "type": "integer",
+                    "value": 90000
+                  }
+                ]
+              }
+            },
+            "Initialize_Threat_Data": {
+              "runAfter": {
+                "Initialize_Rlimit": [ "Succeeded" ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "threat_data",
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "Parse_JSON_For_Query_Parameters": {
+              "runAfter": {},
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@triggerBody()",
+                "schema": {
+                  "properties": {
+                    "target": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azureloganalyticsdatacollector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+              },
+              "azuremonitorlogs": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+              }
+            }
+          }
+        }
+      },
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "Infoblox-TIDE-Lookup",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "apiVersion": "2017-07-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzuremonitorlogsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+        }
+      }
+    }
+  ]
+}

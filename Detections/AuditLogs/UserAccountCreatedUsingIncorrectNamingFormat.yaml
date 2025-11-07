@@ -23,33 +23,59 @@ tags:
   - AADSecOpsGuide
 query: |
   // Add the environments expected username format regex below before deploying
-    let user_regex = "";
-    AuditLogs
-    | where OperationName =~ "Add user"
-    | where Result =~ "success"
-    | extend userAgent = tostring(AdditionalDetails[0].value)
-    | extend addingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend addingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
-    | extend AddedBy = iif(isnotempty(addingUser), addingUser, addingApp)
-    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
-    | extend AddedUser = tostring(TargetResources[0].userPrincipalName)
-    | where AddedUser matches regex user_regex
+  let user_regex = "";
+  AuditLogs
+  | where OperationName =~ "Add user"
+  | where Result =~ "success"
+  | extend userAgent = tostring(AdditionalDetails[0].value)
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+  | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))
+  | extend AddedUser = tostring(TargetResources[0].userPrincipalName)
+  | where AddedUser matches regex user_regex
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  | extend TargetAccountName = tostring(split(AddedUser, "@")[0]), TargetAccountUPNSuffix = tostring(split(AddedUser, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: Account
+    fieldMappings:
       - identifier: FullName
-        columnName: AddedBy
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AddedUser
-version: 1.0.1
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

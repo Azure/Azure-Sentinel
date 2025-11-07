@@ -1,0 +1,48 @@
+id: dafcc598-2987-4aa0-947e-7d0449677689
+name: Dataverse - Activity after failed logons
+description: This hunting query looks for users conducting Dataverse/Dynamics 365
+  activity shortly after a number of failed logons. Use this to look for potential
+  post brute force activity. Adjust the threshold figure based on false positive rate.
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T0819
+  - T1078.004
+query: |
+  let threshold = 10;
+  SigninLogs
+  | where ResultType in ("50125", "50140", "70043", "70044")
+  | summarize FailedSignInCount = count() by IPAddress
+  | where FailedSignInCount >= threshold
+  | join kind=inner (
+      DataverseActivity
+      | extend IPAddress = tostring(split(ClientIp, ":")[0]))
+      on IPAddress
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - columnName: IPAddress
+        identifier: Address
+  - entityType: Account
+    fieldMappings:
+      - columnName: UPNSuffix
+        identifier: UPNSuffix
+      - columnName: AccountName
+        identifier: Name
+  - entityType: CloudApplication
+    fieldMappings:
+      - columnName: CloudAppId
+        identifier: AppId
+version: 3.2.0

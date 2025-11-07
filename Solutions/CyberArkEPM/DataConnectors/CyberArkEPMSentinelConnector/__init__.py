@@ -149,7 +149,7 @@ def main(mytimer: func.TimerRequest) -> None:
     except Exception as err:
         logging.error("CyberArkEPMServerURL is invalid")
         return
-    filter_date = '{"filter": "eventDate GE ' + str(start_time) + ' AND eventDate LE ' + end_time + '"}'
+    filter_date = '{"filter": "arrivalTime GE ' + str(start_time) + ' AND arrivalTime LE ' + end_time + '"}'
     aggregated_events = []
     raw_events = []
     aggregated_policy_audits = []

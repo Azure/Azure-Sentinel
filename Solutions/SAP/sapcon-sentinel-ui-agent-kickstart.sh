@@ -38,6 +38,8 @@ RESTARTPOLICY="--restart unless-stopped"
 NETWORKSTRING=""
 CLOUD="public"
 UI_AGENT=""
+UPDATEPOLICY='{ "auto_update" : true }'
+
 while [[ $# -gt 0 ]]; do
 	case $1 in
 	--keymode)
@@ -60,6 +62,10 @@ while [[ $# -gt 0 ]]; do
 	--appid)
 		APPID="$2"
 		shift 2
+		;;
+  	--hostnetwork)
+		HOSTNETWORK=1
+		shift 1
 		;;
 	--appsecret)
 		APPSECRET="$2"
@@ -132,6 +138,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--keymode [kvmi|kvsi]"
 		echo "--configpath <path>"
 		echo "--sdk <filename>"
+		echo "--hostnetwork"
 		echo "--network <network>"
 		echo "--appid <guid>"
 		echo "--appsecret <secret>"
@@ -264,7 +271,7 @@ elif [ "$os" == '"sles"' ]; then
 		if which az >/dev/null 2>&1; then
 			#AZ is installed, check if it is out-of date version with compatibility issues
 			azver=$(az version | jq '."azure-cli"')
-			if verlte "2.33.1" "$azver"; then
+			if verlte "$azver" "2.33.1"; then
 				log "Installed version $azver is out of date, removing older version"
 				sudo zypper rm -y --clean-deps azure-cli >/dev/null
 				log "Installing Azure CLI"
@@ -308,6 +315,14 @@ fi
 log "Creating group 'docker' and adding current user to 'docker' group"
 sudo usermod -aG docker "$USER"
 
+validateKeyVault() {
+	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
+	if [ ! $? -eq 0 ]; then
+		log "Cannot connect to Key Vault $kv. Agent identity must have 'Key Vault Secrets User' role or list, get secret permissions on the Key Vault."
+		exit 1
+	fi
+}
+
 if [ "$MODE" == "kvmi" ]; then
 	log "Validating Azure managed identity"
 	az login --identity --allow-no-subscriptions >/dev/null 2>&1
@@ -317,6 +332,7 @@ if [ "$MODE" == "kvmi" ]; then
 		log 'For more information check - https://docs.microsoft.com/cli/azure/install-azure-cli'
 		exit 1
 	fi
+	validateKeyVault
 elif [ "$MODE" == "kvsi" ]; then
 	log "Validating service principal identity"
 	az login --service-principal -u "$APPID" -p "$APPSECRET" --tenant "$TENANT" --allow-no-subscriptions >/dev/null 2>&1
@@ -324,11 +340,32 @@ elif [ "$MODE" == "kvsi" ]; then
 		log "Logon with $APPID failed, please check application ID, secret and tenant ID. Ensure the application has been added as an enterprise application"
 		exit 1
 	fi
-	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
-	if [ ! $? -eq 0 ]; then
-		log "Cannot connect to keyvault $kv. Make sure application $APPID has been granted privileges to the keyvault"
-		exit 1
+	validateKeyVault
+fi
+
+# If $HTTPPROXY is set, configure the Docker Daemon to explicitly use it;
+# otherwise, Docker commands (e.g., 'docker pull') will ignore any proxy settings defined at the OS level.
+if [ -n "$HTTPPROXY" ]; then
+	# https://docs.docker.com/engine/daemon/proxy/#systemd-unit-file
+	if ! sudo mkdir -p /etc/systemd/system/docker.service.d; then
+			log "Error: Failed to create directory /etc/systemd/system/docker.service.d"
+			exit 1
 	fi
+
+	if ! sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf > /dev/null <<EOF
+[Service]
+Environment="HTTP_PROXY=${HTTPPROXY}"
+Environment="HTTPS_PROXY=${HTTPPROXY}"
+Environment="NO_PROXY=localhost,127.0.0.1"
+EOF
+	then
+			log "Error: Failed to write /etc/systemd/system/docker.service.d/http-proxy.conf"
+			exit 1
+	fi
+
+	log "Proxy $HTTPPROXY successfully configured, restarting Docker Daemon..."
+	sudo systemctl daemon-reload
+	sudo systemctl restart docker
 fi
 
 log 'Deploying Microsoft Sentinel SAP data connector.'
@@ -371,17 +408,19 @@ if [ $USESNC ]; then
 	sudo chown root:root "$sysfileloc"sec >/dev/null 2>&1
 fi
 
-#Verifying SDK version
-unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
-sudo chmod +x -R /tmp/nwrfcsdk/lib/*.so
-SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
-sdkok=$?
-rm -rf /tmp/nwrfcsdk
-if [ ! $sdkok -eq 0 ]; then
-	log "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
-	log "$SDKLOADRESULT"
-	log "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
-	exit 1
+#Verifying SDK version only in case of non-fedora OS
+if [ "$os" != "fedora" ]; then
+	unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
+	sudo chmod +x -R /tmp/nwrfcsdk/lib/*.so
+	SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
+	sdkok=$?
+	rm -rf /tmp/nwrfcsdk
+	if [ ! $sdkok -eq 0 ]; then
+		log "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
+		log "$SDKLOADRESULT"
+		log "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
+		exit 1
+	fi
 fi
 
 #Building the container
@@ -404,7 +443,7 @@ if [ -n "$NETWORKSTRING" ]; then
 fi
 
 if [ -n "$HTTPPROXY" ]; then
-	cmdparams+=" -e HTTP_PROXY=$HTTPPROXY -e HTTPS_PROXY=$HTTPPROXY"
+	cmdparams+=" -e HTTP_PROXY=$HTTPPROXY -e HTTPS_PROXY=$HTTPPROXY -e NO_PROXY=169.254.169.254"
 fi
 
 cmdparams+=" -e AZURE_KEY_VAULT_NAME=$kv"
@@ -422,7 +461,9 @@ elif [ "$MODE" == "kvsi" ]; then
 	log "Creating agent and configuring to use Azure Key vault and application authentication"
 	cmdparams+=" -e AZURE_CLIENT_ID=$APPID -e AZURE_CLIENT_SECRET=$APPSECRET -e AZURE_TENANT_ID=$TENANT"
 fi
-
+if [ $HOSTNETWORK ]; then
+	cmdparams+=" --network host "
+fi
 sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams --name "$containername" $dockerimage$tagver >/dev/null
 
 log 'Created Microsoft Sentinel SAP agent '"$AGENTNAME"
@@ -434,9 +475,8 @@ if [ ! $? -eq 0 ]; then
 	exit 1
 fi
 
-# Commenting out the following lines as they are not required for now
 # #populate settings.json
-# echo $UPDATEPOLICY> "$sysfileloc/$settingsjson"
+echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
 
 log 'System information Has been Updated'
 

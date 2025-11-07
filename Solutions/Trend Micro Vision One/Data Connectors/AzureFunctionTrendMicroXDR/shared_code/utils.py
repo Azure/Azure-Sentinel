@@ -27,6 +27,16 @@ def find_token_by_clp(clp_id, api_tokens):
     return next(filter(lambda token: get_clp_id(token) == clp_id, api_tokens), None)
 
 
+def check_token_is_expired(token: str) -> bool:
+    try:
+        return datetime.now() > datetime.fromtimestamp(
+            jwt.decode(token, options={"verify_signature": False}).get('et')
+        )
+    except Exception as e:
+        logger.error(f"if_token_is_expired checking Error, e: {e}")
+        return False
+
+
 @timer
 def get_last_success_time(table_name, clp_id):
     try:
@@ -62,9 +72,6 @@ def update_last_success_time(table_name, clp_id, time):
     )
 
 
-
-
-
 @timer
 def send_message_to_storage_queue(
     queue_name, message, conn_str=STORAGE_CONNECTION_STRING
@@ -77,7 +84,7 @@ def send_message_to_storage_queue(
 
     try:
         queue_client.create_queue()
-    except ResourceExistsError as e:
-        logger.error(e)
+    except ResourceExistsError:
+        logger.info(f"Queue {queue_name} already exists.")
 
     queue_client.send_message(message)

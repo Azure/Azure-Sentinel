@@ -1,6 +1,8 @@
 id: 09a7c5fc-0649-4f7d-a21b-36a754cef6b6
 name: User Login IP Address Teleportation
 description: |
+    'This query identifies users logging in from two different countries within a specified time window, potentially indicating VPN use. It includes UEBA logs IdentityInfo and BehaviorAnalytics for context.'
+description_detailed: |
   'This query over SiginLogs will identify user accounts that have logged in from two different countries
   within a specified time window, by default this is a 10 minute window either side of the previous login.
   This query will detect users roaming onto VPNs, it is possible to exclude known VPN IP address ranges.
@@ -12,7 +14,7 @@ requiredDataConnectors:
   - connectorId: BehaviorAnalytics
     dataTypes:
       - BehaviorAnalytics
-  - connectorId: IdentityInfo
+  - connectorId: BehaviorAnalytics
     dataTypes:
       - IdentityInfo
 tactics:
@@ -73,13 +75,11 @@ query: |
   | join kind=leftouter (
       IdentityInfo
       | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
-      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
-      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled
       | summarize
           Tags = make_set(Tags, 1000),
           GroupMembership = make_set(GroupMembership, 1000),
           AssignedRoles = make_set(AssignedRoles, 1000),
-          BlastRadiusInt = sum(BlastRadiusInt),
           UserType = make_set(UserType, 1000),
           UserAccountControl = make_set(UserType, 1000)
       by AccountUPN
@@ -98,7 +98,7 @@ query: |
           IPInvestigationPriority = sum(InvestigationPriority)
       by AnomalousIP)
   on AnomalousIP
-  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | extend UEBARiskScore = IPInvestigationPriority
   | where  UEBARiskScore > riskScoreCutoff
   | sort by UEBARiskScore desc 
 
@@ -111,4 +111,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: AnomalousIP
-version: 2.0.0
+version: 2.0.2

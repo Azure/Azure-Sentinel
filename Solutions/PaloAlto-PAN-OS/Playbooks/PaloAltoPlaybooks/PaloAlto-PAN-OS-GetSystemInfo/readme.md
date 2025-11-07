@@ -2,7 +2,7 @@
 
  ## Summary
 
-This playbook allows us to get System Info of a Palo Alto device for a Sentinel alert. 
+This playbook allows us to get System Info of a Palo Alto device for a Microsoft Sentinel alert. 
 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions:
 

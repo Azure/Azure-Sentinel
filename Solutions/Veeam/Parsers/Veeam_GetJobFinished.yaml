@@ -1,0 +1,50 @@
+id: 600bfa89-575d-4397-b4b4-c0784a43580d
+Function:
+  Title: Parser for Veeam Job Finished Events
+  Version: '1.0.0'
+  LastUpdated: '2024-08-12'
+Category: Microsoft Sentinel Parser
+FunctionName: Veeam_GetJobFinished
+FunctionAlias: Veeam_GetJobFinished
+FunctionQuery: |
+    let vbr_events_lookup = union isfuzzy=true 
+        (datatable(ID:string, Severity:string, Type1:string, ["Event Name"]:string)[]),
+        (_GetWatchlist("vbr_events_lookup")); 
+    let action_results_lookup = union isfuzzy=true 
+        (datatable(JobResult:string, JobResultMessage:string)[]),
+        (_GetWatchlist("action_results_lookup")); 
+    let job_types_lookup = union isfuzzy=true 
+        (datatable(JobType:string, JobTypeDescription:string)[]),
+        (_GetWatchlist("job_types_lookup")); 
+    Syslog
+    | where SyslogMessage has "instanceId"
+    | extend instanceId = extract("instanceId=(\\d+)", 1, SyslogMessage)  
+    | filter instanceId in  ("150", "151", "190", "194", "198", "200", "250", "251", "290", "390", "450", "451", "490", "590", "592", "610", "790", "36022", "36026", "40290", "40800")
+    | lookup kind=leftouter (vbr_events_lookup) 
+        on $left.instanceId == $right.ID
+    | extend Description =  extract("Description=\"(?<Description>[^\"]*)\"", 1, SyslogMessage)
+    | extend event_module = Type1, original_host = Computer 
+    | extend Result = extract("Result=\"(\\d+)\"", 1, SyslogMessage)
+    | extend Status = extract("Status=\"(\\d+)\"", 1, SyslogMessage)
+    | extend JobResultCode = case(
+        instanceId in ("198", "290", "40290", "42210", "42500"), Result,
+        instanceId in ("150", "151", "450", "451"), Status,
+        extract("JobResult=\"(\\d+)\"", 1, SyslogMessage)
+    )
+    | lookup kind=leftouter (action_results_lookup)
+        on $left.JobResultCode == $right.JobResult
+    | extend Platform = extract("Platform=\"(\\d+)\"", 1, SyslogMessage)
+    | extend Version = extract("Version=\"(\\d+)\"", 1, SyslogMessage)
+    | extend JobSessionID = extract("JobSessionID=\"([^\"]*)\"", 1, SyslogMessage)
+    | extend JobID = extract("JobID=\"([^\"]*)\"", 1, SyslogMessage)
+    | extend JobType = case ( 
+        instanceId == "198", "198",
+        instanceId == "290", "198",
+        instanceId == "40800", "40800",
+        instanceId == "40290", "290",
+        extract("JobType=\"([^\"]*)\"", 1, SyslogMessage)
+    )
+    | lookup kind=leftouter (job_types_lookup)
+        on $left.JobType == $right.JobType
+    | extend Allowance = Severity != 'disabled'
+    | project TimeGenerated, Description, event_module, instanceId, original_host, Platform, Severity, Version, JobSessionID, JobID, JobResult = JobResultCode, JobResultMessage, JobType, JobTypeDescription, Allowance, SyslogMessage

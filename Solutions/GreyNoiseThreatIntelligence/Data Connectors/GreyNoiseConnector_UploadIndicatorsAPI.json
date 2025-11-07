@@ -1,0 +1,133 @@
+{
+    "id": "GreyNoise2SentinelAPI",
+    "title": "GreyNoise Threat Intelligence",
+    "publisher": "GreyNoise, Inc. and BlueCycle LLC",
+    "descriptionMarkdown": "This Data Connector installs an Azure Function app to download GreyNoise indicators once per day and inserts them into the ThreatIntelligenceIndicator table in Microsoft Sentinel.",
+    "graphQueries": [
+        {
+            "metricName": "Total indicators received",
+            "legend": "Connection Events",
+            "baseQuery": "ThreatIntelligenceIndicator | where SourceSystem == 'GreyNoise'"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "All Threat Intelligence APIs Indicators",
+            "query": "ThreatIntelligenceIndicator | where SourceSystem == 'GreyNoise'| sort by TimeGenerated desc"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "ThreatIntelligenceIndicator",
+            "lastDataReceivedQuery": "ThreatIntelligenceIndicator| where isnotempty(TimeGenerated) and SourceSystem == 'GreyNoise' | summarize Time = max(TimeGenerated)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "ThreatIntelligenceIndicator| where SourceSystem == 'GreyNoise' | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": true
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.SecurityInsights/threatintelligence/write",
+                "permissionsDisplayText": "write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },{
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            }
+        ],"customs": [
+            {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            },            
+            {
+                "name": "GreyNoise API Key",
+                "description": "Retrieve your GreyNoise API Key [here](https://viz.greynoise.io/account/api-key)."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "You can connect GreyNoise Threat Intelligence to Microsoft Sentinel by following the below steps: ",
+            "description": "\n> The following steps create an Azure AAD application, retrieves a GreyNoise API key, and saves the values in an Azure Function App Configuration."
+        },
+        {
+            "title": "1. Retrieve your API Key from GreyNoise Visualizer.",
+            "description": "Generate an API key from GreyNoise Visualizer https://docs.greynoise.io/docs/using-the-greynoise-api"
+        },
+        {
+            "title": "2. In your Azure AD tenant, create an Azure Active Directory (AAD) application and acquire Tenant ID and Client ID. Also, get the Log Analytics Workspace ID associated with your Microsoft Sentinel instance (it should display below).",
+            "description": "Follow the instructions here to create your Azure AAD app and save your Client ID and Tenant ID: https://learn.microsoft.com/en-us/azure/sentinel/connect-threat-intelligence-upload-api#instructions\n NOTE: Wait until step 5 to generate your client secret.",
+            "instructions":[
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Workspace ID"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "3. Assign the AAD application the Microsoft Sentinel Contributor Role.",
+            "description": "Follow the instructions here to add the Microsoft Sentinel Contributor Role: https://learn.microsoft.com/en-us/azure/sentinel/connect-threat-intelligence-upload-api#assign-a-role-to-the-application"
+        },
+        {
+            "title": "4. Specify the AAD permissions to enable MS Graph API access to the upload-indicators API.",
+            "description": "Follow this section here to add **'ThreatIndicators.ReadWrite.OwnedBy'** permission to the AAD App: https://learn.microsoft.com/en-us/azure/sentinel/connect-threat-intelligence-tip#specify-the-permissions-required-by-the-application. \n Back in your AAD App, ensure you grant admin consent for the permissions you just added. \n Finally, in the 'Tokens and APIs' section, generate a client secret and save it. You will need it in Step 6. "
+        },{
+            "title": "5. Deploy the Threat Intelligence (Preview) Solution, which includes the Threat Intelligence Upload Indicators API (Preview)",
+            "description": "See Microsoft Sentinel Content Hub for this Solution, and install it in the Microsoft Sentinel instance."
+        },
+        {
+            "title": "6. Deploy the Azure Function",
+            "description": "Click the Deploy to Azure button.\n\n  [![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-GreyNoise-azuredeploy)\n\n Fill in the appropriate values for each parameter. **Be aware** that the only valid values for the **GREYNOISE_CLASSIFICATIONS** parameter are **benign**, **malicious** and/or **unknown**, which must be comma-separated."
+        },
+        {
+            "title": "7. Send indicators to Sentinel",
+            "description": "The function app installed in Step 6 queries the GreyNoise GNQL API once per day, and submits each indicator found in STIX 2.1 format to the [Microsoft Upload Threat Intelligence Indicators API](https://learn.microsoft.com/en-us/azure/sentinel/upload-indicators-api). \n Each indicator expires in ~24 hours from creation unless found on the next day's query. In this case the TI Indicator's **Valid Until** time is extended for another 24 hours, which keeps it active in Microsoft Sentinel.  \n\n For more information on the GreyNoise API and the GreyNoise Query Language (GNQL), [click here](https://developer.greynoise.io/docs/using-the-greynoise-api)."
+        }
+    ],
+    "metadata": {
+        "id": "27dc60cc-758b-566e-93ce-932560a6ff81",
+        "version": "1.0.1",
+        "kind": "dataConnector",
+        "source": {
+            "kind": "solution",
+            "name": "GreyNoise Intelligence Solution for Microsoft Sentinel"
+        },
+        "author": {
+            "name": "Blue Cycle LLC | GreyNoise, Inc."
+        },
+        "support": {
+            "tier": "developer",
+            "name": "Support Team",
+            "email": "support@greynoise.io",
+            "link":"https://www.greynoise.io/contact/sales"
+        }
+    }
+}

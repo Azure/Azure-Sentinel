@@ -18,23 +18,31 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1071
 query: |
   let dt_lookBack = 1h; // Look back 1 hour for AppServiceHTTPLogs
   let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
   // Fetch threat intelligence indicators related to IP addresses
   let IP_Indicators = ThreatIntelligenceIndicator
-    | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true and ExpirationDateTime > now()
     // Filter out indicators without relevant IP address fields
     | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    // Filtering out rows where the Confidence Score is less than 50 as they would not have an Alert Priority label. 
+    | where ConfidenceScore > 50
     // Select the IP entity based on availability of different IP fields
     | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
     | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
     | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+    // Determine AlertPriority based on ConfidenceScore
+    | extend AlertPriority = case(ConfidenceScore > 82, "High",
+                                  ConfidenceScore > 74, "Medium",
+                                  "Low")
     // Exclude local addresses using the ipv4_is_private operator and filtering out specific address prefixes
-    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now();
   // Perform a join between IP indicators and AppServiceHTTPLogs to identify potential malicious activity
   IP_Indicators
     // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
@@ -78,5 +86,8 @@ entityMappings:
     fieldMappings:
       - identifier: ResourceId
         columnName: _ResourceId
-version: 1.4.0
+alertDetailsOverride:
+  alertSeverityColumnName: AlertPriority
+version: 1.5.2
 kind: Scheduled
+ 

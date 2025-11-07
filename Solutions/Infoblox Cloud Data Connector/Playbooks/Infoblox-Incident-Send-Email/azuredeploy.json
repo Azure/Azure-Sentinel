@@ -1,0 +1,530 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Infoblox Incident Send Email",
+        "description":  "Sends a detailed email when an incident occurs. Optionally enriches an applicable entity within the email with Infoblox TIDE data. This playbook can be configured to run automatically when an incident occurs (recommended) or run on demand.",
+        "prerequisites":  [
+            "Infoblox TIDE API key (optional)."
+        ],
+        "postDeployment":  [
+            "1. Grant playbook's Managed Identity **Microsoft Sentinel Responder** or greater to Resource Group.",
+            "2. Authorize connections."
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "2023-08-07T00:00:00.000Z",
+        "entities":  [ "DnsResolution"
+        ],
+        "tags":  [ "Enrichment", "Notification"
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Infoblox"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Infoblox-Incident-Send-Email",
+            "type":  "string"
+        },
+        "Email Recipient":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for Email Recipient"
+            }
+        },
+        "TIDE API Key":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for TIDE API Key"
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "Office365ConnectionName":  "[concat('Office365-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "Email Recipient":  {
+                            "defaultValue":  "[parameters('Email Recipient')]",
+                            "type":  "string"
+                        },
+                        "TIDE API Key":  {
+                            "defaultValue":  "[parameters('TIDE API Key')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Create_HTML_table_with_Entities":  {
+                            "runAfter":  {
+                                "Select_Entities":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Table",
+                            "inputs":  {
+                                "format":  "HTML",
+                                "from":  "@body('Select_Entities')"
+                            }
+                        },
+                        "Entities_-_Get_DNS":  {
+                            "runAfter":  {
+                                "Set_Entities_HTML":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/entities/dnsresolution"
+                            }
+                        },
+                        "For_each_DNS_Domain_Entity":  {
+                            "foreach":  "@body('Entities_-_Get_DNS')?['Dnsresolutions']",
+                            "actions":  {
+                                "For_each_Threat_IoC":  {
+                                    "foreach":  "@body('Parse_JSON')?['threat']",
+                                    "actions":  {
+                                        "Enrich_Email_with_TIDE_Data_if_it_exists":  {
+                                            "actions":  {
+                                            },
+                                            "runAfter":  {
+                                            },
+                                            "else":  {
+                                                "actions":  {
+                                                    "Append_HTML_Table_with_TIDE_Data":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "AppendToStringVariable",
+                                                        "inputs":  {
+                                                            "name":  "html_tide",
+                                                            "value":  "\u003cstyle\u003e\n@{variables('css')}\n\u003c/style\u003e\n\u003cdiv class=\"title\"\u003eIoC - @{items('For_each_DNS_Domain_Entity')?['DomainName']} - @{items('For_each_Threat_IoC')?['type']} - @{items('For_each_Threat_IoC')?['class']}\u003c/div\u003e\n\u003ctable class=\"table\"\u003e\u003ctbody\u003e \n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eID\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['id']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eType\u003c/td\u003e\n\u003ctd class=\"tvalue\" \u003e@{items('For_each_Threat_IoC')?['type']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eHost\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['host']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eDomain\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['domain']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eURL\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['url']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eIP\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['ip']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctd class=\"tkey\"\u003eEmail\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['email']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eHash\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['hash']}       @{items('For_each_Threat_IoC')?['hash_type']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eProfile\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['profile']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eProperty\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['property']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eThreat Level\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['threat_level']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eConfidence\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['confidence']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eDetected\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['detected']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eReceived\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['received']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eImported\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['imported']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eExpiration\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['expiration']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eDescription\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003e@{items('For_each_Threat_IoC')?['extended']?['notes']}\u003c/td\u003e\n\u003c/tr\u003e\n\u003ctr\u003e\n\u003ctd class=\"tkey\"\u003eOpen in CSP\u003c/td\u003e\n\u003ctd class=\"tvalue\"\u003ehttps://csp.infoblox.com/#/security_research/search/auto/@{items('For_each_Threat_IoC')?['host']}/summary\u003c/td\u003e\n\u003c/tr\u003e\n\u003c/tbody\u003e\n\u003c/table\u003e"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression":  {
+                                                "and":  [
+                                                    {
+                                                        "equals":  [
+                                                            "@body('Parse_JSON')?['record_count']",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type":  "If"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Parse_JSON":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "HTTP_-_Get_TIDE_Data_(Hosts)":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Http",
+                                    "inputs":  {
+                                        "headers":  {
+                                            "Authorization":  "Token @{parameters('TIDE API Key')}"
+                                        },
+                                        "method":  "GET",
+                                        "queries":  {
+                                            "host":  "@items('For_each_DNS_Domain_Entity')?['DomainName']",
+                                            "rlimit":  "1"
+                                        },
+                                        "uri":  "https://csp.infoblox.com/tide/api/data/threats"
+                                    }
+                                },
+                                "Parse_JSON":  {
+                                    "runAfter":  {
+                                        "HTTP_-_Get_TIDE_Data_(Hosts)":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@body('HTTP_-_Get_TIDE_Data_(Hosts)')",
+                                        "schema":  {
+                                            "properties":  {
+                                                "record_count":  {
+                                                    "type":  "integer"
+                                                },
+                                                "threat":  {
+                                                    "items":  {
+                                                        "properties":  {
+                                                            "batch_id":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "class":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "confidence":  {
+                                                                "type":  "integer"
+                                                            },
+                                                            "confidence_score":  {
+                                                                "type":  "number"
+                                                            },
+                                                            "confidence_score_rating":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "confidence_score_vector":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "detected":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "dga":  {
+                                                            },
+                                                            "domain":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "email":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "expiration":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "extended":  {
+                                                                "properties":  {
+                                                                    "ais_consent":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "cyberint_guid":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "no_whitelist":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "notes":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "protocol":  {
+                                                                        "type":  "string"
+                                                                    },
+                                                                    "url_hash":  {
+                                                                        "type":  "string"
+                                                                    }
+                                                                },
+                                                                "type":  "object"
+                                                            },
+                                                            "hash":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "hash_type":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "host":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "id":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "imported":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "ip":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "profile":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "property":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "received":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "risk_score":  {
+                                                                "type":  "number"
+                                                            },
+                                                            "risk_score_rating":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "risk_score_vector":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "threat_level":  {
+                                                                "type":  "integer"
+                                                            },
+                                                            "threat_score":  {
+                                                                "type":  "number"
+                                                            },
+                                                            "threat_score_rating":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "threat_score_vector":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "tld":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "type":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "up":  {
+                                                            },
+                                                            "url":  {
+                                                                "type":  "string"
+                                                            }
+                                                        },
+                                                        "required":  [
+                                                            "id"
+                                                        ],
+                                                        "type":  "object"
+                                                    },
+                                                    "type":  "array"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Entities_-_Get_DNS":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Initialize_CSS":  {
+                            "runAfter":  {
+                                "Initialize_Incident_HTML":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "css",
+                                        "type":  "string",
+                                        "value":  ".title {\n    color: #1F2A47;\n    font-size: 2rem;\n    letter-spacing: .04em;\n    padding: 8px;\n    border-bottom: 1px solid #7B7B7B;\n    font-weight: bold;\n}\n\ntable  {\n    border-collapse: collapse;\n    border-spacing: 0;\n    padding: 0;\n    margin: 0 0 20px;\n}\n\n.tkey {\n    text-align: right;\n    border-right: 1px solid #7B7B7B;\n}\n.tvalue {\n    text-align: left;\n    border-top: 1px solid #eee !important;\n    padding-left: 10px;\n}\n.value {\n    font-size: 1.4rem;\n    font-weight: bold;\n}\n\n.tkey, .key{\n    color: #263137;\n    letter-spacing: .04em;\n    font-style: italic;\n    padding-right: 10px;\n}\n.tvalue, .value {\n    color: #1f4728 !important;\n    letter-spacing: .02rem;\n}\n\n"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entities_HTML":  {
+                            "runAfter":  {
+                                "Initialize_CSS":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "html_entities",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Incident_HTML":  {
+                            "runAfter":  {
+                                "Initialize_TIDE_HTML":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "html_incident",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_TIDE_HTML":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "html_tide",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Select_Entities":  {
+                            "runAfter":  {
+                                "Initialize_Entities_HTML":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Select",
+                            "inputs":  {
+                                "from":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "select":  {
+                                    "Entity":  "@item()?['properties']?['friendlyName']",
+                                    "Type":  "@item()?['kind']"
+                                }
+                            }
+                        },
+                        "Send_an_email_with_Incident_details":  {
+                            "runAfter":  {
+                                "Set_Incident_HTML":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "Body":  "\u003cp\u003e\u003cspan style=\"font-size: 14px\"\u003e\u003c/span\u003e\u003cspan style=\"font-size: 14px\"\u003e@{variables('html_incident')}\u003c/span\u003e\u003cspan style=\"font-size: 14px\"\u003e\u003cbr\u003e\n\u003c/span\u003e\u003cspan style=\"font-size: 14px\"\u003e@{variables('html_tide')}\u003c/span\u003e\u003cspan style=\"font-size: 14px\"\u003e\u003c/span\u003e\u003c/p\u003e",
+                                    "Importance":  "Normal",
+                                    "Subject":  "New Sentinel Incident - @{triggerBody()?['object']?['properties']?['title']}",
+                                    "To":  "@parameters('Email Recipient')"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['office365_1']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/v2/Mail"
+                            }
+                        },
+                        "Set_Entities_HTML":  {
+                            "runAfter":  {
+                                "Create_HTML_table_with_Entities":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "html_entities",
+                                "value":  "\u003cstyle\u003e\n@{variables('css')}\ntable, table td, table th {\n    text-align: left;\n    color: #1f4728 !important;\n    border-top: 1px solid #eee !important;\n    letter-spacing: .02rem;\n    padding-left: 10px;\n}\n\u003c/style\u003e\n@{body('Create_HTML_table_with_Entities')}\n"
+                            }
+                        },
+                        "Set_Incident_HTML":  {
+                            "runAfter":  {
+                                "For_each_DNS_Domain_Entity":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "html_incident",
+                                "value":  "\u003cstyle\u003e\n@{variables('css')}\np {\n    margin-bottom:  15px !important;\n}\n\u003c/style\u003e\n\u003cdiv class=\"title\"\u003e New incident created in Microsoft Sentinel \u003c/div\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Triggered - \u003c/span \u003e\u003cspan  class=\"value\"\u003e@{triggerBody()?['object']?['properties']?['title']} \u003c/span \u003e\u003c/p\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Incident ID - \u003c/span\u003e\u003cspan class=\"value\"\u003e @{triggerBody()?['object']?['properties']?['incidentNumber']}\u003c/span\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Triggered on - \u003c/span \u003e\u003cspan class=\"value\"\u003e @{triggerBody()?['object']?['properties']?['createdTimeUtc']}\u003c/span\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Severity - \u003c/span \u003e\u003cspan class=\"value\"\u003e@{triggerBody()?['object']?['properties']?['severity']}\u003c/span\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Alert providers - \u003c/span \u003e\u003cspan class=\"value\"\u003e@{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], '\u003cbr /\u003e')}\u003c/span\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Tactics - \u003c/span \u003e\u003cspan class=\"value\"\u003e\n@{join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '\u003cbr /\u003e')}\u003c/span\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Description - \u003c/span \u003e\u003cspan class=\"value\"\u003e\n@{triggerBody()?['object']?['properties']?['description']}\u003c/span\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Entities - \u003c/span \u003e\u003cspan class=\"value\"\u003e\n@{variables('html_entities')}\u003c/span\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003cspan class=\"key\"\u003e Incident link - \u003c/span \u003e\u003cspan class=\"value\"\u003e\n\u003ca href=\"@{triggerBody()?['object']?['properties']?['incidentUrl']}\"\u003e@{triggerBody()?['object']?['properties']?['incidentUrl']}\u003c/a\u003e\u003c/span\u003e\u003c/p\u003e\n\n\u003cdiv class=\"title\"\u003e TIDE Data \u003c/div \u003e"
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365_1":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName":  "[variables('Office365ConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Infoblox-Incident-Send-Email",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('Office365ConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('Office365ConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,22 @@
+id: 788c6182-85d9-4747-8096-6a971f0e9476
+Function:
+  Title: Parser for Devicefromip
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: Devicefromip
+FunctionAlias: Devicefromip
+FunctionQuery: |
+    let DeviceFromIP2 = (T:(IP:string), Timestamp:datetime = datetime(null))
+    {
+    let t = coalesce(Timestamp, now());
+    let lastReportIds = DeviceNetworkInfo 
+        | where Timestamp between(max_of(t - 1d, ago(30d)) .. t)
+        | summarize arg_max(Timestamp, ReportId) by DeviceId;
+    let adapters = DeviceNetworkInfo
+        | where Timestamp between(max_of(t - 1d, ago(30d)) .. t)
+        | lookup kind = inner lastReportIds on ReportId, DeviceId
+        | mv-expand todynamic(IPAddresses)
+        | project DeviceId, IP = tostring(IPAddresses.IPAddress);
+    T | join adapters on IP | project-away IP1
+    };

@@ -54,7 +54,7 @@ For example: To test the parser file `C:\parsers\vimDnsMicrosoftOMSfict.yaml` , 
 
   
 
-python ASimFilteringTest.py C:\parsers\vimDnsMicrosoftOMSfict.yaml 123-456 99
+python ASimFilteringTest.py 123-456 C:\parsers\vimDnsMicrosoftOMSfict.yaml 99
 
   
 
@@ -69,3 +69,8 @@ python ASimFilteringTest.py C:\parsers\vimDnsMicrosoftOMSfict.yaml 123-456 99
 - If some validations have failed you will receive error messages with a description of the reason for the failures:
 ![enter image description here](https://github.com/Azure/Azure-Sentinel/assets/126081432/6957eaee-5eed-4abd-b701-06fef372cd59)
 ![enter image description here](https://github.com/Azure/Azure-Sentinel/assets/126081432/e724599c-a653-43b9-98f4-0cd24935e5fd)
+
+
+
+- In order to carry out the tests, data within the workspace is necessary. Some error messages indicate a lack of data in the workspace rather than a problem with the parser:
+![enter image description here](https://github.com/Azure/Azure-Sentinel/assets/126081432/4707b8db-743e-4c13-9db2-bd0d91b1abc7)

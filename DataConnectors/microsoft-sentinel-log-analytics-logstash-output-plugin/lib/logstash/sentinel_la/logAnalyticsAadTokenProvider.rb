@@ -1,16 +1,16 @@
 # encoding: utf-8
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
-require 'rest-client'
 require 'json'
 require 'openssl'
 require 'base64'
 require 'time'
+require 'excon'
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsAadTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
-    scope = CGI.escape("https://monitor.azure.com//.default")
-    @aad_uri = "https://login.microsoftonline.com"
+    scope = CGI.escape("#{logstashLoganalyticsConfiguration.get_monitor_endpoint}//.default")
+    @aad_uri = logstashLoganalyticsConfiguration.get_aad_endpoint
     @token_request_body = sprintf("client_id=%s&scope=%s&client_secret=%s&grant_type=client_credentials", logstashLoganalyticsConfiguration.client_app_Id, scope, logstashLoganalyticsConfiguration.client_app_secret)
     @token_request_uri = sprintf("%s/%s/oauth2/v2.0/token",@aad_uri, logstashLoganalyticsConfiguration.tenant_id)
     @token_state = {
@@ -64,14 +64,13 @@ class LogAnalyticsAadTokenProvider
     while true
       begin
         # Post REST request 
-        response = RestClient::Request.execute(method: :post, url: @token_request_uri, payload: @token_request_body, headers: headers,
-                                              proxy: @logstashLoganalyticsConfiguration.proxy_aad)
-                    
-        if (response.code == 200 || response.code == 201)
+        response = Excon.post(@token_request_uri, :body => @token_request_body, :headers => headers, :proxy => @logstashLoganalyticsConfiguration.proxy_aad, expects: [200, 201])
+
+        if (response.status == 200 || response.status == 201)
           return JSON.parse(response.body)
         end
-      rescue RestClient::ExceptionWithResponse => ewr
-        @logger.error("Exception while authenticating with AAD API ['#{ewr.response}']")          
+      rescue Excon::Error::HTTPStatus => ex
+        @logger.error("Error while authenticating with AAD [#{ex.class}: '#{ex.response.status}', Response: '#{ex.response.body}']")
       rescue Exception => ex          
         @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
       end
