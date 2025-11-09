@@ -1,0 +1,50 @@
+id: 5e0f4a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b
+name: AI Agents - Orphaned Agents with Disabled Owners
+description: |
+  'Identifies AI agents whose owners are either disabled or removed from the organization. Having an active owner for each
+  agent is essential for governance and maintaining the agent. Organizations should assign a new owner to these orphaned
+  agents to ensure proper management and security oversight.'
+requiredDataConnectors: []
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1562
+query: |
+  // Identify agents whose owners are either disabled or removed from the organization. 
+  // Having an owner for each agent is essential for governance and maintaining the agent. 
+  let EnabledAccountUpns =  
+      IdentityInfo  
+      | where IsAccountEnabled == 1  
+      | distinct AccountUpn;  
+  AIAgentsInfo  
+  | summarize arg_max(Timestamp, *) by AIAgentId  
+  | where AgentStatus != "Deleted"   
+  | where not(OwnerAccountUpns in (EnabledAccountUpns))
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns
+  | extend AccountCustomEntity = OwnerAccountUpns
+  | extend HostCustomEntity = AIAgentName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: OwnerAccountUpns
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Community Contributor
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - AI Agents Governance" ]
