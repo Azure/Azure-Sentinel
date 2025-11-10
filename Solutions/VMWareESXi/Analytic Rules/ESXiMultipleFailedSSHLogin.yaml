@@ -1,0 +1,41 @@
+id: 22d177d5-588c-4f1a-a332-2695f52079bb
+name: VMware ESXi - Multiple Failed Shell Login via SSH
+description: |
+ Identifies a failed ESXi Shell login via SSH in a short TimeFrame. This could be suspicious activity especially if this alert is seen triggering many times within a short time frame which could be evidence of a brute-force attack. TriggerThreshold can be adapted. 
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SyslogAma
+    datatypes:
+      - Syslog
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  // To Adapt to your environment
+  let triggerThreshold = 10;
+  VMwareESXi
+  | where SyslogMessage has "sshd"
+  | where SyslogMessage contains "authentication failure"
+  | extend SrcUsername = extract(@'\[info\]\s+\[(.*?)\]', 1, SyslogMessage)
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | extend SrcIpAddr = extract(@'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, SyslogMessage)
+  | summarize make_set(SrcUsername),count() by SrcIpAddr,DstHostname
+  | where count_ >= triggerThreshold
+  | extend HostCustomEntity = DstHostname
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0
+kind: Scheduled
