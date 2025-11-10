@@ -12,10 +12,12 @@ relevantTechniques:
   - T1499
   - T1562
 query: |
-  AIAgentsInfo 
+ AIAgentsInfo 
   | summarize arg_max(Timestamp, *) by AIAgentId 
   | where AgentStatus != "Deleted" 
-  | where tostring(todynamic(RawAgentInfo).Bot.Attributes) has_any ('"GenerativeActionsEnabled":true', '"GenerativeActionsEnabled": true') 
+  | extend Config = tostring(todynamic(RawAgentInfo).Bot.Attributes.configuration)
+  | parse Config with * "\"GenerativeActionsEnabled\":" GenerativeActionsEnabled:boolean * 
+  | where GenerativeActionsEnabled 
   | extend  BotComponents = todynamic(RawAgentInfo).BotComponents 
   | mv-expand BotComponent = BotComponents 
   | where BotComponent has "GptComponentMetadata" 
@@ -33,7 +35,7 @@ query: |
       iif(CapabilitiesPos != -1, CapabilitiesPos, strlen(InstructionsRaw))) 
   ) 
   | extend Instructions = substring(InstructionsRaw, InstructionsStart, InstructionsEnd - InstructionsStart) 
-  | where isempty(Instructions) 
+  | where CapabilitiesPos == 43 and CapabilitiesPos == InstructionsEnd
   | project-away DisplayNamePos, CapabilitiesPos, InstructionsStart, InstructionsEnd 
   | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns
   | extend AccountCustomEntity = CreatorAccountUpn
