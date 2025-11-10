@@ -1,7 +1,7 @@
 # Pathlock Cloud - Event Logging Solution
 
 ## Purpose
-This document is intended for Pathlock Cloud customers. It provides detailed instructions for installing and using the Sentinel Connector. By following the steps outlined here, you can seamlessly ingest Pathlock Cloud event logs into Microsoft Sentinel, enabling advanced analysis and threat detection.
+This document is intended for Pathlock Cloud customers. It provides detailed instructions for installing and using the Microsoft Sentinel Connector. By following the steps outlined here, you can seamlessly ingest Pathlock Cloud event logs into Microsoft Sentinel, enabling advanced analysis and threat detection.
 
 ## Overview
 This solution provides a comprehensive framework for collecting, analyzing, and visualizing event logs from Pathlock Cloud Application. It ingests PLC event data into a custom log table in Microsoft Sentinel, enabling security teams to monitor application activity and detect security threats and anomalies.
@@ -13,19 +13,19 @@ This solution provides a comprehensive framework for collecting, analyzing, and 
 
 - **Intuitive Visualization**: Includes a pre-built workbook to visualize PLC event data for advanced analysis and informed incident response.
 
-- **Seamless Integration**: Designed to work with the Pathlock Cloud Solution to easily collect and forward event logs to your Sentinel workspace.
+- **Seamless Integration**: Designed to work with the Pathlock Cloud Solution to easily collect and forward event logs to your Microsoft Sentinel workspace.
 
 ## Prerequisites
 Before deploying this solution, ensure you have the following:
 
 - **Pathlock Cloud Solution**: 
-Pathlock Cloud integrates with Sentinel to log the event information. This is an external dependency and is not included in this solution package. You must have a Pathlock Cloud license and access to the Pathlock Cloud application.  
+Pathlock Cloud integrates with Microsoft Sentinel to log the event information. This is an external dependency and is not included in this solution package. You must have a Pathlock Cloud license and access to the Pathlock Cloud application.  
 
-- **Connector Configuration**: You must configure the Sentinel Connector in Pathlock Cloud application to send event logging information to Sentinel.
+- **Connector Configuration**: You must configure the Microsoft Sentinel Connector in Pathlock Cloud application to send event logging information to Microsoft Sentinel.
 
     **Learn More:** 
 
-        - Pathlock cloud Sentinel connector implementation documentation: https://help.pathlock.com/pathlock-cloud-documentation/pathlock-cloud/integrations/microsoft-sentinel
+        - Pathlock cloud Microsoft Sentinel connector implementation documentation: https://help.pathlock.com/pathlock-cloud-documentation/pathlock-cloud/integrations/microsoft-sentinel
 
 - **Registering a client application for integration**: 
   -  Sign in to the Microsoft Azure admin center https://portal.azure.com/#home
