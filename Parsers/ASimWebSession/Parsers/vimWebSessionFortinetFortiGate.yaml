@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM filtering parser for Fortinet FortiGate
   Version: '0.3.1'
-  LastUpdated: Nov 05, 2025
+  LastUpdated: Nov 11, 2025
 Product:
   Name: Fortinet FortiGate
 Normalization:
@@ -142,100 +142,93 @@ ParserQuery: |
         SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
     | project-rename DvcOriginalAction = DeviceAction
     | parse-kv AdditionalExtensions as (
-            // FTNTFGT format for FortiGate
-            FTNTFGTstart:datetime,
-            FTNTFGTsrcintfrole:string,
-            FTNTFGTdstintfrole:string,
-            FTNTFGTexternalID:string,
-            FTNTFGTpolicyid:int,
-            FTNTFGTdstcountry:string,
-            FTNTFGTsrccountry:string,
-            FTNTFGTcrscore:string,
-            FTNTFGTduration:int,
-            FTNTFGTsentpkt:long,
-            FTNTFGTrcvdpkt:long,
-            FTNTFGTattack:string,
-            FTNTFGTattackid:string,
-            FTNTFGTlogid:string,
-            FTNTFGTsubtype:string,
-            FTNTFGTvd:string,
-            // Simple format for FortiAnalyzer
-            start:datetime,
-            srcintfrole:string,
-            dstintfrole:string,
-            externalID:string,
-            policyid:int,
-            dstcountry:string,
-            srccountry:string,
-            crscore:string,
-            duration:int,
-            sentpkt:long,
-            rcvdpkt:long,
-            attack:string,
-            attackid:string,
-            logid:string,
-            subtype:string,
-            vd:string,
-            // Additional fields
-            ['ad.referralurl']:string,
-            ['ad.httpmethod']:string,
-            ['ad.agent']:string,
-            // IPS and other fields
-            deviceSeverity:string,
-            ref:string,
-            msg:string,
-            profile:string,
-            incidentserialno:string,
-            policytype:string,
-            direction:string,
-            severity:string
-        ) with (pair_delimiter=';', kv_delimiter='=')
+          start:datetime,
+          srcintfrole:string,
+          dstintfrole:string,
+          externalID:string,
+          policyid:int,
+          dstcountry:string,
+          srccountry:string,
+          crscore:string,
+          duration:int,
+          sentpkt:long,
+          rcvdpkt:long,
+          ['ad.referralurl']:string,
+          ['ad.httpmethod']:string,
+          ['ad.agent']:string,
+          deviceSeverity:string,
+          ref:string,
+          msg:string,
+          profile:string,
+          incidentserialno:string,
+          policytype:string,
+          attack:string,
+          attackid:string,
+          logid:string,
+          direction:string,
+          subtype:string,
+          severity: string,
+          vd:string,
+          FTNTFGTattack:string,
+          FTNTFGTattackid:string,
+          FTNTFGTlogid:string,
+          FTNTFGTsubtype:string,
+          FTNTFGTvd:string,
+          FTNTFGTstart:datetime,
+          FTNTFGTsrcintfrole:string,
+          FTNTFGTdstintfrole:string,
+          FTNTFGTexternalID:string,
+          FTNTFGTpolicyid:int,
+          FTNTFGTdstcountry:string,
+          FTNTFGTsrccountry:string,
+          FTNTFGTcrscore:string,
+          FTNTFGTduration:int,
+          FTNTFGTsentpkt:long,
+          FTNTFGTrcvdpkt:long
+      ) with (pair_delimiter=';', kv_delimiter='=')
     | parse AdditionalExtensions with * "x-forwarded-for=" HttpRequestXff:string ";" *
-    | invoke _ASIM_ResolveDstFQDN('DestinationHostName')
-    | extend
-        HttpReferrer            = ['ad.referralurl'],
-        HttpRequestMethod       = ['ad.httpmethod'],
-        HttpUserAgent           = ['ad.agent'],
-        ThreatName              = coalesce(FTNTFGTattack, attack),
-        ThreatId                = coalesce(FTNTFGTattackid, attackid),
-        EventOriginalUid        = coalesce(FTNTFGTlogid, logid),
-        EventOriginalSubType    = coalesce(FTNTFGTsubtype, subtype),
-        EventStartTime          = coalesce(FTNTFGTstart, start),
-        SrcZone                 = coalesce(FTNTFGTsrcintfrole, srcintfrole),
-        DstZone                 = coalesce(FTNTFGTdstintfrole, dstintfrole),
-        NetworkSessionId        = coalesce(FTNTFGTexternalID, externalID),
-        RuleNumber              = coalesce(FTNTFGTpolicyid, policyid),
-        NetworkDuration         = coalesce(FTNTFGTduration, duration),
-        DstGeoCountry           = coalesce(FTNTFGTdstcountry, dstcountry),
-        SrcGeoCountry           = coalesce(FTNTFGTsrccountry, srccountry),
-        ThreatOriginalRiskLevel = coalesce(FTNTFGTcrscore, crscore),
-        SrcPackets              = coalesce(FTNTFGTsentpkt, sentpkt),
-        DstPackets              = coalesce(FTNTFGTrcvdpkt, rcvdpkt)
-    | extend
-        temp_HttpRequestMethod = extract(@"rawdata=.*?Method=(.*?)(?:\||\;|$)", 1, AdditionalExtensions),
-        temp_HttpUserAgent = extract(@"rawdata=.*?User-Agent=(.*?)(?:\||\;|$)", 1, AdditionalExtensions)
-    | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod2 "|User-Agent=" temp_HttpUserAgent2 ";" *
+    | project-rename 
+      HttpReferrer              =  ['ad.referralurl'],
+      HttpRequestMethod         = ['ad.httpmethod'],
+      HttpUserAgent             = ['ad.agent']
     | extend 
-        HttpRequestMethod = coalesce(temp_HttpRequestMethod, temp_HttpRequestMethod2, HttpRequestMethod),
-        HttpUserAgent = coalesce(temp_HttpUserAgent, temp_HttpUserAgent2, HttpUserAgent)
+      ThreatName              = coalesce(attack,FTNTFGTattack),
+      ThreatId                = coalesce(attackid,FTNTFGTattackid),
+      EventOriginalUid        = coalesce(logid,FTNTFGTlogid),
+      EventOriginalSubType    = coalesce(subtype,FTNTFGTsubtype),
+      EventStartTime          = coalesce(start,FTNTFGTstart),
+      SrcZone                 = coalesce(srcintfrole,FTNTFGTsrcintfrole),
+      DstZone                 = coalesce(dstintfrole,FTNTFGTdstintfrole),
+      NetworkSessionId        = coalesce(externalID,FTNTFGTexternalID),
+      RuleNumber              = coalesce(policyid,FTNTFGTpolicyid),
+      NetworkDuration         = coalesce(duration, FTNTFGTduration),
+      DstGeoCountry           = coalesce(dstcountry,FTNTFGTdstcountry),
+      SrcGeoCountry           = coalesce(srccountry,FTNTFGTsrccountry),
+      ThreatOriginalRiskLevel = coalesce(crscore,FTNTFGTcrscore),
+      SrcPackets              = coalesce(sentpkt,FTNTFGTsentpkt),
+      DstPackets              = coalesce(rcvdpkt,FTNTFGTrcvdpkt)
+    | project-away FTNTFGT*, attack, attackid, logid, subtype, start, srcintfrole, dstintfrole, externalID, policyid, dstcountry, srccountry, crscore, duration, sentpkt, rcvdpkt
+    | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
+    | extend 
+        HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
+        HttpUserAgent = coalesce(temp_HttpUserAgent,HttpUserAgent)
     | project-away temp_*
-    | extend AdditionalFields = bag_pack(
-                                "incidentserialno", incidentserialno, 
-                                "policytype", policytype,
-                                "profile", profile,
-                                "ref", ref,
-                                "vd", coalesce(FTNTFGTvd, vd),
-                                "Message", msg,
+    | extend AdditionalFields =  bag_pack(
+                                "incidentserialno",incidentserialno, 
+                                "policytype",policytype,
+                                "profile",profile,
+                                "ref",ref,
+                                "vd",vd,
+                                "Message",msg,
                                 "deviceSeverity", deviceSeverity,
-                                "direction", direction
-                                )
+                                "direction", direction)
     | extend 
       EventCount               = int(1)
       , EventSchema            = "WebSession"
       , EventSchemaVersion     = "0.2.6"
       , EventType              = "HTTPsession"
       , EventVendor            = "Fortinet"
-      , EventProduct           = "Fortigate"
+      , EventProduct = "Fortigate"
       , DvcIdType              = "Other"
       , NetworkBytes           = DstBytes + SrcBytes
       , EventEndTime           = TimeGenerated
@@ -257,11 +250,6 @@ ParserQuery: |
         ""
         )
     | extend EventSeverity = iff(EventMessage has_all ('ips', 'utm'), ipsseverity, EventSeverity)
-    | extend NetworkDirection = case(
-        direction == "incoming", "Inbound",
-        direction == "outgoing", "Outbound",
-        ""
-        )
     | extend 
         Src       = SrcIpAddr,
         Dst       = DstIpAddr,
@@ -269,11 +257,10 @@ ParserQuery: |
         IpAddr    = SrcIpAddr,
         Duration  = NetworkDuration,
         Rule      = tostring(RuleNumber)
-    | project-away 
-        FTNTFGT*, attack, attackid, logid, subtype, start, srcintfrole, dstintfrole, 
-        externalID, policyid, dstcountry, srccountry, crscore, duration, sentpkt, 
-        rcvdpkt, Protocol, AdditionalExtensions, NetworkProtocolNumber, severity, 
-        incidentserialno, policytype, profile, ref, msg, deviceSeverity, direction, 
-        vd, ipsseverity
+    | extend NetworkDirection = case(
+        direction == "incoming", "Inbound",
+        direction == "outgoing", "Outbound",
+        "")
+    | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber, severity, incidentserialno, policytype, profile, ref, msg, deviceSeverity, direction, vd, ipsseverity
   };
   parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
