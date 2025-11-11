@@ -1,0 +1,31 @@
+id: af2b5dbd-4b66-47b4-9936-abfecb246ba1
+name: Top domains outbound sending Malicious Teams messages inbound
+description: |
+  This query looking for potential partner compromise via comparing outbound Teams message traffic per target domain and looking for malicious Teams messages from the same domains as inbound.
+description-detailed: |
+  This query looking for potential partner compromise via comparing outbound Teams message traffic per target domain and looking for malicious Teams messages from the same domains as inbound.
+  Replace contoso.com with your own recipient domain and remove comment marker if you want to see Bad_Traffic_Percentage 
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // This query provides insights of top outbound recipient domains of outbound Teams messages by volume and shows total number of inbound Teams messages with Threats from the same domains (as inbound senders) indicating potential partner user or organization compromise.
+  MessageEvents
+  | where IsExternalThread==1 and IsOwnedThread==1
+  | mv-expand Recipients = RecipientDetails
+  | extend RecipientEmailAddress = Recipients.RecipientSmtpAddress
+  | extend RecipientDomain = tostring(split(RecipientEmailAddress, "@")[1])
+  //| where RecipientDomain !="contoso.com"
+  | summarize count() by RecipientDomain
+  | project OutboundCount=count_, RecipientDomain, SenderFromDomain=RecipientDomain
+  | join (MessageEvents |mv-expand Recipients = RecipientDetails|extend RecipientEmailAddress = Recipients.RecipientSmtpAddress|extend SenderFromDomain = tostring(split(RecipientEmailAddress, "@")[1])| where IsExternalThread==1 and IsOwnedThread==0 and isempty(ThreatTypes)==false) on SenderFromDomain
+  | summarize max(OutboundCount),count() by SenderFromDomain
+  //| extend Bad_Traffic_Percentage = todouble(round(IncomingTeamsMessagesWithThreats=count_ / todouble(OutboundTeamsMessages=max_OutboundCount), 2))
+  | project SenderFromDomain, OutboundTeamsMessages=max_OutboundCount, IncomingTeamsMessagesWithThreats=count_//, Bad_Traffic_Percentage
+  | sort by OutboundTeamsMessages
+version: 1.0.0
