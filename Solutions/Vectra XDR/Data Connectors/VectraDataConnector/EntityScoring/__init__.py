@@ -24,7 +24,7 @@ def main(mytimer: func.TimerRequest) -> None:
         )
         start_time = time.time()
         entity_scoring_obj = EntityScoringCollector(
-            applogger,
+            start_time,
             consts.ENTITY_SCORING_NAME,
             consts.ENTITY_SCORING_CLIENT_ID,
             consts.ENTITY_SCORING_CLIENT_SECRET,
