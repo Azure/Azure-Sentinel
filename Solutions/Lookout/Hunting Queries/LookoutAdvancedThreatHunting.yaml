@@ -1,0 +1,245 @@
+id: lookout-advanced-threat-hunting
+name: Lookout Advanced Threat Hunting Queries
+description: Comprehensive hunting queries for Lookout Mobile Risk API v2 data to identify advanced persistent threats, coordinated attacks, and sophisticated mobile security incidents
+version: 2.0.0
+category: Hunting Queries
+dataTypes:
+  - LookoutMtdV2_CL
+tactics:
+  - Discovery
+  - Persistence
+  - DefenseEvasion
+  - CredentialAccess
+  - Collection
+  - InitialAccess
+techniques:
+  - T1057
+  - T1418
+  - T1444
+  - T1566
+  - T1598
+  - T1621
+  - T1629
+  - T1630
+
+queries:
+  - name: "Multi-Vector Attack Correlation"
+    description: "Identifies devices experiencing multiple threat types within a short timeframe, indicating coordinated attacks"
+    query: |
+      let timeWindow = 24h;
+      let threatEvents = LookoutEvents
+      | where TimeGenerated > ago(timeWindow)
+      | where EventType == "THREAT"
+      | where ThreatSeverity in ("CRITICAL", "HIGH")
+      | summarize 
+          ThreatTypes = make_set(ThreatType),
+          ThreatCount = count(),
+          FirstThreat = min(TimeGenerated),
+          LastThreat = max(TimeGenerated),
+          ThreatClassifications = make_set(ThreatClassifications)
+          by DeviceGuid, DeviceEmailAddress;
+      let smishingEvents = LookoutEvents
+      | where TimeGenerated > ago(timeWindow)
+      | where EventType == "SMISHING_ALERT"
+      | where SmishingAlertSeverity in ("CRITICAL", "HIGH")
+      | summarize 
+          SmishingTypes = make_set(SmishingAlertType),
+          SmishingCount = count(),
+          FirstSmishing = min(TimeGenerated)
+          by DeviceGuid;
+      threatEvents
+      | join kind=inner (smishingEvents) on DeviceGuid
+      | where ThreatCount >= 2 or SmishingCount >= 1
+      | extend AttackDuration = LastThreat - FirstThreat
+      | extend MultiVectorRisk = case(
+          ThreatCount >= 3 and SmishingCount >= 1, "Critical",
+          ThreatCount >= 2 and SmishingCount >= 1, "High", 
+          ThreatCount >= 3, "High",
+          "Medium"
+      )
+      | project DeviceGuid, DeviceEmailAddress, ThreatTypes, SmishingTypes, 
+                ThreatCount, SmishingCount, AttackDuration, MultiVectorRisk,
+                FirstThreat, LastThreat, ThreatClassifications
+      | order by MultiVectorRisk desc, ThreatCount desc
+
+  - name: "Suspicious Device Behavior Patterns"
+    description: "Detects devices with unusual security status changes and compliance degradation patterns"
+    query: |
+      let lookback = 7d;
+      LookoutEvents
+      | where TimeGenerated > ago(lookback)
+      | where EventType == "DEVICE"
+      | where ChangeType == "UPDATE"
+      | sort by DeviceGuid, TimeGenerated asc
+      | extend PrevSecurityStatus = prev(DeviceSecurityStatus, 1)
+      | extend PrevComplianceStatus = prev(DeviceComplianceStatus, 1)
+      | where DeviceSecurityStatus != PrevSecurityStatus or DeviceComplianceStatus != PrevComplianceStatus
+      | extend SecurityDegradation = case(
+          PrevSecurityStatus == "THREATS_LOW" and DeviceSecurityStatus == "THREATS_HIGH", "Rapid Escalation",
+          PrevSecurityStatus == "THREATS_LOW" and DeviceSecurityStatus == "THREATS_MEDIUM", "Moderate Escalation",
+          PrevComplianceStatus == "Compliant" and DeviceComplianceStatus == "Non-Compliant", "Compliance Loss",
+          "Other Change"
+      )
+      | where SecurityDegradation in ("Rapid Escalation", "Moderate Escalation", "Compliance Loss")
+      | summarize 
+          ChangeCount = count(),
+          SecurityChanges = make_set(SecurityDegradation),
+          FirstChange = min(TimeGenerated),
+          LastChange = max(TimeGenerated),
+          Platforms = make_set(DevicePlatform),
+          OSVersions = make_set(DeviceOSVersion)
+          by DeviceGuid, DeviceEmailAddress, DeviceManufacturer, DeviceModel
+      | extend ChangeVelocity = ChangeCount / datetime_diff('hour', LastChange, FirstChange)
+      | where ChangeCount >= 3 or ChangeVelocity > 0.5
+      | order by ChangeVelocity desc, ChangeCount desc
+
+  - name: "Enterprise-Wide Threat Campaign Detection"
+    description: "Identifies potential coordinated attacks across multiple devices in the enterprise"
+    query: |
+      let campaignWindow = 48h;
+      let minDevices = 3;
+      LookoutEvents
+      | where TimeGenerated > ago(campaignWindow)
+      | where EventType in ("THREAT", "SMISHING_ALERT")
+      | extend ThreatIndicator = case(
+          EventType == "THREAT", ThreatType,
+          EventType == "SMISHING_ALERT", SmishingAlertType,
+          "Unknown"
+      )
+      | extend ThreatSev = case(
+          EventType == "THREAT", ThreatSeverity,
+          EventType == "SMISHING_ALERT", SmishingAlertSeverity,
+          "Unknown"
+      )
+      | where ThreatSev in ("CRITICAL", "HIGH")
+      | summarize 
+          AffectedDevices = dcount(DeviceGuid),
+          DeviceList = make_set(DeviceGuid),
+          EmailList = make_set(DeviceEmailAddress),
+          PlatformDistribution = make_set(DevicePlatform),
+          FirstIncident = min(TimeGenerated),
+          LastIncident = max(TimeGenerated),
+          ThreatDetails = make_set(strcat(EventType, ":", ThreatIndicator))
+          by EnterpriseGuid, ThreatIndicator
+      | where AffectedDevices >= minDevices
+      | extend CampaignDuration = LastIncident - FirstIncident
+      | extend CampaignRisk = case(
+          AffectedDevices >= 10, "Critical",
+          AffectedDevices >= 5, "High",
+          "Medium"
+      )
+      | project EnterpriseGuid, ThreatIndicator, AffectedDevices, CampaignRisk,
+                CampaignDuration, FirstIncident, LastIncident, PlatformDistribution,
+                ThreatDetails
+      | order by AffectedDevices desc, CampaignRisk desc
+
+  - name: "Advanced Persistent Threat (APT) Indicators"
+    description: "Hunts for APT-like behavior including persistence mechanisms and stealth techniques"
+    query: |
+      let aptWindow = 30d;
+      let persistentThreats = LookoutEvents
+      | where TimeGenerated > ago(aptWindow)
+      | where EventType == "THREAT"
+      | where ThreatClassifications has_any ("SPYWARE", "TROJAN", "ROOTKIT")
+      | where ThreatAction == "DETECTED" and ThreatStatus == "OPEN"
+      | summarize 
+          PersistentThreatCount = count(),
+          ThreatTypes = make_set(ThreatType),
+          Classifications = make_set(ThreatClassifications),
+          FirstDetection = min(TimeGenerated),
+          LastDetection = max(TimeGenerated)
+          by DeviceGuid, DeviceEmailAddress;
+      let stealthIndicators = LookoutEvents
+      | where TimeGenerated > ago(aptWindow)
+      | where EventType == "DEVICE"
+      | where DeviceActivationStatus == "ACTIVE"
+      | where isempty(DeviceCheckinTime) or DeviceCheckinTime < ago(7d)
+      | summarize 
+          StealthBehavior = count(),
+          LastCheckin = max(DeviceCheckinTime)
+          by DeviceGuid;
+      let privilegeEscalation = LookoutEvents
+      | where TimeGenerated > ago(aptWindow)
+      | where EventType == "AUDIT"
+      | where AuditAttributeChanges has_any ("admin", "root", "privilege")
+      | summarize 
+          PrivilegeChanges = count(),
+          ChangeDetails = make_set(AuditAttributeChanges)
+          by DeviceGuid;
+      persistentThreats
+      | join kind=leftouter (stealthIndicators) on DeviceGuid
+      | join kind=leftouter (privilegeEscalation) on DeviceGuid
+      | extend APTScore = 
+          (PersistentThreatCount * 3) + 
+          (iff(isnotempty(StealthBehavior), StealthBehavior * 2, 0)) +
+          (iff(isnotempty(PrivilegeChanges), PrivilegeChanges * 4, 0))
+      | where APTScore >= 5
+      | extend APTRisk = case(
+          APTScore >= 15, "Critical",
+          APTScore >= 10, "High",
+          "Medium"
+      )
+      | project DeviceGuid, DeviceEmailAddress, APTScore, APTRisk,
+                PersistentThreatCount, ThreatTypes, Classifications,
+                StealthBehavior, PrivilegeChanges, FirstDetection, LastDetection
+      | order by APTScore desc
+
+  - name: "Mobile Device Compromise Timeline"
+    description: "Creates a comprehensive timeline of security events for potentially compromised devices"
+    query: |
+      let suspiciousDevices = LookoutEvents
+      | where TimeGenerated > ago(7d)
+      | where EventType == "THREAT" and ThreatSeverity in ("CRITICAL", "HIGH")
+      | distinct DeviceGuid;
+      LookoutEvents
+      | where DeviceGuid in (suspiciousDevices)
+      | where TimeGenerated > ago(30d)
+      | extend EventSummary = case(
+          EventType == "THREAT", strcat("THREAT: ", ThreatType, " (", ThreatSeverity, ")"),
+          EventType == "DEVICE", strcat("DEVICE: ", ChangeType, " - ", DeviceSecurityStatus),
+          EventType == "SMISHING_ALERT", strcat("SMISHING: ", SmishingAlertType, " (", SmishingAlertSeverity, ")"),
+          EventType == "AUDIT", strcat("AUDIT: ", AuditType),
+          strcat("OTHER: ", EventType)
+      )
+      | extend RiskScore = case(
+          EventType == "THREAT" and ThreatSeverity == "CRITICAL", 10,
+          EventType == "THREAT" and ThreatSeverity == "HIGH", 8,
+          EventType == "SMISHING_ALERT" and SmishingAlertSeverity == "CRITICAL", 9,
+          EventType == "SMISHING_ALERT" and SmishingAlertSeverity == "HIGH", 7,
+          EventType == "DEVICE" and DeviceSecurityStatus == "THREATS_HIGH", 6,
+          EventType == "AUDIT", 4,
+          2
+      )
+      | project TimeGenerated, DeviceGuid, DeviceEmailAddress, DevicePlatform,
+                EventType, EventSummary, RiskScore, ActorType, ChangeType
+      | order by DeviceGuid, TimeGenerated desc
+
+  - name: "Cross-Platform Attack Correlation"
+    description: "Identifies attacks targeting both iOS and Android devices, indicating sophisticated threat actors"
+    query: |
+      let crossPlatformWindow = 72h;
+      let threatsByPlatform = LookoutEvents
+      | where TimeGenerated > ago(crossPlatformWindow)
+      | where EventType in ("THREAT", "SMISHING_ALERT")
+      | extend ThreatIndicator = case(
+          EventType == "THREAT", ThreatType,
+          EventType == "SMISHING_ALERT", SmishingAlertType,
+          "Unknown"
+      )
+      | summarize 
+          Platforms = make_set(DevicePlatform),
+          DeviceCount = dcount(DeviceGuid),
+          AffectedEmails = make_set(DeviceEmailAddress),
+          FirstSeen = min(TimeGenerated),
+          LastSeen = max(TimeGenerated)
+          by ThreatIndicator, EnterpriseGuid
+      | where array_length(Platforms) >= 2
+      | where Platforms has "ANDROID" and Platforms has "IOS"
+      | extend CrossPlatformRisk = case(
+          DeviceCount >= 10, "Critical",
+          DeviceCount >= 5, "High",
+          "Medium"
+      )
+      | project ThreatIndicator, EnterpriseGuid, Platforms, DeviceCount,
+                CrossPlatformRisk, FirstSeen, LastSeen, AffectedEmails
+      | order by DeviceCount desc, CrossPlatformRisk desc

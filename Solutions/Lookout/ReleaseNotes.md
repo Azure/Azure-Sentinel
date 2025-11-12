@@ -1,3 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 3.0.0       | 18-07-2025                     | New **CCF Connector** added to Solution - *Lookout Mobile Threat Detection Connector*.    |
+| 3.0.2       | 12-11-2025                     | Parser fixes, comprehensive and executive dashboards, updated analytic rules with MITRE mappings |
+| 3.0.0       | 07-11-2025                     | New **CCF Connector** added to Solution - *Lookout Mobile Threat Detection Connector*.    |
