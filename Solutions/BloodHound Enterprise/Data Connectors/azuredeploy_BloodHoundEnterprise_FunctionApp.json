@@ -3,67 +3,74 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "functionAppName": {
-      "type": "string",
+      "type": "String",
       "metadata": {
         "description": "Name of the Function App. This must be unique across Azure, since each instance requires its own Function App (e.g., BloodHoundEnterprise-Maple)."
       }
     },
     "logAnalyticsWorkspaceName": {
-      "type": "string",
+      "type": "String",
       "metadata": {
         "description": "The name of the existing Log Analytics Workspace where you want to create a Data Collection Endpoint (DCE) and Data Collection Rule (DCR) for custom tables."
       }
     },
     "bloodhoundTenantDomain": {
-      "type": "string",
+      "type": "String",
       "metadata": {
         "description": "The URL for the BloodHound Enterprise tenant domain."
       }
     },
     "Bloodhound-Token-Id-Secret-Value": {
-      "type": "securestring",
+      "type": "SecureString",
       "metadata": {
         "description": "The value for the BloodHound token ID. This value will be stored in an Azure Key Vault secret."
       }
     },
     "Bloodhound-Token-Key-Secret-Value": {
-      "type": "securestring",
+      "type": "SecureString",
       "metadata": {
         "description": "The value for the BloodHound token key. This value will be stored in an Azure Key Vault secret."
       }
     },
     "microsoftEntraIdApplicationAppId": {
-      "type": "string",
+      "type": "String",
       "metadata": {
         "description": "The unique identifier for the Microsoft Entra ID application. This ID, also known as the Client ID, is used to authenticate your application to the Microsoft identity platform."
       }
     },
     "microsoftEntraIdApplicationAppSecret": {
-      "type": "securestring",
+      "type": "SecureString",
       "metadata": {
         "description": "A confidential secret generated for your Microsoft Entra ID application. This secret, also known as the Client Secret, is used along with the App ID to prove the application's identity when requesting an access token."
       }
     },
     "lookupDays": {
-      "type": "int",
       "defaultValue": 2,
+      "type": "Int",
       "metadata": {
         "description": "Specifies the number of days in the past for which the system should fetch data. A higher value means more historical data will be retrieved, which increases the time and compute resources required, during the first iteration when setting up the system. This parameter sets the default lookback period when no previous timestamp is available."
       }
     },
     "selectedBloodhoundEnvironments": {
-      "type": "string",
       "defaultValue": "All",
+      "type": "String",
       "metadata": {
         "description": "The selected BloodHound environments from which you want to fetch data. These should be provided as comma-separated values (e.g., Ghost.Corp, Phantom.Corp). The default value is All."
       }
     },
     "selectedFindingTypes": {
-      "type": "string",
       "defaultValue": "All",
+      "type": "String",
       "metadata": {
         "description": "The selected finding types."
       }
+    },
+    "utcTimeZone": {
+      "type": "String",
+      "metadata": {
+        "description": "The UTC time zone to use for the Function App."
+      },
+      "defaultValue": "[utcNow()]"
     }
   },
   "variables": {
@@ -93,7 +100,12 @@
     "bloodhoundTokenIdSecretName": "Bloodhound-Token-Id-Secret-Value",
     "bloodhoundTokenKeySecretName": "Bloodhound-Token-Key-Secret-Value",
     "dceName": "BloodHoundDCE",
-    "dcrName": "BloodHoundDCR"
+    "dcrName": "BloodHoundDCR",
+    "managedIdentityName": "[concat('deploymentScriptIdentity-', parameters('functionAppName'))]",
+    "storageBlobDataContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+    "deploymentContainerName": "deploymentpackage",
+    "zipFileName": "[concat(parameters('functionAppName'), '.zip')]",
+    "zipFileUrl": "https://github.com/metron-labs/Azure-Sentinel/blob/bloodhound/Solutions/BloodHound%20Enterprise/Data%20Connectors/BloodHoundDataConnector/BloodHoundAzureFunction.zip?raw=true"
   },
   "resources": [
     {
@@ -108,9 +120,9 @@
       }
     },
     {
-      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAttackPathsTable'))]",
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAttackPathsTable'))]",
       "properties": {
         "schema": {
           "name": "[variables('bheAttackPathsTable')]",
@@ -276,9 +288,9 @@
       }
     },
     {
-      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAuditLogsTable'))]",
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAuditLogsTable'))]",
       "properties": {
         "schema": {
           "name": "[variables('bheAuditLogsTable')]",
@@ -344,9 +356,9 @@
       }
     },
     {
-      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheFindingTrendsTable'))]",
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheFindingTrendsTable'))]",
       "properties": {
         "schema": {
           "name": "[variables('bheFindingTrendsTable')]",
@@ -428,9 +440,9 @@
       }
     },
     {
-      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bhePostureHistoryTable'))]",
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bhePostureHistoryTable'))]",
       "properties": {
         "schema": {
           "name": "[variables('bhePostureHistoryTable')]",
@@ -480,9 +492,9 @@
       }
     },
     {
-      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheTierZeroAssetsTable'))]",
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheTierZeroAssetsTable'))]",
       "properties": {
         "schema": {
           "name": "[variables('bheTierZeroAssetsTable')]",
@@ -940,9 +952,9 @@
       }
     },
     {
-      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAttackPathsTimelineTable'))]",
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/', variables('bheAttackPathsTimelineTable'))]",
       "properties": {
         "schema": {
           "name": "[variables('bheAttackPathsTimelineTable')]",
@@ -1975,23 +1987,24 @@
       "tags": {
         "[format('hidden-link:{0}', resourceId('Microsoft.Web/sites', parameters('functionAppName')))]": "Resource"
       },
+      "kind": "web",
       "properties": {
         "Application_Type": "web"
-      },
-      "kind": "web"
+      }
     },
     {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2023-12-01",
       "name": "[parameters('functionAppName')]",
       "location": "[variables('logAnalyticsWorkspaceLocation')]",
-      "kind": "functionapp,linux",
       "dependsOn": [
         "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
         "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
-        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "[resourceId('Microsoft.Resources/deploymentScripts', 'uploadZipToBlob')]"
       ],
+      "kind": "functionapp,linux",
       "identity": {
         "type": "SystemAssigned"
       },
@@ -2099,11 +2112,10 @@
         "functionAppConfig": {
           "deployment": {
             "storage": {
-              "type": "blobContainer",
-              "value": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').primaryEndpoints.blob, 'deploymentpackage')]",
+              "type": "BlobContainer",
+              "value": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').primaryEndpoints.blob, variables('deploymentContainerName'))]",
               "authentication": {
-                "type": "StorageAccountConnectionString",
-                "storageAccountConnectionStringName": "AzureWebJobsStorage"
+                "type": "SystemAssignedIdentity"
               }
             }
           },
@@ -2169,10 +2181,118 @@
       }
     },
     {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('managedIdentityName')]",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]"
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/providers/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[concat(variables('storageAccountName'), '/Microsoft.Authorization/', guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('managedIdentityName'), 'StorageBlobDataContributor'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('storageBlobDataContributorRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2020-10-01",
+      "name": "uploadZipToBlob",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('deploymentContainerName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/providers/roleAssignments', variables('storageAccountName'), 'Microsoft.Authorization', guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('managedIdentityName'), 'StorageBlobDataContributor'))]"
+      ],
+      "kind": "AzureCLI",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName'))]": {}
+        }
+      },
+      "properties": {
+        "azCliVersion": "2.52.0",
+        "timeout": "PT10M",
+        "retentionInterval": "PT1H",
+        "cleanupPreference": "OnSuccess",
+        "forceUpdateTag": "[parameters('utcTimeZone')]",
+        "scriptContent": "[concat('#!/bin/bash\nset -e\necho \"Starting deployment script...\"\necho \"Waiting for role assignment to propagate...\"\nsleep 30\necho \"Downloading zip file...\"\ncurl -L --fail --show-error -o ', variables('zipFileName'), ' \"', variables('zipFileUrl'), '\"\necho \"Verifying downloaded file...\"\nif [ ! -f ', variables('zipFileName'), ' ]; then\n  echo \"Error: Downloaded file does not exist\"\n  exit 1\nfi\necho \"File downloaded successfully\"\necho \"Uploading to storage account...\"\naz storage blob upload --account-name ', variables('storageAccountName'), ' --container-name ', variables('deploymentContainerName'), ' --name ', variables('zipFileName'), ' --file ', variables('zipFileName'), ' --auth-mode login --overwrite --no-progress\necho \"Upload completed successfully\"\n')]"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, 'StorageBlobDataContributor', parameters('functionAppName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+        "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2023-12-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2020-10-01",
+      "name": "WaitSection",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+      ],
+      "kind": "AzurePowerShell",
+      "properties": {
+        "azPowerShellVersion": "7.0",
+        "scriptContent": "start-sleep -Seconds 30",
+        "cleanupPreference": "Always",
+        "retentionInterval": "PT1H"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2020-10-01",
+      "name": "generateSasUrl",
+      "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deploymentScripts', 'uploadZipToBlob')]",
+        "[resourceId('Microsoft.Resources/deploymentScripts', 'WaitSection')]"
+      ],
+      "kind": "AzurePowerShell",
+      "properties": {
+        "azPowerShellVersion": "7.0",
+        "timeout": "PT5M",
+        "retentionInterval": "PT1H",
+        "cleanupPreference": "OnSuccess",
+        "scriptContent": "[concat('$storageAccountName = \"', variables('storageAccountName'), '\"\n$containerName = \"', variables('deploymentContainerName'), '\"\n$blobName = \"', variables('zipFileName'), '\"\n$storageAccountKey = \"', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value, '\"\n$ctx = New-AzStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $storageAccountKey\n$expiryTime = (Get-Date).AddHours(1)\n$sasToken = New-AzStorageBlobSASToken -Context $ctx -Container $containerName -Blob $blobName -Permission r -ExpiryTime $expiryTime\n$blobUrl = \"', reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').primaryEndpoints.blob, variables('deploymentContainerName'), '/', variables('zipFileName'), '?\" + $sasToken\n$DeploymentScriptOutputs = @{}\n$DeploymentScriptOutputs[''result''] = $blobUrl\n')]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/extensions",
+      "apiVersion": "2022-09-01",
+      "name": "[concat(parameters('functionAppName'), '/onedeploy')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deploymentScripts', 'generateSasUrl')]"
+      ],
+      "properties": {
+        "packageUri": "[reference(resourceId('Microsoft.Resources/deploymentScripts', 'generateSasUrl'), '2020-10-01').outputs.result]",
+        "remoteBuild": true
+      }
+    },
+    {
       "type": "Microsoft.KeyVault/vaults",
       "apiVersion": "2021-06-01-preview",
       "name": "[variables('keyVaultName')]",
       "location": "[variables('logAnalyticsWorkspaceLocation')]",
+      "dependsOn": [],
       "properties": {
         "sku": {
           "family": "A",
@@ -2184,7 +2304,6 @@
         "enabledForTemplateDeployment": true,
         "accessPolicies": []
       },
-      "dependsOn": [],
       "resources": [
         {
           "type": "secrets",
@@ -2214,7 +2333,6 @@
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
       "name": "[guid(resourceGroup().id, 'KeyVaultSecretsUser', parameters('functionAppName'))]",
-      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
       "dependsOn": [
         "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
@@ -2222,7 +2340,26 @@
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
         "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'Full').identity.principalId]"
-      }
+      },
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
     }
-  ]
+  ],
+  "outputs": {
+    "storageAccountName": {
+      "type": "String",
+      "value": "[variables('storageAccountName')]"
+    },
+    "containerName": {
+      "type": "String",
+      "value": "[variables('deploymentContainerName')]"
+    },
+    "zipFileName": {
+      "type": "String",
+      "value": "[variables('zipFileName')]"
+    },
+    "blobUrl": {
+      "type": "String",
+      "value": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').primaryEndpoints.blob, variables('deploymentContainerName'), '/', variables('zipFileName'))]"
+    }
+  }
 }
