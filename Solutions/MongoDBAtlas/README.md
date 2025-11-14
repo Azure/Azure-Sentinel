@@ -1,5 +1,6 @@
 # MongoDB Atlas API Connector for Microsoft Sentinel
-Author: Steve Lord
+Author: Steve Lord. 
+
 Contributor: Lester Szeto
 
 This custom data connector uses a Function App to pull MongoDB Atlas (MDBA) logs from the MongoDB Atlas Administration API and upload them into the selected Log Analytics workspace via the Log Ingestion API. 

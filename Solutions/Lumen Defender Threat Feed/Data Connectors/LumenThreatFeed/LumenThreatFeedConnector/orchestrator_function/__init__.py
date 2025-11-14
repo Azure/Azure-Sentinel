@@ -145,10 +145,10 @@ def orchestrator_function(context):
             f"CUMULATIVE — work units completed: {cumulative_units}, "
             f"uploaded: {cumulative_uploaded}, errors: {cumulative_errors}, throttles: {cumulative_throttles}"
         )
-        logging.info(f"Blob sources processed (if legacy path): {len(blob_sources)}")
+        logging.debug(f"Blob sources processed (if legacy path): {len(blob_sources)}")
 
         if 'has_more' in locals() and has_more and manifest_blob_name:
-            logging.info(f"Paging manifest: advancing to next page at offset {next_offset}")
+            logging.debug(f"Paging manifest: advancing to next page at offset {next_offset}")
             # Fold this segment's totals into the accumulator before paging to next
             segment_uploaded = sum((r or {}).get('uploaded_count', 0) for r in results)
             segment_errors = sum((r or {}).get('error_count', 0) for r in results)
