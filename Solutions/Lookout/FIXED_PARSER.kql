@@ -1,0 +1,117 @@
+# Fixed LookoutEvents Parser for Your Data Structure
+
+Copy and paste this in Sentinel **Logs** to create the correct parser:
+
+```kql
+.create-or-alter function LookoutEvents() {
+    LookoutMtdV2_CL
+    | extend 
+        // Core Event Fields
+        EventVendor = "Lookout",
+        EventProduct = "Lookout Mobile Risk API v2",
+        EventType = log_type,
+        EventId = id,
+        EventTime = TimeGenerated,
+        ChangeType = change_type,
+        
+        // Device Information (from nested threat.device object)
+        DeviceGuid = tostring(threat.device.guid),
+        DeviceEmailAddress = tostring(threat.device.email),
+        DeviceSeverity = tostring(threat.device.severity),
+        DeviceStatus = tostring(threat.device.status),
+        DeviceType = tostring(threat.device.type),
+        
+        // Threat Information (from nested threat object)
+        ThreatId = tostring(threat.guid),
+        ThreatType = tostring(threat.type),
+        ThreatSeverity = tostring(threat.severity),
+        ThreatStatus = tostring(threat.status),
+        ThreatDetectedAt = todatetime(threat.detected_at),
+        ThreatClassifications = tostring(threat.classifications),
+        ThreatAssessments = tostring(threat.assessments),
+        
+        // Threat Details (nested in threat.details)
+        ThreatNetworkSSID = tostring(threat.details.network_ssid),
+        ThreatDNSIpAddresses = tostring(threat.details.dns_ip_addresses),
+        ThreatMacAddress = tostring(threat.details.mac_address),
+        ThreatProxyPort = tostring(threat.details.proxy_port),
+        
+        // Actor Information
+        ActorGuid = tostring(actor.guid),
+        ActorType = tostring(actor.type),
+        
+        // Target Information
+        TargetGuid = tostring(target.guid),
+        TargetType = tostring(target.type)
+        
+    // Security Risk Classification
+    | extend SecurityRiskLevel = case(
+        ThreatSeverity in ("CRITICAL", "HIGH"), "High",
+        ThreatSeverity == "MEDIUM", "Medium",
+        ThreatSeverity == "LOW", "Low",
+        "Unknown"
+    )
+    
+    | project
+        TimeGenerated,
+        EventVendor,
+        EventProduct,
+        EventType,
+        EventId,
+        ChangeType,
+        SecurityRiskLevel,
+        
+        // Device fields
+        DeviceGuid,
+        DeviceEmailAddress,
+        DeviceSeverity,
+        DeviceStatus,
+        DeviceType,
+        
+        // Threat fields
+        ThreatId,
+        ThreatType,
+        ThreatSeverity,
+        ThreatStatus,
+        ThreatDetectedAt,
+        ThreatClassifications,
+        ThreatAssessments,
+        ThreatNetworkSSID,
+        ThreatDNSIpAddresses,
+        ThreatMacAddress,
+        ThreatProxyPort,
+        
+        // Actor/Target
+        ActorGuid,
+        ActorType,
+        TargetGuid,
+        TargetType,
+        
+        // Keep original nested objects for advanced queries
+        threat,
+        target,
+        actor,
+        enterprise_guid,
+        created_time
+}
+```
+
+## How to Deploy This Fixed Parser
+
+1. In Azure Portal, go to Sentinel → **Logs**
+2. Copy the entire code block above (starting with `.create-or-alter`)
+3. Paste it into the query window
+4. Click **Run**
+5. You should see a success message
+
+## Then Test It
+
+```kql
+LookoutEvents
+| where TimeGenerated > ago(7d)
+| project TimeGenerated, EventType, ThreatType, ThreatSeverity, DeviceEmailAddress
+```
+
+**Expected output**: Should show your THREAT event with NETWORK type, HIGH severity, and frank.srp@gmail.com
+
+Let me know if it works!
