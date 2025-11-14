@@ -24,8 +24,6 @@ class MimecastAwarenessSafeScore(Utils):
         self.check_environment_var_exist(
             [
                 {"BaseURL": consts.BASE_URL},
-                {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"MimecastClientID": consts.MIMECAST_CLIENT_ID},
                 {"MimecastClientSecret": consts.MIMECAST_CLIENT_SECRET},
                 {"ConnectionString": consts.CONN_STRING},
