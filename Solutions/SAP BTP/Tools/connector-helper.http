@@ -1,0 +1,88 @@
+@subscriptionId = YOUR_SUBSCRIPTION_ID
+@resourceGroupName = YOUR_RESOURCE_GROUP_NAME
+@workspaceName = YOUR_WORKSPACE_NAME
+@tenantId = YOUR_TENANT_ID
+@connectionId = SapBtpAuditLog_YourSubaccountId
+
+### IMPORTANT: This file helps you add CONNECTIONS to the existing SAP BTP data connector.
+### The SAP BTP solution must be installed from Content Hub first.
+### Each connection represents a BTP subaccount or global account.
+
+### Get Bearer Token
+# @name getToken
+POST https://login.microsoftonline.com/{{tenantId}}/oauth2/v2.0/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials
+&client_id=YOUR_CLIENT_ID
+&client_secret=YOUR_CLIENT_SECRET
+&scope=https://management.azure.com/.default
+
+###
+
+### List all available Sentinel connector definitions
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.OperationalInsights/workspaces/{{workspaceName}}/providers/Microsoft.SecurityInsights/dataConnectorDefinitions?api-version=2025-09-01
+Authorization: Bearer {{getToken.response.body.access_token}}
+Content-Type: application/json
+
+###
+
+### List all existing data connectors (shows all connections)
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.OperationalInsights/workspaces/{{workspaceName}}/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2025-09-01
+Authorization: Bearer {{getToken.response.body.access_token}}
+Content-Type: application/json
+
+###
+
+### Create or update SAP BTP connection (RestApiPoller)
+### This adds a new connection/account to the SAP BTP data connector
+PUT https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.OperationalInsights/workspaces/{{workspaceName}}/providers/Microsoft.SecurityInsights/dataConnectors/{{connectionId}}?api-version=2025-09-01
+Authorization: Bearer {{getToken.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "kind": "RestApiPoller",
+  "properties": {
+    "connectorDefinitionName": "SAPBTPAuditLog",
+    "dataType": "SAPBTPAuditLog_CL",
+    "auth": {
+      "type": "OAuth2",
+      "clientId": "YOUR_BTP_CLIENT_ID",
+      "clientSecret": "YOUR_BTP_CLIENT_SECRET",
+      "tokenEndpoint": "https://YOUR_SUBACCOUNT.authentication.us10.hana.ondemand.com/oauth/token",
+      "grantType": "client_credentials",
+      "scope": ""
+    },
+    "request": {
+      "apiEndpoint": "https://auditlog-management.cfapps.us10.hana.ondemand.com/auditlog/v2/auditlogrecords",
+      "httpMethod": "GET",
+      "queryWindowInMin": 5,
+      "queryTimeFormat": "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+      "rateLimitQPS": 1,
+      "retryCount": 3,
+      "timeoutInSeconds": 60,
+      "startTimeAttributeName": "time_from",
+      "endTimeAttributeName": "time_to"
+    },
+    "response": {
+      "eventsJsonPaths": ["$"],
+      "format": "json"
+    },
+    "isActive": true
+  }
+}
+
+###
+
+### Get specific data connector connection
+GET https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.OperationalInsights/workspaces/{{workspaceName}}/providers/Microsoft.SecurityInsights/dataConnectors/{{connectionId}}?api-version=2025-09-01
+Authorization: Bearer {{getToken.response.body.access_token}}
+Content-Type: application/json
+
+###
+
+### Delete data connector connection
+DELETE https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroupName}}/providers/Microsoft.OperationalInsights/workspaces/{{workspaceName}}/providers/Microsoft.SecurityInsights/dataConnectors/{{connectionId}}?api-version=2025-09-01
+Authorization: Bearer {{getToken.response.body.access_token}}
+Content-Type: application/json
+
