@@ -246,10 +246,10 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
 
 function Get-ArmResource($name, $type, $kind, $properties) {
     [hashtable]$apiVersion = @{
-        "Microsoft.SecurityInsights/dataConnectors"           = "2023-02-01-preview";
-        "Microsoft.SecurityInsights/dataConnectorDefinitions" = "2022-09-01-preview";
-        "Microsoft.OperationalInsights/workspaces/tables"     = "2022-10-01";
-        "Microsoft.Insights/dataCollectionRules"              = "2022-06-01";
+        "Microsoft.SecurityInsights/dataConnectors"           = "2025-09-01";
+        "Microsoft.SecurityInsights/dataConnectorDefinitions" = "2025-09-01";
+        "Microsoft.OperationalInsights/workspaces/tables"     = "2025-07-01";
+        "Microsoft.Insights/dataCollectionRules"              = "2024-03-11";
     }
 
     return [PSCustomObject]@{
