@@ -1,9 +1,44 @@
 # Lookout Sentinel Solution - Complete Update Log
 
-**Date**: November 3, 2025
+**Date**: November 3, 2025 (Updated: November 18, 2025)
 **Workspace**: lookout-sentinel-ccf1
 **Resource Group**: lookout-sentinel-rg
 **Subscription**: a4b6a533-f801-49d5-ad81-719bc7264956
+
+---
+
+## 🔧 Latest Update - November 18, 2025
+
+### PR #13148 Validation Fix
+**Commit**: `2dcbbd046c` - Fix ARM-TTK validation
+
+**Issue**: PR failing with ARM-TTK validation errors
+- Error: `workbook2-name` and `workbook3-name` parameters missing from createUiDefinition.json outputs
+
+**Fix Applied**:
+- ✅ Added missing workbook output parameters to `Package/createUiDefinition.json`:
+  - `workbook1-name`: "Lookout"
+  - `workbook2-name`: "LookoutEventsV2"
+  - `workbook3-name`: "LookoutSecurityInvestigationDashboard"
+- ✅ Updated `Package/3.0.1.zip` with corrected files
+- ✅ Local ARM-TTK validation: **All tests passed**
+- ✅ KQL validation: **All Lookout rules valid** (errors in PR were from other solutions)
+
+**Validation Commands Used**:
+```bash
+# ARM-TTK validation (with GitHub Actions filtering)
+pwsh -Command "
+Import-Module '/tmp/arm-ttk/arm-ttk/arm-ttk.psd1'
+Test-AzTemplate -TemplatePath './Package' -File createUiDefinition.json
+Test-AzTemplate -TemplatePath './Package' -File mainTemplate.json
+"
+```
+
+**Files Modified**:
+- `Package/createUiDefinition.json` - Added workbook parameters to outputs
+- `Package/3.0.1.zip` - Updated with fixes
+
+**Status**: Ready for Microsoft review ✅
 
 ---
 
