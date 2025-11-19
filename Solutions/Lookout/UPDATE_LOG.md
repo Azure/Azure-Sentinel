@@ -42,6 +42,31 @@ Test-AzTemplate -TemplatePath './Package' -File mainTemplate.json
 
 ---
 
+## 🔧 Latest Update - November 18, 2025 (KQL Schema Fix)
+
+### PR #13148 KQL Validation Fix
+**Commit**: `aef274d8ba` - Fix KQL validation schema
+
+**Issue**: KQL validation failing with "EventType does not refer to any known column"
+- Schema file `.script/tests/KqlvalidationsTests/CustomTables/LookoutEvents.json` only had v1 fields
+- Missing all v2 fields: EventType, ThreatSeverity, DeviceGuid, DeviceComplianceStatus, etc.
+
+**Fix Applied**:
+- ✅ Updated `LookoutEvents.json` schema with complete v2 field set:
+  - Core event fields: EventVendor, EventProduct, EventType, EventId, EventPriority
+  - Device fields: DeviceGuid, DevicePlatform, DeviceSecurityStatus, DeviceComplianceStatus
+  - Threat fields: ThreatId, ThreatType, ThreatSeverity, ThreatStatus, ThreatDescription
+  - Smishing fields: SmishingAlertId, SmishingAlertType, SmishingAlertSeverity
+  - Audit fields: AuditType, AuditAttributeChanges
+  - MDM integration: MDMConnectorId, MDMExternalId
+  - Legacy fields for backward compatibility
+
+**Total Fields Added**: 90+ v2 fields to schema
+
+**Status**: KQL validation should now pass ✅
+
+---
+
 ## ✅ What Was Completed
 
 ### 1. Deployment
